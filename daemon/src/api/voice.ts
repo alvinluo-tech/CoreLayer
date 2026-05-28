@@ -69,7 +69,7 @@ voiceRoutes.post("/synthesize", async (c) => {
 
     return new Response(new Uint8Array(audioBuffer), {
       headers: {
-        "Content-Type": "audio/mpeg",
+        "Content-Type": "audio/wav",
         "Content-Length": audioBuffer.length.toString(),
       },
     });

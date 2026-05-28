@@ -1,5 +1,9 @@
 import Groq from "groq-sdk";
 import { env } from "../config/env.js";
+import { writeFile, unlink } from "fs/promises";
+import { tmpdir } from "os";
+import { join } from "path";
+import { createReadStream } from "fs";
 
 export interface TranscriptionResult {
   text: string;
@@ -33,36 +37,29 @@ export async function transcribeWithGroq(
 
   const client = getGroqClient();
 
-  // Create a File-like object from buffer
-  const file = new File([new Uint8Array(audioBuffer)], filename, {
-    type: getAudioMimeType(filename),
-  });
+  // Write to temp file for Groq SDK compatibility
+  const ext = filename.split(".").pop() || "webm";
+  const tmpPath = join(tmpdir(), `jarvis-asr-${Date.now()}.${ext}`);
+  await writeFile(tmpPath, audioBuffer);
 
-  const transcription = await client.audio.transcriptions.create({
-    file,
-    model: "whisper-large-v3-turbo",
-    response_format: "verbose_json",
-    ...(language ? { language } : {}),
-  });
+  try {
+    const transcription = await client.audio.transcriptions.create({
+      file: createReadStream(tmpPath),
+      model: "whisper-large-v3-turbo",
+      response_format: "verbose_json",
+      ...(language ? { language } : {}),
+    });
 
-  return {
-    text: transcription.text.trim(),
-    language: "language" in transcription ? (transcription as { language?: string }).language : undefined,
-    duration: "duration" in transcription ? (transcription as { duration?: number }).duration : undefined,
-  };
-}
-
-function getAudioMimeType(filename: string): string {
-  const ext = filename.split(".").pop()?.toLowerCase();
-  switch (ext) {
-    case "mp3": return "audio/mpeg";
-    case "wav": return "audio/wav";
-    case "webm": return "audio/webm";
-    case "ogg": return "audio/ogg";
-    case "m4a": return "audio/mp4";
-    default: return "audio/webm";
+    return {
+      text: transcription.text.trim(),
+      language: "language" in transcription ? (transcription as { language?: string }).language : undefined,
+      duration: "duration" in transcription ? (transcription as { duration?: number }).duration : undefined,
+    };
+  } finally {
+    await unlink(tmpPath).catch(() => {});
   }
 }
+
 
 /**
  * Check if ASR is available (Groq key configured).

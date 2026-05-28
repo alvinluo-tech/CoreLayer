@@ -11,21 +11,20 @@ export interface TTSOptions {
 
 /**
  * Call MiMo TTS API and return audio buffer.
- * MiMo API is OpenAI-compatible: POST {baseURL}/audio/speech
+ * MiMo TTS uses chat completions endpoint with assistant role.
+ * Response contains base64-encoded WAV audio in choices[0].message.audio.data.
  */
 export async function synthesizeSpeech(options: TTSOptions): Promise<Buffer> {
   const {
     text,
     model = "mimo-v2.5-tts",
-    voice = "alloy",
-    speed = 1.0,
   } = options;
 
   if (!env.MIMO_API_KEY) {
     throw new Error("MIMO_API_KEY not configured");
   }
 
-  const url = `${env.MIMO_API_URL}/audio/speech`;
+  const url = `${env.MIMO_API_URL}/chat/completions`;
 
   const response = await fetch(url, {
     method: "POST",
@@ -35,10 +34,10 @@ export async function synthesizeSpeech(options: TTSOptions): Promise<Buffer> {
     },
     body: JSON.stringify({
       model,
-      input: text,
-      voice,
-      speed,
-      response_format: "mp3",
+      messages: [
+        { role: "user", content: "请用自然的语气说话" },
+        { role: "assistant", content: text },
+      ],
     }),
   });
 
@@ -47,8 +46,22 @@ export async function synthesizeSpeech(options: TTSOptions): Promise<Buffer> {
     throw new Error(`MiMo TTS error (${response.status}): ${errorText}`);
   }
 
-  const arrayBuffer = await response.arrayBuffer();
-  return Buffer.from(arrayBuffer);
+  const json = (await response.json()) as {
+    choices?: Array<{
+      message?: {
+        audio?: {
+          data?: string;
+        };
+      };
+    }>;
+  };
+
+  const audioData = json.choices?.[0]?.message?.audio?.data;
+  if (!audioData) {
+    throw new Error("MiMo TTS: no audio data in response");
+  }
+
+  return Buffer.from(audioData, "base64");
 }
 
 /**
