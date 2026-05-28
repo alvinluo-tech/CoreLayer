@@ -216,6 +216,10 @@ export async function getVoiceStatus(): Promise<VoiceStatus> {
   return invoke("get_voice_status");
 }
 
+export async function getDaemonUrl(): Promise<string> {
+  return invoke("get_daemon_url_command");
+}
+
 export async function getHealth(): Promise<{
   status: string;
   timestamp: string;

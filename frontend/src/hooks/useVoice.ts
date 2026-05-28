@@ -1,6 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from "react";
-
-const DAEMON_URL = "http://localhost:3001";
+import { getDaemonUrl } from "@/lib/tauri";
 
 export type VoiceState = "idle" | "recording" | "transcribing" | "processing" | "speaking";
 
@@ -13,65 +12,78 @@ export function useVoice(onCommand: (text: string) => void) {
   const audioChunksRef = useRef<Blob[]>([]);
   const audioContextRef = useRef<AudioContext | null>(null);
   const sourceNodeRef = useRef<AudioBufferSourceNode | null>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
   const isRecordingRef = useRef(false);
   const onCommandRef = useRef(onCommand);
-  const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const daemonUrlRef = useRef<string>("http://localhost:3001");
 
   useEffect(() => {
     onCommandRef.current = onCommand;
   }, [onCommand]);
 
+  // Discover daemon URL from Tauri backend on mount
   useEffect(() => {
     setIsSupported(Boolean(navigator.mediaDevices?.getUserMedia));
+    getDaemonUrl()
+      .then((url) => {
+        daemonUrlRef.current = url;
+        console.log("[Voice] Daemon URL:", url);
+      })
+      .catch(() => {
+        console.warn("[Voice] Could not get daemon URL, using default");
+      });
   }, []);
 
   // ---- Barge-in: stop TTS when user starts speaking ----
   const stopTTS = useCallback(() => {
     if (sourceNodeRef.current) {
-      try { sourceNodeRef.current.stop(); } catch {}
+      try {
+        sourceNodeRef.current.stop();
+      } catch {}
       sourceNodeRef.current = null;
+    }
+    if ("speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
     }
   }, []);
 
   // ---- TTS: call daemon MiMo TTS API and play audio ----
-  const speak = useCallback(async (text: string) => {
-    if (!text.trim()) return;
+  const speak = useCallback(
+    async (text: string) => {
+      if (!text.trim()) return;
 
-    // Stop any ongoing speech (barge-in)
-    stopTTS();
-    setState("speaking");
+      stopTTS();
+      setState("speaking");
 
-    try {
-      const response = await fetch(`${DAEMON_URL}/api/voice/synthesize`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, model: "mimo-v2.5-tts" }),
-      });
+      try {
+        const response = await fetch(`${daemonUrlRef.current}/api/voice/synthesize`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text, model: "mimo-v2.5-tts" }),
+        });
 
-      if (!response.ok) {
-        // Fallback to browser TTS if MiMo TTS fails
+        if (!response.ok) {
+          console.warn("[Voice] MiMo TTS failed, falling back to browser TTS");
+          speakWithBrowserTTS(text);
+          return;
+        }
+
+        const audioBuffer = await response.arrayBuffer();
+        await playAudioBuffer(audioBuffer);
+
+        if (isRecordingRef.current) {
+          startRecording();
+        } else {
+          setState("idle");
+        }
+      } catch (err) {
+        console.warn("[Voice] TTS error:", err);
         speakWithBrowserTTS(text);
-        return;
       }
+    },
+    [stopTTS],
+  );
 
-      const audioBuffer = await response.arrayBuffer();
-      await playAudioBuffer(audioBuffer);
-
-      // After speaking, go back to idle
-      if (isRecordingRef.current) {
-        startRecording();
-      } else {
-        setState("idle");
-      }
-    } catch {
-      // Fallback to browser TTS
-      speakWithBrowserTTS(text);
-    }
-  }, [stopTTS]);
-
-  // Play audio buffer using Web Audio API (supports barge-in)
   const playAudioBuffer = useCallback(async (buffer: ArrayBuffer): Promise<void> => {
     return new Promise((resolve) => {
       if (!audioContextRef.current) {
@@ -79,26 +91,28 @@ export function useVoice(onCommand: (text: string) => void) {
       }
       const ctx = audioContextRef.current;
 
-      ctx.decodeAudioData(buffer, (decoded) => {
-        const source = ctx.createBufferSource();
-        source.buffer = decoded;
-        source.connect(ctx.destination);
-        sourceNodeRef.current = source;
+      ctx.decodeAudioData(
+        buffer,
+        (decoded) => {
+          const source = ctx.createBufferSource();
+          source.buffer = decoded;
+          source.connect(ctx.destination);
+          sourceNodeRef.current = source;
 
-        source.onended = () => {
-          sourceNodeRef.current = null;
+          source.onended = () => {
+            sourceNodeRef.current = null;
+            resolve();
+          };
+
+          source.start();
+        },
+        () => {
           resolve();
-        };
-
-        source.start();
-      }, () => {
-        // Decode failed, resolve anyway
-        resolve();
-      });
+        },
+      );
     });
   }, []);
 
-  // Browser TTS fallback
   const speakWithBrowserTTS = useCallback((text: string) => {
     if (!("speechSynthesis" in window)) {
       setState("idle");
@@ -130,20 +144,13 @@ export function useVoice(onCommand: (text: string) => void) {
   // ---- ASR: record audio and send to Groq Whisper via daemon ----
   const startRecording = useCallback(async () => {
     try {
+      // Stop any ongoing TTS first (barge-in)
+      stopTTS();
+
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
 
-      // Set up audio analyser for VAD (voice activity detection)
-      if (!audioContextRef.current) {
-        audioContextRef.current = new AudioContext();
-      }
-      const ctx = audioContextRef.current;
-      const source = ctx.createMediaStreamSource(stream);
-      const analyser = ctx.createAnalyser();
-      analyser.fftSize = 512;
-      source.connect(analyser);
-      analyserRef.current = analyser;
-
+      // Create MediaRecorder
       const mediaRecorder = new MediaRecorder(stream, {
         mimeType: MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
           ? "audio/webm;codecs=opus"
@@ -162,8 +169,12 @@ export function useVoice(onCommand: (text: string) => void) {
         const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
         audioChunksRef.current = [];
 
+        // Release mic stream
+        stream.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+
         if (blob.size < 1000) {
-          // Too small, probably silence
+          console.log("[Voice] Audio too small, skipping");
           if (isRecordingRef.current) {
             startRecording();
           } else {
@@ -172,8 +183,11 @@ export function useVoice(onCommand: (text: string) => void) {
           return;
         }
 
+        console.log("[Voice] Audio recorded:", blob.size, "bytes");
         setState("transcribing");
+
         const text = await transcribeAudio(blob);
+        console.log("[Voice] Transcription:", text);
 
         if (text && text.trim()) {
           setTranscript(text);
@@ -189,58 +203,73 @@ export function useVoice(onCommand: (text: string) => void) {
       };
 
       mediaRecorderRef.current = mediaRecorder;
-      mediaRecorder.start();
+      mediaRecorder.start(100); // timeslice: collect data every 100ms
       isRecordingRef.current = true;
       setState("recording");
 
-      // Simple VAD: stop recording after silence
-      startSilenceDetection(analyser, mediaRecorder);
-    } catch (err) {
-      console.error("Microphone access denied:", err);
-      setState("idle");
-    }
-  }, []);
+      // Silence detection via AnalyserNode
+      const audioCtx = new AudioContext();
+      const source = audioCtx.createMediaStreamSource(stream);
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 512;
+      source.connect(analyser);
 
-  // Simple silence detection using audio analyser
-  const startSilenceDetection = useCallback((analyser: AnalyserNode, recorder: MediaRecorder) => {
-    const dataArray = new Uint8Array(analyser.frequencyBinCount);
-    let silenceStart = 0;
-    const SILENCE_THRESHOLD = 15; // volume threshold
-    const SILENCE_DURATION = 1500; // ms of silence before stopping
-    const MIN_SPEECH_DURATION = 500; // minimum recording duration
-    let speechStarted = false;
-    let recordingStart = Date.now();
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      let silenceStart = 0;
+      let speechStarted = false;
+      const recordingStart = Date.now();
+      const SILENCE_THRESHOLD = 15;
+      const SILENCE_DURATION = 1500;
+      const MAX_RECORDING = 30000;
 
-    const check = () => {
-      if (!isRecordingRef.current || recorder.state !== "recording") return;
+      const checkVAD = () => {
+        if (!isRecordingRef.current || mediaRecorder.state !== "recording") {
+          audioCtx.close();
+          return;
+        }
 
-      analyser.getByteFrequencyData(dataArray);
-      const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
+        analyser.getByteFrequencyData(dataArray);
+        const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
 
-      if (avg > SILENCE_THRESHOLD) {
-        speechStarted = true;
-        silenceStart = 0;
-      } else if (speechStarted) {
-        if (silenceStart === 0) {
-          silenceStart = Date.now();
-        } else if (Date.now() - silenceStart > SILENCE_DURATION) {
-          // Silence long enough, stop recording
-          if (Date.now() - recordingStart > MIN_SPEECH_DURATION) {
-            recorder.stop();
+        if (avg > SILENCE_THRESHOLD) {
+          speechStarted = true;
+          silenceStart = 0;
+        } else if (speechStarted) {
+          if (silenceStart === 0) {
+            silenceStart = Date.now();
+          } else if (Date.now() - silenceStart > SILENCE_DURATION) {
+            console.log("[Voice] Silence detected, stopping recording");
+            mediaRecorder.stop();
+            audioCtx.close();
             return;
           }
         }
-      } else if (!speechStarted && Date.now() - recordingStart > 10000) {
-        // No speech detected for 10 seconds, stop
-        recorder.stop();
-        return;
-      }
 
-      requestAnimationFrame(check);
-    };
+        // Max recording duration
+        if (Date.now() - recordingStart > MAX_RECORDING) {
+          console.log("[Voice] Max recording duration reached");
+          mediaRecorder.stop();
+          audioCtx.close();
+          return;
+        }
 
-    requestAnimationFrame(check);
-  }, []);
+        // No speech for 10s
+        if (!speechStarted && Date.now() - recordingStart > 10000) {
+          console.log("[Voice] No speech detected for 10s");
+          mediaRecorder.stop();
+          audioCtx.close();
+          return;
+        }
+
+        requestAnimationFrame(checkVAD);
+      };
+
+      requestAnimationFrame(checkVAD);
+    } catch (err) {
+      console.error("[Voice] Microphone error:", err);
+      setState("idle");
+    }
+  }, [stopTTS]);
 
   // Send audio to daemon for transcription
   const transcribeAudio = useCallback(async (audioBlob: Blob): Promise<string> => {
@@ -249,20 +278,28 @@ export function useVoice(onCommand: (text: string) => void) {
       formData.append("audio", audioBlob, "audio.webm");
       formData.append("language", "zh");
 
-      const response = await fetch(`${DAEMON_URL}/api/voice/transcribe`, {
+      const url = `${daemonUrlRef.current}/api/voice/transcribe`;
+      console.log("[Voice] Sending to:", url);
+
+      const response = await fetch(url, {
         method: "POST",
         body: formData,
       });
 
       if (!response.ok) {
-        console.error("Transcription failed:", response.status);
+        const errText = await response.text();
+        console.error("[Voice] Transcription failed:", response.status, errText);
         return "";
       }
 
-      const data = (await response.json()) as { text: string };
+      const data = (await response.json()) as { text: string; error?: string };
+      if (data.error) {
+        console.error("[Voice] Transcription error:", data.error);
+        return "";
+      }
       return data.text;
     } catch (err) {
-      console.error("Transcription error:", err);
+      console.error("[Voice] Transcription network error:", err);
       return "";
     }
   }, []);
@@ -270,11 +307,6 @@ export function useVoice(onCommand: (text: string) => void) {
   // ---- Control ----
   const stopRecording = useCallback(() => {
     isRecordingRef.current = false;
-
-    if (silenceTimerRef.current) {
-      clearTimeout(silenceTimerRef.current);
-      silenceTimerRef.current = null;
-    }
 
     if (mediaRecorderRef.current?.state === "recording") {
       mediaRecorderRef.current.stop();
@@ -289,9 +321,6 @@ export function useVoice(onCommand: (text: string) => void) {
   const stopListening = useCallback(() => {
     stopRecording();
     stopTTS();
-    if ("speechSynthesis" in window) {
-      window.speechSynthesis.cancel();
-    }
     setState("idle");
     setTranscript("");
   }, [stopRecording, stopTTS]);
@@ -312,7 +341,9 @@ export function useVoice(onCommand: (text: string) => void) {
         streamRef.current.getTracks().forEach((t) => t.stop());
       }
       if (sourceNodeRef.current) {
-        try { sourceNodeRef.current.stop(); } catch {}
+        try {
+          sourceNodeRef.current.stop();
+        } catch {}
       }
     };
   }, []);

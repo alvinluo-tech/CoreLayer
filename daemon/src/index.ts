@@ -1,4 +1,3 @@
-import "dotenv/config";
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
@@ -62,8 +61,8 @@ function startServer(port: number) {
       console.log(`Jarvis Daemon running on http://localhost:${info.port}`);
     }).on("error", (err: NodeJS.ErrnoException) => {
       if (err.code === "EADDRINUSE") {
-        console.warn(`Port ${port} in use, trying ${port + 1}...`);
-        startServer(port + 1);
+        console.error(`Port ${port} already in use. Kill the existing process first.`);
+        process.exit(1);
       } else {
         console.error("Server error:", err);
         process.exit(1);

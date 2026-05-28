@@ -460,6 +460,11 @@ async fn get_voice_status() -> Result<VoiceStatus, String> {
     daemon_get("/api/voice/status").await
 }
 
+#[tauri::command]
+async fn get_daemon_url_command() -> Result<String, String> {
+    Ok(get_daemon_url().await)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -483,7 +488,8 @@ pub fn run() {
             get_weekly_stats,
             get_settings,
             update_storage_mode,
-            get_voice_status
+            get_voice_status,
+            get_daemon_url_command
         ])
         .setup(|app| {
             if cfg!(debug_assertions) {
