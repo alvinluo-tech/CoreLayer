@@ -451,8 +451,8 @@ async fn daemon_put<T: for<'de> Deserialize<'de>>(path: &str, body: serde_json::
 #[serde(rename_all = "camelCase")]
 pub struct VoiceStatus {
     pub asr: bool,
-    pub tts: serde_json::Value,
-    pub vad: serde_json::Value,
+    pub tts: bool,
+    pub tts_models: Vec<String>,
 }
 
 #[tauri::command]

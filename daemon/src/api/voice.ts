@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { transcribeWithGroq, isAsrAvailable } from "../voice/asr.js";
-import { prepareTTS } from "../voice/tts.js";
+import { synthesizeSpeech, isTtsAvailable, type TTSModel } from "../voice/tts.js";
 
 const voiceRoutes = new Hono();
 
@@ -23,9 +23,10 @@ voiceRoutes.post("/transcribe", async (c) => {
 
     const arrayBuffer = await audioFile.arrayBuffer();
     const audioBuffer = Buffer.from(arrayBuffer);
+    const filename = audioFile.name || "audio.webm";
 
     const language = formData.get("language") as string | null;
-    const result = await transcribeWithGroq(audioBuffer, language ?? undefined);
+    const result = await transcribeWithGroq(audioBuffer, filename, language ?? undefined);
 
     return c.json(result);
   } catch (error) {
@@ -36,18 +37,42 @@ voiceRoutes.post("/transcribe", async (c) => {
 
 /**
  * POST /api/voice/synthesize
- * Accepts text, returns TTS info (client-side for now).
+ * Accepts text, returns audio binary (MP3).
+ * Body: { text, model?, voice?, speed? }
  */
 voiceRoutes.post("/synthesize", async (c) => {
+  if (!isTtsAvailable()) {
+    return c.json({ error: "TTS not configured. Set MIMO_API_KEY." }, 503);
+  }
+
   try {
-    const body = await c.req.json<{ text: string; lang?: string }>();
+    const body = await c.req.json<{
+      text: string;
+      model?: TTSModel;
+      voice?: string;
+      speed?: number;
+    }>();
 
     if (!body.text?.trim()) {
       return c.json({ error: "Text is required" }, 400);
     }
 
-    const result = prepareTTS(body.text, body.lang);
-    return c.json(result);
+    // Truncate very long text to avoid API limits
+    const text = body.text.length > 2000 ? body.text.slice(0, 2000) + "..." : body.text;
+
+    const audioBuffer = await synthesizeSpeech({
+      text,
+      model: body.model,
+      voice: body.voice,
+      speed: body.speed,
+    });
+
+    return new Response(new Uint8Array(audioBuffer), {
+      headers: {
+        "Content-Type": "audio/mpeg",
+        "Content-Length": audioBuffer.length.toString(),
+      },
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return c.json({ error: message }, 500);
@@ -61,8 +86,8 @@ voiceRoutes.post("/synthesize", async (c) => {
 voiceRoutes.get("/status", (c) => {
   return c.json({
     asr: isAsrAvailable(),
-    tts: { available: true, provider: "client" },
-    vad: { available: false, note: "Silero VAD - coming soon" },
+    tts: isTtsAvailable(),
+    ttsModels: ["mimo-v2.5-tts", "mimo-v2.5-tts-voiceclone", "mimo-v2.5-tts-voicedesign"],
   });
 });
 

@@ -1,3 +1,4 @@
+import Groq from "groq-sdk";
 import { env } from "../config/env.js";
 
 export interface TranscriptionResult {
@@ -6,51 +7,61 @@ export interface TranscriptionResult {
   duration?: number;
 }
 
+let groqClient: Groq | null = null;
+
+function getGroqClient(): Groq {
+  if (!groqClient) {
+    groqClient = new Groq({ apiKey: env.GROQ_API_KEY });
+  }
+  return groqClient;
+}
+
 /**
  * Transcribe audio using Groq Whisper API.
  * @param audioBuffer - Audio file buffer (webm, mp3, wav, etc.)
+ * @param filename - Original filename (used to determine format)
  * @param language - Optional language hint (e.g., "zh", "en")
  */
 export async function transcribeWithGroq(
   audioBuffer: Buffer,
+  filename: string = "audio.webm",
   language?: string,
 ): Promise<TranscriptionResult> {
   if (!env.GROQ_API_KEY) {
     throw new Error("GROQ_API_KEY not configured");
   }
 
-  const formData = new FormData();
-  formData.append("file", new Blob([new Uint8Array(audioBuffer)], { type: "audio/webm" }), "audio.webm");
-  formData.append("model", "whisper-large-v3-turbo");
-  formData.append("response_format", "verbose_json");
-  if (language) {
-    formData.append("language", language);
-  }
+  const client = getGroqClient();
 
-  const response = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${env.GROQ_API_KEY}`,
-    },
-    body: formData,
+  // Create a File-like object from buffer
+  const file = new File([new Uint8Array(audioBuffer)], filename, {
+    type: getAudioMimeType(filename),
   });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Groq ASR error (${response.status}): ${errorText}`);
-  }
-
-  const data = (await response.json()) as {
-    text: string;
-    language?: string;
-    duration?: number;
-  };
+  const transcription = await client.audio.transcriptions.create({
+    file,
+    model: "whisper-large-v3-turbo",
+    response_format: "verbose_json",
+    ...(language ? { language } : {}),
+  });
 
   return {
-    text: data.text.trim(),
-    language: data.language,
-    duration: data.duration,
+    text: transcription.text.trim(),
+    language: "language" in transcription ? (transcription as { language?: string }).language : undefined,
+    duration: "duration" in transcription ? (transcription as { duration?: number }).duration : undefined,
   };
+}
+
+function getAudioMimeType(filename: string): string {
+  const ext = filename.split(".").pop()?.toLowerCase();
+  switch (ext) {
+    case "mp3": return "audio/mpeg";
+    case "wav": return "audio/wav";
+    case "webm": return "audio/webm";
+    case "ogg": return "audio/ogg";
+    case "m4a": return "audio/mp4";
+    default: return "audio/webm";
+  }
 }
 
 /**
