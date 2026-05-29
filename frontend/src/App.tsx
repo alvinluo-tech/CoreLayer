@@ -59,8 +59,8 @@ function App() {
       
       setupListener();
       
-      // Auto-start on initial load
-      voiceConv.playGreetingAndListen();
+      // We do NOT auto-start on load to prevent locking the microphone in the background!
+      // The window will start listening only when it receives the "wake-assistant" event.
       
       return () => {
         if (unlisten) unlisten();
