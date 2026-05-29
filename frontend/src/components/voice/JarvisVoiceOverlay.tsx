@@ -227,10 +227,10 @@ export function JarvisVoiceOverlay({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-[8px] transition-all duration-300 animate-in fade-in">
+    <div className="fixed bottom-6 right-6 z-50 transition-all duration-300 animate-in slide-in-from-bottom-5 slide-in-from-right-5 fade-in">
       <div
         className={cn(
-          "relative w-full max-w-xl p-6 mx-4 rounded-2xl border backdrop-blur-2xl shadow-2xl transition-all duration-500 transform scale-100 animate-in zoom-in-95",
+          "relative w-[360px] p-4 rounded-2xl border backdrop-blur-2xl shadow-2xl transition-all duration-500 transform scale-100 shadow-cyan-950/20",
           glowColors[state]
         )}
       >
@@ -238,17 +238,17 @@ export function JarvisVoiceOverlay({
         <div className="absolute inset-0 bg-radial-gradient from-transparent to-black/10 rounded-2xl pointer-events-none" />
 
         {/* HUD top decorative bar */}
-        <div className="flex items-center justify-between border-b border-white/10 pb-3 mb-4">
+        <div className="flex items-center justify-between border-b border-white/10 pb-2 mb-3">
           <div className="flex items-center gap-2">
             <span className="h-2 w-2 rounded-full bg-cyan-500 animate-ping" />
-            <span className="font-mono text-xs tracking-widest text-cyan-400 font-bold uppercase">
-              JARVIS HUD v2.5
+            <span className="font-mono text-[10px] tracking-widest text-cyan-400 font-bold uppercase">
+              JARVIS HUD
             </span>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             {/* Timer stopwatch */}
             {(state === "listening" || state === "speaking" || state === "streaming") && (
-              <span className="font-mono text-xs tracking-wider bg-white/5 border border-white/10 rounded px-2 py-0.5 text-cyan-400 font-bold animate-pulse">
+              <span className="font-mono text-[10px] tracking-wider bg-white/5 border border-white/10 rounded px-1.5 py-0.5 text-cyan-400 font-bold animate-pulse">
                 ⏱️ {formatTime(timer)}
               </span>
             )}
@@ -256,23 +256,23 @@ export function JarvisVoiceOverlay({
               variant="ghost"
               size="icon"
               onClick={onClose}
-              className="h-6 w-6 text-white/50 hover:text-white hover:bg-white/10 rounded-full transition-all"
+              className="h-5 w-5 text-white/50 hover:text-white hover:bg-white/10 rounded-full transition-all"
             >
-              <X className="h-4 w-4" />
+              <X className="h-3.5 w-3.5" />
             </Button>
           </div>
         </div>
 
         {/* Content body */}
-        <div className="space-y-6">
+        <div className="space-y-4">
           {/* Main Visualizer Area */}
-          <div className="relative h-44 rounded-xl border border-white/5 bg-black/40 overflow-hidden flex flex-col items-center justify-center">
+          <div className="relative h-28 rounded-xl border border-white/5 bg-black/40 overflow-hidden flex flex-col items-center justify-center">
             {/* Pulsating background circle */}
             <div
               className={cn(
-                "absolute h-36 w-36 rounded-full border border-white/5 opacity-20 filter blur-sm transition-all duration-1000 transform scale-100",
+                "absolute h-24 w-24 rounded-full border border-white/5 opacity-20 filter blur-sm transition-all duration-1000 transform scale-100",
                 state === "listening" && "scale-110 border-cyan-500 animate-pulse",
-                state === "speaking" && "scale-125 border-violet-500",
+                state === "speaking" && "scale-120 border-violet-500",
                 state === "streaming" && "scale-105 border-amber-500 animate-spin"
               )}
             />
@@ -280,8 +280,8 @@ export function JarvisVoiceOverlay({
             <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
             
             {/* Floating state overlay label */}
-            <div className="absolute bottom-3 text-center pointer-events-none">
-              <p className="font-mono text-xs tracking-wider text-white/90 font-bold drop-shadow-md">
+            <div className="absolute bottom-2 text-center pointer-events-none">
+              <p className="font-mono text-[10px] tracking-wider text-white/90 font-bold drop-shadow-md">
                 {stateTitle[state]}
               </p>
               <p className="text-[10px] text-white/50 font-mono tracking-wide drop-shadow mt-0.5">
@@ -341,29 +341,29 @@ export function JarvisVoiceOverlay({
           </div>
 
           {/* Controls Footer */}
-          <div className="flex justify-center border-t border-white/10 pt-4 gap-4">
+          <div className="flex justify-center border-t border-white/10 pt-3 gap-3">
             {/* Interrupt or stop button */}
             {state === "speaking" || state === "streaming" ? (
               <Button
                 variant="destructive"
                 onClick={onStop}
-                className="flex items-center gap-2 rounded-full px-6 py-5 bg-red-600 hover:bg-red-700 font-mono text-xs tracking-wider shadow-lg shadow-red-900/30"
+                className="flex items-center gap-1.5 rounded-full px-4 py-2 bg-red-600 hover:bg-red-700 font-mono text-[10px] tracking-wider shadow-lg shadow-red-900/30"
               >
-                <Square className="h-4 w-4" /> INTERRUPT FEED
+                <Square className="h-3 w-3" /> INTERRUPT
               </Button>
             ) : (state === "listening") ? (
               <Button
                 onClick={onStop}
-                className="flex items-center gap-2 rounded-full px-6 py-5 bg-cyan-600 hover:bg-cyan-700 font-mono text-xs tracking-wider shadow-lg shadow-cyan-900/30"
+                className="flex items-center gap-1.5 rounded-full px-4 py-2 bg-cyan-600 hover:bg-cyan-700 font-mono text-[10px] tracking-wider shadow-lg shadow-cyan-900/30"
               >
-                <Mic className="h-4 w-4 animate-pulse" /> FINISH COMM
+                <Mic className="h-3 w-3 animate-pulse" /> FINISH COMM
               </Button>
             ) : (
               <Button
                 disabled
-                className="flex items-center gap-2 rounded-full px-6 py-5 bg-white/10 text-white/40 border border-white/5 font-mono text-xs tracking-wider"
+                className="flex items-center gap-1.5 rounded-full px-4 py-2 bg-white/10 text-white/40 border border-white/5 font-mono text-[10px] tracking-wider"
               >
-                <Loader2 className="h-4 w-4 animate-spin" /> SYNCHRONIZING
+                <Loader2 className="h-3 w-3 animate-spin" /> SYNCHRONIZING
               </Button>
             )}
           </div>
