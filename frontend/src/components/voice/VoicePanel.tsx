@@ -1,35 +1,60 @@
-import { Mic, MicOff, Volume2, Loader2 } from "lucide-react";
+import { Mic, MicOff, Loader2, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { VoiceState } from "@/hooks/useVoice";
+import type { VoiceConversationState } from "@/hooks/useVoiceConversation";
+
+type CombinedState = VoiceState | VoiceConversationState;
 
 interface VoicePanelProps {
-  state: VoiceState;
+  state: CombinedState;
   transcript: string;
   isSupported: boolean;
   isWakeWordListening?: boolean;
   wakeWordMethod?: "porcupine" | "webspeech" | null;
   wakeWordError?: string | null;
+  interimTranscript?: string;
+  assistantText?: string;
   onToggle: () => void;
+  onBargeIn?: () => void;
+  onStop?: () => void;
 }
 
-const stateLabels: Record<VoiceState, string> = {
+const stateLabels: Record<CombinedState, string> = {
   idle: "点击开始语音",
+  listening: "正在聆听...",
   recording: "正在聆听...",
   transcribing: "识别中...",
+  streaming: "AI 思考中...",
   processing: "处理中...",
   speaking: "播报中...",
+  error: "出错了",
 };
 
-const stateColors: Record<VoiceState, string> = {
+const stateColors: Record<CombinedState, string> = {
   idle: "bg-secondary",
+  listening: "bg-green-500/20 border-green-500",
   recording: "bg-green-500/20 border-green-500",
   transcribing: "bg-blue-500/20 border-blue-500",
+  streaming: "bg-yellow-500/20 border-yellow-500",
   processing: "bg-yellow-500/20 border-yellow-500",
   speaking: "bg-purple-500/20 border-purple-500",
+  error: "bg-red-500/20 border-red-500",
 };
 
-export function VoicePanel({ state, transcript, isSupported, isWakeWordListening, wakeWordMethod, wakeWordError, onToggle }: VoicePanelProps) {
+export function VoicePanel({
+  state,
+  transcript,
+  isSupported,
+  isWakeWordListening,
+  wakeWordMethod,
+  wakeWordError,
+  interimTranscript,
+  assistantText,
+  onToggle,
+  onBargeIn,
+  onStop,
+}: VoicePanelProps) {
   if (!isSupported) {
     return (
       <div className="text-xs text-muted-foreground text-center py-2">
@@ -39,6 +64,7 @@ export function VoicePanel({ state, transcript, isSupported, isWakeWordListening
   }
 
   const isActive = state !== "idle";
+  const canBargeIn = state === "speaking" || state === "streaming";
 
   return (
     <div className="space-y-3">
@@ -47,18 +73,21 @@ export function VoicePanel({ state, transcript, isSupported, isWakeWordListening
         <Button
           variant={isActive || isWakeWordListening ? "default" : "outline"}
           size="icon"
-          onClick={onToggle}
+          onClick={canBargeIn && onBargeIn ? onBargeIn : onToggle}
           className={cn(
             "h-10 w-10 rounded-full transition-all",
             isActive && "animate-pulse",
             isWakeWordListening && !isActive && "bg-green-600 hover:bg-green-700",
-            state === "recording" && "bg-green-600 hover:bg-green-700",
+            (state === "recording" || state === "listening") && "bg-green-600 hover:bg-green-700",
             state === "transcribing" && "bg-blue-600 hover:bg-blue-700",
+            state === "streaming" && "bg-yellow-600 hover:bg-yellow-700",
             state === "speaking" && "bg-purple-600 hover:bg-purple-700",
           )}
         >
           {state === "transcribing" || state === "processing" ? (
             <Loader2 className="h-4 w-4 animate-spin" />
+          ) : canBargeIn ? (
+            <Square className="h-4 w-4" />
           ) : isActive || isWakeWordListening ? (
             <Mic className="h-4 w-4" />
           ) : (
@@ -68,15 +97,19 @@ export function VoicePanel({ state, transcript, isSupported, isWakeWordListening
 
         <div className="flex-1 min-w-0">
           <p className="text-xs text-muted-foreground">
-            {isWakeWordListening && !isActive ? '说 "Hey Jarvis" 唤醒' : stateLabels[state]}
+            {isWakeWordListening && !isActive
+              ? '说 "Hey Jarvis" 唤醒'
+              : stateLabels[state]}
           </p>
           {transcript && (
             <p className="text-sm truncate mt-0.5">{transcript}</p>
           )}
         </div>
 
-        {state === "speaking" && (
-          <Volume2 className="h-4 w-4 text-purple-500 animate-pulse" />
+        {state === "speaking" && onStop && (
+          <Button variant="ghost" size="icon" onClick={onStop} className="h-6 w-6">
+            <Square className="h-3 w-3" />
+          </Button>
         )}
       </div>
 
@@ -101,25 +134,57 @@ export function VoicePanel({ state, transcript, isSupported, isWakeWordListening
         <div className="rounded-md border p-2 text-xs bg-green-500/10 border-green-500/30">
           <p className="text-green-400">
             🎙️ 等待唤醒... 说 "Hey Jarvis" 开始对话
-            {wakeWordMethod && <span className="text-muted-foreground ml-1">({wakeWordMethod})</span>}
+            {wakeWordMethod && (
+              <span className="text-muted-foreground ml-1">
+                ({wakeWordMethod})
+              </span>
+            )}
           </p>
         </div>
       )}
 
       {/* Active state indicator */}
       {isActive && (
-        <div className={cn("rounded-md border p-2 text-xs", stateColors[state])}>
-          {state === "recording" && (
-            <p className="text-green-400">🎤 正在录音... 说完会自动停止</p>
+        <div
+          className={cn("rounded-md border p-2 text-xs", stateColors[state])}
+        >
+          {(state === "recording" || state === "listening") && (
+            <div>
+              <p className="text-green-400">🎤 正在聆听...</p>
+              {interimTranscript && (
+                <p className="text-green-300/70 mt-1 truncate">
+                  {interimTranscript}
+                </p>
+              )}
+            </div>
           )}
           {state === "transcribing" && (
-            <p className="text-blue-400">🔄 语音识别中 (Whisper)...</p>
+            <p className="text-blue-400">🔄 语音识别中...</p>
           )}
-          {state === "processing" && (
-            <p className="text-yellow-400">⏳ 正在处理你的请求...</p>
+          {(state === "streaming" || state === "processing") && (
+            <div>
+              <p className="text-yellow-400">⏳ AI 思考中...</p>
+              {assistantText && (
+                <p className="text-yellow-300/70 mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap">
+                  {assistantText}
+                </p>
+              )}
+            </div>
           )}
           {state === "speaking" && (
-            <p className="text-purple-400">🔊 Jarvis 正在回复... (点击可打断)</p>
+            <div>
+              <p className="text-purple-400">
+                🔊 Jarvis 正在回复... (点击打断)
+              </p>
+              {assistantText && (
+                <p className="text-purple-300/70 mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap">
+                  {assistantText}
+                </p>
+              )}
+            </div>
+          )}
+          {state === "error" && (
+            <p className="text-red-400">❌ 出错了，请重试</p>
           )}
         </div>
       )}

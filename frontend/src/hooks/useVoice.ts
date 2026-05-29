@@ -1,47 +1,12 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { getDaemonUrl } from "@/lib/tauri";
 import { useWakeWord } from "./useWakeWord";
+import { encodeWav } from "@/lib/audioCapture";
 
-function writeString(view: DataView, offset: number, str: string) {
-  for (let i = 0; i < str.length; i++) {
-    view.setUint8(offset + i, str.charCodeAt(i));
-  }
-}
-
-function encodeWav(chunks: Float32Array[], sampleRate: number): Blob {
-  const length = chunks.reduce((sum, c) => sum + c.length, 0);
-  const buffer = new ArrayBuffer(44 + length * 2);
-  const view = new DataView(buffer);
-
-  writeString(view, 0, "RIFF");
-  view.setUint32(4, 36 + length * 2, true);
-  writeString(view, 8, "WAVE");
-  writeString(view, 12, "fmt ");
-  view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true);
-  view.setUint16(22, 1, true);
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate * 2, true);
-  view.setUint16(32, 2, true);
-  view.setUint16(34, 16, true);
-  writeString(view, 36, "data");
-  view.setUint32(40, length * 2, true);
-
-  let offset = 44;
-  for (const chunk of chunks) {
-    for (let i = 0; i < chunk.length; i++) {
-      const sample = Math.max(-1, Math.min(1, chunk[i] ?? 0));
-      view.setInt16(offset, sample * 0x7fff, true);
-      offset += 2;
-    }
-  }
-
-  return new Blob([buffer], { type: "audio/wav" });
-}
 
 export type VoiceState = "idle" | "recording" | "transcribing" | "processing" | "speaking";
 
-export function useVoice(onCommand: (text: string) => void) {
+export function useVoice(onCommand: (text: string) => void, onWake?: () => void) {
   const [state, setState] = useState<VoiceState>("idle");
   const [transcript, setTranscript] = useState("");
   const [isSupported, setIsSupported] = useState(false);
@@ -51,7 +16,7 @@ export function useVoice(onCommand: (text: string) => void) {
   const isRecordingRef = useRef(false);
   const onCommandRef = useRef(onCommand);
   const streamRef = useRef<MediaStream | null>(null);
-  const daemonUrlRef = useRef<string>("http://localhost:3001");
+  const daemonUrlRef = useRef<string>("http://127.0.0.1:3001");
   const vadAudioCtxRef = useRef<AudioContext | null>(null);
   const vadFrameRef = useRef<number>(0);
   const wantsContinuousRef = useRef(false);
@@ -60,11 +25,15 @@ export function useVoice(onCommand: (text: string) => void) {
 
   // Wake word detection
   const handleWake = useCallback(() => {
-    console.log("[Voice] Wake word triggered, starting recording");
+    console.log("[Voice] Wake word triggered");
     wakeWord.stop();
-    wantsContinuousRef.current = true;
-    startRecording();
-  }, []);
+    if (onWake) {
+      onWake();
+    } else {
+      wantsContinuousRef.current = true;
+      startRecording();
+    }
+  }, [onWake]);
 
   const wakeWord = useWakeWord(handleWake, daemonUrlRef.current);
 

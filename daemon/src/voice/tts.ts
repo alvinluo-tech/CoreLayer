@@ -18,13 +18,40 @@ export async function synthesizeSpeech(options: TTSOptions): Promise<Buffer> {
   const {
     text,
     model = "mimo-v2.5-tts",
+    voice,
+    speed,
   } = options;
 
   if (!env.MIMO_API_KEY) {
     throw new Error("MIMO_API_KEY not configured");
   }
 
+  // Voice mapping: use stable preset voice "茉莉" for mimo-v2.5-tts by default
+  let selectedVoice = voice;
+  if (model === "mimo-v2.5-tts") {
+    if (!selectedVoice || selectedVoice === "female-tianmei") {
+      selectedVoice = "茉莉";
+    }
+  }
+
+  // Map speed to natural language style instruction suffix
+  let instruction = "请用自然的语气说话";
+  if (speed && speed !== 1.0) {
+    if (speed > 1.2) {
+      instruction += "，语速稍微快一点";
+    } else if (speed < 0.8) {
+      instruction += "，语速稍微慢一点";
+    }
+  }
+
   const url = `${env.MIMO_API_URL}/chat/completions`;
+
+  const audioConfig: Record<string, string> = {
+    format: "wav",
+  };
+  if (selectedVoice) {
+    audioConfig.voice = selectedVoice;
+  }
 
   const response = await fetch(url, {
     method: "POST",
@@ -34,8 +61,10 @@ export async function synthesizeSpeech(options: TTSOptions): Promise<Buffer> {
     },
     body: JSON.stringify({
       model,
+      modalities: ["text", "audio"],
+      audio: audioConfig,
       messages: [
-        { role: "user", content: "请用自然的语气说话" },
+        { role: "user", content: instruction },
         { role: "assistant", content: text },
       ],
     }),

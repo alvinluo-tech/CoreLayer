@@ -63,7 +63,7 @@ struct DaemonErrorResponse {
 }
 
 async fn get_daemon_url() -> String {
-    std::env::var("DAEMON_URL").unwrap_or_else(|_| "http://localhost:3001".to_string())
+    std::env::var("DAEMON_URL").unwrap_or_else(|_| "http://127.0.0.1:3001".to_string())
 }
 
 async fn daemon_get<T: for<'de> Deserialize<'de>>(path: &str) -> Result<T, String> {
