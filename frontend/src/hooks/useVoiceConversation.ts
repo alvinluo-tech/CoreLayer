@@ -584,6 +584,8 @@ export function useVoiceConversation(
       }
 
       if (!isActiveRef.current) {
+        lastStreamedTextRef.current = "";
+        lastUserTextRef.current = "";
         const isFocused = document.hasFocus();
         isAppFocusedRef.current = isFocused;
         setLayoutMode(isFocused ? "centered" : "bottom-right");
@@ -689,6 +691,9 @@ export function useVoiceConversation(
   const startListening = useCallback(() => {
     if (isActiveRef.current) return;
     
+    lastStreamedTextRef.current = "";
+    lastUserTextRef.current = "";
+    
     const isFocused = document.hasFocus();
     isAppFocusedRef.current = isFocused;
     setLayoutMode(isFocused ? "centered" : "bottom-right");
@@ -760,6 +765,9 @@ export function useVoiceConversation(
   // --- Play Sci-Fi greeting and then start listening ---
   const playGreetingAndListen = useCallback(async () => {
     if (isActiveRef.current) return;
+    
+    lastStreamedTextRef.current = "";
+    lastUserTextRef.current = "";
     
     const isFocused = document.hasFocus();
     isAppFocusedRef.current = isFocused;

@@ -28,6 +28,8 @@ function App() {
         const { getCurrentWindow } = await import("@tauri-apps/api/window");
         const appWindow = getCurrentWindow();
         await appWindow.hide().catch(() => {});
+        // Notify the main window that we are idle!
+        await appWindow.emit("assistant-idle").catch(() => {});
       } catch (e) {
         console.warn("Failed to hide assistant window:", e);
       }
@@ -242,6 +244,32 @@ function App() {
       voiceConv.clearLastStreamedText();
     }
   }, [messages, voiceConv.clearLastStreamedText]);
+
+  // Listen to assistant window going idle to restart wake-word listening!
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    const setupListener = async () => {
+      try {
+        const { getCurrentWindow } = await import("@tauri-apps/api/window");
+        const appWindow = getCurrentWindow();
+        const unsub = await appWindow.listen("assistant-idle", () => {
+          console.log("[Main Window] Assistant window went idle. Restarting wake-word engine...");
+          const v = voiceRef.current;
+          if (v && !v.isWakeWordListening) {
+            v.toggleListening();
+          }
+        });
+        unlisten = unsub;
+      } catch (e) {
+        console.warn("Failed to listen to assistant-idle event:", e);
+      }
+    };
+    
+    setupListener();
+    return () => {
+      if (unlisten) unlisten();
+    };
+  }, []);
 
   // Determine which state to show in VoicePanel
   const panelState = voiceConv.state !== "idle" ? voiceConv.state : voice.state;
