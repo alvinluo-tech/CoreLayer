@@ -147,6 +147,11 @@ export function useVoiceConversation(
         lang: "zh-CN",
         onInterim: (text) => {
           if (isActiveRef.current) {
+            // Cancel the post-listen timeout because the user has started speaking!
+            if (postListenTimerRef.current) {
+              clearTimeout(postListenTimerRef.current);
+              postListenTimerRef.current = null;
+            }
             setInterimTranscript(text);
             latestInterimText = text;
           }
