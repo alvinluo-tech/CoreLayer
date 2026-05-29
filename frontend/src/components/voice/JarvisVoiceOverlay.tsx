@@ -1,0 +1,357 @@
+import { useEffect, useRef, useState } from "react";
+import { X, Mic, Square, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import type { VoiceConversationState } from "@/hooks/useVoiceConversation";
+
+interface JarvisVoiceOverlayProps {
+  state: VoiceConversationState;
+  interimTranscript: string;
+  finalTranscript: string;
+  assistantText: string;
+  onClose: () => void;
+  onStop: () => void;
+}
+
+export function JarvisVoiceOverlay({
+  state,
+  interimTranscript,
+  finalTranscript,
+  assistantText,
+  onClose,
+  onStop,
+}: JarvisVoiceOverlayProps) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const animationFrameRef = useRef<number>(0);
+  const phaseRef = useRef<number>(0);
+
+  // Active Timer state
+  const [timer, setTimer] = useState<number>(0);
+  const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Start stopwatch when ASR listening or AI speaking is active
+  useEffect(() => {
+    const isActive = state === "listening" || state === "speaking" || state === "streaming";
+    
+    if (isActive) {
+      setTimer(0);
+      timerIntervalRef.current = setInterval(() => {
+        setTimer((t) => t + 1);
+      }, 1000);
+    } else {
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
+        timerIntervalRef.current = null;
+      }
+    }
+
+    return () => {
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
+      }
+    };
+  }, [state]);
+
+  // Format timer as MM:SS
+  const formatTime = (secs: number) => {
+    const m = Math.floor(secs / 60).toString().padStart(2, "0");
+    const s = (secs % 60).toString().padStart(2, "0");
+    return `${m}:${s}`;
+  };
+
+  // Canvas Sci-Fi Sine Wave Animation
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    // Resize canvas properly for high-DPI displays
+    const resizeCanvas = () => {
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = rect.width * window.devicePixelRatio;
+      canvas.height = rect.height * window.devicePixelRatio;
+      ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    };
+    resizeCanvas();
+    window.addEventListener("resize", resizeCanvas);
+
+    // Color definitions based on state
+    const getStateColors = () => {
+      switch (state) {
+        case "listening":
+          return {
+            primary: "rgba(6, 182, 212, 0.8)", // Cyan
+            secondary: "rgba(16, 185, 129, 0.4)", // Emerald
+            glow: "rgba(6, 182, 212, 0.25)",
+            speed: 0.15,
+            amplitude: 45,
+            waves: 4,
+          };
+        case "transcribing":
+          return {
+            primary: "rgba(59, 130, 246, 0.8)", // Blue
+            secondary: "rgba(99, 102, 241, 0.4)", // Indigo
+            glow: "rgba(59, 130, 246, 0.25)",
+            speed: 0.25,
+            amplitude: 20,
+            waves: 6,
+          };
+        case "streaming":
+          return {
+            primary: "rgba(245, 158, 11, 0.8)", // Amber
+            secondary: "rgba(234, 179, 8, 0.4)", // Yellow
+            glow: "rgba(245, 158, 11, 0.25)",
+            speed: 0.08,
+            amplitude: 30,
+            waves: 3,
+          };
+        case "speaking":
+          return {
+            primary: "rgba(139, 92, 246, 0.8)", // Violet
+            secondary: "rgba(236, 72, 153, 0.4)", // Pink
+            glow: "rgba(139, 92, 246, 0.25)",
+            speed: 0.12,
+            amplitude: 35,
+            waves: 5,
+          };
+        default:
+          return {
+            primary: "rgba(148, 163, 184, 0.5)", // Slate
+            secondary: "rgba(71, 85, 105, 0.2)",
+            glow: "rgba(148, 163, 184, 0.1)",
+            speed: 0.05,
+            amplitude: 10,
+            waves: 2,
+          };
+      }
+    };
+
+    const draw = () => {
+      const rect = canvas.getBoundingClientRect();
+      const w = rect.width;
+      const h = rect.height;
+      
+      ctx.clearRect(0, 0, w, h);
+      
+      const config = getStateColors();
+      phaseRef.current += config.speed;
+      
+      // Draw background glow grid lines for futuristic HUD look
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.02)";
+      ctx.lineWidth = 1;
+      for (let x = 0; x < w; x += 40) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, h);
+        ctx.stroke();
+      }
+      for (let y = 0; y < h; y += 40) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+        ctx.stroke();
+      }
+
+      // Draw multi-layered sine waves
+      for (let i = 0; i < config.waves; i++) {
+        ctx.beginPath();
+        
+        const currentAmp = config.amplitude * (1 - i * 0.18);
+        const currentFreq = 0.008 + i * 0.003;
+        
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = config.primary;
+        ctx.strokeStyle = i === 0 ? config.primary : config.secondary;
+        ctx.lineWidth = i === 0 ? 3 : 1.5;
+        
+        // Fluid sine formula
+        for (let x = 0; x < w; x++) {
+          // Fade waves out near edges for circular border focus
+          const edgeFade = Math.sin((x / w) * Math.PI);
+          const y = h / 2 + Math.sin(x * currentFreq + phaseRef.current + i * 1.5) * currentAmp * edgeFade;
+          
+          if (x === 0) {
+            ctx.moveTo(x, y);
+          } else {
+            ctx.lineTo(x, y);
+          }
+        }
+        
+        ctx.stroke();
+      }
+
+      ctx.shadowBlur = 0; // Reset shadow
+      animationFrameRef.current = requestAnimationFrame(draw);
+    };
+
+    const animationId = requestAnimationFrame(draw);
+    animationFrameRef.current = animationId;
+
+    return () => {
+      window.removeEventListener("resize", resizeCanvas);
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, [state]);
+
+  if (state === "idle") return null;
+
+  // Custom styling based on state
+  const glowColors: Record<VoiceConversationState, string> = {
+    idle: "shadow-slate-500/20 border-slate-500/30",
+    listening: "shadow-cyan-500/30 border-cyan-500/30 bg-cyan-950/10",
+    transcribing: "shadow-blue-500/30 border-blue-500/30 bg-blue-950/10",
+    streaming: "shadow-amber-500/30 border-amber-500/30 bg-amber-950/10",
+    speaking: "shadow-violet-500/30 border-violet-500/30 bg-violet-950/10",
+    error: "shadow-red-500/30 border-red-500/30 bg-red-950/10",
+  };
+
+  const stateTitle: Record<VoiceConversationState, string> = {
+    idle: "IDLE",
+    listening: "🎤 JARVIS IS LISTENING...",
+    transcribing: "🔄 TRANSCRIBING...",
+    streaming: "⏳ DEEP THOUGHT GENERATING...",
+    speaking: "🔊 JARVIS COMMUNICATING...",
+    error: "⚠️ CRITICAL PIPELINE ERROR",
+  };
+
+  const stateSubtitle: Record<VoiceConversationState, string> = {
+    idle: "Waiting",
+    listening: "Speak your command clearly",
+    transcribing: "Converting speech to digital instructions",
+    streaming: "Synthesizing intelligence feedback",
+    speaking: "Streaming audio response segment",
+    error: "Voice pipeline encountered an error",
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-[8px] transition-all duration-300 animate-in fade-in">
+      <div
+        className={cn(
+          "relative w-full max-w-xl p-6 mx-4 rounded-2xl border backdrop-blur-2xl shadow-2xl transition-all duration-500 transform scale-100 animate-in zoom-in-95",
+          glowColors[state]
+        )}
+      >
+        {/* Glow overlay grid effect */}
+        <div className="absolute inset-0 bg-radial-gradient from-transparent to-black/10 rounded-2xl pointer-events-none" />
+
+        {/* HUD top decorative bar */}
+        <div className="flex items-center justify-between border-b border-white/10 pb-3 mb-4">
+          <div className="flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-cyan-500 animate-ping" />
+            <span className="font-mono text-xs tracking-widest text-cyan-400 font-bold uppercase">
+              JARVIS HUD v2.5
+            </span>
+          </div>
+          <div className="flex items-center gap-4">
+            {/* Timer stopwatch */}
+            {(state === "listening" || state === "speaking" || state === "streaming") && (
+              <span className="font-mono text-xs tracking-wider bg-white/5 border border-white/10 rounded px-2 py-0.5 text-cyan-400 font-bold animate-pulse">
+                ⏱️ {formatTime(timer)}
+              </span>
+            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onClose}
+              className="h-6 w-6 text-white/50 hover:text-white hover:bg-white/10 rounded-full transition-all"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+
+        {/* Content body */}
+        <div className="space-y-6">
+          {/* Main Visualizer Area */}
+          <div className="relative h-44 rounded-xl border border-white/5 bg-black/40 overflow-hidden flex flex-col items-center justify-center">
+            {/* Pulsating background circle */}
+            <div
+              className={cn(
+                "absolute h-36 w-36 rounded-full border border-white/5 opacity-20 filter blur-sm transition-all duration-1000 transform scale-100",
+                state === "listening" && "scale-110 border-cyan-500 animate-pulse",
+                state === "speaking" && "scale-125 border-violet-500",
+                state === "streaming" && "scale-105 border-amber-500 animate-spin"
+              )}
+            />
+
+            <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
+            
+            {/* Floating state overlay label */}
+            <div className="absolute bottom-3 text-center pointer-events-none">
+              <p className="font-mono text-xs tracking-wider text-white/90 font-bold drop-shadow-md">
+                {stateTitle[state]}
+              </p>
+              <p className="text-[10px] text-white/50 font-mono tracking-wide drop-shadow mt-0.5">
+                {stateSubtitle[state]}
+              </p>
+            </div>
+          </div>
+
+          {/* Interactive Transcript Panel */}
+          <div className="space-y-4">
+            {/* User speech transcript bubble */}
+            {(state === "listening" || finalTranscript) && (
+              <div className="rounded-lg border border-white/5 bg-white/5 p-3 space-y-1">
+                <p className="font-mono text-[10px] text-cyan-400 uppercase tracking-widest font-semibold">
+                  Host Voice Command:
+                </p>
+                <div className="text-sm min-h-[1.5rem] max-h-16 overflow-y-auto leading-relaxed">
+                  {interimTranscript ? (
+                    <span className="text-white/80 animate-pulse">{interimTranscript}</span>
+                  ) : finalTranscript ? (
+                    <span className="text-white font-medium">{finalTranscript}</span>
+                  ) : (
+                    <span className="text-white/30 italic font-mono">Listening for voice feed...</span>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* AI speaking response bubble */}
+            {assistantText && (
+              <div className="rounded-lg border border-purple-500/10 bg-purple-500/5 p-3 space-y-1">
+                <p className="font-mono text-[10px] text-purple-400 uppercase tracking-widest font-semibold">
+                  Jarvis Intelligence Response:
+                </p>
+                <div className="text-sm max-h-28 overflow-y-auto whitespace-pre-wrap leading-relaxed text-white/90 font-medium">
+                  {assistantText}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Controls Footer */}
+          <div className="flex justify-center border-t border-white/10 pt-4 gap-4">
+            {/* Interrupt or stop button */}
+            {state === "speaking" || state === "streaming" ? (
+              <Button
+                variant="destructive"
+                onClick={onStop}
+                className="flex items-center gap-2 rounded-full px-6 py-5 bg-red-600 hover:bg-red-700 font-mono text-xs tracking-wider shadow-lg shadow-red-900/30"
+              >
+                <Square className="h-4 w-4" /> INTERRUPT FEED
+              </Button>
+            ) : (state === "listening") ? (
+              <Button
+                onClick={onStop}
+                className="flex items-center gap-2 rounded-full px-6 py-5 bg-cyan-600 hover:bg-cyan-700 font-mono text-xs tracking-wider shadow-lg shadow-cyan-900/30"
+              >
+                <Mic className="h-4 w-4 animate-pulse" /> FINISH COMM
+              </Button>
+            ) : (
+              <Button
+                disabled
+                className="flex items-center gap-2 rounded-full px-6 py-5 bg-white/10 text-white/40 border border-white/5 font-mono text-xs tracking-wider"
+              >
+                <Loader2 className="h-4 w-4 animate-spin" /> SYNCHRONIZING
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

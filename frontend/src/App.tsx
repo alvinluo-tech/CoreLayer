@@ -5,6 +5,7 @@ import { TodayView } from "@/components/modules/todo/TodayView";
 import { ReadingList } from "@/components/modules/reading/ReadingList";
 import { DailySummary } from "@/components/modules/review/DailySummary";
 import { VoicePanel } from "@/components/voice/VoicePanel";
+import { JarvisVoiceOverlay } from "@/components/voice/JarvisVoiceOverlay";
 import { SettingsModal } from "@/components/settings/SettingsModal";
 import { CommandPalette } from "@/components/palette/CommandPalette";
 import { useChat } from "@/hooks/useChat";
@@ -58,7 +59,7 @@ function App() {
 
   // Wake word detection (from useVoice)
   const handleWake = useCallback(() => {
-    voiceConv.startListening();
+    voiceConv.playGreetingAndListen();
   }, [voiceConv]);
 
   // When batch ASR transcription completes, start streaming conversation
@@ -192,6 +193,16 @@ function App() {
 
       {/* Settings Modal */}
       <SettingsModal open={showSettings} onClose={() => setShowSettings(false)} />
+
+      {/* Futuristic Sci-Fi Voice Overlay */}
+      <JarvisVoiceOverlay
+        state={voiceConv.state}
+        interimTranscript={voiceConv.interimTranscript}
+        finalTranscript={voiceConv.finalTranscript}
+        assistantText={voiceConv.assistantText}
+        onClose={voiceConv.stopConversation}
+        onStop={voiceConv.stopConversation}
+      />
     </div>
   );
 }

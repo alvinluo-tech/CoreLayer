@@ -23,6 +23,49 @@ const HALLUCINATION_PATTERNS = [
   "拜拜", "再见", "字幕由", "制作", "敬请关注",
 ];
 
+function playSciFiChime() {
+  try {
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const now = ctx.currentTime;
+    
+    // Osc 1 - High bell chime
+    const osc1 = ctx.createOscillator();
+    const gain1 = ctx.createGain();
+    osc1.type = "sine";
+    osc1.frequency.setValueAtTime(880, now); // A5
+    osc1.frequency.exponentialRampToValueAtTime(1760, now + 0.15); // A6
+    
+    gain1.gain.setValueAtTime(0, now);
+    gain1.gain.linearRampToValueAtTime(0.35, now + 0.05);
+    gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+    
+    // Osc 2 - Harmony chime
+    const osc2 = ctx.createOscillator();
+    const gain2 = ctx.createGain();
+    osc2.type = "triangle";
+    osc2.frequency.setValueAtTime(1108.73, now); // C#6
+    osc2.frequency.exponentialRampToValueAtTime(2217.46, now + 0.2); // C#7
+    
+    gain2.gain.setValueAtTime(0, now);
+    gain2.gain.linearRampToValueAtTime(0.18, now + 0.08);
+    gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
+    
+    osc1.connect(gain1);
+    gain1.connect(ctx.destination);
+    
+    osc2.connect(gain2);
+    gain2.connect(ctx.destination);
+    
+    osc1.start(now);
+    osc1.stop(now + 0.8);
+    
+    osc2.start(now);
+    osc2.stop(now + 0.8);
+  } catch (e) {
+    console.warn("Failed to play sci-fi chime programmatically:", e);
+  }
+}
+
 export function useVoiceConversation(
   conversationId: string | null,
   onIdle?: () => void,
@@ -602,6 +645,57 @@ export function useVoiceConversation(
     }
   }, [transcribeWithWhisper, startConversation]);
 
+  // --- Play Sci-Fi greeting and then start listening ---
+  const playGreetingAndListen = useCallback(async () => {
+    if (isActiveRef.current) return;
+    isActiveRef.current = true;
+    setState("speaking");
+    setAssistantText("我在的，主人。");
+    
+    try {
+      // 1. Play chime sound
+      playSciFiChime();
+      
+      // 2. Fetch spoken response
+      const res = await fetch(`${daemonUrlRef.current}/api/voice/synthesize`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: "我在的，主人。", voice: "茉莉" }),
+      });
+      
+      if (!res.ok) throw new Error("TTS failed");
+      
+      const buffer = await res.arrayBuffer();
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      
+      ctx.decodeAudioData(
+        buffer,
+        (decoded) => {
+          const source = ctx.createBufferSource();
+          source.buffer = decoded;
+          source.connect(ctx.destination);
+          
+          source.onended = () => {
+            isActiveRef.current = false;
+            startListening();
+            ctx.close().catch(() => {});
+          };
+          
+          source.start(0);
+        },
+        () => {
+          isActiveRef.current = false;
+          startListening();
+          ctx.close().catch(() => {});
+        }
+      );
+    } catch (err) {
+      console.warn("[VoiceConversation] Greeting playback failed, falling back to direct listening:", err);
+      isActiveRef.current = false;
+      startListening();
+    }
+  }, [startListening]);
+
   // --- Stop / Barge-in ---
   const stopConversation = useCallback(() => {
     isActiveRef.current = false;
@@ -710,6 +804,7 @@ export function useVoiceConversation(
     assistantText: displayAssistantText,
     isSupported,
     startListening,
+    playGreetingAndListen,
     stopConversation,
     bargeIn,
     startConversation,
