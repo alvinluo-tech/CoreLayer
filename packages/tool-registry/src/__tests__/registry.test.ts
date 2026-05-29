@@ -102,6 +102,30 @@ describe("ToolRegistry", () => {
     expect(filtered).toHaveLength(2);
   });
 
+  it("filters tools by category", () => {
+    const registry = new ToolRegistry();
+    registry.registerTool(createTestTool({ id: "t1", category: "productivity" }));
+    registry.registerTool(createTestTool({ id: "t2", category: "system" }));
+    registry.registerTool(createTestTool({ id: "t3", category: "productivity" }));
+    registry.registerTool(createTestTool({ id: "t4" })); // undefined category
+
+    const filtered = registry.filterTools({ category: "productivity" });
+    expect(filtered).toHaveLength(2);
+    expect(filtered[0].id).toBe("t1");
+    expect(filtered[1].id).toBe("t3");
+  });
+
+  it("filters tools by multiple criteria", () => {
+    const registry = new ToolRegistry();
+    registry.registerTool(createTestTool({ id: "t1", source: "mcp", category: "data" }));
+    registry.registerTool(createTestTool({ id: "t2", source: "mcp", category: "system" }));
+    registry.registerTool(createTestTool({ id: "t3", source: "native", category: "data" }));
+
+    const filtered = registry.filterTools({ source: "mcp", category: "data" });
+    expect(filtered).toHaveLength(1);
+    expect(filtered[0].id).toBe("t1");
+  });
+
   it("creates JarvisTools from MCP tool definitions", () => {
     const callTool = async () => ({
       content: [{ type: "text" as const, text: "result" }],
@@ -121,6 +145,21 @@ describe("ToolRegistry", () => {
     expect(tools[0].source).toBe("mcp");
     expect(tools[0].appId).toBe("server1");
     expect(tools[0].description).toBe("First tool");
+  });
+
+  it("sets default metadata on MCP tools", () => {
+    const callTool = async () => ({
+      content: [{ type: "text" as const, text: "ok" }],
+    });
+
+    const tools = ToolRegistry.fromMCPTools("srv", [{ name: "t1" }], callTool);
+    const tool = tools[0];
+
+    expect(tool.timeoutMs).toBe(30000);
+    expect(tool.idempotent).toBe(false);
+    expect(tool.cancellable).toBe(false);
+    expect(tool.category).toBe("other");
+    expect(tool.displayMode).toBe("card");
   });
 
   it("clears all tools", () => {

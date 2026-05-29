@@ -3,13 +3,18 @@ import type {
   PermissionCheckResult,
   PermissionGuardConfig,
   ToolResult,
+  PendingConfirmation,
+  PendingExecution,
 } from "@jarvis/types";
 import { AuditLog } from "./audit.js";
 import { DEFAULT_PERMISSION_CONFIG, getRiskAction } from "./policies.js";
 
+const PENDING_CONFIRMATION_TIMEOUT_MS = 30_000;
+
 export class PermissionGuard {
   private config: PermissionGuardConfig;
   private auditLog: AuditLog;
+  private pendingConfirmations: Map<string, PendingConfirmation & { resolve: (value: boolean) => void }> = new Map();
 
   constructor(config?: Partial<PermissionGuardConfig>) {
     this.config = { ...DEFAULT_PERMISSION_CONFIG, ...config };
@@ -149,5 +154,160 @@ export class PermissionGuard {
 
   setAppPermissions(appId: string, permissions: PermissionGuardConfig["appPermissions"][string]): void {
     this.config.appPermissions[appId] = permissions;
+  }
+
+  async executeWithPendingConfirmation(
+    tool: JarvisTool,
+    args: unknown,
+    options?: { timeoutMs?: number },
+  ): Promise<PendingExecution> {
+    const check = this.checkPermission(tool);
+    const now = new Date();
+    const timeoutMs = options?.timeoutMs ?? PENDING_CONFIRMATION_TIMEOUT_MS;
+    const confirmationId = crypto.randomUUID();
+
+    // Auto-execute for low/medium risk (no confirmation needed)
+    if (!check.requiresConfirmation) {
+      const result = await tool.execute(args);
+      this.auditLog.log({
+        action: "execute",
+        toolId: tool.id,
+        toolName: tool.name,
+        appId: tool.appId,
+        args,
+        result: result.success ? "success" : "failure",
+        riskLevel: tool.risk,
+        confirmedByUser: false,
+        error: result.error,
+      });
+
+      const confirmation: PendingConfirmation = {
+        confirmationId,
+        toolId: tool.id,
+        toolName: tool.name,
+        appId: tool.appId,
+        args,
+        riskLevel: tool.risk,
+        reason: check.reason,
+        createdAt: now.toISOString(),
+        expiresAt: new Date(now.getTime() + timeoutMs).toISOString(),
+      };
+
+      return {
+        confirmationId,
+        confirmation,
+        confirm: async () => result,
+        deny: async () => ({ success: false, error: "已自动执行，无法拒绝" }),
+        isExpired: false,
+      };
+    }
+
+    // High/critical risk — create pending confirmation
+    const confirmation: PendingConfirmation = {
+      confirmationId,
+      toolId: tool.id,
+      toolName: tool.name,
+      appId: tool.appId,
+      args,
+      riskLevel: tool.risk,
+      reason: check.reason,
+      createdAt: now.toISOString(),
+      expiresAt: new Date(now.getTime() + timeoutMs).toISOString(),
+    };
+
+    let resolved = false;
+    let expired = false;
+
+    // Store resolve so confirm/deny can signal the pending promise
+    let storedResolve: (value: boolean) => void = () => {};
+    const _pendingPromise = new Promise<boolean>((resolve) => {
+      storedResolve = resolve;
+      this.pendingConfirmations.set(confirmationId, {
+        ...confirmation,
+        resolve,
+      });
+
+      // Auto-expire after timeout
+      setTimeout(() => {
+        if (!resolved) {
+          expired = true;
+          this.pendingConfirmations.delete(confirmationId);
+          resolve(false);
+        }
+      }, timeoutMs);
+    });
+
+    const confirm = async (): Promise<ToolResult> => {
+      if (expired) {
+        return { success: false, error: "确认已过期" };
+      }
+      resolved = true;
+      storedResolve(true);
+      this.pendingConfirmations.delete(confirmationId);
+
+      const result = await tool.execute(args);
+      this.auditLog.log({
+        action: "execute",
+        toolId: tool.id,
+        toolName: tool.name,
+        appId: tool.appId,
+        args,
+        result: result.success ? "success" : "failure",
+        riskLevel: tool.risk,
+        confirmedByUser: true,
+        error: result.error,
+      });
+      return result;
+    };
+
+    const deny = async (): Promise<ToolResult> => {
+      if (expired) {
+        return { success: false, error: "确认已过期" };
+      }
+      resolved = true;
+      storedResolve(false);
+      this.pendingConfirmations.delete(confirmationId);
+
+      this.auditLog.log({
+        action: "execute",
+        toolId: tool.id,
+        toolName: tool.name,
+        appId: tool.appId,
+        args,
+        result: "cancelled",
+        riskLevel: tool.risk,
+        confirmedByUser: false,
+      });
+      return { success: false, error: "用户拒绝执行" };
+    };
+
+    return {
+      confirmationId,
+      confirmation,
+      confirm,
+      deny,
+      isExpired: expired,
+    };
+  }
+
+  getPendingConfirmations(): PendingConfirmation[] {
+    return Array.from(this.pendingConfirmations.values()).map(({ resolve: _, ...rest }) => rest);
+  }
+
+  cancelConfirmation(confirmationId: string): boolean {
+    const pending = this.pendingConfirmations.get(confirmationId);
+    if (!pending) return false;
+    pending.resolve(false);
+    this.pendingConfirmations.delete(confirmationId);
+    return true;
+  }
+
+  cancelAllPending(): number {
+    const count = this.pendingConfirmations.size;
+    for (const [, pending] of this.pendingConfirmations) {
+      pending.resolve(false);
+    }
+    this.pendingConfirmations.clear();
+    return count;
   }
 }

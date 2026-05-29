@@ -72,3 +72,70 @@ export const messages = sqliteTable("messages", {
   tokenCount: integer("token_count"),
   createdAt: text("created_at").default("CURRENT_TIMESTAMP").notNull(),
 });
+
+// ---- Tool Call Audit Trail ----
+
+export const toolCallLogs = sqliteTable("tool_call_logs", {
+  id: text("id").primaryKey(),
+  toolId: text("tool_id").notNull(),
+  toolName: text("tool_name").notNull(),
+  appId: text("app_id"),
+  source: text("source", { enum: ["mcp", "native", "skill", "rest"] }).notNull(),
+  args: text("args"), // JSON stored as text
+  resultSuccess: integer("result_success", { mode: "boolean" }),
+  resultData: text("result_data"), // JSON stored as text
+  resultError: text("result_error"),
+  risk: text("risk"),
+  confirmedByUser: integer("confirmed_by_user", { mode: "boolean" }),
+  durationMs: integer("duration_ms"),
+  conversationId: text("conversation_id"),
+  createdAt: text("created_at").default("CURRENT_TIMESTAMP").notNull(),
+});
+
+// ---- Persisted MCP/App Connections ----
+
+export const appConnections = sqliteTable("app_connections", {
+  id: text("id").primaryKey(),
+  appId: text("app_id").notNull().unique(),
+  appName: text("app_name").notNull(),
+  source: text("source", { enum: ["mcp", "native", "skill", "rest"] }).notNull(),
+  config: text("config"), // JSON stored as text
+  status: text("status", { enum: ["disconnected", "connecting", "connected", "error"] })
+    .default("disconnected")
+    .notNull(),
+  lastConnected: text("last_connected"),
+  lastError: text("last_error"),
+  toolCount: integer("tool_count").default(0),
+  createdAt: text("created_at").default("CURRENT_TIMESTAMP").notNull(),
+  updatedAt: text("updated_at").default("CURRENT_TIMESTAMP").notNull(),
+});
+
+// ---- Model Profiles ----
+
+export const modelProfiles = sqliteTable("model_profiles", {
+  id: text("id").primaryKey(),
+  provider: text("provider").notNull(),
+  modelName: text("model_name").notNull(),
+  displayName: text("display_name"),
+  capabilities: text("capabilities"), // JSON stored as text
+  limits: text("limits"), // JSON stored as text
+  cost: text("cost"), // JSON stored as text
+  isDefault: integer("is_default", { mode: "boolean" }).default(false),
+  createdAt: text("created_at").default("CURRENT_TIMESTAMP").notNull(),
+  updatedAt: text("updated_at").default("CURRENT_TIMESTAMP").notNull(),
+});
+
+// ---- Agent Memory ----
+
+export const memories = sqliteTable("memories", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().default("default"),
+  type: text("type", { enum: ["fact", "preference", "context", "summary"] }).notNull(),
+  key: text("key").notNull(),
+  value: text("value").notNull(),
+  source: text("source"),
+  confidence: real("confidence"),
+  expiresAt: text("expires_at"),
+  createdAt: text("created_at").default("CURRENT_TIMESTAMP").notNull(),
+  updatedAt: text("updated_at").default("CURRENT_TIMESTAMP").notNull(),
+});

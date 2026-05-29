@@ -1,4 +1,4 @@
-import type { RiskLevel } from "./tool.js";
+import type { RiskLevel, ToolResult } from "./tool.js";
 
 export type PermissionAction = "read" | "write" | "delete" | "bulkWrite" | "execute";
 
@@ -47,4 +47,24 @@ export interface PermissionGuardConfig {
     critical: "auto" | "notify" | "confirm" | "deny";
   };
   appPermissions: Record<string, PermissionSet>;
+}
+
+export interface PendingConfirmation {
+  confirmationId: string;
+  toolId: string;
+  toolName: string;
+  appId: string;
+  args: unknown;
+  riskLevel: RiskLevel;
+  reason?: string;
+  createdAt: string;
+  expiresAt: string;
+}
+
+export interface PendingExecution {
+  confirmationId: string;
+  confirmation: PendingConfirmation;
+  confirm: () => Promise<ToolResult>;
+  deny: () => Promise<ToolResult>;
+  isExpired: boolean;
 }

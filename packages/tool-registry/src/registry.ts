@@ -3,6 +3,8 @@ import type {
   ToolSource,
   ToolFilter,
   RiskLevel,
+  ToolCategory,
+  ToolDisplayMode,
   MCPToolDefinition,
   MCPToolCallResult,
 } from "@jarvis/types";
@@ -52,6 +54,7 @@ export class ToolRegistry {
       if (filter.appId && tool.appId !== filter.appId) return false;
       if (filter.source && tool.source !== filter.source) return false;
       if (filter.risk && tool.risk !== filter.risk) return false;
+      if (filter.category && tool.category !== filter.category) return false;
       if (filter.search) {
         const q = filter.search.toLowerCase();
         const matches =
@@ -92,6 +95,11 @@ export class ToolRegistry {
       risk: "medium" as RiskLevel,
       permissions: [],
       requiresConfirmation: false,
+      timeoutMs: 30000,
+      idempotent: false,
+      cancellable: false,
+      category: "other" as ToolCategory,
+      displayMode: "card" as ToolDisplayMode,
       execute: async (args: unknown) => {
         const result = await callTool(serverId, t.name, args as Record<string, unknown>);
         if (result.isError) {

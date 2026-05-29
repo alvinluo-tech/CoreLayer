@@ -1,7 +1,10 @@
+import { voiceProfileManager } from "./voiceProfile.js";
+
 export class AudioQueueManager {
   private audioCtx: AudioContext;
   private ttsUrl: string;
   private voice: string;
+  private model: string;
   private buffers: Map<number, AudioBuffer> = new Map();
   private nextPlayIndex = 0;
   private totalExpected = 0;
@@ -10,10 +13,11 @@ export class AudioQueueManager {
   private stopped = false;
   private completionResolve: (() => void) | null = null;
 
-  constructor(ttsUrl: string, voice = "茉莉") {
+  constructor(ttsUrl: string, voice?: string) {
     this.audioCtx = new AudioContext();
     this.ttsUrl = ttsUrl;
-    this.voice = voice;
+    this.voice = voice ?? voiceProfileManager.getVoiceName();
+    this.model = voiceProfileManager.getTTSModel();
   }
 
   setTotalExpected(count: number) {
@@ -47,7 +51,7 @@ export class AudioQueueManager {
     const response = await fetch(this.ttsUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: cleanedText, model: "mimo-v2.5-tts", voice: this.voice }),
+      body: JSON.stringify({ text: cleanedText, model: this.model, voice: this.voice }),
     });
     if (!response.ok) {
       throw new Error(`TTS error ${response.status}`);

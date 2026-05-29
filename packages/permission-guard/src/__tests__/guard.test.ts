@@ -154,4 +154,112 @@ describe("PermissionGuard", () => {
     const result = guard.checkPermission(tool);
     expect(result.requiresConfirmation).toBe(true);
   });
+
+  it("auto-executes low risk tools via pending confirmation", async () => {
+    const guard = new PermissionGuard();
+    const tool = createTestTool({ risk: "low" });
+
+    const pending = await guard.executeWithPendingConfirmation(tool, {});
+    expect(pending.confirmation.riskLevel).toBe("low");
+    // Should have already executed
+    const result = await pending.confirm();
+    expect(result.success).toBe(true);
+    expect(pending.isExpired).toBe(false);
+  });
+
+  it("creates pending confirmation for high risk tools", async () => {
+    const guard = new PermissionGuard();
+    const tool = createTestTool({ risk: "high" });
+
+    const pending = await guard.executeWithPendingConfirmation(tool, { data: "test" });
+    expect(pending.confirmation.riskLevel).toBe("high");
+    expect(pending.confirmation.toolId).toBe("test:tool1");
+    expect(pending.confirmation.args).toEqual({ data: "test" });
+
+    // Should be in pending list
+    const pendingList = guard.getPendingConfirmations();
+    expect(pendingList).toHaveLength(1);
+    expect(pendingList[0].confirmationId).toBe(pending.confirmationId);
+  });
+
+  it("confirms high risk tool execution", async () => {
+    const guard = new PermissionGuard();
+    const tool = createTestTool({ risk: "high" });
+
+    const pending = await guard.executeWithPendingConfirmation(tool, {});
+    const result = await pending.confirm();
+    expect(result.success).toBe(true);
+
+    // Should be removed from pending list
+    expect(guard.getPendingConfirmations()).toHaveLength(0);
+  });
+
+  it("denies high risk tool execution", async () => {
+    const guard = new PermissionGuard();
+    const tool = createTestTool({ risk: "high" });
+
+    const pending = await guard.executeWithPendingConfirmation(tool, {});
+    const result = await pending.deny();
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("拒绝");
+
+    expect(guard.getPendingConfirmations()).toHaveLength(0);
+  });
+
+  it("cancels a specific pending confirmation", async () => {
+    const guard = new PermissionGuard();
+    const tool = createTestTool({ risk: "high" });
+
+    const pending = await guard.executeWithPendingConfirmation(tool, {});
+    expect(guard.getPendingConfirmations()).toHaveLength(1);
+
+    const cancelled = guard.cancelConfirmation(pending.confirmationId);
+    expect(cancelled).toBe(true);
+    expect(guard.getPendingConfirmations()).toHaveLength(0);
+  });
+
+  it("returns false when cancelling nonexistent confirmation", () => {
+    const guard = new PermissionGuard();
+    expect(guard.cancelConfirmation("nonexistent")).toBe(false);
+  });
+
+  it("cancels all pending confirmations", async () => {
+    const guard = new PermissionGuard();
+    const tool1 = createTestTool({ id: "t1", risk: "high" });
+    const tool2 = createTestTool({ id: "t2", risk: "critical" });
+
+    await guard.executeWithPendingConfirmation(tool1, {});
+    await guard.executeWithPendingConfirmation(tool2, {});
+    expect(guard.getPendingConfirmations()).toHaveLength(2);
+
+    const count = guard.cancelAllPending();
+    expect(count).toBe(2);
+    expect(guard.getPendingConfirmations()).toHaveLength(0);
+  });
+
+  it("logs audit entries for confirmed pending execution", async () => {
+    const guard = new PermissionGuard();
+    const tool = createTestTool({ risk: "high" });
+
+    const pending = await guard.executeWithPendingConfirmation(tool, {});
+    await pending.confirm();
+
+    const entries = guard.getAuditLog().getEntries();
+    expect(entries).toHaveLength(1);
+    expect(entries[0].result).toBe("success");
+    expect(entries[0].confirmedByUser).toBe(true);
+  });
+
+  it("logs audit entries for denied pending execution", async () => {
+    const guard = new PermissionGuard();
+    const tool = createTestTool({ risk: "high" });
+
+    const pending = await guard.executeWithPendingConfirmation(tool, {});
+    await pending.deny();
+
+    const entries = guard.getAuditLog().getEntries();
+    expect(entries).toHaveLength(1);
+    expect(entries[0].result).toBe("cancelled");
+    expect(entries[0].confirmedByUser).toBe(false);
+  });
 });

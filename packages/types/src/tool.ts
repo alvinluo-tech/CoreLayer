@@ -16,6 +16,17 @@ export type ToolSource = "mcp" | "native" | "skill" | "rest";
 
 export type RiskLevel = "low" | "medium" | "high" | "critical";
 
+export type ToolCategory =
+  | "productivity"
+  | "communication"
+  | "system"
+  | "data"
+  | "media"
+  | "automation"
+  | "other";
+
+export type ToolDisplayMode = "inline" | "card" | "silent" | "confirm";
+
 export interface ToolResult {
   success: boolean;
   data?: unknown;
@@ -36,6 +47,11 @@ export interface JarvisTool {
   permissions: string[];
   requiresConfirmation: boolean;
   execute: (args: unknown) => Promise<ToolResult>;
+  timeoutMs?: number;
+  idempotent?: boolean;
+  cancellable?: boolean;
+  category?: ToolCategory;
+  displayMode?: ToolDisplayMode;
 }
 
 export interface ToolCallLog {
@@ -57,4 +73,5 @@ export interface ToolFilter {
   source?: ToolSource;
   risk?: RiskLevel;
   search?: string;
+  category?: ToolCategory;
 }

@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { getDaemonUrl } from "@/lib/tauri";
+import { voiceProfileManager } from "@/lib/voiceProfile";
 import { useWakeWord } from "./useWakeWord";
 import { encodeWav } from "@/lib/audioCapture";
 
@@ -98,7 +99,7 @@ export function useVoice(onCommand: (text: string) => void, onWake?: () => void)
         const response = await fetch(`${daemonUrlRef.current}/api/voice/synthesize`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text, model: "mimo-v2.5-tts" }),
+          body: JSON.stringify({ text, model: voiceProfileManager.getTTSModel() }),
         });
 
         if (!response.ok) {

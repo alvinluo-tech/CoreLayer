@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { getDaemonUrl } from "@/lib/tauri";
 import { splitSentences } from "@/lib/sentenceSplitter";
 import { AudioQueueManager } from "@/lib/audioQueue";
+import { voiceProfileManager } from "@/lib/voiceProfile";
 import { startAudioCapture, encodeWav } from "@/lib/audioCapture";
 import {
   createWebSpeechASR,
@@ -666,7 +667,6 @@ export function useVoiceConversation(
 
       const queue = new AudioQueueManager(
         `${daemonUrlRef.current}/api/voice/synthesize`,
-        "茉莉",
       );
       audioQueueRef.current = queue;
 
@@ -846,7 +846,7 @@ export function useVoiceConversation(
       const res = await fetch(`${daemonUrlRef.current}/api/voice/synthesize`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: "我在的，主人。", voice: "茉莉" }),
+        body: JSON.stringify({ text: "我在的，主人。", voice: voiceProfileManager.getVoiceName() }),
       });
       
       if (!res.ok) throw new Error("TTS failed");
@@ -972,7 +972,7 @@ export function useVoiceConversation(
       const res = await fetch(`${daemonUrlRef.current}/api/voice/synthesize`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: "如果没啥事我就先退下咯，如果有需要随时喊我哦！", voice: "茉莉" }),
+        body: JSON.stringify({ text: "如果没啥事我就先退下咯，如果有需要随时喊我哦！", voice: voiceProfileManager.getVoiceName() }),
       });
       
       if (!res.ok) throw new Error("TTS failed");

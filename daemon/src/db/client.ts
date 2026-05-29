@@ -80,6 +80,69 @@ sqlite.exec(`
   );
 
   CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id, created_at);
+
+  CREATE TABLE IF NOT EXISTS tool_call_logs (
+    id TEXT PRIMARY KEY,
+    tool_id TEXT NOT NULL,
+    tool_name TEXT NOT NULL,
+    app_id TEXT,
+    source TEXT NOT NULL CHECK(source IN ('mcp', 'native', 'skill', 'rest')),
+    args TEXT,
+    result_success INTEGER,
+    result_data TEXT,
+    result_error TEXT,
+    risk TEXT,
+    confirmed_by_user INTEGER,
+    duration_ms INTEGER,
+    conversation_id TEXT,
+    created_at TEXT DEFAULT 'CURRENT_TIMESTAMP'
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_tool_call_logs_conversation ON tool_call_logs(conversation_id);
+  CREATE INDEX IF NOT EXISTS idx_tool_call_logs_tool ON tool_call_logs(tool_id);
+
+  CREATE TABLE IF NOT EXISTS app_connections (
+    id TEXT PRIMARY KEY,
+    app_id TEXT NOT NULL UNIQUE,
+    app_name TEXT NOT NULL,
+    source TEXT NOT NULL CHECK(source IN ('mcp', 'native', 'skill', 'rest')),
+    config TEXT,
+    status TEXT NOT NULL DEFAULT 'disconnected' CHECK(status IN ('disconnected', 'connecting', 'connected', 'error')),
+    last_connected TEXT,
+    last_error TEXT,
+    tool_count INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT 'CURRENT_TIMESTAMP',
+    updated_at TEXT DEFAULT 'CURRENT_TIMESTAMP'
+  );
+
+  CREATE TABLE IF NOT EXISTS model_profiles (
+    id TEXT PRIMARY KEY,
+    provider TEXT NOT NULL,
+    model_name TEXT NOT NULL,
+    display_name TEXT,
+    capabilities TEXT,
+    limits TEXT,
+    cost TEXT,
+    is_default INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT 'CURRENT_TIMESTAMP',
+    updated_at TEXT DEFAULT 'CURRENT_TIMESTAMP'
+  );
+
+  CREATE TABLE IF NOT EXISTS memories (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL DEFAULT 'default',
+    type TEXT NOT NULL CHECK(type IN ('fact', 'preference', 'context', 'summary')),
+    key TEXT NOT NULL,
+    value TEXT NOT NULL,
+    source TEXT,
+    confidence REAL,
+    expires_at TEXT,
+    created_at TEXT DEFAULT 'CURRENT_TIMESTAMP',
+    updated_at TEXT DEFAULT 'CURRENT_TIMESTAMP'
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_memories_user ON memories(user_id, type);
+  CREATE INDEX IF NOT EXISTS idx_memories_key ON memories(key);
 `);
 
 export const db = drizzle(sqlite, { schema });
