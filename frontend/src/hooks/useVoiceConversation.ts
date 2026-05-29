@@ -531,7 +531,7 @@ export function useVoiceConversation(
           fullText += token;
           setAssistantText(fullText);
 
-          const { complete, remainder } = splitSentences(textBuffer, sentenceIndex === 0);
+          const { complete, remainder } = splitSentences(textBuffer, sentenceIndex);
           for (const sentence of complete) {
             queue.enqueue(sentence, sentenceIndex++);
           }
