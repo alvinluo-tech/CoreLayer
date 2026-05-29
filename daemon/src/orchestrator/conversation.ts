@@ -255,6 +255,82 @@ export async function handleMessageInConversation(
 }
 
 /**
+ * Handle a message within a conversation context (streaming).
+ * Saves user message, triggers streamText, and returns callback to save assistant message at finish.
+ */
+export async function streamMessageInConversation(
+  conversationId: string,
+  userMessage: string,
+): Promise<{
+  isAi: boolean;
+  userMessage: MessageRow;
+  result?: any;
+  reply?: string;
+  toolCalls?: any[];
+  saveAssistantMessage: (reply: string, toolCallsLog: any[]) => Promise<MessageRow>;
+}> {
+  const repo = getRepositories().conversations;
+
+  // Persist user message
+  const savedUserMsg = await repo.addMessage(conversationId, {
+    role: "user",
+    content: userMessage,
+  });
+
+  // Auto-generate title from first message
+  const conversation = await repo.getById(conversationId);
+  if (conversation && conversation.title === "New Chat" && conversation.messageCount <= 1) {
+    const title = generateTitleFromMessage(userMessage);
+    await repo.update(conversationId, { title });
+  }
+
+  // Load message history
+  const history = await repo.getMessages(conversationId);
+  const recentHistory = history.slice(-MAX_HISTORY_MESSAGES);
+
+  const saveAssistantMessage = async (reply: string, toolCallsLog: any[]) => {
+    return repo.addMessage(conversationId, {
+      role: "assistant",
+      content: reply,
+      toolCalls: toolCallsLog.length > 0 ? JSON.stringify(toolCallsLog) : undefined,
+    });
+  };
+
+  if (isAiConfigured()) {
+    const messages: ModelMessage[] = [
+      { role: "system", content: buildSystemPrompt() },
+      ...recentHistory.map((msg) => ({
+        role: msg.role as "user" | "assistant",
+        content: msg.content,
+      })),
+    ];
+
+    const result = streamText({
+      model: getModel(),
+      messages,
+      tools: getAllTools(),
+      stopWhen: stepCountIs(5),
+    });
+
+    return {
+      isAi: true,
+      userMessage: savedUserMsg,
+      result,
+      saveAssistantMessage,
+    };
+  } else {
+    const localResult = await handleLocally(userMessage);
+    return {
+      isAi: false,
+      userMessage: savedUserMsg,
+      reply: localResult.reply,
+      toolCalls: localResult.toolCalls,
+      saveAssistantMessage,
+    };
+  }
+}
+
+/**
  * Stream a chat response using Vercel AI SDK streamText.
  * Returns the stream result for direct use in API responses.
  */
@@ -268,6 +344,7 @@ export function streamChat(messages: ModelMessage[]): any {
     stopWhen: stepCountIs(5),
   });
 }
+
 
 /**
  * Legacy handler for backward compatibility (no conversation context).

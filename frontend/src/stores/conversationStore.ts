@@ -17,7 +17,12 @@ interface ConversationState {
   renameConversation: (id: string, title: string) => Promise<void>;
   sendMessage: (content: string) => Promise<SendMessageResponse | null>;
   clearActive: () => void;
+  refreshMessages: () => Promise<void>;
+  setMessages: (messages: ConversationMessage[]) => void;
+  setIsSending: (sending: boolean) => void;
+  setConversations: (conversations: Conversation[]) => void;
 }
+
 
 export const useConversationStore = create<ConversationState>((set, get) => ({
   conversations: [],
@@ -158,4 +163,18 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
   clearActive: () => {
     set({ activeConversationId: null, messages: [] });
   },
+
+  refreshMessages: async () => {
+    const { activeConversationId } = get();
+    if (!activeConversationId) return;
+    try {
+      const { messages } = await tauri.getConversation(activeConversationId);
+      set({ messages });
+    } catch (error) {
+      console.error("[ConversationStore] Failed to refresh messages:", error);
+    }
+  },
+  setMessages: (messages) => set({ messages }),
+  setIsSending: (isSending) => set({ isSending }),
+  setConversations: (conversations) => set({ conversations }),
 }));
