@@ -3,6 +3,7 @@ import { getDaemonUrl } from "@/lib/tauri";
 import { splitSentences } from "@/lib/sentenceSplitter";
 import { AudioQueueManager } from "@/lib/audioQueue";
 import { voiceProfileManager } from "@/lib/voiceProfile";
+import { jarvisClient } from "@/lib/jarvisClient";
 import { startAudioCapture, encodeWav } from "@/lib/audioCapture";
 import {
   createWebSpeechASR,
@@ -440,26 +441,12 @@ export function useVoiceConversation(
         }
 
         try {
-          const formData = new FormData();
-          formData.append("audio", wavBlob, "audio.wav");
-          formData.append("language", "zh");
-
-          const response = await fetch(
-            `${daemonUrlRef.current}/api/voice/transcribe`,
-            { method: "POST", body: formData },
-          );
-
-          if (!response.ok) {
-            resolve("");
-            return;
-          }
-
-          const data = (await response.json()) as { text: string };
-          const text = data.text?.trim() || "";
+          const text = await jarvisClient.transcribe(wavBlob, "zh");
+          const trimmed = text?.trim() || "";
           const isHallucination = HALLUCINATION_PATTERNS.some((p) =>
-            text.includes(p),
+            trimmed.includes(p),
           );
-          resolve(isHallucination ? "" : text);
+          resolve(isHallucination ? "" : trimmed);
         } catch {
           resolve("");
         }
@@ -843,15 +830,7 @@ export function useVoiceConversation(
       playSciFiChime();
       
       // 2. Fetch spoken response
-      const res = await fetch(`${daemonUrlRef.current}/api/voice/synthesize`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: "我在的，主人。", voice: voiceProfileManager.getVoiceName() }),
-      });
-      
-      if (!res.ok) throw new Error("TTS failed");
-      
-      const buffer = await res.arrayBuffer();
+      const buffer = await jarvisClient.synthesize("我在的，主人。", voiceProfileManager.getVoiceName());
       const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
       
       ctx.decodeAudioData(
@@ -969,15 +948,7 @@ export function useVoiceConversation(
     isFarewellPlayingRef.current = true;
     
     try {
-      const res = await fetch(`${daemonUrlRef.current}/api/voice/synthesize`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: "如果没啥事我就先退下咯，如果有需要随时喊我哦！", voice: voiceProfileManager.getVoiceName() }),
-      });
-      
-      if (!res.ok) throw new Error("TTS failed");
-      
-      const buffer = await res.arrayBuffer();
+      const buffer = await jarvisClient.synthesize("如果没啥事我就先退下咯，如果有需要随时喊我哦！", voiceProfileManager.getVoiceName());
       const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
       
       ctx.decodeAudioData(

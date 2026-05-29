@@ -1,7 +1,8 @@
-import { useCallback, useRef, useState, useEffect } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useConversationStore } from "@/stores/conversationStore";
-import type { ConversationMessage, Conversation } from "@/lib/tauri";
+import type { ConversationMessage } from "@/lib/tauri";
 import * as tauri from "@/lib/tauri";
+import { jarvisClient } from "@/lib/jarvisClient";
 
 export interface Message {
   id: string;
@@ -37,22 +38,9 @@ export function useChat() {
 
   const [streamingContent, setStreamingContent] = useState<string>("");
   const [isStreaming, setIsStreaming] = useState(false);
-  const [daemonUrl, setDaemonUrl] = useState("http://127.0.0.1:3001");
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const messages: Message[] = rawMessages.map(convertMessage);
-
-  // Discover daemon URL from Tauri backend on mount to avoid CORS/host mismatches
-  useEffect(() => {
-    tauri.getDaemonUrl()
-      .then((url) => {
-        setDaemonUrl(url);
-        console.log("[useChat] Dynamically discovered Daemon URL:", url);
-      })
-      .catch(() => {
-        console.warn("[useChat] Could not get daemon URL, using default http://127.0.0.1:3001");
-      });
-  }, []);
 
   // Streaming send (direct SSE to Hono daemon)
   const sendMessage = useCallback(
@@ -102,111 +90,69 @@ export function useChat() {
       setMessages(currentMessages);
 
       try {
-        const response = await fetch(`${daemonUrl}/api/conversations/${conversationId}/messages/stream`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ content: text }),
-          signal: abortController.signal,
-        });
-
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
-
-        const reader = response.body?.getReader();
-        if (!reader) throw new Error("No reader");
-
-        const decoder = new TextDecoder();
-        let buffer = "";
-        let currentEvent = "token";
         let fullText = "";
         const toolCallsMap = new Map<string, { name: string; args: unknown; result: unknown }>();
+        let messageListUpdated = false;
 
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() || "";
-
-          let messageListUpdated = false;
-
-          for (const line of lines) {
-            if (line.startsWith("event: ")) {
-              currentEvent = line.slice(7).trim();
-            } else if (line.startsWith("data: ")) {
-              const data = line.slice(6);
-              if (!data) continue;
-
-              if (currentEvent === "token") {
-                try {
-                  const payload = JSON.parse(data) as { text: string };
-                  fullText += payload.text;
-                } catch {
-                  fullText += data;
-                }
-                setStreamingContent(fullText);
-                messageListUpdated = true;
-              } else if (currentEvent === "tool-call") {
-                try {
-                  const payload = JSON.parse(data) as { name: string; toolCallId: string; args: unknown };
-                  toolCallsMap.set(payload.toolCallId, {
-                    name: payload.name,
-                    args: payload.args,
-                    result: null,
-                  });
-                  messageListUpdated = true;
-                } catch {}
-              } else if (currentEvent === "tool-result") {
-                try {
-                  const payload = JSON.parse(data) as { name: string; toolCallId: string; result: unknown };
-                  const existing = toolCallsMap.get(payload.toolCallId);
-                  if (existing) {
-                    existing.result = payload.result;
-                    messageListUpdated = true;
-                  }
-                } catch {}
-              } else if (currentEvent === "done") {
-                try {
-                  const payload = JSON.parse(data) as {
-                    userMessage: ConversationMessage;
-                    assistantMessage: ConversationMessage;
-                    conversation: Conversation;
-                  };
-
-                  const updatedFromDb = currentMessages.map((m) => {
-                    if (m.id === userTempId) return payload.userMessage;
-                    if (m.id === assistantTempId) return payload.assistantMessage;
-                    return m;
-                  });
-                  setMessages(updatedFromDb);
-
-                  try {
-                    const convs = await tauri.listConversations();
-                    setConversations(convs);
-                  } catch {}
-
-                  messageListUpdated = false;
-                } catch {}
+        await jarvisClient.streamSSE({
+          path: `/api/conversations/${conversationId}/messages/stream`,
+          method: "POST",
+          body: { content: text },
+          signal: abortController.signal,
+          onEvent({ event, data }) {
+            if (event === "token") {
+              try {
+                const payload = JSON.parse(data) as { text: string };
+                fullText += payload.text;
+              } catch {
+                fullText += data;
               }
+              setStreamingContent(fullText);
+              messageListUpdated = true;
+            } else if (event === "tool-call") {
+              try {
+                const payload = JSON.parse(data) as { name: string; toolCallId: string; args: unknown };
+                toolCallsMap.set(payload.toolCallId, { name: payload.name, args: payload.args, result: null });
+                messageListUpdated = true;
+              } catch {}
+            } else if (event === "tool-result") {
+              try {
+                const payload = JSON.parse(data) as { name: string; toolCallId: string; result: unknown };
+                const existing = toolCallsMap.get(payload.toolCallId);
+                if (existing) {
+                  existing.result = payload.result;
+                  messageListUpdated = true;
+                }
+              } catch {}
+            } else if (event === "done") {
+              try {
+                const payload = JSON.parse(data) as {
+                  userMessage: ConversationMessage;
+                  assistantMessage: ConversationMessage;
+                };
+                const updatedFromDb = currentMessages.map((m) => {
+                  if (m.id === userTempId) return payload.userMessage;
+                  if (m.id === assistantTempId) return payload.assistantMessage;
+                  return m;
+                });
+                setMessages(updatedFromDb);
+                tauri.listConversations().then(setConversations).catch(() => {});
+                messageListUpdated = false;
+              } catch {}
             }
-          }
 
-          if (messageListUpdated) {
-            const updatedAssistant: ConversationMessage = {
-              ...optimisticAssistantMsg,
-              content: fullText,
-              toolCalls: toolCallsMap.size > 0 ? JSON.stringify(Array.from(toolCallsMap.values())) : null,
-            };
-            setMessages(
-              currentMessages.map((m) => {
-                if (m.id === assistantTempId) return updatedAssistant;
-                return m;
-              }),
-            );
-          }
-        }
+            if (messageListUpdated) {
+              const updatedAssistant: ConversationMessage = {
+                ...optimisticAssistantMsg,
+                content: fullText,
+                toolCalls: toolCallsMap.size > 0 ? JSON.stringify(Array.from(toolCallsMap.values())) : null,
+              };
+              setMessages(
+                currentMessages.map((m) => (m.id === assistantTempId ? updatedAssistant : m)),
+              );
+            }
+          },
+        });
       } catch (err) {
         if ((err as Error).name !== "AbortError") {
           console.error("Streaming error, falling back to non-streaming send:", err);
@@ -239,7 +185,7 @@ export function useChat() {
         setStreamingContent("");
       }
     },
-    [activeConversationId, createConversation, rawMessages, setMessages, setIsSending, setConversations, daemonUrl],
+    [activeConversationId, createConversation, rawMessages, setMessages, setIsSending, setConversations],
   );
 
   const stopStreaming = useCallback(() => {

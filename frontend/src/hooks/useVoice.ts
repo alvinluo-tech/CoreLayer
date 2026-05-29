@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { getDaemonUrl } from "@/lib/tauri";
 import { voiceProfileManager } from "@/lib/voiceProfile";
+import { jarvisClient } from "@/lib/jarvisClient";
 import { useWakeWord } from "./useWakeWord";
 import { encodeWav } from "@/lib/audioCapture";
 
@@ -96,22 +97,7 @@ export function useVoice(onCommand: (text: string) => void, onWake?: () => void)
       setState("speaking");
 
       try {
-        const response = await fetch(`${daemonUrlRef.current}/api/voice/synthesize`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text, model: voiceProfileManager.getTTSModel() }),
-        });
-
-        if (!response.ok) {
-          const errBody = await response.text().catch(() => "");
-          console.error(`[Voice] MiMo TTS failed (${response.status}): ${errBody}`);
-          speakWithBrowserTTS(text);
-          return;
-        }
-
-        console.log("[Voice] MiMo TTS succeeded");
-
-        const audioBuffer = await response.arrayBuffer();
+        const audioBuffer = await jarvisClient.synthesize(text, undefined, voiceProfileManager.getTTSModel());
         await playAudioBuffer(audioBuffer);
 
         if (wantsContinuousRef.current) {
@@ -338,32 +324,9 @@ export function useVoice(onCommand: (text: string) => void, onWake?: () => void)
   // Send audio to daemon for transcription
   const transcribeAudio = useCallback(async (audioBlob: Blob): Promise<string> => {
     try {
-      const formData = new FormData();
-      formData.append("audio", audioBlob, "audio.wav");
-      formData.append("language", "zh");
-
-      const url = `${daemonUrlRef.current}/api/voice/transcribe`;
-      console.log("[Voice] Sending to:", url);
-
-      const response = await fetch(url, {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const errText = await response.text();
-        console.error("[Voice] Transcription failed:", response.status, errText);
-        return "";
-      }
-
-      const data = (await response.json()) as { text: string; error?: string };
-      if (data.error) {
-        console.error("[Voice] Transcription error:", data.error);
-        return "";
-      }
-      return data.text;
+      return await jarvisClient.transcribe(audioBlob, "zh");
     } catch (err) {
-      console.error("[Voice] Transcription network error:", err);
+      console.error("[Voice] Transcription error:", err);
       return "";
     }
   }, []);
