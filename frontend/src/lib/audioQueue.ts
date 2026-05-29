@@ -38,8 +38,11 @@ export class AudioQueueManager {
   }
 
   private async synthesize(text: string): Promise<AudioBuffer> {
-    // Replace non-standard English word "luo" (case-insensitive) with Chinese character "骆" so TTS pronounces it naturally instead of spelling out L-U-O
-    const cleanedText = text.replace(/\bluo\b/gi, "骆");
+    // Replace non-standard English word "luo" (case-insensitive) with Chinese character "骆" so TTS pronounces it naturally instead of spelling out L-U-O.
+    // We use positive lookahead/lookbehind assertions to ensure perfect boundary matching on mixed Chinese/English/punctuation text.
+    const cleanedText = text
+      .replace(/alvin\s+luo/gi, "alvin 骆")
+      .replace(/(?<![a-zA-Z])luo(?![a-zA-Z])/gi, "骆");
 
     const response = await fetch(this.ttsUrl, {
       method: "POST",
