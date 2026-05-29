@@ -241,7 +241,7 @@ export function JarvisVoiceOverlay({
         className={cn(
           isCentered
             ? "relative w-full max-w-md p-6 mx-4 rounded-2xl border backdrop-blur-2xl shadow-2xl transition-all duration-500 transform scale-100 animate-in zoom-in-95"
-            : "relative w-full h-full p-4 flex flex-col justify-between border rounded-none backdrop-blur-2xl shadow-2xl transition-all duration-500 transform scale-100",
+            : "relative w-full h-full p-4 flex flex-col border rounded-none backdrop-blur-2xl shadow-2xl transition-all duration-500 transform scale-100",
           glowColors[state]
         )}
       >
@@ -275,11 +275,11 @@ export function JarvisVoiceOverlay({
         </div>
 
         {/* Content body */}
-        <div className={cn(isCentered ? "space-y-6" : "space-y-4")}>
+        <div className={cn(isCentered ? "space-y-6" : "flex-1 flex flex-col justify-between overflow-hidden mt-3 min-h-0")}>
           {/* Main Visualizer Area */}
           <div
             className={cn(
-              "relative rounded-xl border border-white/5 bg-black/40 overflow-hidden flex flex-col items-center justify-center",
+              "relative rounded-xl border border-white/5 bg-black/40 overflow-hidden flex flex-col items-center justify-center flex-shrink-0",
               isCentered ? "h-36" : "h-28"
             )}
           >
@@ -308,7 +308,7 @@ export function JarvisVoiceOverlay({
           </div>
 
           {/* Interactive Transcript Panel */}
-          <div className="space-y-3">
+          <div className={cn("space-y-3", !isCentered ? "flex-1 overflow-y-auto min-h-0 py-2 pr-1" : "")}>
             {/* User speech transcript bubble */}
             {(state === "listening" || finalTranscript) && (
               <div className="rounded-lg border border-white/5 bg-white/5 p-2.5 space-y-1">
@@ -358,7 +358,7 @@ export function JarvisVoiceOverlay({
           </div>
 
           {/* Controls Footer */}
-          <div className="flex justify-center border-t border-white/10 pt-3 gap-3">
+          <div className="flex justify-center border-t border-white/10 pt-3 gap-3 flex-shrink-0">
             {state === "speaking" || state === "streaming" ? (
               <Button
                 variant="destructive"

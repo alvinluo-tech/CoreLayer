@@ -23,6 +23,30 @@ const HALLUCINATION_PATTERNS = [
   "拜拜", "再见", "字幕由", "制作", "敬请关注",
 ];
 
+function getSpokenText(text: string): string {
+  let result = "";
+  let currentIndex = 0;
+  
+  while (currentIndex < text.length) {
+    const thoughtStart = text.indexOf("<thought>", currentIndex);
+    if (thoughtStart === -1) {
+      result += text.slice(currentIndex);
+      break;
+    }
+    
+    result += text.slice(currentIndex, thoughtStart);
+    
+    const thoughtEnd = text.indexOf("</thought>", thoughtStart);
+    if (thoughtEnd === -1) {
+      break; // Thought block is open and not closed yet; strip subsequent streaming tokens
+    }
+    
+    currentIndex = thoughtEnd + "</thought>".length;
+  }
+  
+  return result;
+}
+
 function playSciFiChime() {
   try {
     const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -92,10 +116,14 @@ export function useVoiceConversation(
   const prevStateRef = useRef<VoiceConversationState>("idle");
   const lastStreamedTextRef = useRef("");
   const postListenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const breathingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startConversationRef = useRef<(text: string) => void>(() => {});
   const lastUserTextRef = useRef("");
   const bargeInMonitorRef = useRef<{ stop: () => void } | null>(null);
   const bargeInRef = useRef<() => void>(() => {});
+  const isFarewellPlayingRef = useRef(false);
+  const playFarewellAndExitRef = useRef<() => void>(() => {});
+
 
 
   const POST_LISTEN_TIMEOUT = 7000; // 7s silence → back to wake word
@@ -113,6 +141,7 @@ export function useVoiceConversation(
     isActiveRef.current = true;
     setState("listening");
     setInterimTranscript("");
+    setFinalTranscript("");
 
     if (isWebSpeechASRAvailable()) {
       let gotResult = false;
@@ -140,24 +169,21 @@ export function useVoiceConversation(
           webAsrRef.current = null;
         }
         isActiveRef.current = false;
-        setState("idle");
+        playFarewellAndExitRef.current();
       }, POST_LISTEN_TIMEOUT);
 
       const asr = createWebSpeechASR({
         lang: "zh-CN",
         onInterim: (text) => {
-          if (isActiveRef.current) {
-            // Cancel the post-listen timeout because the user has started speaking!
-            if (postListenTimerRef.current) {
-              clearTimeout(postListenTimerRef.current);
-              postListenTimerRef.current = null;
-            }
-            setInterimTranscript(text);
-            latestInterimText = text;
+          // Cancel the post-listen timeout because the user has started speaking!
+          if (postListenTimerRef.current) {
+            clearTimeout(postListenTimerRef.current);
+            postListenTimerRef.current = null;
           }
+          setInterimTranscript(text);
+          latestInterimText = text;
         },
         onFinal: (text) => {
-          if (!isActiveRef.current) return;
           gotResult = true;
           if (postListenTimerRef.current) {
             clearTimeout(postListenTimerRef.current);
@@ -180,16 +206,14 @@ export function useVoiceConversation(
             clearTimeout(postListenTimerRef.current);
             postListenTimerRef.current = null;
           }
-          if (isActiveRef.current) {
-            if (latestInterimText.trim()) {
-              console.log("[VoiceConversation] Post-listen ASR ended but got interim text, submitting:", latestInterimText);
-              gotResult = true;
-              isActiveRef.current = false;
-              startConversationRef.current(latestInterimText);
-            } else {
-              isActiveRef.current = false;
-              setState("idle");
-            }
+          if (latestInterimText.trim()) {
+            console.log("[VoiceConversation] Post-listen ASR ended but got interim text, submitting:", latestInterimText);
+            gotResult = true;
+            isActiveRef.current = false;
+            startConversationRef.current(latestInterimText);
+          } else {
+            isActiveRef.current = false;
+            playFarewellAndExitRef.current();
           }
         },
         silenceTimeout: POST_LISTEN_TIMEOUT,
@@ -200,27 +224,24 @@ export function useVoiceConversation(
       // No Web Speech API — fall back to immediate wake word
       console.warn("[VoiceConversation] Web Speech API not available, falling back to wake word");
       isActiveRef.current = false;
-      setState("idle");
+      playFarewellAndExitRef.current();
     }
   }, []);
 
-  // When transitioning from active state to idle:
-  // - After conversation (speaking → idle): start post-conversation listening
-  // - After post-listen timeout (listening → idle): go to wake word
+  // When transitioning to idle state, return to wake word mode
   useEffect(() => {
     if (state === "idle" && prevStateRef.current !== "idle") {
       console.log(`[VoiceConversation] Transition: ${prevStateRef.current} → idle, isActive: ${isActiveRef.current}`);
-      if (prevStateRef.current === "speaking" || prevStateRef.current === "streaming") {
-        // AI just finished — start post-conversation listen window
-        startPostConversationListen();
+      if (isFarewellPlayingRef.current) {
+        isFarewellPlayingRef.current = false;
+        console.log("[VoiceConversation] Farewell completed. Back to wake word mode.");
       } else {
-        // Post-listen timeout or manual stop — back to wake word
-        console.log("[VoiceConversation] Back to wake word mode");
-        onIdleRef.current?.();
+        console.log("[VoiceConversation] Stopped or timed out. Back to wake word mode.");
       }
+      onIdleRef.current?.();
     }
     prevStateRef.current = state;
-  }, [state, startPostConversationListen]);
+  }, [state]);
 
   const restoreWindow = useCallback(async () => {
     if (typeof window === "undefined" || !originalBoundsRef.current) return;
@@ -337,10 +358,29 @@ export function useVoiceConversation(
       clearTimeout(postListenTimerRef.current);
       postListenTimerRef.current = null;
     }
+    if (breathingTimerRef.current) {
+      clearTimeout(breathingTimerRef.current);
+      breathingTimerRef.current = null;
+    }
     if (webAsrRef.current) {
 
       webAsrRef.current.stop();
       webAsrRef.current = null;
+    }
+    if (audioQueueRef.current) {
+      audioQueueRef.current.dispose();
+      audioQueueRef.current = null;
+    }
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+  }, []);
+
+  const cleanupStreaming = useCallback(() => {
+    if (bargeInMonitorRef.current) {
+      bargeInMonitorRef.current.stop();
+      bargeInMonitorRef.current = null;
     }
     if (audioQueueRef.current) {
       audioQueueRef.current.dispose();
@@ -532,7 +572,7 @@ export function useVoiceConversation(
         source.connect(analyser);
 
         const dataArray = new Uint8Array(analyser.frequencyBinCount);
-        const BARGE_IN_THRESHOLD = 50; // Raised from 30 to 50 to filter out fan noise, speaker leak, and deep breathing
+        const BARGE_IN_THRESHOLD = 62; // Raised from 50 to 62 to highly filter out speaker output leak, loud keyboard typing, fan noise, and breathing
         let sustainedVoiceDuration = 0;
         const CHECK_INTERVAL = 100;
 
@@ -549,7 +589,7 @@ export function useVoiceConversation(
 
             if (avg > BARGE_IN_THRESHOLD) {
               sustainedVoiceDuration += CHECK_INTERVAL;
-              if (sustainedVoiceDuration >= 450) { // Raised from 200ms to 450ms to verify intentional spoken words instead of micro-noises
+              if (sustainedVoiceDuration >= 750) { // Raised from 450ms to 750ms to verify intentional, continuous spoken words instead of transient clicks or echo spikes
                 // Only barge-in if the AI is actively playing synthesized voice audio.
                 // If the AI is still "thinking" (generating text) or silent, we ignore environmental noises.
                 const isTtsPlaying = audioQueueRef.current && audioQueueRef.current.isPlaying;
@@ -633,28 +673,37 @@ export function useVoiceConversation(
       startBargeInMonitor(); // Start background VAD voice barge-in monitor!
 
       try {
-        let textBuffer = "";
-
         let fullText = "";
+        let processedSpokenLength = 0;
+        let ttsBuffer = "";
         let sentenceIndex = 0;
 
         for await (const token of streamLLMResponse(userText, convId)) {
           if (!isActiveRef.current) break;
 
-          textBuffer += token;
           fullText += token;
           setAssistantText(fullText);
 
-          const { complete, remainder } = splitSentences(textBuffer, sentenceIndex);
+          // Get the total clean spoken text generated so far
+          const spokenText = getSpokenText(fullText);
+          
+          // Get the newly generated clean spoken text since last loop
+          if (spokenText.length > processedSpokenLength) {
+            const newSpokenChars = spokenText.slice(processedSpokenLength);
+            ttsBuffer += newSpokenChars;
+            processedSpokenLength = spokenText.length;
+          }
+
+          const { complete, remainder } = splitSentences(ttsBuffer, sentenceIndex);
           for (const sentence of complete) {
             queue.enqueue(sentence, sentenceIndex++);
           }
-          textBuffer = remainder;
+          ttsBuffer = remainder;
         }
 
         // Flush remaining text
-        if (textBuffer.trim() && isActiveRef.current) {
-          queue.enqueue(textBuffer.trim(), sentenceIndex++);
+        if (ttsBuffer.trim() && isActiveRef.current) {
+          queue.enqueue(ttsBuffer.trim(), sentenceIndex++);
         }
 
         queue.setTotalExpected(sentenceIndex);
@@ -668,11 +717,23 @@ export function useVoiceConversation(
         // Done — keep assistantText visible until persisted messages load
         if (isActiveRef.current) {
           lastStreamedTextRef.current = fullText;
-          console.log("[VoiceConversation] Stream done, setting isActive=false, state→idle");
-          isActiveRef.current = false;
-          setState("idle");
-          setInterimTranscript("");
-          setFinalTranscript("");
+          console.log("[VoiceConversation] Audio done, waiting 800ms breathing delay...");
+          
+          await new Promise<void>((resolve) => {
+            if (breathingTimerRef.current) {
+              clearTimeout(breathingTimerRef.current);
+            }
+            breathingTimerRef.current = setTimeout(() => {
+              breathingTimerRef.current = null;
+              resolve();
+            }, 800);
+          });
+          
+          if (isActiveRef.current) {
+            console.log("[VoiceConversation] Breathing pause done, starting post-conversation listen...");
+            isActiveRef.current = false;
+            startPostConversationListen();
+          }
         }
       } catch (error) {
         if ((error as Error).name !== "AbortError") {
@@ -683,10 +744,10 @@ export function useVoiceConversation(
           }, 2000);
         }
       } finally {
-        cleanup();
+        cleanupStreaming();
       }
     },
-    [streamLLMResponse, cleanup, conversationId, createConversation],
+    [streamLLMResponse, cleanupStreaming, conversationId, createConversation],
   );
 
   // Keep ref in sync for post-conversation listen
@@ -716,13 +777,10 @@ export function useVoiceConversation(
       const asr = createWebSpeechASR({
         lang: "zh-CN",
         onInterim: (text) => {
-          if (isActiveRef.current) {
-            setInterimTranscript(text);
-            latestInterimText = text;
-          }
+          setInterimTranscript(text);
+          latestInterimText = text;
         },
         onFinal: (text) => {
-          if (!isActiveRef.current) return;
           gotFinalResult = true;
           if (webAsrRef.current) {
             webAsrRef.current.stop();
@@ -736,16 +794,14 @@ export function useVoiceConversation(
         },
         onEnd: () => {
           if (gotFinalResult) return;
-          if (isActiveRef.current) {
-            if (latestInterimText.trim()) {
-              console.log("[VoiceConversation] Silence timeout but got interim text, submitting:", latestInterimText);
-              gotFinalResult = true;
-              isActiveRef.current = false;
-              startConversation(latestInterimText);
-            } else {
-              isActiveRef.current = false;
-              setState("idle");
-            }
+          if (latestInterimText.trim()) {
+            console.log("[VoiceConversation] Silence timeout but got interim text, submitting:", latestInterimText);
+            gotFinalResult = true;
+            isActiveRef.current = false;
+            startConversation(latestInterimText);
+          } else {
+            isActiveRef.current = false;
+            playFarewellAndExitRef.current();
           }
         },
         silenceTimeout: 4000,
@@ -761,7 +817,7 @@ export function useVoiceConversation(
           startConversation(text);
         } else {
           isActiveRef.current = false;
-          setState("idle");
+          playFarewellAndExitRef.current();
         }
       });
     }
@@ -806,9 +862,19 @@ export function useVoiceConversation(
           source.connect(ctx.destination);
           
           source.onended = () => {
-            isActiveRef.current = false;
-            startListening();
             ctx.close().catch(() => {});
+            
+            if (breathingTimerRef.current) {
+              clearTimeout(breathingTimerRef.current);
+            }
+            
+            breathingTimerRef.current = setTimeout(() => {
+              breathingTimerRef.current = null;
+              if (isActiveRef.current) {
+                isActiveRef.current = false;
+                startListening();
+              }
+            }, 800);
           };
           
           source.start(0);
@@ -830,6 +896,7 @@ export function useVoiceConversation(
   const stopConversation = useCallback(() => {
     isActiveRef.current = false;
     cleanup();
+    isFarewellPlayingRef.current = false;
     lastStreamedTextRef.current = "";
     setState("idle");
     setInterimTranscript("");
@@ -838,6 +905,7 @@ export function useVoiceConversation(
   }, [cleanup]);
 
   const bargeIn = useCallback(() => {
+    isFarewellPlayingRef.current = false;
     // Stop TTS playback and abort LLM stream
     if (audioQueueRef.current) {
       audioQueueRef.current.stop();
@@ -860,13 +928,10 @@ export function useVoiceConversation(
       const asr = createWebSpeechASR({
         lang: "zh-CN",
         onInterim: (text) => {
-          if (isActiveRef.current) {
-            setInterimTranscript(text);
-            latestInterimText = text;
-          }
+          setInterimTranscript(text);
+          latestInterimText = text;
         },
         onFinal: (text) => {
-          if (!isActiveRef.current) return;
           gotFinalResult = true;
           if (webAsrRef.current) {
             webAsrRef.current.stop();
@@ -877,16 +942,14 @@ export function useVoiceConversation(
         },
         onEnd: () => {
           if (gotFinalResult) return;
-          if (isActiveRef.current) {
-            if (latestInterimText.trim()) {
-              console.log("[VoiceConversation:BargeIn] Silence timeout but got interim text, submitting:", latestInterimText);
-              gotFinalResult = true;
-              isActiveRef.current = false;
-              startConversation(latestInterimText);
-            } else {
-              isActiveRef.current = false;
-              setState("idle");
-            }
+          if (latestInterimText.trim()) {
+            console.log("[VoiceConversation:BargeIn] Silence timeout but got interim text, submitting:", latestInterimText);
+            gotFinalResult = true;
+            isActiveRef.current = false;
+            startConversation(latestInterimText);
+          } else {
+            isActiveRef.current = false;
+            playFarewellAndExitRef.current();
           }
         },
         silenceTimeout: 4000,
@@ -896,9 +959,75 @@ export function useVoiceConversation(
     }
   }, [startConversation]);
 
+  const playFarewellAndExit = useCallback(async () => {
+    console.log("[VoiceConversation] Silence detected, playing farewell and exiting...");
+    cleanup();
+    
+    isActiveRef.current = true;
+    setState("speaking");
+    setAssistantText("如果没啥事我就先退下咯，如果有需要随时喊我哦！");
+    isFarewellPlayingRef.current = true;
+    
+    try {
+      const res = await fetch(`${daemonUrlRef.current}/api/voice/synthesize`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: "如果没啥事我就先退下咯，如果有需要随时喊我哦！", voice: "茉莉" }),
+      });
+      
+      if (!res.ok) throw new Error("TTS failed");
+      
+      const buffer = await res.arrayBuffer();
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      
+      ctx.decodeAudioData(
+        buffer,
+        (decoded) => {
+          const source = ctx.createBufferSource();
+          source.buffer = decoded;
+          source.connect(ctx.destination);
+          
+          source.onended = () => {
+            ctx.close().catch(() => {});
+            
+            if (breathingTimerRef.current) {
+              clearTimeout(breathingTimerRef.current);
+            }
+            
+            breathingTimerRef.current = setTimeout(() => {
+              breathingTimerRef.current = null;
+              if (isActiveRef.current) {
+                isActiveRef.current = false;
+                setState("idle");
+                setAssistantText("");
+              }
+            }, 800);
+          };
+          
+          source.start(0);
+        },
+        () => {
+          ctx.close().catch(() => {});
+          isActiveRef.current = false;
+          setState("idle");
+          setAssistantText("");
+        }
+      );
+    } catch (err) {
+      console.warn("[VoiceConversation] Farewell playback failed:", err);
+      isActiveRef.current = false;
+      setState("idle");
+      setAssistantText("");
+    }
+  }, [cleanup]);
+
   useEffect(() => {
     bargeInRef.current = bargeIn;
   }, [bargeIn]);
+
+  useEffect(() => {
+    playFarewellAndExitRef.current = playFarewellAndExit;
+  }, [playFarewellAndExit]);
 
   // Cleanup on unmount
 
@@ -920,8 +1049,8 @@ export function useVoiceConversation(
   // Display logic: show live text during streaming, keep ref text after
   const displayAssistantText =
     state === "streaming" || state === "speaking"
-      ? assistantText
-      : lastStreamedTextRef.current || "";
+      ? getSpokenText(assistantText)
+      : getSpokenText(lastStreamedTextRef.current || "");
 
   const displayUserText =
     state === "streaming" || state === "speaking" || state === "listening"

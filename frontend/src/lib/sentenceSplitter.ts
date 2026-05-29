@@ -47,9 +47,12 @@ export function splitSentences(text: string, chunkIndex = 0): SplitResult {
     
     // Force-split rule for low latency tiers to jumpstart audio
     if ((tier === 1 || tier === 2) && currentMinLength < 35 && currentChunk.trim().length >= forceLimit) {
-      complete.push(currentChunk.trim());
-      currentChunk = "";
-      currentMinLength = 35;
+      const containsEnglish = /[a-zA-Z]/.test(currentChunk);
+      if (!containsEnglish) {
+        complete.push(currentChunk.trim());
+        currentChunk = "";
+        currentMinLength = 35;
+      }
     }
 
     // Force-split rule for Tier 3 long sentences to prevent overflow

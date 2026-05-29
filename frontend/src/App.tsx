@@ -335,8 +335,8 @@ function App() {
           hasActiveConversation={!!activeConversationId}
           error={error}
           conversationId={activeConversationId}
-          voiceUserText={voiceConv.finalTranscript || undefined}
-          voiceAssistantText={voiceConv.assistantText}
+          voiceUserText={voiceConv.state !== "idle" ? voiceConv.finalTranscript || undefined : undefined}
+          voiceAssistantText={voiceConv.state !== "idle" ? voiceConv.assistantText || undefined : undefined}
           isVoiceStreaming={voiceConv.state === "streaming"}
         />
       </main>

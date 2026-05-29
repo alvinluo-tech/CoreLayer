@@ -1,7 +1,24 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 
 // Wake words for Web Speech API fallback
-const WAKE_WORDS = ["jarvis", "贾维斯"];
+const WAKE_WORDS = [
+  "jarvis",
+  "jar vis",
+  "javis",
+  "javs",
+  "贾维斯",
+  "加维斯",
+  "佳维斯",
+  "家维斯",
+  "甲维斯",
+  "嘉维斯",
+  "假维斯",
+  "查维斯",
+  "查理斯",
+  "加维",
+  "佳斯",
+  "维斯"
+];
 
 type WakeWordMethod = "porcupine" | "webspeech" | null;
 
@@ -36,6 +53,7 @@ interface SpeechRecognitionInstance {
   onresult: ((event: SpeechRecognitionEvent) => void) | null;
   onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
   onend: (() => void) | null;
+  onstart: (() => void) | null;
 }
 
 function getSpeechRecognition(): (new () => SpeechRecognitionInstance) | null {
@@ -55,6 +73,7 @@ export function useWakeWord(onWake: () => void, daemonUrl?: string) {
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const onWakeRef = useRef(onWake);
   const isActiveRef = useRef(false);
+  const lastErrorRef = useRef<string | null>(null);
 
   useEffect(() => {
     onWakeRef.current = onWake;
@@ -100,12 +119,17 @@ export function useWakeWord(onWake: () => void, daemonUrl?: string) {
 
     try {
       const recognition = new SpeechRecognition();
-      recognition.continuous = true;
+      recognition.continuous = false; // High reliability non-continuous restart loop
       recognition.interimResults = true;
       recognition.lang = "zh-CN";
       recognition.maxAlternatives = 1;
 
       let wakeTriggered = false;
+
+      recognition.onstart = () => {
+        console.log("[WakeWord:WebSpeech] Web Speech session active...");
+        lastErrorRef.current = null;
+      };
 
       recognition.onresult = (event: SpeechRecognitionEvent) => {
         if (wakeTriggered) return;
@@ -125,15 +149,22 @@ export function useWakeWord(onWake: () => void, daemonUrl?: string) {
       };
 
       recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+        console.warn("[WakeWord:WebSpeech] Error:", event.error);
+        lastErrorRef.current = event.error;
         if (event.error !== "no-speech" && event.error !== "aborted") {
-          console.warn("[WakeWord:WebSpeech] Unexpected error:", event.error);
           setError(event.error);
         }
       };
 
       recognition.onend = () => {
         if (isActiveRef.current) {
-          // Use setTimeout with a 1500ms delay to prevent infinite rapid abort/restart loop when microphone is busy or tab is unfocused
+          const isCritical = lastErrorRef.current && 
+            (lastErrorRef.current === "not-allowed" || 
+             lastErrorRef.current === "audio-capture" || 
+             lastErrorRef.current === "aborted");
+          
+          const delay = isCritical ? 2000 : 50; // 50ms restart for normal silence, 2000ms delay for system conflicts/background suspension
+          
           setTimeout(() => {
             if (isActiveRef.current && recognitionRef.current) {
               try {
@@ -142,14 +173,14 @@ export function useWakeWord(onWake: () => void, daemonUrl?: string) {
                 console.warn("[WakeWord:WebSpeech] Keep-alive restart failed:", e);
               }
             }
-          }, 1500);
+          }, delay);
         }
       };
 
       recognition.start();
       recognitionRef.current = recognition;
       setMethod("webspeech");
-      console.log("[WakeWord] Web Speech API listening for 'Hey Jarvis'");
+      console.log("[WakeWord] Web Speech API listening for 'Hey Jarvis' or Chinese homophones");
       return true;
     } catch (err) {
       console.warn("[WakeWord] Web Speech API failed:", err);

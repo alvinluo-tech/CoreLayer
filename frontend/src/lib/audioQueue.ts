@@ -38,10 +38,13 @@ export class AudioQueueManager {
   }
 
   private async synthesize(text: string): Promise<AudioBuffer> {
+    // Replace non-standard English word "luo" (case-insensitive) with Chinese character "骆" so TTS pronounces it naturally instead of spelling out L-U-O
+    const cleanedText = text.replace(/\bluo\b/gi, "骆");
+
     const response = await fetch(this.ttsUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text, model: "mimo-v2.5-tts", voice: this.voice }),
+      body: JSON.stringify({ text: cleanedText, model: "mimo-v2.5-tts", voice: this.voice }),
     });
     if (!response.ok) {
       throw new Error(`TTS error ${response.status}`);
