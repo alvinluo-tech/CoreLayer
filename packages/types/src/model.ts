@@ -40,6 +40,19 @@ export interface ModelCost {
   output: number;
 }
 
+export interface CapabilityRequirements {
+  required: ModelCapability[];
+  bonus?: ModelCapability[];
+  minContextWindow?: number;
+}
+
+export interface ModelScore {
+  modelId: string;
+  score: number;
+  matchedRequired: ModelCapability[];
+  matchedBonus: ModelCapability[];
+}
+
 export interface ModelProfile {
   id: string;
   provider: ModelProviderName;
