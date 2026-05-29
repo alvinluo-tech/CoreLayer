@@ -465,6 +465,57 @@ async fn get_daemon_url_command() -> Result<String, String> {
     Ok(get_daemon_url().await)
 }
 
+// ---- MCP Server Commands ----
+
+#[tauri::command]
+async fn list_mcp_servers() -> Result<serde_json::Value, String> {
+    daemon_get("/api/mcp/servers").await
+}
+
+#[tauri::command]
+async fn connect_mcp_server(config: serde_json::Value) -> Result<serde_json::Value, String> {
+    daemon_post("/api/mcp/servers", config).await
+}
+
+#[tauri::command]
+async fn disconnect_mcp_server(server_id: String) -> Result<serde_json::Value, String> {
+    daemon_delete(&format!("/api/mcp/servers/{}", server_id)).await
+}
+
+#[tauri::command]
+async fn list_mcp_tools() -> Result<serde_json::Value, String> {
+    daemon_get("/api/mcp/tools").await
+}
+
+#[tauri::command]
+async fn list_mcp_resources() -> Result<serde_json::Value, String> {
+    daemon_get("/api/mcp/resources").await
+}
+
+#[tauri::command]
+async fn list_mcp_prompts() -> Result<serde_json::Value, String> {
+    daemon_get("/api/mcp/prompts").await
+}
+
+// ---- Unified Tool Registry Commands ----
+
+#[tauri::command]
+async fn list_all_tools() -> Result<serde_json::Value, String> {
+    daemon_get("/api/tools").await
+}
+
+#[tauri::command]
+async fn get_tool(tool_id: String) -> Result<serde_json::Value, String> {
+    daemon_get(&format!("/api/tools/{}", tool_id)).await
+}
+
+// ---- Model Gateway Commands ----
+
+#[tauri::command]
+async fn list_model_profiles() -> Result<serde_json::Value, String> {
+    daemon_get("/api/mcp/models").await
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -489,7 +540,16 @@ pub fn run() {
             get_settings,
             update_storage_mode,
             get_voice_status,
-            get_daemon_url_command
+            get_daemon_url_command,
+            list_mcp_servers,
+            connect_mcp_server,
+            disconnect_mcp_server,
+            list_mcp_tools,
+            list_mcp_resources,
+            list_mcp_prompts,
+            list_all_tools,
+            get_tool,
+            list_model_profiles
         ])
         .setup(|app| {
             if cfg!(debug_assertions) {
