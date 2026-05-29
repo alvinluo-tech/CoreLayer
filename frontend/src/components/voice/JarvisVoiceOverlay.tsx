@@ -11,6 +11,7 @@ interface JarvisVoiceOverlayProps {
   assistantText: string;
   onClose: () => void;
   onStop: () => void;
+  layoutMode?: "centered" | "bottom-right";
 }
 
 export function JarvisVoiceOverlay({
@@ -20,6 +21,7 @@ export function JarvisVoiceOverlay({
   assistantText,
   onClose,
   onStop,
+  layoutMode = "centered",
 }: JarvisVoiceOverlayProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const animationFrameRef = useRef<number>(0);
@@ -85,7 +87,7 @@ export function JarvisVoiceOverlay({
             secondary: "rgba(16, 185, 129, 0.4)", // Emerald
             glow: "rgba(6, 182, 212, 0.25)",
             speed: 0.15,
-            amplitude: 45,
+            amplitude: layoutMode === "centered" ? 45 : 35,
             waves: 4,
           };
         case "transcribing":
@@ -112,7 +114,7 @@ export function JarvisVoiceOverlay({
             secondary: "rgba(236, 72, 153, 0.4)", // Pink
             glow: "rgba(139, 92, 246, 0.25)",
             speed: 0.12,
-            amplitude: 35,
+            amplitude: layoutMode === "centered" ? 35 : 28,
             waves: 5,
           };
         default:
@@ -167,7 +169,6 @@ export function JarvisVoiceOverlay({
         
         // Fluid sine formula
         for (let x = 0; x < w; x++) {
-          // Fade waves out near edges for circular border focus
           const edgeFade = Math.sin((x / w) * Math.PI);
           const y = h / 2 + Math.sin(x * currentFreq + phaseRef.current + i * 1.5) * currentAmp * edgeFade;
           
@@ -181,7 +182,7 @@ export function JarvisVoiceOverlay({
         ctx.stroke();
       }
 
-      ctx.shadowBlur = 0; // Reset shadow
+      ctx.shadowBlur = 0;
       animationFrameRef.current = requestAnimationFrame(draw);
     };
 
@@ -194,7 +195,7 @@ export function JarvisVoiceOverlay({
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [state]);
+  }, [state, layoutMode]);
 
   if (state === "idle") return null;
 
@@ -226,23 +227,33 @@ export function JarvisVoiceOverlay({
     error: "Voice pipeline encountered an error",
   };
 
+  const isCentered = layoutMode === "centered";
+
   return (
-    <div className="fixed bottom-6 right-6 z-50 transition-all duration-300 animate-in slide-in-from-bottom-5 slide-in-from-right-5 fade-in">
+    <div
+      className={cn(
+        isCentered
+          ? "fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-[8px] transition-all duration-300 animate-in fade-in"
+          : "fixed inset-0 z-50 w-full h-full flex items-center justify-center bg-background/95 backdrop-blur-xl transition-all duration-300 animate-in fade-in"
+      )}
+    >
       <div
         className={cn(
-          "relative w-[360px] p-4 rounded-2xl border backdrop-blur-2xl shadow-2xl transition-all duration-500 transform scale-100 shadow-cyan-950/20",
+          isCentered
+            ? "relative w-full max-w-md p-6 mx-4 rounded-2xl border backdrop-blur-2xl shadow-2xl transition-all duration-500 transform scale-100 animate-in zoom-in-95"
+            : "relative w-full h-full p-4 flex flex-col justify-between border rounded-none backdrop-blur-2xl shadow-2xl transition-all duration-500 transform scale-100",
           glowColors[state]
         )}
       >
         {/* Glow overlay grid effect */}
-        <div className="absolute inset-0 bg-radial-gradient from-transparent to-black/10 rounded-2xl pointer-events-none" />
+        <div className={cn("absolute inset-0 bg-radial-gradient from-transparent to-black/10 pointer-events-none", isCentered ? "rounded-2xl" : "rounded-none")} />
 
         {/* HUD top decorative bar */}
-        <div className="flex items-center justify-between border-b border-white/10 pb-2 mb-3">
+        <div className={cn("flex items-center justify-between border-b border-white/10 pb-2", isCentered ? "mb-4" : "mb-3")}>
           <div className="flex items-center gap-2">
             <span className="h-2 w-2 rounded-full bg-cyan-500 animate-ping" />
             <span className="font-mono text-[10px] tracking-widest text-cyan-400 font-bold uppercase">
-              JARVIS HUD
+              {isCentered ? "JARVIS HUD v2.5" : "JARVIS HUD"}
             </span>
           </div>
           <div className="flex items-center gap-3">
@@ -264,13 +275,19 @@ export function JarvisVoiceOverlay({
         </div>
 
         {/* Content body */}
-        <div className="space-y-4">
+        <div className={cn(isCentered ? "space-y-6" : "space-y-4")}>
           {/* Main Visualizer Area */}
-          <div className="relative h-28 rounded-xl border border-white/5 bg-black/40 overflow-hidden flex flex-col items-center justify-center">
+          <div
+            className={cn(
+              "relative rounded-xl border border-white/5 bg-black/40 overflow-hidden flex flex-col items-center justify-center",
+              isCentered ? "h-36" : "h-28"
+            )}
+          >
             {/* Pulsating background circle */}
             <div
               className={cn(
-                "absolute h-24 w-24 rounded-full border border-white/5 opacity-20 filter blur-sm transition-all duration-1000 transform scale-100",
+                "absolute rounded-full border border-white/5 opacity-20 filter blur-sm transition-all duration-1000 transform scale-100",
+                isCentered ? "h-30 w-30" : "h-24 w-24",
                 state === "listening" && "scale-110 border-cyan-500 animate-pulse",
                 state === "speaking" && "scale-120 border-violet-500",
                 state === "streaming" && "scale-105 border-amber-500 animate-spin"
@@ -291,14 +308,14 @@ export function JarvisVoiceOverlay({
           </div>
 
           {/* Interactive Transcript Panel */}
-          <div className="space-y-4">
+          <div className="space-y-3">
             {/* User speech transcript bubble */}
             {(state === "listening" || finalTranscript) && (
-              <div className="rounded-lg border border-white/5 bg-white/5 p-3 space-y-1">
-                <p className="font-mono text-[10px] text-cyan-400 uppercase tracking-widest font-semibold">
+              <div className="rounded-lg border border-white/5 bg-white/5 p-2.5 space-y-1">
+                <p className="font-mono text-[9px] text-cyan-400 uppercase tracking-widest font-semibold">
                   Host Voice Command:
                 </p>
-                <div className="text-sm min-h-[1.5rem] max-h-16 overflow-y-auto leading-relaxed">
+                <div className="text-xs min-h-[1.2rem] max-h-16 overflow-y-auto leading-relaxed">
                   {interimTranscript ? (
                     <span className="text-white/80 animate-pulse">{interimTranscript}</span>
                   ) : finalTranscript ? (
@@ -312,28 +329,28 @@ export function JarvisVoiceOverlay({
 
             {/* Holographic Thought Ticker */}
             {(state === "streaming" || state === "transcribing" || state === "error") && !assistantText && (
-              <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 space-y-2 animate-pulse">
+              <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-2.5 space-y-1.5 animate-pulse">
                 <div className="flex items-center justify-between">
-                  <p className="font-mono text-[10px] text-amber-400 uppercase tracking-widest font-bold">
+                  <p className="font-mono text-[9px] text-amber-400 uppercase tracking-widest font-bold">
                     🧠 COGNITIVE MATRIX SCANNERS:
                   </p>
-                  <span className="h-2 w-2 rounded-full bg-amber-500 animate-ping" />
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-ping" />
                 </div>
-                <div className="font-mono text-xs text-amber-300/80 space-y-1">
+                <div className="font-mono text-[10px] text-amber-300/80 space-y-0.5">
                   <p className="animate-pulse">▶ [RETRIEVING KNOWLEDGE SCHEMAS...]</p>
-                  <p className="text-[10px] text-amber-500/60 pl-3">DECRYPTING NEURAL NODES: OK</p>
-                  <p className="text-[10px] text-amber-500/60 pl-3">SEMANTIC RESPONSE CORRELATION: SYNTHESIZING</p>
+                  <p className="text-[9px] text-amber-500/60 pl-3">DECRYPTING NEURAL NODES: OK</p>
+                  <p className="text-[9px] text-amber-500/60 pl-3">SEMANTIC RESPONSE CORRELATION: SYNTHESIZING</p>
                 </div>
               </div>
             )}
 
             {/* AI speaking response bubble */}
             {assistantText && (
-              <div className="rounded-lg border border-purple-500/10 bg-purple-500/5 p-3 space-y-1">
-                <p className="font-mono text-[10px] text-purple-400 uppercase tracking-widest font-semibold">
-                  Jarvis Intelligence Response:
+              <div className="rounded-lg border border-purple-500/10 bg-purple-500/5 p-2.5 space-y-1">
+                <p className="font-mono text-[9px] text-purple-400 uppercase tracking-widest font-semibold">
+                  Jarvis Response:
                 </p>
-                <div className="text-sm max-h-28 overflow-y-auto whitespace-pre-wrap leading-relaxed text-white/90 font-medium">
+                <div className="text-xs max-h-24 overflow-y-auto whitespace-pre-wrap leading-relaxed text-white/90 font-medium">
                   {assistantText}
                 </div>
               </div>
@@ -342,7 +359,6 @@ export function JarvisVoiceOverlay({
 
           {/* Controls Footer */}
           <div className="flex justify-center border-t border-white/10 pt-3 gap-3">
-            {/* Interrupt or stop button */}
             {state === "speaking" || state === "streaming" ? (
               <Button
                 variant="destructive"

@@ -202,6 +202,7 @@ function App() {
         assistantText={voiceConv.assistantText}
         onClose={voiceConv.stopConversation}
         onStop={voiceConv.stopConversation}
+        layoutMode={voiceConv.layoutMode}
       />
     </div>
   );

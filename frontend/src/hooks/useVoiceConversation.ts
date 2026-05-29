@@ -76,6 +76,12 @@ export function useVoiceConversation(
   const [finalTranscript, setFinalTranscript] = useState("");
   const [assistantText, setAssistantText] = useState("");
   const [isSupported, setIsSupported] = useState(false);
+  const [layoutMode, setLayoutMode] = useState<"centered" | "bottom-right">("centered");
+  const isAppFocusedRef = useRef(true);
+  const originalBoundsRef = useRef<{
+    size: any;
+    position: any;
+  } | null>(null);
 
   const daemonUrlRef = useRef<string>("http://127.0.0.1:3001");
   const audioQueueRef = useRef<AudioQueueManager | null>(null);
@@ -211,30 +217,97 @@ export function useVoiceConversation(
     prevStateRef.current = state;
   }, [state, startPostConversationListen]);
 
-  // Synchronize Tauri Window Always-on-Top focus based on voice conversation state
+  const restoreWindow = useCallback(async () => {
+    if (typeof window === "undefined" || !originalBoundsRef.current) return;
+    try {
+      const { getCurrentWindow } = await import("@tauri-apps/api/window");
+      const appWindow = getCurrentWindow();
+      const { size, position } = originalBoundsRef.current;
+      
+      console.log("[Tauri Window] Restoring original window bounds...", originalBoundsRef.current);
+      await appWindow.setAlwaysOnTop(false).catch(() => {});
+      await appWindow.setDecorations(true).catch(() => {});
+      if (size) {
+        await appWindow.setSize(size).catch(() => {});
+      }
+      if (position) {
+        await appWindow.setPosition(position).catch(() => {});
+      }
+    } catch (e) {
+      console.warn("Failed to restore window bounds:", e);
+    } finally {
+      originalBoundsRef.current = null;
+    }
+  }, []);
+
+  // Synchronize Tauri Window bounds, decorations, and focus based on voice conversation state
   useEffect(() => {
     const isActive = state !== "idle";
-    const syncWindowPriority = async () => {
+    const syncWindow = async () => {
       if (typeof window === "undefined") return;
       try {
         const { getCurrentWindow } = await import("@tauri-apps/api/window");
         const appWindow = getCurrentWindow();
+        
         if (isActive) {
-          console.log("[Tauri Window] Bringing Jarvis to the absolute top");
+          // If the app was not focused when triggered, shrink it and place in bottom-right
+          if (!isAppFocusedRef.current) {
+            console.log("[Tauri Window] App not focused. Entering system-level bottom-right overlay mode...");
+            
+            // Only capture original bounds if we haven't already
+            if (!originalBoundsRef.current) {
+              const size = await appWindow.outerSize().catch(() => null);
+              const position = await appWindow.outerPosition().catch(() => null);
+              originalBoundsRef.current = { size, position };
+              console.log("[Tauri Window] Saved original bounds:", originalBoundsRef.current);
+            }
+            
+            // Apply borderless, shrunken dimensions, always-on-top
+            await appWindow.setDecorations(false).catch(() => {});
+            await appWindow.setAlwaysOnTop(true).catch(() => {});
+            
+            const { LogicalSize, LogicalPosition } = await import("@tauri-apps/api/dpi");
+            await appWindow.setSize(new LogicalSize(360, 440)).catch(() => {});
+            
+            const { currentMonitor } = await import("@tauri-apps/api/window");
+            const monitor = await currentMonitor().catch(() => null);
+            if (monitor) {
+              const workArea = monitor.workArea || { position: { x: 0, y: 0 }, size: monitor.size };
+              const scaleFactor = monitor.scaleFactor || 1;
+              
+              const workWidthLogical = workArea.size.width / scaleFactor;
+              const workHeightLogical = workArea.size.height / scaleFactor;
+              const workXLogical = workArea.position.x / scaleFactor;
+              const workYLogical = workArea.position.y / scaleFactor;
+              
+              const winWidth = 360;
+              const winHeight = 440;
+              const margin = 20;
+              
+              const targetX = workXLogical + workWidthLogical - winWidth - margin;
+              const targetY = workYLogical + workHeightLogical - winHeight - margin;
+              
+              await appWindow.setPosition(new LogicalPosition(targetX, targetY)).catch(() => {});
+            }
+          } else {
+            console.log("[Tauri Window] App is already focused. Showing centered overlay inside application.");
+            // Just ensure always on top without shrinking
+            await appWindow.setAlwaysOnTop(true).catch(() => {});
+          }
+          
           await appWindow.show().catch(() => {});
           await appWindow.unminimize().catch(() => {});
-          await appWindow.setAlwaysOnTop(true).catch(() => {});
           await appWindow.setFocus().catch(() => {});
         } else {
-          console.log("[Tauri Window] Releasing always-on-top lock");
-          await appWindow.setAlwaysOnTop(false).catch(() => {});
+          console.log("[Tauri Window] Voice state is idle. Restoring window...");
+          await restoreWindow();
         }
       } catch (e) {
-        // Safe ignore in browser/non-Tauri environments
+        console.warn("[Tauri Window] Window manipulation failed:", e);
       }
     };
-    syncWindowPriority();
-  }, [state]);
+    syncWindow();
+  }, [state, restoreWindow]);
 
   useEffect(() => {
     setIsSupported(
@@ -507,6 +580,12 @@ export function useVoiceConversation(
         return;
       }
 
+      if (!isActiveRef.current) {
+        const isFocused = document.hasFocus();
+        isAppFocusedRef.current = isFocused;
+        setLayoutMode(isFocused ? "centered" : "bottom-right");
+      }
+
       // Ensure a conversation exists
       let convId = conversationId;
       if (!convId && createConversation) {
@@ -606,6 +685,11 @@ export function useVoiceConversation(
   // --- Start listening (Web Speech API or batch fallback) ---
   const startListening = useCallback(() => {
     if (isActiveRef.current) return;
+    
+    const isFocused = document.hasFocus();
+    isAppFocusedRef.current = isFocused;
+    setLayoutMode(isFocused ? "centered" : "bottom-right");
+    
     isActiveRef.current = true;
     setState("listening");
     setInterimTranscript("");
@@ -673,6 +757,11 @@ export function useVoiceConversation(
   // --- Play Sci-Fi greeting and then start listening ---
   const playGreetingAndListen = useCallback(async () => {
     if (isActiveRef.current) return;
+    
+    const isFocused = document.hasFocus();
+    isAppFocusedRef.current = isFocused;
+    setLayoutMode(isFocused ? "centered" : "bottom-right");
+    
     isActiveRef.current = true;
     setState("speaking");
     setAssistantText("我在的，主人。");
@@ -802,8 +891,9 @@ export function useVoiceConversation(
     return () => {
       isActiveRef.current = false;
       cleanup();
+      restoreWindow();
     };
-  }, [cleanup]);
+  }, [cleanup, restoreWindow]);
 
   // Clear persisted text when new messages arrive from server
   const clearLastStreamedText = useCallback(() => {
@@ -834,5 +924,6 @@ export function useVoiceConversation(
     bargeIn,
     startConversation,
     clearLastStreamedText,
+    layoutMode,
   };
 }
