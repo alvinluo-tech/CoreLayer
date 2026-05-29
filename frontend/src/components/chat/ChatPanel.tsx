@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { MessageSquarePlus, ArrowDown } from "lucide-react";
+import { MessageSquarePlus, ArrowDown, Loader2 } from "lucide-react";
 import { Streamdown } from "streamdown";
 import { MessageBubble } from "./MessageBubble";
 import { ChatInput } from "./ChatInput";
@@ -117,9 +117,19 @@ export function ChatPanel({ messages, onSend, isLoading, hasActiveConversation, 
           )}
 
           {isLoading && (
-            <div className="flex justify-start">
-              <div className="bg-secondary rounded-lg px-4 py-2 text-sm">
-                <span className="animate-pulse">思考中...</span>
+            <div className="flex justify-start animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="rounded-xl border border-cyan-500/15 bg-cyan-950/10 px-4 py-3 space-y-2 max-w-[80%] shadow-lg shadow-cyan-950/5">
+                <div className="flex items-center gap-2">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-cyan-400" />
+                  <span className="font-mono text-xs font-bold text-cyan-400 tracking-wider">
+                    JARVIS COGNITIVE DECRYPTING...
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 pl-5">
+                  <span className="h-1.5 w-1.5 rounded-full bg-cyan-400 animate-bounce" style={{ animationDelay: "0ms" }} />
+                  <span className="h-1.5 w-1.5 rounded-full bg-cyan-400 animate-bounce" style={{ animationDelay: "150ms" }} />
+                  <span className="h-1.5 w-1.5 rounded-full bg-cyan-400 animate-bounce" style={{ animationDelay: "300ms" }} />
+                </div>
               </div>
             </div>
           )}

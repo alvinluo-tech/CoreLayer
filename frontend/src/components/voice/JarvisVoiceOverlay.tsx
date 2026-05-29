@@ -310,6 +310,23 @@ export function JarvisVoiceOverlay({
               </div>
             )}
 
+            {/* Holographic Thought Ticker */}
+            {(state === "streaming" || state === "transcribing" || state === "error") && !assistantText && (
+              <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 space-y-2 animate-pulse">
+                <div className="flex items-center justify-between">
+                  <p className="font-mono text-[10px] text-amber-400 uppercase tracking-widest font-bold">
+                    🧠 COGNITIVE MATRIX SCANNERS:
+                  </p>
+                  <span className="h-2 w-2 rounded-full bg-amber-500 animate-ping" />
+                </div>
+                <div className="font-mono text-xs text-amber-300/80 space-y-1">
+                  <p className="animate-pulse">▶ [RETRIEVING KNOWLEDGE SCHEMAS...]</p>
+                  <p className="text-[10px] text-amber-500/60 pl-3">DECRYPTING NEURAL NODES: OK</p>
+                  <p className="text-[10px] text-amber-500/60 pl-3">SEMANTIC RESPONSE CORRELATION: SYNTHESIZING</p>
+                </div>
+              </div>
+            )}
+
             {/* AI speaking response bubble */}
             {assistantText && (
               <div className="rounded-lg border border-purple-500/10 bg-purple-500/5 p-3 space-y-1">
