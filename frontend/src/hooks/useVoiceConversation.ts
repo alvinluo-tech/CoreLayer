@@ -67,11 +67,25 @@ export function useVoiceConversation(
 
     if (isWebSpeechASRAvailable()) {
       let gotResult = false;
+      let latestInterimText = "";
 
       // 7s timeout — if no speech, go to wake word mode
       postListenTimerRef.current = setTimeout(() => {
         if (gotResult) return;
-        console.log("[VoiceConversation] Post-listen timeout (7s), back to wake word");
+        console.log("[VoiceConversation] Post-listen timeout (7s), checking for interim text");
+        
+        if (latestInterimText.trim()) {
+          console.log("[VoiceConversation] Post-listen timeout but got interim text, submitting:", latestInterimText);
+          gotResult = true;
+          if (webAsrRef.current) {
+            webAsrRef.current.stop();
+            webAsrRef.current = null;
+          }
+          isActiveRef.current = false;
+          startConversationRef.current(latestInterimText);
+          return;
+        }
+
         if (webAsrRef.current) {
           webAsrRef.current.stop();
           webAsrRef.current = null;
@@ -83,7 +97,10 @@ export function useVoiceConversation(
       const asr = createWebSpeechASR({
         lang: "zh-CN",
         onInterim: (text) => {
-          if (isActiveRef.current) setInterimTranscript(text);
+          if (isActiveRef.current) {
+            setInterimTranscript(text);
+            latestInterimText = text;
+          }
         },
         onFinal: (text) => {
           if (!isActiveRef.current) return;
@@ -92,7 +109,10 @@ export function useVoiceConversation(
             clearTimeout(postListenTimerRef.current);
             postListenTimerRef.current = null;
           }
-          webAsrRef.current = null;
+          if (webAsrRef.current) {
+            webAsrRef.current.stop();
+            webAsrRef.current = null;
+          }
           isActiveRef.current = false;
           startConversationRef.current(text);
         },
@@ -107,8 +127,15 @@ export function useVoiceConversation(
             postListenTimerRef.current = null;
           }
           if (isActiveRef.current) {
-            isActiveRef.current = false;
-            setState("idle");
+            if (latestInterimText.trim()) {
+              console.log("[VoiceConversation] Post-listen ASR ended but got interim text, submitting:", latestInterimText);
+              gotResult = true;
+              isActiveRef.current = false;
+              startConversationRef.current(latestInterimText);
+            } else {
+              isActiveRef.current = false;
+              setState("idle");
+            }
           }
         },
         silenceTimeout: POST_LISTEN_TIMEOUT,
@@ -374,10 +401,17 @@ export function useVoiceConversation(
             if (avg > BARGE_IN_THRESHOLD) {
               sustainedVoiceDuration += CHECK_INTERVAL;
               if (sustainedVoiceDuration >= 450) { // Raised from 200ms to 450ms to verify intentional spoken words instead of micro-noises
-                console.log("[VoiceConversation:BargeIn] Voice activity detected! Interrupting AI...");
-                stop();
-                bargeInRef.current(); // Call barge-in via ref
-                return;
+                // Only barge-in if the AI is actively playing synthesized voice audio.
+                // If the AI is still "thinking" (generating text) or silent, we ignore environmental noises.
+                const isTtsPlaying = audioQueueRef.current && audioQueueRef.current.isPlaying;
+                if (isTtsPlaying) {
+                  console.log("[VoiceConversation:BargeIn] Voice activity detected! Interrupting AI...");
+                  stop();
+                  bargeInRef.current(); // Call barge-in via ref
+                  return;
+                } else {
+                  sustainedVoiceDuration = 0; // Reset accumulation since AI is not speaking yet
+                }
               }
             } else {
               sustainedVoiceDuration = Math.max(0, sustainedVoiceDuration - CHECK_INTERVAL);
@@ -397,7 +431,13 @@ export function useVoiceConversation(
   // --- Main conversation flow ---
   const startConversation = useCallback(
     async (userText: string) => {
-      if (!userText.trim() || isActiveRef.current) return;
+      if (!userText.trim()) return;
+
+      // 1. State Isolation: Block any duplicate triggers if the AI is already streaming or speaking
+      if (isActiveRef.current && (state === "streaming" || state === "speaking")) {
+        console.warn("[VoiceConversation] Conversation already in progress, ignoring duplicate trigger");
+        return;
+      }
 
       // Ensure a conversation exists
       let convId = conversationId;
@@ -408,6 +448,16 @@ export function useVoiceConversation(
         } catch (err) {
           console.error("[VoiceConversation] Failed to create conversation:", err);
         }
+      }
+
+      // 2. Failsafe Cleanup: Force stop and dispose any lingering audio queues or streams before creating new ones
+      if (audioQueueRef.current) {
+        try { audioQueueRef.current.dispose(); } catch {}
+        audioQueueRef.current = null;
+      }
+      if (abortControllerRef.current) {
+        try { abortControllerRef.current.abort(); } catch {}
+        abortControllerRef.current = null;
       }
 
       isActiveRef.current = true;
@@ -496,15 +546,23 @@ export function useVoiceConversation(
 
     if (isWebSpeechASRAvailable()) {
       let gotFinalResult = false;
+      let latestInterimText = "";
+
       const asr = createWebSpeechASR({
         lang: "zh-CN",
         onInterim: (text) => {
-          if (isActiveRef.current) setInterimTranscript(text);
+          if (isActiveRef.current) {
+            setInterimTranscript(text);
+            latestInterimText = text;
+          }
         },
         onFinal: (text) => {
           if (!isActiveRef.current) return;
           gotFinalResult = true;
-          webAsrRef.current = null;
+          if (webAsrRef.current) {
+            webAsrRef.current.stop();
+            webAsrRef.current = null;
+          }
           isActiveRef.current = false;
           startConversation(text);
         },
@@ -514,11 +572,18 @@ export function useVoiceConversation(
         onEnd: () => {
           if (gotFinalResult) return;
           if (isActiveRef.current) {
-            isActiveRef.current = false;
-            setState("idle");
+            if (latestInterimText.trim()) {
+              console.log("[VoiceConversation] Silence timeout but got interim text, submitting:", latestInterimText);
+              gotFinalResult = true;
+              isActiveRef.current = false;
+              startConversation(latestInterimText);
+            } else {
+              isActiveRef.current = false;
+              setState("idle");
+            }
           }
         },
-        silenceTimeout: 2500,
+        silenceTimeout: 4000,
       });
       webAsrRef.current = asr;
       asr.start();
@@ -566,26 +631,41 @@ export function useVoiceConversation(
 
     if (isWebSpeechASRAvailable()) {
       let gotFinalResult = false;
+      let latestInterimText = "";
+
       const asr = createWebSpeechASR({
         lang: "zh-CN",
         onInterim: (text) => {
-          if (isActiveRef.current) setInterimTranscript(text);
+          if (isActiveRef.current) {
+            setInterimTranscript(text);
+            latestInterimText = text;
+          }
         },
         onFinal: (text) => {
           if (!isActiveRef.current) return;
           gotFinalResult = true;
-          webAsrRef.current = null;
+          if (webAsrRef.current) {
+            webAsrRef.current.stop();
+            webAsrRef.current = null;
+          }
           isActiveRef.current = false;
           startConversation(text);
         },
         onEnd: () => {
           if (gotFinalResult) return;
           if (isActiveRef.current) {
-            isActiveRef.current = false;
-            setState("idle");
+            if (latestInterimText.trim()) {
+              console.log("[VoiceConversation:BargeIn] Silence timeout but got interim text, submitting:", latestInterimText);
+              gotFinalResult = true;
+              isActiveRef.current = false;
+              startConversation(latestInterimText);
+            } else {
+              isActiveRef.current = false;
+              setState("idle");
+            }
           }
         },
-        silenceTimeout: 2500,
+        silenceTimeout: 4000,
       });
       webAsrRef.current = asr;
       asr.start();

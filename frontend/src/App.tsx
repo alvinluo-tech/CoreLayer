@@ -37,12 +37,16 @@ function App() {
   // Ref for voice hook (to avoid circular dependency)
   const voiceRef = useRef<ReturnType<typeof useVoice> | null>(null);
 
-  // When conversation ends, restart wake word listening
+  // When conversation ends, restart wake word listening after a short delay
+  // to ensure any active ASR/microphones are fully released by the browser
   const handleConversationIdle = useCallback(() => {
-    const v = voiceRef.current;
-    if (v && !v.isWakeWordListening) {
-      v.toggleListening();
-    }
+    setTimeout(() => {
+      const v = voiceRef.current;
+      if (v && !v.isWakeWordListening) {
+        console.log("[App] Restarting wake word after conversation idle");
+        v.toggleListening();
+      }
+    }, 500);
   }, []);
 
   // Streaming voice conversation (primary)

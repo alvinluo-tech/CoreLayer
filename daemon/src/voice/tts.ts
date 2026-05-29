@@ -53,6 +53,15 @@ export async function synthesizeSpeech(options: TTSOptions): Promise<Buffer> {
     audioConfig.voice = selectedVoice;
   }
 
+  // Robust markdown stripper to prevent TTS from reading raw markdown symbols or alert markers
+  const cleanText = text
+    .replace(/[*#`_\-~]/g, "") // Strip bold, italics, headings, backticks, strikethroughs, and bullet dashes
+    .replace(/\[!.*?\]/g, "") // Strip alert blocks like [!NOTE]
+    .replace(/\[(.*?)\]\((.*?)\)/g, "$1") // Convert links [text](url) to just the text
+    .replace(/<thought>[\s\S]*?<\/thought>/gi, "") // Guarantee thoughts are fully excluded (safety fallback)
+    .replace(/\n+/g, "，") // Convert newlines to commas for smooth pausing
+    .trim();
+
   const response = await fetch(url, {
     method: "POST",
     headers: {
@@ -65,7 +74,7 @@ export async function synthesizeSpeech(options: TTSOptions): Promise<Buffer> {
       audio: audioConfig,
       messages: [
         { role: "user", content: instruction },
-        { role: "assistant", content: text },
+        { role: "assistant", content: cleanText || text },
       ],
     }),
   });

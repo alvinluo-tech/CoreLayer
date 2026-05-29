@@ -25,13 +25,18 @@ export function useVoice(onCommand: (text: string) => void, onWake?: () => void)
 
   // Wake word detection
   const handleWake = useCallback(() => {
-    console.log("[Voice] Wake word triggered");
+    console.log("[Voice] Wake word triggered, stopping wake word engine");
     wakeWord.stop();
     if (onWake) {
-      onWake();
+      // Add a 300ms delay to allow the browser to fully release the microphone from wake word SpeechRecognition
+      setTimeout(() => {
+        onWake();
+      }, 300);
     } else {
       wantsContinuousRef.current = true;
-      startRecording();
+      setTimeout(() => {
+        startRecording();
+      }, 300);
     }
   }, [onWake]);
 

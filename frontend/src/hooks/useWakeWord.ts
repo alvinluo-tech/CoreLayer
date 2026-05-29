@@ -32,6 +32,7 @@ interface SpeechRecognitionInstance {
   maxAlternatives: number;
   start: () => void;
   stop: () => void;
+  abort: () => void;
   onresult: ((event: SpeechRecognitionEvent) => void) | null;
   onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
   onend: (() => void) | null;
@@ -124,7 +125,6 @@ export function useWakeWord(onWake: () => void, daemonUrl?: string) {
       };
 
       recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-        console.log("[WakeWord:WebSpeech] Error:", event.error);
         if (event.error !== "no-speech" && event.error !== "aborted") {
           console.warn("[WakeWord:WebSpeech] Unexpected error:", event.error);
           setError(event.error);
@@ -132,9 +132,17 @@ export function useWakeWord(onWake: () => void, daemonUrl?: string) {
       };
 
       recognition.onend = () => {
-        console.log("[WakeWord:WebSpeech] Recognition ended, active:", isActiveRef.current);
         if (isActiveRef.current) {
-          try { recognition.start(); } catch (e) { console.warn("[WakeWord:WebSpeech] Restart failed:", e); }
+          // Use setTimeout with a 1500ms delay to prevent infinite rapid abort/restart loop when microphone is busy or tab is unfocused
+          setTimeout(() => {
+            if (isActiveRef.current && recognitionRef.current) {
+              try {
+                recognitionRef.current.start();
+              } catch (e) {
+                console.warn("[WakeWord:WebSpeech] Keep-alive restart failed:", e);
+              }
+            }
+          }, 1500);
         }
       };
 
@@ -203,7 +211,7 @@ export function useWakeWord(onWake: () => void, daemonUrl?: string) {
     }
 
     if (method === "webspeech" && recognitionRef.current) {
-      try { recognitionRef.current.stop(); } catch {}
+      try { recognitionRef.current.abort(); } catch {}
       recognitionRef.current = null;
     }
 
@@ -222,7 +230,7 @@ export function useWakeWord(onWake: () => void, daemonUrl?: string) {
         porcupineRef.current = null;
       }
       if (recognitionRef.current) {
-        try { recognitionRef.current.stop(); } catch {}
+        try { recognitionRef.current.abort(); } catch {}
         recognitionRef.current = null;
       }
     };

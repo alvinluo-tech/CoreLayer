@@ -180,6 +180,154 @@ isVoiceStreaming = voiceConv.state === "streaming" || voiceConv.state === "speak
 
 ---
 
+### 4. 语音对话专属 System Prompt 优化
+
+#### 根因分析
+在文字对话中，大模型被强烈建议输出丰富的 Markdown 格式（如标题 `#`、加粗 `**`、警示块、代码块、以及复杂的 Markdown 表格和 Emoji 表情 😊/😄）以增加可读性。
+然而，在语音对话（TTS）中，这些格式是极其糟糕的：
+1. **TTS 引擎无法处理 Emoji**：读出 Emoji 的字面描述（如“眯眼笑脸”）或产生乱码电音。
+2. **Markdown 标点严重干扰停顿**：标题符号或表格竖线会导致合成语调怪异，产生突兀的停顿。
+3. **内容过于死板书面化**：大模型习惯输出结构化、段落复杂的文字，不符合人耳倾听的口语习惯（用户容易遗忘冗长信息，且听起来生硬）。
+
+#### 解决方案
+我们彻底将 **“文字对话系统提示”** 与 **“语音对话系统提示”** 分离开来。在 Hono 后端的 [voice.ts](file:///E:/code/github_project/Jarvis/daemon/src/api/voice.ts) 路由中调用 `streamChat(messages, "voice")`，传入专属的语音引导词。
+
+语音版提示词 [prompt-builder.ts](file:///E:/code/github_project/Jarvis/daemon/src/orchestrator/prompt-builder.ts) 核心约束包括：
+* **严禁任何表情与特殊符号**：彻底杜绝 Emoji、颜表情和 `*微笑*` / `(高兴)` 等 TTS 播报乱码源。
+* **严禁 Markdown 排版与表格**：禁止一切加粗、标题、列表符号和代码块。对于列表数据，强制使用口语化关联词（“第一、第二、最后”）叙述，表格改用流利纯文本总结。
+* **言简意赅，短小精悍**：单次语音回答强制控制在 **60-150 字** 之间。大段回答改用核心点概括，并通过末尾交互询问（如“您想听细节吗？”）来按需深入。
+* **口语助词与温暖互动**：尾部融入自然口语语气词（“呀”、“哈”、“哦”），并强制以自然的开放式问题收尾，引导双向互动。
+* **保留 <thought> 标签**：虽然大模型的 `<thought>` 推理和工具调用逻辑依然完美保留（用于界面视觉展示），但**绝不参与语音播报**，确保了视觉的高端感与听觉的极致纯净。
+
+---
+
+### 5. 并发双流语音播放防线与垃圾回收
+
+#### 根因分析
+在语音交互管线中，`isActiveRef.current` 状态锁存在“竞态条件漏洞”：
+* 当 ASR 触发结束并执行 `startConversation` 时，程序必须临时重置该锁以绕过防线。
+* 若在首句切片或网络加载的几毫秒时间差内，系统因为万分之一的极度网络波动或外部触发，收到了**第二个并发 `onFinal` 转写回调**，它将成功通过漏网状态锁，调起**第二个 `startConversation` 语音对话实例**。
+* 由于新实例启动时，直接用 `audioQueueRef.current = new AudioQueueManager(...)` 覆写了音频管理器引用，**导致前一个处于活跃播放状态的音频队列实例直接“泄漏”在后台内存中继续播放**，造成双声重叠、两个 AI 声音打架的奇怪现象。
+
+#### 解决方案
+我们实施了 **“状态硬隔离 + 强力垃圾回收”** 的双重锁止防御架构，在 [useVoiceConversation.ts](file:///E:/code/github_project/Jarvis/frontend/src/hooks/useVoiceConversation.ts) 升级了入口拦截保护：
+
+1. **第一防线：严格的 UI State 拦截**：
+   在 `startConversation` 入口处增设对当前 React 状态机的判定。若当前系统状态正处于 `"streaming"`（大模型文本流式生成）或 `"speaking"`（语音播报中），**直接判定为非法并发操作，原地打回拦截**，阻止任何二次会话的启动：
+   ```typescript
+   if (isActiveRef.current && (state === "streaming" || state === "speaking")) {
+     console.warn("[VoiceConversation] Conversation already in progress, ignoring duplicate trigger");
+     return;
+   }
+   ```
+2. **第二防线：主动垃圾回收（Failsafe Cleanup）**：
+   即使突破第一防线，在新音频管理器创建前，**强制性地同步调用已有音频管理器的 `.dispose()` 销毁函数，并强制 abort 任何正在通信中的大模型网络连接**。这一步阻断了任何多流音频播放的硬件条件，强制确保前一个实例被彻底灭活并完成垃圾回收：
+   ```typescript
+   if (audioQueueRef.current) {
+     try { audioQueueRef.current.dispose(); } catch {}
+     audioQueueRef.current = null;
+   }
+   if (abortControllerRef.current) {
+     try { abortControllerRef.current.abort(); } catch {}
+     abortControllerRef.current = null;
+   }
+   ```
+
+---
+
+### 6. 语音打断监测（Barge-in）防误触与环境音去噪优化
+
+#### 根因分析
+Jarvis 拥有高级的“语音打断（Barge-in）”功能，在 AI 说话时，用户可以直接发声打断它。
+然而，打断监听器（Barge-in Mic Monitor）在原设计中存在一个严重的触发时机设计缺陷：
+* 当用户说完话，系统进入 `"streaming"` 状态（AI 思考中，LLM 正在生成文字，TTS 还没有开始播放任何声音）时，**打断监听器被立即激活并开始捕获麦克风输入**。
+* 在思考阶段，AI 并没有发出声音。如果此时用户发出任何微小的声音（如呼吸、叹气、挪动椅子的响动、键盘敲击声或环境风噪），打断监听器都会敏锐地捕捉到这一声波，并**误判**为用户想要打断 AI。
+* 结果是，系统在展示 `"AI 思考中..."` 仅仅一瞬间后，就会被自身的呼吸或环境噪音强行打断，从而莫名其妙地**退回 `"聆听中..."`**，导致对话体验完全卡死。
+
+#### 解决方案
+我们实施了 **“TTS 活跃播放检测锁（Active TTS Playback Guard）”**：
+1. **只在 AI 确实在说话时才允许打断**：
+   在打断监听器的循环帧检测函数 `checkFrame` 中，我们增设了一道门槛：**只有当 TTS 音频队列正处于活跃的播放状态（`audioQueueRef.current.isPlaying` 为 `true`）时，才允许执行打断逻辑**。
+   ```typescript
+   if (sustainedVoiceDuration >= 450) {
+     // 核心防线：只有在 AI 正在实际播放 synthesized 声音时，才允许打断！
+     const isTtsPlaying = audioQueueRef.current && audioQueueRef.current.isPlaying;
+     if (isTtsPlaying) {
+       console.log("[VoiceConversation:BargeIn] Voice activity detected! Interrupting AI...");
+       stop();
+       bargeInRef.current(); // 触发打断，中断 TTS 并返回聆听
+       return;
+     } else {
+       sustainedVoiceDuration = 0; // 若 AI 还未开腔，任何噪音均视为无效积累，直接归零重置
+     }
+   }
+   ```
+2. **完美去噪**：
+   * 在 AI “思考中”或“吐字流式传输中”，由于 TTS 还未起播，`isPlaying` 为 `false`，所有的环境噪音、换气声、咳嗽声都会被**完全忽略**。
+   * 只有当音箱里传出 AI 自然甜美的声音后，打断机制才会完美“苏醒”，此时用户只要发声，就能瞬间、灵敏地中断 AI 的播报，达成了高灵敏度与高鲁棒性的完美平衡。
+
+---
+
+### 7. 浏览器 Web Speech 保持检测（Keep-Alive）与控制台去噪
+
+#### 根因分析
+浏览器的原生 Web Speech API（`webkitSpeechRecognition`）受限于浏览器的能效与隐私安全机制，无法进行无限期长连接：
+* 当麦克风捕获周围静音持续超过约 10~15 秒，或发生临时音频上下文休眠，浏览器会自动中断（Abort）语音会话以释放资源。这会触发 `onerror` 报出 `"no-speech"` 错误。
+* 为保证唤醒词一直保持监听，系统需要在 `onend` 回调中执行自动重启重试。
+* 然而，若无视超时原因，将每次常规的浏览器静音超时、常规重启以及被 Abort 重连以高频 `console.log` 的形式直接打印出来，会在控制台产生大量的无用重试日志刷屏。这会让开发者产生系统在“高频崩溃或重启失败”的视觉误导与技术焦虑。
+
+#### 解决方案
+我们实施了 **“静音去噪与静默心跳重连机制”**：
+1. **静默心跳重连**：
+   在 `onend` 回调中，我们通过 1.5 秒的防抖延迟拉起重启，并且不再输出诸如 `Recognition ended, active: true` 这样的冗余重启日志。这既保证了后台唤醒词功能永久驻留，又对用户彻底屏蔽了心跳包过程。
+2. **过滤常规超时错误（Log Quieting）**：
+   在 `onerror` 回调中，我们将常规发生的 `"no-speech"`（静音超时断开）和被主动打断时的 `"aborted"` 过滤出警告层级。只有当真的发生麦克风被彻底禁用、或致命底层权限错误等 Unexpected 异常时，才会发出 `console.warn`。
+   * 这一优化完全肃清了调试控制台的冗余日志，使控制台重回极致干净利落的状态，彻底消除了视觉干扰与无谓的排障负担。
+
+---
+
+### 8. Web Speech API 麦克风独占资源交接冲突（Microphone Handover Conflict）解决
+
+#### 根因分析
+在高级语音控制面板中，**唤醒词检测（Wake-word Engine）**和**对话转写（Active ASR Engine）**均使用底层的浏览器原生 `webkitSpeechRecognition` 服务。然而，浏览器的安全与硬件捕获模型对麦克风资源有着严格的**独占和单例限制**：
+* 任何时候只允许一个 `SpeechRecognition` 实例占有麦克风。
+* 当用户说出唤醒词 "Hey Jarvis" 时，系统会先停止唤醒词监听，随即拉起 ASR 会话监听。
+* 同样，当会话静音超时或结束，系统会停止 ASR，并随即重新拉起唤醒词引擎。
+* **致命竞态条件**：无论是 `recognition.stop()` 还是 React 状态机驱动的 handover 都是极其高速且异步的。如果在前一个实例还没有完全释放麦克风底层的微秒级时间差内，下一个实例便调用了 `.start()`，浏览器会由于物理冲突立刻抛出 `aborted` 或 `audio-capture` 错误强行阻断新实例。
+* 这不仅导致唤醒词引擎陷入无限的 `Recognition ended, active: true` 异常重试自毁循环，还会引发**用户再次发声时系统毫无反应、无法唤醒**的灾难性交互 Bug。
+
+#### 解决方案
+我们实施了 **“物理强力释放 + 毫秒级防抖交接缓冲”** 方案：
+1. **采用强物理释放（`.abort()`）**：
+   在 `webSpeechASR.ts` 和 `useWakeWord.ts` 的 `stop` 方法中，将旧有的 `.stop()`（意图让其分析完缓存音频才结束，释放慢）全部升级为原生的 **`.abort()`**。这会迫使浏览器底层瞬间中断连接并释放麦克风独占锁。
+2. **设置主动交接防抖延时（Handover Cooldown）**：
+   * **唤醒词 -> ASR 交接**：在 `useVoice.ts` 中监听到唤醒后，先执行 `wakeWord.stop()`，然后增设 **300ms** 的 `setTimeout` 延迟缓冲，之后才安全触发 `onWake()` / `startListening()`。这给予了浏览器充分的硬件释放期。
+   * **ASR -> 唤醒词 交接**：在 `App.tsx` 的 `handleConversationIdle` 回调中，当会话归于静默、即将重启唤醒词检测时，增设 **500ms** 的 `setTimeout` 延迟缓冲。这确保了在长对话转写实例完全灭活释放后，唤醒词引擎才会被静默拉起。
+3. **在 `onFinal` 结束时主动关闭 ASR，拒绝遗留占用**：
+   原有 ASR 在监听到用户 `onFinal` 结果时直接将 `webAsrRef.current` 置为 `null`，遗留了仍在静默运行的 `SpeechRecognition` 实例（需等待 2.5s 超时后才会在后台断开）。这造成了在这 2.5s 内若有其他交互必会触发麦克风死锁。
+   我们更新了 `useVoiceConversation.ts` 中的三个 `onFinal` 入口，在清空 Ref 前主动、强制调用 `webAsrRef.current.stop()`（即 `.abort()`），瞬间释放物理设备。
+
+---
+
+### 9. 说话中途被异常切回“待唤醒模式”与语句丢失问题解决
+
+#### 根因分析
+在正常对话、打断（Barge-in）或续听状态下，用户正在发声说话，系统却突然中断并切换为“待唤醒模式”（等待唤醒词），这背后有两个致命的机制缺陷：
+1. **ASR 触发静音超时（Silence Timeout）过于严格**：
+   原有 ASR 引擎的静音检测设定为超高灵敏的 **2.5 秒**。由于人类在日常表达、思索、换气喘息时极易产生 2 到 3 秒的自然停顿，如果用户稍微卡壳，静音定时器就会被强行触发并关闭麦克风，导致语音传输被拦腰切断。
+2. **直接抛弃临时识别缓存（Interim Transcript Drop）**：
+   浏览器的原生 `webkitSpeechRecognition` 分为“临时识别缓存（Interim Results）”和“最终敲定文本（Final Results）”。最终文本只有当浏览器通过复杂的声学统筹，断定用户一句话彻底说完后才会放出。
+   如果在浏览器放出 `isFinal` 之前，ASR 引擎触发了 2.5 秒的静音超时，系统会执行 `onEnd` 关闭设备，但因为没拿到 `gotFinalResult = true`，**系统会毫无保留地把所有 `interimTranscript` 缓存清空，并静默退回 `idle` 待唤醒状态**。这导致用户刚才说的所有话全被彻底“吞掉”、视为无效，造成严重的功能死锁。
+
+#### 解决方案
+我们实施了 **“临时识别缓存兜底上报（Interim Transcript Salvaging） + 宽松超时阈值”** 双核优化架构：
+1. **临时识别缓存全力救起**：
+   在 `startPostConversationListen`、`startListening` 和 `bargeIn` 中，我们增设了实时缓存跟踪变量 `latestInterimText`。当静音超时触发并触发 `onEnd` 时，**首先校验该缓存是否含有不为空的有效文本。如果有，全力挽救这部分数据，将其包装并强制作为 Final Command 提交给 AI 处理**！只有当用户完全没有出声（缓存为空）时，才合理地退回到 `idle` 待唤醒模式。这彻底消灭了“吞语音”的绝境。
+2. **放宽静音判定阈值（Relaxed Silence Threshold）**：
+   将 `startListening` 与 `bargeIn` 中的 ASR 超时判定从原本极度苛刻的 **2.5 秒大幅放宽至 4.0 秒**。这完美适配了日常口语表达的停顿节奏，给予了用户充裕的思索和换气空间。
+
+---
+
 ## 优化成效对比
 
 | 衡量维度 | 优化前 (Cascade Original) | 优化后 (Dynamic Hybrid Pipeline) |

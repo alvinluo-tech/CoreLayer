@@ -169,7 +169,7 @@ export function createWebSpeechASR(options: WebSpeechASROptions): WebSpeechASR {
     active = false;
     clearSilenceTimer();
     try {
-      recognition.stop();
+      recognition.abort();
     } catch {}
   };
 

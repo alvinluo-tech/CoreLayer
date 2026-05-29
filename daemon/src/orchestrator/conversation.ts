@@ -330,15 +330,10 @@ export async function streamMessageInConversation(
   }
 }
 
-/**
- * Stream a chat response using Vercel AI SDK streamText.
- * Returns the stream result for direct use in API responses.
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function streamChat(messages: ModelMessage[]): any {
+export function streamChat(messages: ModelMessage[], mode: "text" | "voice" = "text"): any {
   return streamText({
     model: getModel(),
-    system: buildSystemPrompt(),
+    system: buildSystemPrompt(mode),
     messages,
     tools: getAllTools(),
     stopWhen: stepCountIs(5),

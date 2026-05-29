@@ -134,7 +134,7 @@ voiceRoutes.post("/converse-stream", async (c) => {
   }));
 
   // Stream LLM response
-  const result = streamChat(messages);
+  const result = streamChat(messages, "voice");
 
   return streamSSE(c, async (sseStream) => {
     let fullText = "";
