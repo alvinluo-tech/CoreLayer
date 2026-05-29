@@ -75,11 +75,13 @@ export function TitleBar() {
 
   return (
     <div
-      data-tauri-drag-region
       className="flex items-center justify-between h-10 w-full bg-card/60 backdrop-blur-md border-b border-border select-none relative z-50 text-foreground transition-all duration-300"
     >
       {/* Left: Premium Sci-Fi Logo & App Details */}
-      <div className="flex items-center gap-3 px-3 h-full pointer-events-none select-none">
+      <div
+        data-tauri-drag-region
+        className="flex items-center gap-3 px-3 h-full select-none cursor-default"
+      >
         {/* Animated Custom Neon core */}
         <div className="relative flex items-center justify-center w-5 h-5">
           <div className="absolute inset-0 rounded-full bg-primary/20 animate-ping" />

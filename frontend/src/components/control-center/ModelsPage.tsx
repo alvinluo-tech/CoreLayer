@@ -2,37 +2,35 @@ import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
-  Brain,
-  Eye,
-  EyeOff,
-  Save,
   Plus,
   Trash2,
   RefreshCw,
   Star,
   X,
+  Search,
+  Wifi,
+  WifiOff,
+  ChevronDown,
+  ChevronUp,
+  Loader2,
 } from "lucide-react";
-import { useModelStore } from "@/stores/modelStore";
-import type { RoutingRule } from "@/lib/tauri";
-
-const providerLabels: Record<string, string> = {
-  mimo: "MiMo (小米)",
-  groq: "Groq",
-  openrouter: "OpenRouter",
-  local: "Ollama (本地)",
-};
+import { useModelStore, type ProviderEntry } from "@/stores/modelStore";
+import type { RoutingRule, ProviderPreset } from "@/lib/tauri";
 
 const taskTypeLabels: Record<string, string> = {
   chat: "默认聊天",
   fast: "快速响应",
   reasoning: "深度推理",
   toolAgent: "工具调用",
+  coding: "代码生成",
+  voice: "语音对话",
   private: "隐私模式",
 };
 
 export function ModelsPage() {
   const {
-    providerConfigs,
+    providers,
+    providerPresets,
     routingRules,
     routingRulesCustom,
     activeModelId,
@@ -40,11 +38,6 @@ export function ModelsPage() {
     isLoading,
     error,
     fetchAll,
-    updateProvider,
-    updateRoutingRules,
-    setActiveModel,
-    upsertProfile,
-    deleteProfile,
   } = useModelStore();
 
   useEffect(() => {
@@ -55,8 +48,8 @@ export function ModelsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold">模型管理</h2>
-          <p className="text-sm text-muted-foreground">配置 AI 提供商、路由规则和模型</p>
+          <h2 className="text-lg font-semibold">模型广场</h2>
+          <p className="text-sm text-muted-foreground">管理 AI 提供商、模型和路由规则</p>
         </div>
         <Button variant="outline" size="sm" onClick={fetchAll} className="gap-1.5">
           <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`} />
@@ -70,213 +63,544 @@ export function ModelsPage() {
         </div>
       )}
 
-      {/* Section 1: Provider Config */}
-      <ProviderConfigsSection
-        configs={providerConfigs}
+      {/* Section 1: Provider Gallery */}
+      <ProviderGallery
+        providers={providers}
+        presets={providerPresets}
         isLoading={isLoading}
-        onSave={updateProvider}
       />
 
-      {/* Section 2: Active Model */}
-      <ActiveModelSection
+      {/* Section 2: Model Marketplace */}
+      <ModelMarketplace
+        providers={providers}
+        profiles={modelProfiles}
+        activeModelId={activeModelId}
+        isLoading={isLoading}
+      />
+
+      {/* Section 3: Active Config */}
+      <ActiveConfigSection
         activeModelId={activeModelId}
         profiles={modelProfiles}
-        isLoading={isLoading}
-        onChange={setActiveModel}
-      />
-
-      {/* Section 3: Routing Rules */}
-      <RoutingRulesSection
         rules={routingRules}
         isCustom={routingRulesCustom}
-        profiles={modelProfiles}
         isLoading={isLoading}
-        onSave={updateRoutingRules}
-      />
-
-      {/* Section 4: Model Profiles */}
-      <ModelProfilesSection
-        profiles={modelProfiles}
-        activeModelId={activeModelId}
-        isLoading={isLoading}
-        onUpsert={upsertProfile}
-        onDelete={deleteProfile}
-        onSetActive={setActiveModel}
       />
     </div>
   );
 }
 
-// ---- Section 1: Provider Config ----
+// ---- Section 1: Provider Gallery ----
 
-function ProviderConfigsSection({
-  configs,
+function ProviderGallery({
+  providers,
+  presets,
   isLoading,
-  onSave,
 }: {
-  configs: Record<string, { apiKey: string; baseURL: string }>;
+  providers: ProviderEntry[];
+  presets: ProviderPreset[];
   isLoading: boolean;
-  onSave: (name: string, config: { apiKey?: string; baseURL?: string }) => Promise<void>;
 }) {
-  return (
-    <Card className="p-5">
-      <h3 className="text-sm font-medium mb-4">提供商配置</h3>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {Object.entries(providerLabels).map(([key, label]) => (
-          <ProviderCard
-            key={key}
-            name={key}
-            label={label}
-            config={configs[key]}
-            isLoading={isLoading}
-            onSave={onSave}
-          />
-        ))}
-      </div>
-    </Card>
-  );
-}
+  const { addProvider, addCustomProvider, updateProvider, removeProvider, discoverModels } = useModelStore();
+  const [showAdd, setShowAdd] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [editKey, setEditKey] = useState("");
+  const [editURL, setEditURL] = useState("");
+  const [discoveredModels, setDiscoveredModels] = useState<Record<string, { id: string; name: string }[]>>({});
+  const [discovering, setDiscovering] = useState<string | null>(null);
+  const [customId, setCustomId] = useState("");
+  const [customName, setCustomName] = useState("");
+  const [customURL, setCustomURL] = useState("");
+  const [customKey, setCustomKey] = useState("");
 
-function ProviderCard({
-  name,
-  label,
-  config,
-  isLoading,
-  onSave,
-}: {
-  name: string;
-  label: string;
-  config: { apiKey: string; baseURL: string } | undefined;
-  isLoading: boolean;
-  onSave: (name: string, config: { apiKey?: string; baseURL?: string }) => Promise<void>;
-}) {
-  const [apiKey, setApiKey] = useState("");
-  const [baseURL, setBaseURL] = useState("");
-  const [showKey, setShowKey] = useState(false);
-  const [dirty, setDirty] = useState(false);
+  const connectedIds = new Set(providers.map((p) => p.id));
+  const unconnectedPresets = presets.filter((p) => !connectedIds.has(p.id));
 
-  useEffect(() => {
-    if (config) {
-      setBaseURL(config.baseURL);
-      setApiKey(""); // Don't pre-fill masked key in editable field
-    }
-  }, [config]);
+  const handleAddPreset = async (preset: ProviderPreset, apiKey?: string) => {
+    await addProvider(preset.id, apiKey);
+    setShowAdd(false);
+  };
 
-  const handleSave = async () => {
+  const handleAddCustom = async () => {
+    if (!customId || !customName || !customURL) return;
+    await addCustomProvider({
+      id: customId,
+      name: customName,
+      baseURL: customURL,
+      apiKey: customKey || undefined,
+    });
+    setShowAdd(false);
+    setCustomId("");
+    setCustomName("");
+    setCustomURL("");
+    setCustomKey("");
+  };
+
+  const handleSaveEdit = async (id: string) => {
     const updates: { apiKey?: string; baseURL?: string } = {};
-    if (apiKey) updates.apiKey = apiKey;
-    if (baseURL !== (config?.baseURL ?? "")) updates.baseURL = baseURL;
-    if (Object.keys(updates).length === 0) return;
-    await onSave(name, updates);
-    setApiKey("");
-    setDirty(false);
+    if (editKey) updates.apiKey = editKey;
+    if (editURL) updates.baseURL = editURL;
+    if (Object.keys(updates).length > 0) {
+      await updateProvider(id, updates);
+    }
+    setExpandedId(null);
+    setEditKey("");
+    setEditURL("");
+  };
+
+  const handleDiscover = async (id: string) => {
+    setDiscovering(id);
+    const models = await discoverModels(id);
+    setDiscoveredModels((prev) => ({ ...prev, [id]: models }));
+    setDiscovering(null);
   };
 
   return (
-    <div className="p-3 rounded-lg border bg-card space-y-2">
-      <p className="text-sm font-medium">{label}</p>
-      <div>
-        <label className="text-xs text-muted-foreground">API Key</label>
-        <div className="relative mt-0.5">
-          <input
-            type={showKey ? "text" : "password"}
-            value={showKey && apiKey ? apiKey : (config?.apiKey ?? "")}
-            onChange={(e) => {
-              setApiKey(e.target.value);
-              setDirty(true);
-            }}
-            onFocus={() => {
-              if (!apiKey) setApiKey("");
-              setShowKey(false);
-            }}
-            placeholder={config?.apiKey ? "已配置 (留空保持不变)" : "输入 API Key"}
-            className="w-full px-2.5 py-1.5 text-xs bg-background border rounded-md pr-8"
-            readOnly={showKey && !apiKey && !!config?.apiKey}
-          />
-          <button
-            type="button"
-            onClick={() => setShowKey(!showKey)}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-          >
-            {showKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-          </button>
-        </div>
-      </div>
-      <div>
-        <label className="text-xs text-muted-foreground">Base URL</label>
-        <input
-          type="text"
-          value={baseURL}
-          onChange={(e) => {
-            setBaseURL(e.target.value);
-            setDirty(true);
-          }}
-          placeholder="https://api.example.com/v1"
-          className="w-full mt-0.5 px-2.5 py-1.5 text-xs bg-background border rounded-md font-mono"
-        />
-      </div>
-      {dirty && (
-        <Button size="sm" onClick={handleSave} disabled={isLoading} className="w-full gap-1.5">
-          <Save className="h-3.5 w-3.5" />
-          保存
-        </Button>
-      )}
-    </div>
-  );
-}
-
-// ---- Section 2: Active Model ----
-
-function ActiveModelSection({
-  activeModelId,
-  profiles,
-  isLoading,
-  onChange,
-}: {
-  activeModelId: string | null;
-  profiles: { id: string; displayName: string; provider: string; modelName: string }[];
-  isLoading: boolean;
-  onChange: (id: string) => Promise<void>;
-}) {
-  return (
     <Card className="p-5">
-      <h3 className="text-sm font-medium mb-3">当前模型</h3>
-      <select
-        value={activeModelId ?? ""}
-        onChange={(e) => onChange(e.target.value)}
-        disabled={isLoading}
-        className="w-full px-3 py-2 text-sm bg-background border rounded-md"
-      >
-        {profiles.map((p) => (
-          <option key={p.id} value={p.id}>
-            {p.displayName || p.modelName} ({p.provider})
-          </option>
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-medium">AI 提供商</h3>
+        <Button variant="ghost" size="sm" onClick={() => setShowAdd(!showAdd)} className="gap-1">
+          <Plus className="h-3.5 w-3.5" />
+          添加提供商
+        </Button>
+      </div>
+
+      {/* Add Provider Panel */}
+      {showAdd && (
+        <div className="p-4 rounded-lg border bg-muted/50 space-y-4 mb-4">
+          <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">选择提供商</h4>
+
+          {/* Preset Grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+            {unconnectedPresets.map((preset) => (
+              <PresetCard key={preset.id} preset={preset} onAdd={handleAddPreset} isLoading={isLoading} />
+            ))}
+          </div>
+
+          {/* Custom Provider */}
+          <div className="pt-3 border-t">
+            <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">自定义提供商 (OpenAI 兼容)</h4>
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                type="text"
+                value={customId}
+                onChange={(e) => setCustomId(e.target.value)}
+                placeholder="ID (如 my-llm)"
+                className="px-2.5 py-1.5 text-xs bg-background border rounded-md"
+              />
+              <input
+                type="text"
+                value={customName}
+                onChange={(e) => setCustomName(e.target.value)}
+                placeholder="显示名称"
+                className="px-2.5 py-1.5 text-xs bg-background border rounded-md"
+              />
+              <input
+                type="text"
+                value={customURL}
+                onChange={(e) => setCustomURL(e.target.value)}
+                placeholder="Base URL (https://...)"
+                className="px-2.5 py-1.5 text-xs bg-background border rounded-md font-mono"
+              />
+              <input
+                type="password"
+                value={customKey}
+                onChange={(e) => setCustomKey(e.target.value)}
+                placeholder="API Key (可选)"
+                className="px-2.5 py-1.5 text-xs bg-background border rounded-md"
+              />
+            </div>
+            <div className="flex justify-end mt-2 gap-2">
+              <Button variant="ghost" size="sm" onClick={() => setShowAdd(false)}>
+                取消
+              </Button>
+              <Button size="sm" onClick={handleAddCustom} disabled={!customId || !customName || !customURL || isLoading}>
+                添加
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Provider Grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+        {providers.map((provider) => (
+          <div
+            key={provider.id}
+            className={`p-3 rounded-lg border transition-colors cursor-pointer ${
+              provider.enabled
+                ? "border-green-500/30 bg-green-500/5 hover:bg-green-500/10"
+                : "border-muted bg-muted/30 hover:bg-muted/50"
+            }`}
+            onClick={() => {
+              if (expandedId === provider.id) {
+                setExpandedId(null);
+              } else {
+                setExpandedId(provider.id);
+                setEditKey("");
+                setEditURL(provider.baseURL);
+              }
+            }}
+          >
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-sm font-medium truncate">{provider.name}</span>
+              {provider.enabled ? (
+                <Wifi className="h-3.5 w-3.5 text-green-500 shrink-0" />
+              ) : (
+                <WifiOff className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {provider.modelCount > 0 ? `${provider.modelCount} 模型` : "未配置模型"}
+            </p>
+            {expandedId === provider.id && (
+              <div className="mt-3 pt-3 border-t space-y-2" onClick={(e) => e.stopPropagation()}>
+                <div>
+                  <label className="text-xs text-muted-foreground">API Key</label>
+                  <input
+                    type="password"
+                    value={editKey}
+                    onChange={(e) => setEditKey(e.target.value)}
+                    placeholder={provider.apiKey ? "已配置 (留空保持不变)" : "输入 API Key"}
+                    className="w-full mt-0.5 px-2 py-1 text-xs bg-background border rounded-md"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">Base URL</label>
+                  <input
+                    type="text"
+                    value={editURL}
+                    onChange={(e) => setEditURL(e.target.value)}
+                    className="w-full mt-0.5 px-2 py-1 text-xs bg-background border rounded-md font-mono"
+                  />
+                </div>
+                <div className="flex gap-1.5">
+                  <Button size="sm" onClick={() => handleSaveEdit(provider.id)} disabled={isLoading} className="flex-1 text-xs">
+                    保存
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleDiscover(provider.id)}
+                    disabled={discovering === provider.id}
+                    className="flex-1 text-xs gap-1"
+                  >
+                    {discovering === provider.id ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Search className="h-3 w-3" />
+                    )}
+                    发现模型
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => removeProvider(provider.id)}
+                    className="text-xs text-destructive hover:text-destructive"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </div>
+                {/* Discovered Models */}
+                {(() => {
+                  const models = discoveredModels[provider.id];
+                  if (!models) return null;
+                  return (
+                    <div className="mt-2 p-2 rounded bg-background border max-h-32 overflow-y-auto">
+                      <p className="text-xs text-muted-foreground mb-1">
+                        发现 {models.length} 个模型:
+                      </p>
+                      <div className="space-y-0.5">
+                        {models.slice(0, 20).map((m) => (
+                          <p key={m.id} className="text-xs font-mono truncate">{m.id}</p>
+                        ))}
+                        {models.length > 20 && (
+                          <p className="text-xs text-muted-foreground">
+                            ...还有 {models.length - 20} 个
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+          </div>
         ))}
-      </select>
-      <p className="text-xs text-muted-foreground mt-2">
-        选择默认使用的 AI 模型。路由规则中的特殊场景会覆盖此选择。
-      </p>
+      </div>
     </Card>
   );
 }
 
-// ---- Section 3: Routing Rules ----
+function PresetCard({
+  preset,
+  onAdd,
+  isLoading,
+}: {
+  preset: ProviderPreset;
+  onAdd: (preset: ProviderPreset, apiKey?: string) => Promise<void>;
+  isLoading: boolean;
+}) {
+  const [showForm, setShowForm] = useState(false);
+  const [apiKey, setApiKey] = useState("");
 
-function RoutingRulesSection({
+  const handleAdd = async () => {
+    if (preset.requiresApiKey && !apiKey) return;
+    await onAdd(preset, apiKey || undefined);
+    setShowForm(false);
+    setApiKey("");
+  };
+
+  if (showForm) {
+    return (
+      <div className="p-3 rounded-lg border bg-background space-y-2">
+        <p className="text-xs font-medium">{preset.nameCN}</p>
+        {preset.requiresApiKey && (
+          <input
+            type="password"
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            placeholder="API Key"
+            className="w-full px-2 py-1 text-xs bg-background border rounded-md"
+            autoFocus
+          />
+        )}
+        <div className="flex gap-1">
+          <Button variant="ghost" size="sm" onClick={() => setShowForm(false)} className="flex-1 text-xs">
+            取消
+          </Button>
+          <Button size="sm" onClick={handleAdd} disabled={isLoading} className="flex-1 text-xs">
+            添加
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      onClick={() => setShowForm(true)}
+      className="p-3 rounded-lg border bg-background hover:bg-muted/50 transition-colors text-left"
+    >
+      <p className="text-sm font-medium">{preset.nameCN}</p>
+      <p className="text-xs text-muted-foreground mt-0.5">
+        {preset.popularModels.length} 预设模型
+      </p>
+    </button>
+  );
+}
+
+// ---- Section 2: Model Marketplace ----
+
+function ModelMarketplace({
+  providers,
+  profiles,
+  activeModelId,
+  isLoading,
+}: {
+  providers: ProviderEntry[];
+  profiles: { id: string; provider: string; modelName: string; displayName: string; capabilities: { toolCalling: boolean; vision: boolean; longContext: boolean; streaming: boolean }; limits: { contextWindow: number } }[];
+  activeModelId: string | null;
+  isLoading: boolean;
+}) {
+  const { deleteProfile, setActiveModel, upsertProfile } = useModelStore();
+  const [search, setSearch] = useState("");
+  const [filterProvider, setFilterProvider] = useState<string>("all");
+  const [showAdd, setShowAdd] = useState(false);
+  const [newModel, setNewModel] = useState({ provider: "", modelName: "", displayName: "" });
+
+  const filtered = profiles.filter((p) => {
+    const matchesSearch =
+      !search ||
+      p.displayName.toLowerCase().includes(search.toLowerCase()) ||
+      p.modelName.toLowerCase().includes(search.toLowerCase());
+    const matchesProvider = filterProvider === "all" || p.provider === filterProvider;
+    return matchesSearch && matchesProvider;
+  });
+
+  const handleAddModel = async () => {
+    if (!newModel.provider || !newModel.modelName) return;
+    await upsertProfile({
+      provider: newModel.provider,
+      modelName: newModel.modelName,
+      displayName: newModel.displayName || undefined,
+    });
+    setNewModel({ provider: "", modelName: "", displayName: "" });
+    setShowAdd(false);
+  };
+
+  const formatContext = (tokens: number) => {
+    if (tokens >= 1000000) return `${(tokens / 1000000).toFixed(0)}M`;
+    if (tokens >= 1000) return `${(tokens / 1000).toFixed(0)}k`;
+    return `${tokens}`;
+  };
+
+  return (
+    <Card className="p-5">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-medium">模型广场</h3>
+        <Button variant="ghost" size="sm" onClick={() => setShowAdd(!showAdd)} className="gap-1">
+          <Plus className="h-3.5 w-3.5" />
+          添加模型
+        </Button>
+      </div>
+
+      {/* Search & Filter */}
+      <div className="flex gap-2 mb-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="搜索模型..."
+            className="w-full pl-8 pr-3 py-1.5 text-xs bg-background border rounded-md"
+          />
+        </div>
+        <select
+          value={filterProvider}
+          onChange={(e) => setFilterProvider(e.target.value)}
+          className="px-2.5 py-1.5 text-xs bg-background border rounded-md"
+        >
+          <option value="all">全部提供商</option>
+          {providers.map((p) => (
+            <option key={p.id} value={p.id}>{p.name}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Add Model Form */}
+      {showAdd && (
+        <div className="p-3 rounded-lg border bg-muted/50 space-y-2 mb-4">
+          <div className="grid grid-cols-3 gap-2">
+            <select
+              value={newModel.provider}
+              onChange={(e) => setNewModel({ ...newModel, provider: e.target.value })}
+              className="px-2.5 py-1.5 text-xs bg-background border rounded-md"
+            >
+              <option value="">选择提供商</option>
+              {providers.filter((p) => p.enabled).map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+            <input
+              type="text"
+              value={newModel.modelName}
+              onChange={(e) => setNewModel({ ...newModel, modelName: e.target.value })}
+              placeholder="模型 ID (如 gpt-4o)"
+              className="px-2.5 py-1.5 text-xs bg-background border rounded-md font-mono"
+            />
+            <input
+              type="text"
+              value={newModel.displayName}
+              onChange={(e) => setNewModel({ ...newModel, displayName: e.target.value })}
+              placeholder="显示名称 (可选)"
+              className="px-2.5 py-1.5 text-xs bg-background border rounded-md"
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setShowAdd(false)}>
+              取消
+            </Button>
+            <Button size="sm" onClick={handleAddModel} disabled={!newModel.provider || !newModel.modelName || isLoading}>
+              添加
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Model List */}
+      <div className="space-y-1">
+        {/* Header */}
+        <div className="grid grid-cols-[auto_1fr_100px_80px_60px_40px] gap-2 px-2 py-1 text-xs text-muted-foreground font-medium">
+          <span className="w-6" />
+          <span>模型</span>
+          <span>提供商</span>
+          <span>上下文</span>
+          <span>能力</span>
+          <span />
+        </div>
+
+        {filtered.map((profile) => {
+          const isActive = profile.id === activeModelId;
+          const provider = providers.find((p) => p.id === profile.provider);
+          return (
+            <div
+              key={profile.id}
+              className={`grid grid-cols-[auto_1fr_100px_80px_60px_40px] gap-2 items-center px-2 py-2 rounded-md transition-colors ${
+                isActive ? "bg-primary/5 border border-primary/20" : "hover:bg-muted/50"
+              }`}
+            >
+              <button
+                onClick={() => setActiveModel(profile.id)}
+                className="w-6 flex justify-center"
+                title={isActive ? "当前模型" : "设为默认"}
+              >
+                <Star className={`h-3.5 w-3.5 ${isActive ? "text-primary fill-primary" : "text-muted-foreground"}`} />
+              </button>
+              <div className="min-w-0">
+                <p className="text-sm font-medium truncate">
+                  {profile.displayName}
+                  {isActive && <span className="ml-1.5 text-xs text-primary">当前</span>}
+                </p>
+                <p className="text-xs text-muted-foreground font-mono truncate">{profile.modelName}</p>
+              </div>
+              <span className="text-xs text-muted-foreground truncate">
+                {provider?.name ?? profile.provider}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                {formatContext(profile.limits.contextWindow)}
+              </span>
+              <div className="flex gap-0.5">
+                {profile.capabilities.toolCalling && (
+                  <span className="text-[10px] px-1 py-0.5 rounded bg-blue-500/10 text-blue-600">工具</span>
+                )}
+                {profile.capabilities.vision && (
+                  <span className="text-[10px] px-1 py-0.5 rounded bg-purple-500/10 text-purple-600">视觉</span>
+                )}
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => deleteProfile(profile.id)}
+                className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                title="删除"
+              >
+                <Trash2 className="h-3 w-3" />
+              </Button>
+            </div>
+          );
+        })}
+
+        {filtered.length === 0 && (
+          <p className="text-sm text-muted-foreground text-center py-6">
+            {search || filterProvider !== "all" ? "没有匹配的模型" : "暂无模型，点击上方添加"}
+          </p>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+// ---- Section 3: Active Config ----
+
+function ActiveConfigSection({
+  activeModelId,
+  profiles,
   rules,
   isCustom,
-  profiles,
   isLoading,
-  onSave,
 }: {
+  activeModelId: string | null;
+  profiles: { id: string; displayName: string; modelName: string }[];
   rules: RoutingRule[];
   isCustom: boolean;
-  profiles: { id: string; displayName: string; modelName: string }[];
   isLoading: boolean;
-  onSave: (rules: RoutingRule[]) => Promise<void>;
 }) {
+  const { setActiveModel, updateRoutingRules } = useModelStore();
   const [localRules, setLocalRules] = useState<RoutingRule[]>([]);
   const [dirty, setDirty] = useState(false);
+  const [showRules, setShowRules] = useState(false);
 
   useEffect(() => {
     setLocalRules(rules.map((r) => ({ ...r })));
@@ -301,233 +625,96 @@ function RoutingRulesSection({
   };
 
   const handleSave = async () => {
-    await onSave(localRules);
+    await updateRoutingRules(localRules);
     setDirty(false);
   };
 
   return (
     <Card className="p-5">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-medium">
-          路由规则
-          {isCustom && (
-            <span className="ml-2 text-xs px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600">
-              自定义
-            </span>
-          )}
-        </h3>
-        <div className="flex gap-2">
-          <Button variant="ghost" size="sm" onClick={addRule} className="gap-1">
-            <Plus className="h-3.5 w-3.5" />
-            添加
-          </Button>
-          {dirty && (
-            <Button size="sm" onClick={handleSave} disabled={isLoading} className="gap-1.5">
-              <Save className="h-3.5 w-3.5" />
-              保存
-            </Button>
-          )}
-        </div>
-      </div>
-      <div className="space-y-2">
-        <div className="grid grid-cols-[1fr_1fr_40px] gap-2 px-2 text-xs text-muted-foreground">
-          <span>任务类型</span>
-          <span>目标模型</span>
-          <span />
-        </div>
-        {localRules.map((rule, i) => (
-          <div key={i} className="grid grid-cols-[1fr_1fr_40px] gap-2 items-center">
-            <select
-              value={rule.taskType}
-              onChange={(e) => updateRule(i, "taskType", e.target.value)}
-              className="px-2.5 py-1.5 text-xs bg-background border rounded-md"
-            >
-              {Object.entries(taskTypeLabels).map(([val, label]) => (
-                <option key={val} value={val}>{label}</option>
-              ))}
-            </select>
-            <select
-              value={rule.modelId}
-              onChange={(e) => updateRule(i, "modelId", e.target.value)}
-              className="px-2.5 py-1.5 text-xs bg-background border rounded-md"
-            >
-              {profiles.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.displayName || p.modelName}
-                </option>
-              ))}
-            </select>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => removeRule(i)}
-              className="h-8 w-8 text-muted-foreground hover:text-destructive"
-            >
-              <X className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        ))}
-        {localRules.length === 0 && (
-          <p className="text-xs text-muted-foreground text-center py-3">无路由规则</p>
-        )}
-      </div>
-    </Card>
-  );
-}
+      <h3 className="text-sm font-medium mb-3">当前配置</h3>
 
-// ---- Section 4: Model Profiles ----
-
-function ModelProfilesSection({
-  profiles,
-  activeModelId,
-  isLoading,
-  onUpsert,
-  onDelete,
-  onSetActive,
-}: {
-  profiles: { id: string; provider: string; modelName: string; displayName: string | null; capabilities: Record<string, boolean> | null }[];
-  activeModelId: string | null;
-  isLoading: boolean;
-  onUpsert: (profile: {
-    provider: string;
-    modelName: string;
-    displayName?: string;
-    capabilities?: Record<string, boolean>;
-  }) => Promise<void>;
-  onDelete: (id: string) => Promise<void>;
-  onSetActive: (id: string) => Promise<void>;
-}) {
-  const [showAdd, setShowAdd] = useState(false);
-  const [newProfile, setNewProfile] = useState({
-    provider: "mimo",
-    modelName: "",
-    displayName: "",
-  });
-
-  const handleAdd = async () => {
-    if (!newProfile.modelName) return;
-    await onUpsert({
-      provider: newProfile.provider,
-      modelName: newProfile.modelName,
-      displayName: newProfile.displayName || undefined,
-    });
-    setNewProfile({ provider: "mimo", modelName: "", displayName: "" });
-    setShowAdd(false);
-  };
-
-  return (
-    <Card className="p-5">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-medium">模型配置</h3>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setShowAdd(!showAdd)}
-          className="gap-1"
+      {/* Active Model */}
+      <div className="mb-4">
+        <label className="text-xs text-muted-foreground mb-1 block">默认模型</label>
+        <select
+          value={activeModelId ?? ""}
+          onChange={(e) => setActiveModel(e.target.value)}
+          disabled={isLoading}
+          className="w-full px-3 py-2 text-sm bg-background border rounded-md"
         >
-          <Plus className="h-3.5 w-3.5" />
-          添加
-        </Button>
+          {profiles.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.displayName || p.modelName}
+            </option>
+          ))}
+        </select>
       </div>
 
-      {showAdd && (
-        <div className="p-3 rounded-lg border bg-muted/50 space-y-2 mb-4">
-          <div className="grid grid-cols-3 gap-2">
-            <div>
-              <label className="text-xs text-muted-foreground">提供商</label>
+      {/* Routing Rules Toggle */}
+      <button
+        onClick={() => setShowRules(!showRules)}
+        className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mb-2"
+      >
+        {showRules ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+        路由规则
+        {isCustom && (
+          <span className="text-xs px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600">自定义</span>
+        )}
+      </button>
+
+      {showRules && (
+        <div className="space-y-2">
+          <div className="grid grid-cols-[1fr_1fr_40px] gap-2 px-2 text-xs text-muted-foreground">
+            <span>任务类型</span>
+            <span>目标模型</span>
+            <span />
+          </div>
+          {localRules.map((rule, i) => (
+            <div key={i} className="grid grid-cols-[1fr_1fr_40px] gap-2 items-center">
               <select
-                value={newProfile.provider}
-                onChange={(e) => setNewProfile({ ...newProfile, provider: e.target.value })}
-                className="w-full mt-0.5 px-2.5 py-1.5 text-xs bg-background border rounded-md"
+                value={rule.taskType}
+                onChange={(e) => updateRule(i, "taskType", e.target.value)}
+                className="px-2.5 py-1.5 text-xs bg-background border rounded-md"
               >
-                {Object.entries(providerLabels).map(([val, label]) => (
+                {Object.entries(taskTypeLabels).map(([val, label]) => (
                   <option key={val} value={val}>{label}</option>
                 ))}
               </select>
+              <select
+                value={rule.modelId}
+                onChange={(e) => updateRule(i, "modelId", e.target.value)}
+                className="px-2.5 py-1.5 text-xs bg-background border rounded-md"
+              >
+                {profiles.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.displayName || p.modelName}
+                  </option>
+                ))}
+              </select>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => removeRule(i)}
+                className="h-8 w-8 text-muted-foreground hover:text-destructive"
+              >
+                <X className="h-3.5 w-3.5" />
+              </Button>
             </div>
-            <div>
-              <label className="text-xs text-muted-foreground">模型名称</label>
-              <input
-                type="text"
-                value={newProfile.modelName}
-                onChange={(e) => setNewProfile({ ...newProfile, modelName: e.target.value })}
-                placeholder="mimo-v2.5-pro"
-                className="w-full mt-0.5 px-2.5 py-1.5 text-xs bg-background border rounded-md"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">显示名称</label>
-              <input
-                type="text"
-                value={newProfile.displayName}
-                onChange={(e) => setNewProfile({ ...newProfile, displayName: e.target.value })}
-                placeholder="MiMo v2.5 Pro"
-                className="w-full mt-0.5 px-2.5 py-1.5 text-xs bg-background border rounded-md"
-              />
-            </div>
-          </div>
-          <div className="flex justify-end gap-2">
-            <Button variant="ghost" size="sm" onClick={() => setShowAdd(false)}>
-              取消
+          ))}
+
+          <div className="flex justify-between pt-2">
+            <Button variant="ghost" size="sm" onClick={addRule} className="gap-1 text-xs">
+              <Plus className="h-3 w-3" />
+              添加规则
             </Button>
-            <Button size="sm" onClick={handleAdd} disabled={!newProfile.modelName || isLoading}>
-              添加
-            </Button>
+            {dirty && (
+              <Button size="sm" onClick={handleSave} disabled={isLoading} className="gap-1.5 text-xs">
+                保存规则
+              </Button>
+            )}
           </div>
         </div>
       )}
-
-      <div className="space-y-2">
-        {profiles.map((profile) => {
-          const isActive = profile.id === activeModelId;
-          return (
-            <div
-              key={profile.id}
-              className={`p-3 rounded-lg border flex items-center justify-between ${isActive ? "border-primary bg-primary/5" : "bg-card"}`}
-            >
-              <div className="flex items-center gap-2 min-w-0">
-                <Brain className="h-4 w-4 text-muted-foreground shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-sm font-medium truncate">
-                    {profile.displayName || profile.modelName}
-                    {isActive && (
-                      <Star className="h-3 w-3 text-primary inline ml-1" />
-                    )}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {providerLabels[profile.provider] ?? profile.provider} / {profile.modelName}
-                  </p>
-                </div>
-              </div>
-              <div className="flex gap-1 shrink-0">
-                {!isActive && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => onSetActive(profile.id)}
-                    className="h-7 w-7 text-muted-foreground hover:text-primary"
-                    title="设为默认"
-                  >
-                    <Star className="h-3.5 w-3.5" />
-                  </Button>
-                )}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => onDelete(profile.id)}
-                  className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                  title="删除"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              </div>
-            </div>
-          );
-        })}
-        {profiles.length === 0 && (
-          <p className="text-sm text-muted-foreground text-center py-4">暂无模型配置</p>
-        )}
-      </div>
     </Card>
   );
 }

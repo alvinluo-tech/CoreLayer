@@ -353,6 +353,54 @@ export async function updateProviderConfig(
   return invoke("update_provider_config", { name, apiKey: config.apiKey, baseUrl: config.baseURL });
 }
 
+// ---- Provider Presets & CRUD ----
+
+export interface ProviderPreset {
+  id: string;
+  name: string;
+  nameCN: string;
+  type: "openai_compatible" | "ollama";
+  defaultBaseURL: string;
+  requiresApiKey: boolean;
+  popularModels: { id: string; name: string }[];
+}
+
+export interface StoredProvider {
+  id: string;
+  name: string;
+  type: "openai_compatible" | "ollama";
+  baseURL: string;
+  apiKey?: string;
+  enabled: boolean;
+}
+
+export async function listProviderPresets(): Promise<{ presets: ProviderPreset[] }> {
+  return invoke("list_provider_presets");
+}
+
+export async function getProviders(): Promise<{ providers: StoredProvider[] | Record<string, StoredProvider & { enabled: boolean }>; isLegacy: boolean }> {
+  return invoke("get_provider_configs");
+}
+
+export async function addProvider(config: {
+  id: string;
+  name: string;
+  type?: string;
+  baseURL: string;
+  apiKey?: string;
+  enabled?: boolean;
+}): Promise<{ success: boolean }> {
+  return invoke("add_provider", { config });
+}
+
+export async function removeProvider(id: string): Promise<{ success: boolean }> {
+  return invoke("remove_provider", { id });
+}
+
+export async function discoverModels(providerId: string): Promise<{ models: { id: string; name: string }[] }> {
+  return invoke("discover_models", { providerId });
+}
+
 // ---- Routing Rules ----
 
 export interface RoutingRule {

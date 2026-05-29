@@ -1,4 +1,4 @@
-export type ModelProviderName = "mimo" | "groq" | "openrouter" | "local";
+export type ModelProviderName = string;
 
 export type ModelCapability =
   | "text"

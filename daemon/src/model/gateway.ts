@@ -1,8 +1,9 @@
 import { ModelGateway, DEFAULT_PROFILES, DEFAULT_ROUTING_RULES } from "@jarvis/model-gateway";
-import type { ModelProviderName, ProviderConfig, ModelProfile } from "@jarvis/types";
+import type { ProviderConfig, ModelProfile } from "@jarvis/types";
 import { env } from "../config/env.js";
 import {
   getProviderCredentials,
+  getProviders,
   getRoutingRules,
   getActiveModelId,
 } from "../config/storage-config.js";
@@ -17,7 +18,6 @@ export function resetGateway(): void {
 function getDbProfiles(): ModelProfile[] | null {
   try {
     const repos = getRepositories();
-    // model_profiles repo returns rows, need to map to ModelProfile shape
     const rows = (repos.modelProfiles as { getAll: () => unknown[] }).getAll();
     if (!Array.isArray(rows) || rows.length === 0) return null;
 
@@ -33,7 +33,7 @@ function getDbProfiles(): ModelProfile[] | null {
       };
       return {
         id: r.id,
-        provider: r.provider as ModelProviderName,
+        provider: r.provider,
         modelName: r.modelName,
         displayName: r.displayName ?? r.modelName,
         capabilities: (r.capabilities as ModelProfile["capabilities"]) ?? {
@@ -58,38 +58,80 @@ function getDbProfiles(): ModelProfile[] | null {
   }
 }
 
+// Legacy env-based defaults for the original 4 providers
+const LEGACY_ENV_MAP: Record<string, { baseURL: string; envKey?: string }> = {
+  mimo: { baseURL: "https://token-plan-ams.xiaomimimo.com/v1", envKey: "MIMO_API_KEY" },
+  groq: { baseURL: "https://api.groq.com/openai/v1", envKey: "GROQ_API_KEY" },
+  openrouter: { baseURL: "https://openrouter.ai/api/v1", envKey: "OPENROUTER_API_KEY" },
+  local: { baseURL: "http://localhost:11434/v1" },
+};
+
+function resolveProviderBaseURL(storedId: string, storedBaseURL?: string): string {
+  if (storedBaseURL) return storedBaseURL;
+  const legacy = LEGACY_ENV_MAP[storedId];
+  if (legacy) return legacy.baseURL;
+  return "";
+}
+
+function resolveProviderApiKey(storedId: string, storedApiKey?: string): string {
+  if (storedApiKey) return storedApiKey;
+  // Check legacy credentials
+  const creds = getProviderCredentials();
+  if (creds[storedId]?.apiKey) return creds[storedId].apiKey!;
+  // Check env vars
+  const legacy = LEGACY_ENV_MAP[storedId];
+  if (legacy?.envKey) return process.env[legacy.envKey] ?? "";
+  if (storedId === "local") return "ollama";
+  return "";
+}
+
 export function getModelGateway(): ModelGateway {
   if (gateway) return gateway;
 
-  const creds = getProviderCredentials();
   const dbProfiles = getDbProfiles();
   const profiles = dbProfiles ?? DEFAULT_PROFILES;
   const customRules = getRoutingRules();
   const routingRules = customRules ?? DEFAULT_ROUTING_RULES;
   const activeModelId = getActiveModelId() ?? getDefaultModelId();
 
-  const providers: Record<ModelProviderName, ProviderConfig> = {
-    mimo: {
-      baseURL: creds.mimo?.baseURL ?? env.MIMO_API_URL,
-      apiKey: creds.mimo?.apiKey ?? env.MIMO_API_KEY,
-      models: profiles.filter((p) => p.provider === "mimo"),
-    },
-    groq: {
-      baseURL: creds.groq?.baseURL ?? "https://api.groq.com/openai/v1",
-      apiKey: creds.groq?.apiKey ?? env.GROQ_API_KEY,
-      models: profiles.filter((p) => p.provider === "groq"),
-    },
-    openrouter: {
-      baseURL: creds.openrouter?.baseURL ?? "https://openrouter.ai/api/v1",
-      apiKey: creds.openrouter?.apiKey ?? env.OPENROUTER_API_KEY,
-      models: profiles.filter((p) => p.provider === "openrouter"),
-    },
-    local: {
-      baseURL: creds.local?.baseURL ?? env.OLLAMA_BASE_URL ?? "http://localhost:11434/v1",
-      apiKey: creds.local?.apiKey ?? "ollama",
-      models: profiles.filter((p) => p.provider === "local"),
-    },
-  };
+  // Build providers from stored providers, falling back to legacy config
+  const storedProviders = getProviders();
+  const providers: Record<string, ProviderConfig> = {};
+
+  if (storedProviders.length > 0) {
+    // New dynamic system
+    for (const sp of storedProviders) {
+      if (!sp.enabled) continue;
+      providers[sp.id] = {
+        baseURL: resolveProviderBaseURL(sp.id, sp.baseURL),
+        apiKey: resolveProviderApiKey(sp.id, sp.apiKey),
+        models: profiles.filter((p) => p.provider === sp.id),
+      };
+    }
+  }
+
+  // Ensure all profile providers have an entry (fallback for profiles without stored providers)
+  const profileProviders = new Set(profiles.map((p) => p.provider));
+  for (const provName of profileProviders) {
+    if (!providers[provName]) {
+      providers[provName] = {
+        baseURL: resolveProviderBaseURL(provName),
+        apiKey: resolveProviderApiKey(provName),
+        models: profiles.filter((p) => p.provider === provName),
+      };
+    }
+  }
+
+  // Ensure at least the 4 legacy providers exist (for backward compat)
+  for (const legacyId of Object.keys(LEGACY_ENV_MAP)) {
+    if (!providers[legacyId]) {
+      providers[legacyId] = {
+        baseURL: resolveProviderBaseURL(legacyId),
+        apiKey: resolveProviderApiKey(legacyId),
+        models: profiles.filter((p) => p.provider === legacyId),
+      };
+    }
+  }
 
   gateway = new ModelGateway({
     defaultModelId: activeModelId,

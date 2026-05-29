@@ -16,9 +16,19 @@ interface RoutingRule {
   conditions?: Record<string, unknown>;
 }
 
+export interface StoredProvider {
+  id: string;
+  name: string;
+  type: "openai_compatible" | "ollama";
+  baseURL: string;
+  apiKey?: string;
+  enabled: boolean;
+}
+
 interface Config {
   storageMode: "local" | "cloud";
   providerCredentials?: Record<string, ProviderCredential>;
+  providers?: StoredProvider[];
   routingRules?: RoutingRule[];
   activeModelId?: string;
 }
@@ -36,6 +46,9 @@ function readConfig(): Config {
       }
       if (parsed.providerCredentials && typeof parsed.providerCredentials === "object") {
         defaults.providerCredentials = parsed.providerCredentials;
+      }
+      if (Array.isArray(parsed.providers)) {
+        defaults.providers = parsed.providers;
       }
       if (Array.isArray(parsed.routingRules)) {
         defaults.routingRules = parsed.routingRules;
@@ -78,7 +91,7 @@ export function isCloudConfigured(): boolean {
   return Boolean(env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY);
 }
 
-// ---- Provider Credentials ----
+// ---- Provider Credentials (legacy, backward compat) ----
 
 export function getProviderCredentials(): Record<string, ProviderCredential> {
   return readConfig().providerCredentials ?? {};
@@ -92,6 +105,29 @@ export function setProviderCredential(name: string, cred: ProviderCredential): v
     baseURL: cred.baseURL !== undefined ? cred.baseURL : existing.baseURL,
   };
   mergeConfig({ providerCredentials: current });
+}
+
+// ---- Providers (new dynamic system) ----
+
+export function getProviders(): StoredProvider[] {
+  return readConfig().providers ?? [];
+}
+
+export function setProvider(id: string, provider: Omit<StoredProvider, "id">): void {
+  const providers = getProviders();
+  const index = providers.findIndex((p) => p.id === id);
+  const entry: StoredProvider = { id, ...provider };
+  if (index >= 0) {
+    providers[index] = entry;
+  } else {
+    providers.push(entry);
+  }
+  mergeConfig({ providers });
+}
+
+export function removeProvider(id: string): void {
+  const providers = getProviders().filter((p) => p.id !== id);
+  mergeConfig({ providers });
 }
 
 // ---- Routing Rules ----

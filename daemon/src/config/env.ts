@@ -24,8 +24,8 @@ function getEnvVar(key: string, fallbackKeys: string[] = [], defaultValue?: stri
 }
 
 export const env = {
-  // AI Provider: "mimo" | "groq" | "openrouter" | "local"
-  AI_PROVIDER: getEnvVar("AI_PROVIDER", [], "mimo") as "mimo" | "groq" | "openrouter" | "local",
+  // AI Provider (any string, defaults to "mimo" for backward compat)
+  AI_PROVIDER: getEnvVar("AI_PROVIDER", [], "mimo"),
   AI_MODEL: getEnvVar("AI_MODEL", [], "mimo-v2.5-pro"),
 
   // MiMo (Xiaomi)

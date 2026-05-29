@@ -541,6 +541,30 @@ async fn update_provider_config(name: String, api_key: Option<String>, base_url:
     daemon_put(&format!("/api/settings/providers/{}", name), body).await
 }
 
+// ---- Provider Presets ----
+
+#[tauri::command]
+async fn list_provider_presets() -> Result<serde_json::Value, String> {
+    daemon_get("/api/settings/providers/presets").await
+}
+
+// ---- Provider CRUD ----
+
+#[tauri::command]
+async fn add_provider(config: serde_json::Value) -> Result<serde_json::Value, String> {
+    daemon_post("/api/settings/providers", config).await
+}
+
+#[tauri::command]
+async fn remove_provider(id: String) -> Result<serde_json::Value, String> {
+    daemon_delete(&format!("/api/settings/providers/{}", id)).await
+}
+
+#[tauri::command]
+async fn discover_models(provider_id: String) -> Result<serde_json::Value, String> {
+    daemon_post(&format!("/api/settings/providers/{}/discover", provider_id), serde_json::json!({})).await
+}
+
 // ---- Routing Rules Commands ----
 
 #[tauri::command]
@@ -619,6 +643,10 @@ pub fn run() {
             list_model_profiles,
             get_provider_configs,
             update_provider_config,
+            list_provider_presets,
+            add_provider,
+            remove_provider,
+            discover_models,
             get_routing_rules,
             update_routing_rules,
             get_active_model,
