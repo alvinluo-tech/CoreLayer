@@ -11,6 +11,7 @@ import {
 import { Card } from "@/components/ui/card";
 import { StatusBadge } from "./StatusBadge";
 import { useMCPStore } from "@/stores/mcpStore";
+import { useModelStore } from "@/stores/modelStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import {
   getDaemonStatus,
@@ -21,8 +22,8 @@ import {
 } from "@/lib/tauri";
 
 export function OverviewPage() {
-  const { servers, toolCounts, modelProfiles, fetchServers, fetchTools, fetchModelProfiles } =
-    useMCPStore();
+  const { servers, toolCounts, fetchServers, fetchTools } = useMCPStore();
+  const { modelProfiles, fetchAll: fetchModels } = useModelStore();
   const { storageMode, fetchSettings } = useSettingsStore();
   const [daemon, setDaemon] = useState<DaemonStatus | null>(null);
   const [voiceStatus, setVoiceStatus] = useState<VoiceStatus | null>(null);
@@ -35,12 +36,12 @@ export function OverviewPage() {
   useEffect(() => {
     fetchServers();
     fetchTools();
-    fetchModelProfiles();
+    fetchModels();
     fetchSettings();
     getDaemonStatus().then(setDaemon).catch(() => {});
     getVoiceStatus().then(setVoiceStatus).catch(() => {});
     getHealth().then(setHealth).catch(() => {});
-  }, [fetchServers, fetchTools, fetchModelProfiles, fetchSettings]);
+  }, [fetchServers, fetchTools, fetchModels, fetchSettings]);
 
   const connectedServers = servers.filter((s) => s.status === "connected").length;
   const totalTools = toolCounts.native + toolCounts.mcp + toolCounts.skill + toolCounts.rest;

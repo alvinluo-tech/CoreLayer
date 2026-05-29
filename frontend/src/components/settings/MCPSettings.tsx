@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useMCPStore } from "@/stores/mcpStore";
+import { useModelStore } from "@/stores/modelStore";
 import {
   Plug,
   PlugZap,
@@ -24,15 +25,14 @@ export function MCPSettings({ className }: MCPSettingsProps) {
     servers,
     tools: _tools,
     toolCounts,
-    modelProfiles,
     isLoading,
     error,
     fetchServers,
     fetchTools,
-    fetchModelProfiles,
     connectServer,
     disconnectServer,
   } = useMCPStore();
+  const { modelProfiles, fetchAll: fetchModels } = useModelStore();
 
   const [showAddForm, setShowAddForm] = useState(false);
   const [newServer, setNewServer] = useState({
@@ -45,8 +45,8 @@ export function MCPSettings({ className }: MCPSettingsProps) {
   useEffect(() => {
     fetchServers();
     fetchTools();
-    fetchModelProfiles();
-  }, [fetchServers, fetchTools, fetchModelProfiles]);
+    fetchModels();
+  }, [fetchServers, fetchTools, fetchModels]);
 
   const handleConnect = async () => {
     if (!newServer.id || !newServer.name) return;
@@ -91,7 +91,7 @@ export function MCPSettings({ className }: MCPSettingsProps) {
               onClick={() => {
                 fetchServers();
                 fetchTools();
-                fetchModelProfiles();
+                fetchModels();
               }}
               className="p-2 rounded-md hover:bg-muted transition-colors"
               title="刷新"

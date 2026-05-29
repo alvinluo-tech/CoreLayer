@@ -4,23 +4,19 @@ import {
   connectMCPServer as tauriConnectMCPServer,
   disconnectMCPServer as tauriDisconnectMCPServer,
   listAllTools,
-  listModelProfiles,
   type MCPServerInfo,
   type ToolInfo,
-  type ModelProfile,
 } from "@/lib/tauri";
 
 interface MCPState {
   servers: MCPServerInfo[];
   tools: ToolInfo[];
   toolCounts: { native: number; mcp: number; skill: number; rest: number };
-  modelProfiles: ModelProfile[];
   isLoading: boolean;
   error: string | null;
 
   fetchServers: () => Promise<void>;
   fetchTools: () => Promise<void>;
-  fetchModelProfiles: () => Promise<void>;
   connectServer: (config: {
     id: string;
     name: string;
@@ -34,7 +30,6 @@ export const useMCPStore = create<MCPState>((set, get) => ({
   servers: [],
   tools: [],
   toolCounts: { native: 0, mcp: 0, skill: 0, rest: 0 },
-  modelProfiles: [],
   isLoading: false,
   error: null,
 
@@ -57,16 +52,6 @@ export const useMCPStore = create<MCPState>((set, get) => ({
         toolCounts: resp.bySource,
         isLoading: false,
       });
-    } catch (e) {
-      set({ error: String(e), isLoading: false });
-    }
-  },
-
-  fetchModelProfiles: async () => {
-    set({ isLoading: true, error: null });
-    try {
-      const resp = await listModelProfiles();
-      set({ modelProfiles: resp.profiles, isLoading: false });
     } catch (e) {
       set({ error: String(e), isLoading: false });
     }

@@ -22,7 +22,6 @@ export function AppsPage() {
     error,
     fetchServers,
     fetchTools,
-    fetchModelProfiles,
     connectServer,
     disconnectServer,
   } = useMCPStore();
@@ -38,8 +37,7 @@ export function AppsPage() {
   useEffect(() => {
     fetchServers();
     fetchTools();
-    fetchModelProfiles();
-  }, [fetchServers, fetchTools, fetchModelProfiles]);
+  }, [fetchServers, fetchTools]);
 
   const handleConnect = async () => {
     if (!newServer.id || !newServer.name) return;
@@ -64,7 +62,6 @@ export function AppsPage() {
             onClick={() => {
               fetchServers();
               fetchTools();
-              fetchModelProfiles();
             }}
             className="gap-1.5"
           >

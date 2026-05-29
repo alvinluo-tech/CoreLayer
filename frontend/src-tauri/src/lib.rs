@@ -526,6 +526,57 @@ async fn list_model_profiles() -> Result<serde_json::Value, String> {
     daemon_get("/api/mcp/models").await
 }
 
+// ---- Provider Config Commands ----
+
+#[tauri::command]
+async fn get_provider_configs() -> Result<serde_json::Value, String> {
+    daemon_get("/api/settings/providers").await
+}
+
+#[tauri::command]
+async fn update_provider_config(name: String, api_key: Option<String>, base_url: Option<String>) -> Result<serde_json::Value, String> {
+    let mut body = serde_json::json!({});
+    if let Some(k) = api_key { body["apiKey"] = serde_json::json!(k); }
+    if let Some(u) = base_url { body["baseURL"] = serde_json::json!(u); }
+    daemon_put(&format!("/api/settings/providers/{}", name), body).await
+}
+
+// ---- Routing Rules Commands ----
+
+#[tauri::command]
+async fn get_routing_rules() -> Result<serde_json::Value, String> {
+    daemon_get("/api/settings/routing-rules").await
+}
+
+#[tauri::command]
+async fn update_routing_rules(rules: serde_json::Value) -> Result<serde_json::Value, String> {
+    daemon_put("/api/settings/routing-rules", serde_json::json!({ "rules": rules })).await
+}
+
+// ---- Active Model Commands ----
+
+#[tauri::command]
+async fn get_active_model() -> Result<serde_json::Value, String> {
+    daemon_get("/api/settings/active-model").await
+}
+
+#[tauri::command]
+async fn set_active_model(model_id: String) -> Result<serde_json::Value, String> {
+    daemon_put("/api/settings/active-model", serde_json::json!({ "modelId": model_id })).await
+}
+
+// ---- Model Profile CRUD Commands ----
+
+#[tauri::command]
+async fn upsert_model_profile(profile: serde_json::Value) -> Result<serde_json::Value, String> {
+    daemon_post("/api/settings/model-profiles", profile).await
+}
+
+#[tauri::command]
+async fn delete_model_profile(id: String) -> Result<serde_json::Value, String> {
+    daemon_delete(&format!("/api/settings/model-profiles/{}", id)).await
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let daemon_url = std::env::var("DAEMON_URL").unwrap_or_else(|_| "http://127.0.0.1:3001".to_string());
@@ -566,6 +617,14 @@ pub fn run() {
             get_tool,
             get_tool_call_logs,
             list_model_profiles,
+            get_provider_configs,
+            update_provider_config,
+            get_routing_rules,
+            update_routing_rules,
+            get_active_model,
+            set_active_model,
+            upsert_model_profile,
+            delete_model_profile,
             daemon_supervisor::daemon_status,
             daemon_supervisor::start_daemon,
             daemon_supervisor::stop_daemon,

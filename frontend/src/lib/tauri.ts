@@ -335,6 +335,67 @@ export async function listModelProfiles(): Promise<{ profiles: ModelProfile[] }>
   return invoke("list_model_profiles");
 }
 
+// ---- Provider Config ----
+
+export interface ProviderCredentialView {
+  apiKey: string; // masked
+  baseURL: string;
+}
+
+export async function getProviderConfigs(): Promise<{ providers: Record<string, ProviderCredentialView> }> {
+  return invoke("get_provider_configs");
+}
+
+export async function updateProviderConfig(
+  name: string,
+  config: { apiKey?: string; baseURL?: string },
+): Promise<{ success: boolean }> {
+  return invoke("update_provider_config", { name, apiKey: config.apiKey, baseUrl: config.baseURL });
+}
+
+// ---- Routing Rules ----
+
+export interface RoutingRule {
+  taskType: string;
+  modelId: string;
+  conditions?: Record<string, unknown>;
+}
+
+export async function getRoutingRules(): Promise<{ rules: RoutingRule[]; isCustom: boolean }> {
+  return invoke("get_routing_rules");
+}
+
+export async function updateRoutingRules(rules: RoutingRule[]): Promise<{ success: boolean }> {
+  return invoke("update_routing_rules", { rules });
+}
+
+// ---- Active Model ----
+
+export async function getActiveModel(): Promise<{ modelId: string; profile: ModelProfile | null }> {
+  return invoke("get_active_model");
+}
+
+export async function setActiveModel(modelId: string): Promise<{ success: boolean }> {
+  return invoke("set_active_model", { modelId });
+}
+
+// ---- Model Profile CRUD ----
+
+export async function upsertModelProfile(profile: {
+  provider: string;
+  modelName: string;
+  displayName?: string;
+  capabilities?: Record<string, boolean>;
+  limits?: { contextWindow: number; maxOutputTokens: number };
+  cost?: { input: number; output: number };
+}): Promise<{ success: boolean; profile: ModelProfile }> {
+  return invoke("upsert_model_profile", { profile });
+}
+
+export async function deleteModelProfile(id: string): Promise<{ success: boolean }> {
+  return invoke("delete_model_profile", { id });
+}
+
 // ---- Daemon Supervisor ----
 
 export interface DaemonStatus {
