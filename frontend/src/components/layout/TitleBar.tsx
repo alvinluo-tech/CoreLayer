@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Minus, Square, X, Copy, Cpu } from "lucide-react";
+import { Minus, Square, X, Copy } from "lucide-react";
 
 export function TitleBar() {
   const [isMaximized, setIsMaximized] = useState(false);
@@ -82,12 +82,7 @@ export function TitleBar() {
         data-tauri-drag-region
         className="flex items-center gap-3 px-3 h-full select-none cursor-default"
       >
-        {/* Animated Custom Neon core */}
-        <div className="relative flex items-center justify-center w-5 h-5">
-          <div className="absolute inset-0 rounded-full bg-primary/20 animate-ping" />
-          <div className="absolute inset-0.5 rounded-full border border-primary/40 animate-spin-slow" />
-          <Cpu className="w-3 h-3 text-primary relative z-10 animate-pulse-slow" />
-        </div>
+        <img src="/icon.png" alt="Jarvis" className="w-5 h-5 rounded-sm" />
         <div className="flex items-baseline gap-2">
           <span className="text-xs font-semibold tracking-[0.2em] text-foreground uppercase">
             Jarvis

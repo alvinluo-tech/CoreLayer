@@ -782,6 +782,14 @@ pub fn run() {
             daemon_supervisor::restart_daemon
         ])
         .setup(|app| {
+            use tauri::Manager;
+            // Set window icon from default window icon (embedded via tauri.conf.json bundle)
+            if let Some(window) = app.get_webview_window("main") {
+                if let Some(icon) = app.default_window_icon() {
+                    let _ = window.set_icon(icon.clone());
+                }
+            }
+
             if cfg!(debug_assertions) {
                 app.handle().plugin(
                     tauri_plugin_log::Builder::default()

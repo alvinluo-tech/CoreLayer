@@ -10,7 +10,8 @@
     "build": "pnpm --filter daemon build && pnpm --filter frontend tauri build",
     "lint": "pnpm -r lint",
     "test": "pnpm -r test",
-    "clean": "pnpm -r clean"
+    "clean": "pnpm -r clean",
+    "clean:app": "taskkill /f /im app.exe 2>nul || exit 0"
   },
   "devDependencies": {
     "concurrently": "^9.1.0",
