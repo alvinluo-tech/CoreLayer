@@ -120,11 +120,16 @@ app.get("/servers/:id/resources/*", async (c) => {
 
 // Get model gateway info
 app.get("/models", async (c) => {
-  const { getModelGateway } = await import("../model/gateway.js");
-  const gateway = getModelGateway();
-  return c.json({
-    profiles: gateway.getAllProfiles(),
-  });
+  try {
+    const { getModelGateway } = await import("../model/gateway.js");
+    const gateway = getModelGateway();
+    return c.json({
+      profiles: gateway.getAllProfiles(),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return c.json({ error: message }, 500);
+  }
 });
 
 export default app;

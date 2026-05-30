@@ -56,7 +56,7 @@ export async function transcribeWithGroq(
       duration: "duration" in transcription ? (transcription as { duration?: number }).duration : undefined,
     };
   } finally {
-    await unlink(tmpPath).catch(() => {});
+    await unlink(tmpPath).catch((e) => console.warn("[Jarvis][asr] Failed to clean up temp file:", tmpPath, e));
   }
 }
 

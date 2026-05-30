@@ -4,7 +4,7 @@ import { TrendingUp, CheckCircle2, BookOpen, Target } from "lucide-react";
 import { useReviewStore } from "@/stores/reviewStore";
 
 export function DailySummary() {
-  const { dailySummary, isLoading, fetchDailySummary } = useReviewStore();
+  const { dailySummary, isLoading, error, fetchDailySummary } = useReviewStore();
 
   useEffect(() => {
     fetchDailySummary();
@@ -23,7 +23,9 @@ export function DailySummary() {
         <CardTitle className="text-sm font-medium">今日总结</CardTitle>
       </CardHeader>
       <CardContent>
-        {isLoading && !dailySummary ? (
+        {error ? (
+          <p className="text-xs text-destructive text-center py-4">{error}</p>
+        ) : isLoading && !dailySummary ? (
           <p className="text-xs text-muted-foreground text-center py-4">加载中...</p>
         ) : (
           <div className="grid grid-cols-2 gap-3">

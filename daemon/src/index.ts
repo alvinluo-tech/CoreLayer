@@ -7,6 +7,7 @@ import { getStorageMode } from "./config/storage-config.js";
 import { registerTodoTools } from "./tools/todo/connector.js";
 import { registerReadingTools } from "./tools/reading/connector.js";
 import { registerReviewTools } from "./tools/review/connector.js";
+import { logError } from "./utils/errors.js";
 import conversationRoutes from "./api/conversations.js";
 import taskRoutes from "./api/tasks.js";
 import articleRoutes from "./api/articles.js";
@@ -29,6 +30,18 @@ registerReviewTools();
 const app = new Hono();
 
 app.use("/*", cors());
+
+// ─── Global error handler (safety net for any unhandled route exception) ─────
+app.onError((err, c) => {
+  logError("UnhandledRouteError", err);
+  const message = err instanceof Error ? err.message : "Internal server error";
+  return c.json({ error: message }, 500);
+});
+
+// ─── 404 handler ─────────────────────────────────────────────────────────────
+app.notFound((c) => {
+  return c.json({ error: `Route not found: ${c.req.method} ${c.req.path}` }, 404);
+});
 
 app.get("/health", (c) => {
   return c.json({

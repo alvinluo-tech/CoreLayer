@@ -20,7 +20,7 @@ function getEnvApiKey(envKey?: string): string {
   return process.env[envKey] ?? "";
 }
 
-function getProviderConfig(name: string): ProviderConfig {
+export function getProviderConfig(name: string): ProviderConfig {
   // 1. Check new providers list
   const providers = getProviders();
   const stored = providers.find((p) => p.id === name);
@@ -46,7 +46,9 @@ function getProviderConfig(name: string): ProviderConfig {
     return { baseURL: ui.baseURL ?? "", apiKey: ui.apiKey ?? "" };
   }
 
-  throw new Error(`Provider not configured: ${name}`);
+  throw new Error(
+    `Provider not configured: ${name}. Add it in Settings → Model Marketplace, or set the appropriate API key environment variable.`,
+  );
 }
 
 export function getProvider(name?: string) {

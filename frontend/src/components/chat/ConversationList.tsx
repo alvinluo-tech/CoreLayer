@@ -9,6 +9,7 @@ export function ConversationList() {
     conversations,
     activeConversationId,
     isLoading,
+    error,
     fetchConversations,
     createConversation,
     selectConversation,
@@ -62,6 +63,11 @@ export function ConversationList() {
             className="w-full h-8 pl-7 pr-2 text-sm bg-transparent border border-input rounded-md placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
           />
         </div>
+      )}
+
+      {/* Error */}
+      {error && (
+        <p className="text-xs text-destructive text-center py-2">{error}</p>
       )}
 
       {/* Conversation List */}

@@ -2,53 +2,78 @@ import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { getRepositories } from "../db/factory.js";
 import { handleMessageInConversation, streamMessageInConversation } from "../orchestrator/conversation.js";
-
+import { apiError, logError } from "../utils/errors.js";
 
 const app = new Hono();
 
 // GET / - List all conversations
 app.get("/", async (c) => {
-  const conversations = await getRepositories().conversations.list();
-  return c.json({ conversations });
+  try {
+    const conversations = await getRepositories().conversations.list();
+    return c.json({ conversations });
+  } catch (err) {
+    logError("conversations/list", err);
+    return apiError(c, "Failed to list conversations", 500);
+  }
 });
 
 // POST / - Create a new conversation
 app.post("/", async (c) => {
-  const body: { title?: string } = await c.req.json<{ title?: string }>().catch(() => ({ title: undefined }));
-  const conversation = await getRepositories().conversations.create(body.title);
-  return c.json({ conversation }, 201);
+  try {
+    const body: { title?: string } = await c.req.json<{ title?: string }>().catch(() => ({ title: undefined }));
+    const conversation = await getRepositories().conversations.create(body.title);
+    return c.json({ conversation }, 201);
+  } catch (err) {
+    logError("conversations/create", err);
+    return apiError(c, "Failed to create conversation", 500);
+  }
 });
 
 // GET /:id - Get conversation with messages
 app.get("/:id", async (c) => {
-  const id = c.req.param("id");
-  const conversation = await getRepositories().conversations.getById(id);
-  if (!conversation) {
-    return c.json({ error: "Conversation not found" }, 404);
+  try {
+    const id = c.req.param("id");
+    const conversation = await getRepositories().conversations.getById(id);
+    if (!conversation) {
+      return apiError(c, "Conversation not found", 404);
+    }
+    const messages = await getRepositories().conversations.getMessages(id);
+    return c.json({ conversation, messages });
+  } catch (err) {
+    logError("conversations/getById", err);
+    return apiError(c, "Failed to get conversation", 500);
   }
-  const messages = await getRepositories().conversations.getMessages(id);
-  return c.json({ conversation, messages });
 });
 
 // DELETE /:id - Delete conversation
 app.delete("/:id", async (c) => {
-  const id = c.req.param("id");
-  const deleted = await getRepositories().conversations.delete(id);
-  if (!deleted) {
-    return c.json({ error: "Conversation not found" }, 404);
+  try {
+    const id = c.req.param("id");
+    const deleted = await getRepositories().conversations.delete(id);
+    if (!deleted) {
+      return apiError(c, "Conversation not found", 404);
+    }
+    return c.json({ success: true });
+  } catch (err) {
+    logError("conversations/delete", err);
+    return apiError(c, "Failed to delete conversation", 500);
   }
-  return c.json({ success: true });
 });
 
 // PATCH /:id - Update conversation (rename)
 app.patch("/:id", async (c) => {
-  const id = c.req.param("id");
-  const body: { title?: string } = await c.req.json<{ title?: string }>().catch(() => ({ title: undefined }));
-  const conversation = await getRepositories().conversations.update(id, body);
-  if (!conversation) {
-    return c.json({ error: "Conversation not found" }, 404);
+  try {
+    const id = c.req.param("id");
+    const body: { title?: string } = await c.req.json<{ title?: string }>().catch(() => ({ title: undefined }));
+    const conversation = await getRepositories().conversations.update(id, body);
+    if (!conversation) {
+      return apiError(c, "Conversation not found", 404);
+    }
+    return c.json({ conversation });
+  } catch (err) {
+    logError("conversations/update", err);
+    return apiError(c, "Failed to update conversation", 500);
   }
-  return c.json({ conversation });
 });
 
 // POST /:id/messages - Send a message in conversation
@@ -56,20 +81,21 @@ app.post("/:id/messages", async (c) => {
   const id = c.req.param("id");
   const conversation = await getRepositories().conversations.getById(id);
   if (!conversation) {
-    return c.json({ error: "Conversation not found" }, 404);
+    return apiError(c, "Conversation not found", 404);
   }
 
   const body = await c.req.json<{ content: string }>();
   if (!body.content?.trim()) {
-    return c.json({ error: "Message content is required" }, 400);
+    return apiError(c, "Message content is required", 400);
   }
 
   try {
     const result = await handleMessageInConversation(id, body.content);
     return c.json(result);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return c.json({ error: message }, 500);
+  } catch (err) {
+    logError("conversations/handleMessage", err);
+    const message = err instanceof Error ? err.message : String(err);
+    return apiError(c, message, 500);
   }
 });
 
@@ -78,12 +104,12 @@ app.post("/:id/messages/stream", async (c) => {
   const id = c.req.param("id");
   const conversation = await getRepositories().conversations.getById(id);
   if (!conversation) {
-    return c.json({ error: "Conversation not found" }, 404);
+    return apiError(c, "Conversation not found", 404);
   }
 
   const body = await c.req.json<{ content: string }>();
   if (!body.content?.trim()) {
-    return c.json({ error: "Message content is required" }, 400);
+    return apiError(c, "Message content is required", 400);
   }
 
   try {
@@ -130,8 +156,9 @@ app.post("/:id/messages/stream", async (c) => {
               conversation: updatedConv,
             }),
           });
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
+        } catch (err) {
+          logError("conversations/stream/ai", err);
+          const message = err instanceof Error ? err.message : String(err);
           await sseStream.writeSSE({
             event: "error",
             data: JSON.stringify({ error: message }),
@@ -159,8 +186,9 @@ app.post("/:id/messages/stream", async (c) => {
               conversation: updatedConv,
             }),
           });
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
+        } catch (err) {
+          logError("conversations/stream/local", err);
+          const message = err instanceof Error ? err.message : String(err);
           await sseStream.writeSSE({
             event: "error",
             data: JSON.stringify({ error: message }),
@@ -168,9 +196,10 @@ app.post("/:id/messages/stream", async (c) => {
         }
       }
     });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return c.json({ error: message }, 500);
+  } catch (err) {
+    logError("conversations/stream", err);
+    const message = err instanceof Error ? err.message : String(err);
+    return apiError(c, message, 500);
   }
 });
 

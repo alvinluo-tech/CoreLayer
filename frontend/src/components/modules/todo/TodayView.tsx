@@ -20,7 +20,7 @@ const priorityLabel: Record<number, React.ReactNode> = {
 };
 
 export function TodayView() {
-  const { tasks, isLoading, fetchTasks } = useTaskStore();
+  const { tasks, isLoading, error, fetchTasks } = useTaskStore();
 
   useEffect(() => {
     fetchTasks();
@@ -45,7 +45,9 @@ export function TodayView() {
         </div>
       </CardHeader>
       <CardContent>
-        {isLoading && todayTasks.length === 0 ? (
+        {error && !isLoading ? (
+          <p className="text-xs text-destructive text-center py-4">⚠️ {error}—请尝试刷新页面</p>
+        ) : isLoading && tasks.length === 0 ? (
           <p className="text-xs text-muted-foreground text-center py-4">加载中...</p>
         ) : todayTasks.length === 0 ? (
           <p className="text-xs text-muted-foreground text-center py-4">暂无今日任务</p>

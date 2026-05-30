@@ -66,6 +66,7 @@ export function DbManager({ className }: DbManagerProps) {
       }
     } catch (err) {
       console.error("加载数据行错误:", err);
+      setError(`加载数据行失败: ${String(err)}`);
     } finally {
       setIsLoadingRows(false);
     }
@@ -98,6 +99,7 @@ export function DbManager({ className }: DbManagerProps) {
       }
     } catch (err) {
       console.error("删除数据行错误:", err);
+      setError(`删除失败: ${String(err)}`);
     }
   };
 
@@ -117,6 +119,7 @@ export function DbManager({ className }: DbManagerProps) {
       }
     } catch (err) {
       console.error("清空数据表错误:", err);
+      setError(`清空失败: ${String(err)}`);
     } finally {
       setIsLoadingRows(false);
     }

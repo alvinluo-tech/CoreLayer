@@ -29,6 +29,7 @@ export type ControlPage =
 
 interface ControlCenterProps {
   onBack: () => void;
+  initialPage?: ControlPage;
 }
 
 const navItems: { id: ControlPage; label: string; icon: typeof LayoutDashboard }[] = [
@@ -51,8 +52,8 @@ const pages: Record<ControlPage, React.ComponentType> = {
   db: DbPage,
 };
 
-export function ControlCenter({ onBack }: ControlCenterProps) {
-  const [activePage, setActivePage] = useState<ControlPage>("overview");
+export function ControlCenter({ onBack, initialPage }: ControlCenterProps) {
+  const [activePage, setActivePage] = useState<ControlPage>(initialPage ?? "overview");
   const PageComponent = pages[activePage];
 
   return (

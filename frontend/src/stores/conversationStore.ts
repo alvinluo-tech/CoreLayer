@@ -169,9 +169,10 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     if (!activeConversationId) return;
     try {
       const { messages } = await tauri.getConversation(activeConversationId);
-      set({ messages });
+      set({ messages, error: null });
     } catch (error) {
       console.error("[ConversationStore] Failed to refresh messages:", error);
+      set({ error: String(error) });
     }
   },
   setMessages: (messages) => set({ messages }),

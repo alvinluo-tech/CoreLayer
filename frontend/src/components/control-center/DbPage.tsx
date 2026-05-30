@@ -50,6 +50,7 @@ export function DbPage() {
   const [migrationResult, setMigrationResult] = useState<{ success: boolean; message?: string; error?: string } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // Fetch initial config
   const fetchConfig = async () => {
@@ -98,6 +99,7 @@ export function DbPage() {
   const handleSaveConfig = async () => {
     setIsSaving(true);
     setSaveSuccess(false);
+    setSaveError(null);
     try {
       // 1. Save config to config.json
       const configParams = {
@@ -116,6 +118,7 @@ export function DbPage() {
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (err) {
       console.error("保存外接配置失败:", err);
+      setSaveError(err instanceof Error ? err.message : String(err));
     } finally {
       setIsSaving(false);
     }
@@ -445,6 +448,14 @@ export function DbPage() {
               <div className="p-3.5 rounded-xl border bg-green-500/5 border-green-500/20 text-green-600 flex items-center gap-2 text-xs">
                 <CheckCircle2 className="h-4 w-4 text-green-500" />
                 <span>连接配置保存成功，系统存储工厂已即时完成切换！</span>
+              </div>
+            )}
+
+            {/* Save error banner */}
+            {saveError && (
+              <div className="p-3.5 rounded-xl border bg-destructive/5 border-destructive/20 text-destructive flex items-center gap-2 text-xs">
+                <XCircle className="h-4 w-4" />
+                <span>保存失败: {saveError}</span>
               </div>
             )}
           </div>

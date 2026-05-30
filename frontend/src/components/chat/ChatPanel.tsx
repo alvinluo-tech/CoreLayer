@@ -103,7 +103,7 @@ export function ChatPanel({ messages, onSend, isLoading, hasActiveConversation, 
         <MessageSquarePlus className="h-16 w-16 mb-4 opacity-30" />
         <h2 className="text-lg font-medium mb-2">开始新对话</h2>
         <p className="text-sm mb-6">选择一个对话或创建新对话开始</p>
-        <Button onClick={() => createConversation()} className="gap-2">
+        <Button onClick={() => createConversation().catch(console.error)} className="gap-2">
           新建对话
         </Button>
       </div>

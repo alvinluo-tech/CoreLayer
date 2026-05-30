@@ -153,6 +153,8 @@ export function useWakeWord(onWake: () => void, daemonUrl?: string) {
         lastErrorRef.current = event.error;
         if (event.error !== "no-speech" && event.error !== "aborted") {
           setError(event.error);
+          setIsListening(false);
+          isActiveRef.current = false;
         }
       };
 

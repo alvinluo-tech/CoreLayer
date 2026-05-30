@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { stream } from "hono/streaming";
 import { handleMessage, streamChat } from "../orchestrator/conversation.js";
+import { apiError, extractErrorMessage, classifyError, logError } from "../utils/errors.js";
 import type { ModelMessage } from "ai";
 
 const chatRoutes = new Hono();
@@ -13,13 +14,14 @@ chatRoutes.post("/", async (c) => {
   try {
     const body = await c.req.json<{ message: string }>();
     if (!body.message?.trim()) {
-      return c.json({ error: "消息不能为空" }, 400);
+      return apiError(c, "消息不能为空", 400);
     }
     const result = await handleMessage(body.message);
     return c.json(result);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return c.json({ error: message }, 500);
+  } catch (err) {
+    logError("chat/send", err);
+    const { status, code } = classifyError(err);
+    return apiError(c, extractErrorMessage(err), status, code);
   }
 });
 
@@ -29,24 +31,36 @@ chatRoutes.post("/", async (c) => {
  * Uses Vercel AI SDK streamText with automatic tool calling.
  */
 chatRoutes.post("/stream", async (c) => {
-  const body = await c.req.json<{ messages: ModelMessage[] }>();
+  try {
+    const body = await c.req.json<{ messages: ModelMessage[] }>();
 
-  if (!body.messages?.length) {
-    return c.json({ error: "消息不能为空" }, 400);
-  }
-
-  const result = streamChat(body.messages);
-
-  return stream(c, async (streamWriter) => {
-    streamWriter.onAbort(() => {
-      // Client disconnected
-    });
-
-    const textStream = result.textStream;
-    for await (const chunk of textStream) {
-      await streamWriter.write(chunk);
+    if (!body.messages?.length) {
+      return apiError(c, "消息不能为空", 400);
     }
-  });
+
+    // streamChat may throw immediately if the model is not configured
+    const result = streamChat(body.messages);
+
+    return stream(c, async (streamWriter) => {
+      streamWriter.onAbort(() => {
+        // Client disconnected — no action needed, stream closes naturally
+      });
+
+      try {
+        for await (const chunk of result.textStream) {
+          await streamWriter.write(chunk);
+        }
+      } catch (streamErr) {
+        logError("chat/stream[mid-stream]", streamErr);
+        // Best-effort: write error marker to already-open stream
+        await streamWriter.write(`\n\n[ERROR: ${extractErrorMessage(streamErr)}]`).catch(() => {});
+      }
+    });
+  } catch (err) {
+    logError("chat/stream", err);
+    const { status, code } = classifyError(err);
+    return apiError(c, extractErrorMessage(err), status, code);
+  }
 });
 
 export default chatRoutes;

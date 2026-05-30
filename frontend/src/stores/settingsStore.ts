@@ -51,13 +51,13 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   },
 
   fetchDbStats: async () => {
-    set({ isLoadingDbStats: true });
+    set({ isLoadingDbStats: true, error: null });
     try {
       const stats = await tauri.getDbStats();
       set({ dbStats: stats, isLoadingDbStats: false });
     } catch (error) {
       console.error("Failed to fetch db stats:", error);
-      set({ isLoadingDbStats: false });
+      set({ error: String(error), isLoadingDbStats: false });
     }
   },
 }));

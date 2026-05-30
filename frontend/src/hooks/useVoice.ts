@@ -11,6 +11,7 @@ export type VoiceState = "idle" | "recording" | "transcribing" | "processing" | 
 export function useVoice(onCommand: (text: string) => void, onWake?: () => void) {
   const [state, setState] = useState<VoiceState>("idle");
   const [transcript, setTranscript] = useState("");
+  const [voiceError, setVoiceError] = useState<string | null>(null);
   const [isSupported, setIsSupported] = useState(false);
 
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -317,6 +318,7 @@ export function useVoice(onCommand: (text: string) => void, onWake?: () => void)
       vadFrameRef.current = requestAnimationFrame(checkVAD);
     } catch (err) {
       console.error("[Voice] Microphone error:", err);
+      setVoiceError(err instanceof Error ? err.message : String(err));
       setState("idle");
     }
   }, [stopTTS, cleanupVAD]);
@@ -327,6 +329,7 @@ export function useVoice(onCommand: (text: string) => void, onWake?: () => void)
       return await jarvisClient.transcribe(audioBlob, "zh");
     } catch (err) {
       console.error("[Voice] Transcription error:", err);
+      setVoiceError(err instanceof Error ? err.message : String(err));
       return "";
     }
   }, []);
@@ -386,6 +389,7 @@ export function useVoice(onCommand: (text: string) => void, onWake?: () => void)
   return {
     state,
     transcript,
+    voiceError,
     isSupported,
     isListening: isRecordingRef.current,
     isWakeWordListening: wakeWord.isListening,

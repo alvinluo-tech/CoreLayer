@@ -45,8 +45,12 @@ export async function disconnectMCPServer(serverId: string): Promise<void> {
 }
 
 export async function disconnectAllMCPServers(): Promise<void> {
-  const manager = getMCPManager();
-  const toolRegistry = getRegistry();
-  toolRegistry.unregisterBySource("mcp");
-  await manager.disconnectAll();
+  try {
+    const manager = getMCPManager();
+    const toolRegistry = getRegistry();
+    toolRegistry.unregisterBySource("mcp");
+    await manager.disconnectAll();
+  } catch (err) {
+    console.error("[Jarvis][mcp/disconnectAll]", err instanceof Error ? err.message : err);
+  }
 }

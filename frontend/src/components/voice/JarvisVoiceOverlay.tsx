@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { X, Mic, Square, Loader2 } from "lucide-react";
+import { X, Mic, Square, Loader2, Settings2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { VoiceConversationState } from "@/hooks/useVoiceConversation";
@@ -11,6 +11,7 @@ interface JarvisVoiceOverlayProps {
   assistantText: string;
   onClose: () => void;
   onStop: () => void;
+  onOpenSettings?: () => void;
   layoutMode?: "centered" | "bottom-right";
 }
 
@@ -21,6 +22,7 @@ export function JarvisVoiceOverlay({
   assistantText,
   onClose,
   onStop,
+  onOpenSettings,
   layoutMode = "centered",
 }: JarvisVoiceOverlayProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -116,6 +118,15 @@ export function JarvisVoiceOverlay({
             speed: 0.12,
             amplitude: layoutMode === "centered" ? 35 : 28,
             waves: 5,
+          };
+        case "error":
+          return {
+            primary: "rgba(239, 68, 68, 0.85)", // Vibrant Red
+            secondary: "rgba(239, 68, 68, 0.3)", // Soft Red
+            glow: "rgba(239, 68, 68, 0.2)",
+            speed: 0.04,
+            amplitude: 8,
+            waves: 3,
           };
         default:
           return {
@@ -251,9 +262,15 @@ export function JarvisVoiceOverlay({
         {/* HUD top decorative bar */}
         <div className={cn("flex items-center justify-between border-b border-white/10 pb-2", isCentered ? "mb-4" : "mb-3")}>
           <div className="flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-cyan-500 animate-ping" />
-            <span className="font-mono text-[10px] tracking-widest text-cyan-400 font-bold uppercase">
-              {isCentered ? "JARVIS HUD v2.5" : "JARVIS HUD"}
+            <span className={cn(
+              "h-2 w-2 rounded-full animate-ping",
+              state === "error" ? "bg-red-500" : "bg-cyan-500"
+            )} />
+            <span className={cn(
+              "font-mono text-[10px] tracking-widest font-bold uppercase",
+              state === "error" ? "text-red-400" : "text-cyan-400"
+            )}>
+              {state === "error" ? "SYSTEM ERROR DETECTED" : (isCentered ? "JARVIS HUD v2.5" : "JARVIS HUD")}
             </span>
           </div>
           <div className="flex items-center gap-3">
@@ -346,11 +363,22 @@ export function JarvisVoiceOverlay({
 
             {/* AI speaking response bubble */}
             {assistantText && (
-              <div className="rounded-lg border border-purple-500/10 bg-purple-500/5 p-2.5 space-y-1">
-                <p className="font-mono text-[9px] text-purple-400 uppercase tracking-widest font-semibold">
-                  Jarvis Response:
+              <div className={cn(
+                "rounded-lg p-2.5 space-y-1 border transition-all duration-300",
+                state === "error"
+                  ? "border-red-500/20 bg-red-500/5 shadow-[inset_0_0_10px_rgba(239,68,68,0.05)]"
+                  : "border-purple-500/10 bg-purple-500/5"
+              )}>
+                <p className={cn(
+                  "font-mono text-[9px] uppercase tracking-widest font-semibold",
+                  state === "error" ? "text-red-400" : "text-purple-400"
+                )}>
+                  {state === "error" ? "⚠️ SYSTEM ALIGNMENT FAILURE:" : "Jarvis Response:"}
                 </p>
-                <div className="text-xs max-h-24 overflow-y-auto whitespace-pre-wrap leading-relaxed text-white/90 font-medium">
+                <div className={cn(
+                  "text-xs max-h-24 overflow-y-auto whitespace-pre-wrap leading-relaxed font-medium transition-colors",
+                  state === "error" ? "text-red-300/90" : "text-white/90"
+                )}>
                   {assistantText}
                 </div>
               </div>
@@ -359,7 +387,25 @@ export function JarvisVoiceOverlay({
 
           {/* Controls Footer */}
           <div className="flex justify-center border-t border-white/10 pt-3 gap-3 flex-shrink-0">
-            {state === "speaking" || state === "streaming" ? (
+            {state === "error" ? (
+              // Error state: show actionable buttons
+              <>
+                {onOpenSettings && (
+                  <Button
+                    onClick={() => { onClose(); onOpenSettings(); }}
+                    className="flex items-center gap-1.5 rounded-full px-4 py-2 bg-red-600/80 hover:bg-red-600 border border-red-500/30 font-mono text-[10px] tracking-wider shadow-lg shadow-red-900/30 transition-all"
+                  >
+                    <Settings2 className="h-3 w-3" /> 前往配置 API Key
+                  </Button>
+                )}
+                <Button
+                  onClick={onClose}
+                  className="flex items-center gap-1.5 rounded-full px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 text-white/60 hover:text-white font-mono text-[10px] tracking-wider transition-all"
+                >
+                  <XCircle className="h-3 w-3" /> 关闭
+                </Button>
+              </>
+            ) : state === "speaking" || state === "streaming" ? (
               <Button
                 variant="destructive"
                 onClick={onStop}
@@ -367,7 +413,7 @@ export function JarvisVoiceOverlay({
               >
                 <Square className="h-3 w-3" /> INTERRUPT
               </Button>
-            ) : (state === "listening") ? (
+            ) : state === "listening" ? (
               <Button
                 onClick={onStop}
                 className="flex items-center gap-1.5 rounded-full px-4 py-2 bg-cyan-600 hover:bg-cyan-700 font-mono text-[10px] tracking-wider shadow-lg shadow-cyan-900/30"

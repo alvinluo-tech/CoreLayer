@@ -7,10 +7,15 @@ const app = new Hono();
 
 // Get recent tool call audit logs
 app.get("/logs", async (c) => {
-  const limit = parseInt(c.req.query("limit") ?? "20", 10);
-  const repos = getRepositories();
-  const logs = await repos.toolCallLogs.getRecent(limit);
-  return c.json({ logs });
+  try {
+    const limit = parseInt(c.req.query("limit") ?? "20", 10);
+    const repos = getRepositories();
+    const logs = await repos.toolCallLogs.getRecent(limit);
+    return c.json({ logs });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return c.json({ error: message }, 500);
+  }
 });
 
 // List all registered tools
@@ -67,25 +72,30 @@ app.get("/:id", (c) => {
 
 // Filter tools
 app.post("/filter", async (c) => {
-  const registry = getRegistry();
-  const filter = await c.req.json<{
-    appId?: string;
-    source?: ToolSource;
-    risk?: RiskLevel;
-    search?: string;
-  }>();
+  try {
+    const registry = getRegistry();
+    const filter = await c.req.json<{
+      appId?: string;
+      source?: ToolSource;
+      risk?: RiskLevel;
+      search?: string;
+    }>();
 
-  const tools = registry.filterTools(filter).map((t) => ({
-    id: t.id,
-    appId: t.appId,
-    source: t.source,
-    name: t.name,
-    title: t.title,
-    description: t.description,
-    risk: t.risk,
-  }));
+    const tools = registry.filterTools(filter).map((t) => ({
+      id: t.id,
+      appId: t.appId,
+      source: t.source,
+      name: t.name,
+      title: t.title,
+      description: t.description,
+      risk: t.risk,
+    }));
 
-  return c.json({ tools, count: tools.length });
+    return c.json({ tools, count: tools.length });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return c.json({ error: message }, 500);
+  }
 });
 
 // Execute a tool (with permission guard)

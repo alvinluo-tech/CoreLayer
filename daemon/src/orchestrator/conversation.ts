@@ -6,11 +6,17 @@ import { getAllTools } from "../tools/registry.js";
 import { env } from "../config/env.js";
 import { getRepositories } from "../db/factory.js";
 import type { MessageRow, ConversationRow } from "../db/repository.js";
+import { classifyError, extractErrorMessage, logError } from "../utils/errors.js";
 
 const MAX_HISTORY_MESSAGES = 20;
 
 function isAiConfigured(): boolean {
-  return Boolean(env.MIMO_API_KEY && env.AI_PROVIDER);
+  // Accept any configured provider key — not just MIMO
+  return Boolean(
+    env.AI_PROVIDER &&
+    (env.MIMO_API_KEY || env.GROQ_API_KEY || env.OPENROUTER_API_KEY ||
+     process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY)
+  );
 }
 
 function generateTitleFromMessage(message: string): string {
@@ -33,12 +39,16 @@ async function handleLocally(userMessage: string): Promise<{
     const { getTool } = await import("../tools/registry.js");
     const t = getTool("getTodayTasks");
     if (t?.execute) {
-      const result = await (t.execute as Function)({});
-      toolCallsLog.push({ name: "getTodayTasks", args: {}, result });
-      const data = result as { tasks: { title: string; status: string; priority: number }[]; count: number };
-      if (data.count === 0) return { reply: "今天没有待办任务。", toolCalls: toolCallsLog };
-      const lines = data.tasks.map((t, i) => `${i + 1}. [${t.status === "done" ? "✅" : "⬜"}] ${t.title} (优先级: ${t.priority})`);
-      return { reply: `今日 ${data.count} 个任务：\n${lines.join("\n")}`, toolCalls: toolCallsLog };
+      try {
+        const result = await (t.execute as Function)({});
+        toolCallsLog.push({ name: "getTodayTasks", args: {}, result });
+        const data = result as { tasks: { title: string; status: string; priority: number }[]; count: number };
+        if (data.count === 0) return { reply: "今天没有待办任务。", toolCalls: toolCallsLog };
+        const lines = data.tasks.map((t, i) => `${i + 1}. [${t.status === "done" ? "✅" : "⬜"}] ${t.title} (优先级: ${t.priority})`);
+        return { reply: `今日 ${data.count} 个任务：\n${lines.join("\n")}`, toolCalls: toolCallsLog };
+      } catch (e) {
+        logError("handleLocally/getTodayTasks", e);
+      }
     }
   }
 
@@ -212,25 +222,31 @@ export async function handleMessageInConversation(
       })),
     ];
 
-    const result = await generateText({
-      model: getModel(),
-      messages,
-      tools: getAllTools(),
-      stopWhen: stepCountIs(5),
-    });
+    try {
+      const result = await generateText({
+        model: getModel(),
+        messages,
+        tools: getAllTools(),
+        stopWhen: stepCountIs(5),
+      });
 
-    reply = result.text;
+      reply = result.text;
 
-    // Extract tool calls from steps
-    for (const step of result.steps ?? []) {
-      for (const toolCall of step.toolCalls ?? []) {
-        const toolResult = step.toolResults?.find((r) => r.toolCallId === toolCall.toolCallId);
-        toolCallsLog.push({
-          name: toolCall.toolName,
-          args: "input" in toolCall ? toolCall.input : {},
-          result: toolResult && "output" in toolResult ? toolResult.output : null,
-        });
+      // Extract tool calls from steps
+      for (const step of result.steps ?? []) {
+        for (const toolCall of step.toolCalls ?? []) {
+          const toolResult = step.toolResults?.find((r) => r.toolCallId === toolCall.toolCallId);
+          toolCallsLog.push({
+            name: toolCall.toolName,
+            args: "input" in toolCall ? toolCall.input : {},
+            result: toolResult && "output" in toolResult ? toolResult.output : null,
+          });
+        }
       }
+    } catch (err) {
+      logError("handleMessageInConversation/generateText", err);
+      const { code } = classifyError(err);
+      throw Object.assign(new Error(extractErrorMessage(err)), { code });
     }
   } else {
     const localResult = await handleLocally(userMessage);
@@ -305,19 +321,25 @@ export async function streamMessageInConversation(
       })),
     ];
 
-    const result = streamText({
-      model: getModel(),
-      messages,
-      tools: getAllTools(),
-      stopWhen: stepCountIs(5),
-    });
+    try {
+      const result = streamText({
+        model: getModel(),
+        messages,
+        tools: getAllTools(),
+        stopWhen: stepCountIs(5),
+      });
 
-    return {
-      isAi: true,
-      userMessage: savedUserMsg,
-      result,
-      saveAssistantMessage,
-    };
+      return {
+        isAi: true,
+        userMessage: savedUserMsg,
+        result,
+        saveAssistantMessage,
+      };
+    } catch (err) {
+      logError("streamMessageInConversation/streamText", err);
+      const { code } = classifyError(err);
+      throw Object.assign(new Error(extractErrorMessage(err)), { code });
+    }
   } else {
     const localResult = await handleLocally(userMessage);
     return {
@@ -331,13 +353,19 @@ export async function streamMessageInConversation(
 }
 
 export function streamChat(messages: ModelMessage[], mode: "text" | "voice" = "text"): any {
-  return streamText({
-    model: getModel(),
-    system: buildSystemPrompt(mode),
-    messages,
-    tools: getAllTools(),
-    stopWhen: stepCountIs(5),
-  });
+  try {
+    return streamText({
+      model: getModel(),
+      system: buildSystemPrompt(mode),
+      messages,
+      tools: getAllTools(),
+      stopWhen: stepCountIs(5),
+    });
+  } catch (err) {
+    logError("streamChat", err);
+    const { code } = classifyError(err);
+    throw Object.assign(new Error(extractErrorMessage(err)), { code });
+  }
 }
 
 

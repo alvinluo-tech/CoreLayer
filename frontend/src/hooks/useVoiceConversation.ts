@@ -127,6 +127,10 @@ export function useVoiceConversation(
   const playFarewellAndExitRef = useRef<() => void>(() => {});
   const greetingAudioCtxRef = useRef<AudioContext | null>(null);
   const greetingSourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
+  const localStreamRef = useRef<MediaStream | null>(null);
+  const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
+  const dataChannelRef = useRef<RTCDataChannel | null>(null);
 
 
 
@@ -383,6 +387,42 @@ export function useVoiceConversation(
       abortControllerRef.current = null;
     }
     
+    // Stop any active Realtime WebSocket socket
+    if ((window as any)._realtimeSocket) {
+      try {
+        (window as any)._realtimeSocket.close();
+      } catch {}
+      (window as any)._realtimeSocket = null;
+    }
+
+    // Stop WebRTC peer connection & media resources
+    if (peerConnectionRef.current) {
+      try {
+        peerConnectionRef.current.close();
+      } catch {}
+      peerConnectionRef.current = null;
+    }
+    if (localStreamRef.current) {
+      try {
+        localStreamRef.current.getTracks().forEach((track) => track.stop());
+      } catch {}
+      localStreamRef.current = null;
+    }
+    if (remoteAudioRef.current) {
+      try {
+        remoteAudioRef.current.pause();
+        remoteAudioRef.current.srcObject = null;
+        remoteAudioRef.current.remove();
+      } catch {}
+      remoteAudioRef.current = null;
+    }
+    if (dataChannelRef.current) {
+      try {
+        dataChannelRef.current.close();
+      } catch {}
+      dataChannelRef.current = null;
+    }
+    
     // Stop any active greeting audio playback immediately
     if (greetingSourceRef.current) {
       try {
@@ -410,6 +450,174 @@ export function useVoiceConversation(
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
+    }
+  }, []);
+
+  const connectRealtimeSession = useCallback(async () => {
+    // 1. Clean up any existing connection first
+    if (peerConnectionRef.current) {
+      try { peerConnectionRef.current.close(); } catch {}
+      peerConnectionRef.current = null;
+    }
+    if (localStreamRef.current) {
+      try { localStreamRef.current.getTracks().forEach(t => t.stop()); } catch {}
+      localStreamRef.current = null;
+    }
+    if (remoteAudioRef.current) {
+      try {
+        remoteAudioRef.current.pause();
+        remoteAudioRef.current.srcObject = null;
+        remoteAudioRef.current.remove();
+      } catch {}
+      remoteAudioRef.current = null;
+    }
+    if (dataChannelRef.current) {
+      try { dataChannelRef.current.close(); } catch {}
+      dataChannelRef.current = null;
+    }
+
+    try {
+      setState("listening");
+      setAssistantText("正在初始化超清实时语音...");
+      
+      // 2. Fetch session from backend
+      const response = await fetch(`${daemonUrlRef.current}/api/voice/realtime-session`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (!response.ok) {
+        let errMessage = "未能建立实时语音会话，请确认 API Key 是否正确配置";
+        try {
+          const errData = await response.json();
+          if (errData && errData.error) {
+            errMessage = errData.error;
+          }
+        } catch {}
+        throw new Error(errMessage);
+      }
+      
+      const sessionData = await response.json();
+      const ephemeralKey = sessionData.client_secret.value;
+
+      // 3. Create WebRTC Peer Connection
+      const pc = new RTCPeerConnection();
+      peerConnectionRef.current = pc;
+
+      // 4. Setup remote audio element
+      const audioEl = document.createElement("audio");
+      audioEl.autoplay = true;
+      remoteAudioRef.current = audioEl;
+
+      pc.ontrack = (event) => {
+        console.log("[VoiceConversation:Realtime] Got remote audio track");
+        if (event.streams && event.streams[0]) {
+          audioEl.srcObject = event.streams[0];
+        }
+      };
+
+      // 5. Add local microphone track
+      console.log("[VoiceConversation:Realtime] Requesting microphone stream...");
+      const localStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
+      localStreamRef.current = localStream;
+      
+      const track = localStream.getTracks()[0];
+      if (track) {
+        pc.addTrack(track, localStream);
+      } else {
+        throw new Error("未能捕获麦克风音频轨道");
+      }
+
+      // 6. Setup DataChannel for text/state events
+      const dc = pc.createDataChannel("oai-events");
+      dataChannelRef.current = dc;
+
+      dc.onopen = () => {
+        console.log("[VoiceConversation:Realtime] Data channel established");
+        setAssistantText("连线上啦！主人，随时可以对我说任何话。");
+        setTimeout(() => {
+          if (isActiveRef.current) {
+            setAssistantText("主人，请讲，我在听。");
+          }
+        }, 1500);
+      };
+
+      let realtimeAssistantBuffer = "";
+
+      dc.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          console.log("[VoiceConversation:Realtime] Message:", msg.type, msg);
+
+          switch (msg.type) {
+            case "response.created":
+              setState("streaming");
+              realtimeAssistantBuffer = "";
+              setAssistantText("");
+              break;
+            case "response.audio_transcript.delta":
+              if (msg.delta) {
+                realtimeAssistantBuffer += msg.delta;
+                setState("speaking");
+                setAssistantText(realtimeAssistantBuffer);
+              }
+              break;
+            case "response.audio_transcript.done":
+              setState("listening");
+              break;
+            case "conversation.item.input_audio_transcription.completed":
+              if (msg.transcript) {
+                setFinalTranscript(msg.transcript);
+              }
+              break;
+            case "input_audio_buffer.speech_started":
+              console.log("[VoiceConversation:Realtime] Speech started (VAD barge-in)");
+              setState("listening");
+              break;
+            case "error":
+              console.error("[VoiceConversation:Realtime] Error event:", msg.error);
+              setAssistantText(`实时连接异常: ${msg.error?.message || "未知错误"}`);
+              break;
+          }
+        } catch (err) {
+          console.warn("[VoiceConversation:Realtime] Failed to parse event:", err);
+        }
+      };
+
+      // 7. Exchange SDP Offer / Answer
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+
+      const sdpResponse = await fetch(`https://api.openai.com/v1/realtime/calls?model=gpt-4o-realtime-preview`, {
+        method: "POST",
+        body: offer.sdp,
+        headers: {
+          "Authorization": `Bearer ${ephemeralKey}`,
+          "Content-Type": "application/sdp"
+        }
+      });
+
+      if (!sdpResponse.ok) {
+        const errText = await sdpResponse.text();
+        throw new Error(`OpenAI SDP Exchange failed: ${errText}`);
+      }
+
+      const answerSdp = await sdpResponse.text();
+      await pc.setRemoteDescription({ type: "answer", sdp: answerSdp });
+      console.log("[VoiceConversation:Realtime] WebRTC Connection fully established!");
+
+    } catch (error) {
+      console.error("[VoiceConversation:Realtime] Initialization error:", error);
+      setState("error");
+      setAssistantText(error instanceof Error ? error.message : "连接 ChatGPT Realtime 失败，请检查网络或配置");
+      setTimeout(() => {
+        if (isActiveRef.current) setState("idle");
+      }, 4000);
     }
   }, []);
 
@@ -466,7 +674,8 @@ export function useVoiceConversation(
             trimmed.includes(p),
           );
           resolve(isHallucination ? "" : trimmed);
-        } catch {
+        } catch (err) {
+          console.warn("[VoiceConversation] transcribeWithWhisper failed:", err);
           resolve("");
         }
       };
@@ -762,6 +971,13 @@ export function useVoiceConversation(
   // --- Start listening (Web Speech API or batch fallback) ---
   const startListening = useCallback(() => {
     if (isActiveRef.current) return;
+
+    const voiceMode = localStorage.getItem("jarvis_voice_mode") || "pipeline";
+    if (voiceMode === "realtime") {
+      isActiveRef.current = true;
+      connectRealtimeSession();
+      return;
+    }
     
     lastStreamedTextRef.current = "";
     lastUserTextRef.current = "";
@@ -827,11 +1043,18 @@ export function useVoiceConversation(
         }
       });
     }
-  }, [transcribeWithWhisper, startConversation]);
+  }, [transcribeWithWhisper, startConversation, connectRealtimeSession]);
 
   // --- Play Sci-Fi greeting and then start listening ---
   const playGreetingAndListen = useCallback(async () => {
     if (isActiveRef.current) return;
+
+    const voiceMode = localStorage.getItem("jarvis_voice_mode") || "pipeline";
+    if (voiceMode === "realtime") {
+      isActiveRef.current = true;
+      connectRealtimeSession();
+      return;
+    }
     
     lastStreamedTextRef.current = "";
     lastUserTextRef.current = "";
@@ -894,7 +1117,7 @@ export function useVoiceConversation(
       isActiveRef.current = false;
       startListening();
     }
-  }, [startListening]);
+  }, [startListening, connectRealtimeSession]);
 
   // --- Stop / Barge-in ---
   const stopConversation = useCallback(() => {

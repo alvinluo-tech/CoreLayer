@@ -17,7 +17,7 @@ const statusLabel = {
 };
 
 export function ReadingList() {
-  const { articles, isLoading, fetchArticles } = useArticleStore();
+  const { articles, isLoading, error, fetchArticles } = useArticleStore();
 
   useEffect(() => {
     fetchArticles();
@@ -36,7 +36,9 @@ export function ReadingList() {
         </div>
       </CardHeader>
       <CardContent>
-        {isLoading && articles.length === 0 ? (
+        {error && !isLoading ? (
+          <p className="text-xs text-destructive text-center py-4">⚠️ {error}—请尝试刷新页面</p>
+        ) : isLoading && articles.length === 0 ? (
           <p className="text-xs text-muted-foreground text-center py-4">加载中...</p>
         ) : articles.length === 0 ? (
           <p className="text-xs text-muted-foreground text-center py-4">暂无阅读清单</p>

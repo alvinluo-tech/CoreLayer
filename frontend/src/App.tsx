@@ -7,6 +7,7 @@ import { DailySummary } from "@/components/modules/review/DailySummary";
 import { VoicePanel } from "@/components/voice/VoicePanel";
 import { JarvisVoiceOverlay } from "@/components/voice/JarvisVoiceOverlay";
 import { ControlCenter } from "@/components/control-center/ControlCenter";
+import type { ControlPage } from "@/components/control-center/ControlCenter";
 import { CommandPalette } from "@/components/palette/CommandPalette";
 import { useChat } from "@/hooks/useChat";
 import { useVoice } from "@/hooks/useVoice";
@@ -100,6 +101,7 @@ function App() {
   }
   const { messages, sendMessage, isLoading, activeConversationId, error, startNewChat } = useChat();
   const [currentView, setCurrentView] = useState<"main" | "control-center">("main");
+  const [initialControlPage, setInitialControlPage] = useState<ControlPage>("overview");
   const paletteToggle = usePaletteStore((s) => s.toggle);
 
   // Global keyboard shortcut: Alt+Space to toggle command palette
@@ -380,7 +382,7 @@ function App() {
       <div className="flex flex-col h-screen overflow-hidden bg-background">
         <TitleBar />
         <div className="flex-1 overflow-hidden">
-          <ControlCenter onBack={() => setCurrentView("main")} />
+          <ControlCenter onBack={() => setCurrentView("main")} initialPage={initialControlPage} />
         </div>
       </div>
     );
@@ -468,6 +470,10 @@ function App() {
         assistantText={voiceConv.assistantText}
         onClose={voiceConv.stopConversation}
         onStop={voiceConv.stopConversation}
+        onOpenSettings={() => {
+          setInitialControlPage("models");
+          setCurrentView("control-center");
+        }}
         layoutMode={voiceConv.layoutMode}
       />
     </div>

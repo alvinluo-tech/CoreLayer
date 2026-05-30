@@ -5,6 +5,7 @@ import { synthesizeSpeech, isTtsAvailable, type TTSModel } from "../voice/tts.js
 import { streamChat } from "../orchestrator/conversation.js";
 import { getRepositories } from "../db/factory.js";
 import { env } from "../config/env.js";
+import { getProviderConfig } from "../ai/provider.js";
 import type { ModelMessage } from "ai";
 
 const voiceRoutes = new Hono();
@@ -104,36 +105,36 @@ voiceRoutes.get("/status", (c) => {
  * Response: SSE stream with token/done/error events.
  */
 voiceRoutes.post("/converse-stream", async (c) => {
-  const body = await c.req.json<{ message: string; conversationId?: string }>();
-
-  if (!body.message?.trim()) {
+  const body = await c.req.json<{ message: string; conversationId?: string }>().catch(() => null);
+  if (!body?.message?.trim()) {
     return c.json({ error: "消息不能为空" }, 400);
   }
 
   const repo = getRepositories().conversations;
   let conversationId = body.conversationId;
+  let messages: ModelMessage[];
 
-  // Create conversation if not provided
-  if (!conversationId) {
-    const conv = await repo.create("Voice Chat");
-    conversationId = conv.id;
+  try {
+    if (!conversationId) {
+      const conv = await repo.create("Voice Chat");
+      conversationId = conv.id;
+    }
+
+    await repo.addMessage(conversationId, {
+      role: "user",
+      content: body.message,
+    });
+
+    const history = await repo.getMessages(conversationId);
+    messages = history.slice(-20).map((msg) => ({
+      role: msg.role as "user" | "assistant",
+      content: msg.content,
+    }));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return c.json({ error: `Failed to initialize conversation: ${message}` }, 500);
   }
 
-  // Persist user message
-  await repo.addMessage(conversationId, {
-    role: "user",
-    content: body.message,
-  });
-
-  // Load message history
-  const history = await repo.getMessages(conversationId);
-  const recentHistory = history.slice(-20);
-  const messages: ModelMessage[] = recentHistory.map((msg) => ({
-    role: msg.role as "user" | "assistant",
-    content: msg.content,
-  }));
-
-  // Stream LLM response
   const result = streamChat(messages, "voice");
 
   return streamSSE(c, async (sseStream) => {
@@ -148,7 +149,6 @@ voiceRoutes.post("/converse-stream", async (c) => {
         });
       }
 
-      // Persist assistant message
       await repo.addMessage(conversationId!, {
         role: "assistant",
         content: fullText,
@@ -166,6 +166,53 @@ voiceRoutes.post("/converse-stream", async (c) => {
       });
     }
   });
+});
+
+/**
+ * POST /api/voice/realtime-session
+ * Fetches an ephemeral token from OpenAI Realtime API for direct WebRTC / WebSocket connections.
+ */
+voiceRoutes.post("/realtime-session", async (c) => {
+  try {
+    let apiKey = "";
+    try {
+      const config = getProviderConfig("openai");
+      apiKey = config.apiKey;
+    } catch {
+      // Fallback to environment variables
+      apiKey = process.env.OPENAI_API_KEY || env.GROQ_API_KEY || ""; 
+    }
+
+    if (!apiKey) {
+      return c.json({ error: "OpenAI API Key 未配置，请在模型配置中添加 OpenAI 提供商" }, 400);
+    }
+
+    // Call OpenAI Realtime Client Secrets endpoint (GA standard)
+    const response = await fetch("https://api.openai.com/v1/realtime/client_secrets", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-realtime-preview",
+        modalities: ["audio", "text"],
+        voice: "alloy",
+      }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      const status = response.status >= 400 && response.status < 600 ? response.status as 400 | 401 | 403 | 404 | 500 | 503 : 500;
+      return c.json({ error: `Failed to create OpenAI Realtime session: ${errText}` }, status);
+    }
+
+    const data = await response.json();
+    return c.json(data);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return c.json({ error: message }, 500);
+  }
 });
 
 export default voiceRoutes;

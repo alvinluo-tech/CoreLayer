@@ -175,6 +175,9 @@ export function useChat() {
             }
           } catch (fallbackErr) {
             console.error("Fallback non-streaming send failed as well:", fallbackErr);
+            useConversationStore.setState({
+              error: fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr),
+            });
           }
           setMessages(rawMessages);
         }
