@@ -26,7 +26,7 @@ export interface StoredProvider {
 }
 
 interface Config {
-  storageMode: "local" | "cloud";
+  storageMode: "local" | "cloud" | "postgres";
   providerCredentials?: Record<string, ProviderCredential>;
   providers?: StoredProvider[];
   routingRules?: RoutingRule[];
@@ -41,7 +41,7 @@ function readConfig(): Config {
       const raw = readFileSync(CONFIG_FILE, "utf-8");
       const parsed = JSON.parse(raw);
       // Lenient parsing: accept any valid fields, don't reject on missing storageMode
-      if (parsed.storageMode === "local" || parsed.storageMode === "cloud") {
+      if (parsed.storageMode === "local" || parsed.storageMode === "cloud" || parsed.storageMode === "postgres") {
         defaults.storageMode = parsed.storageMode;
       }
       if (parsed.providerCredentials && typeof parsed.providerCredentials === "object") {
@@ -79,16 +79,20 @@ function mergeConfig(partial: Partial<Config>): void {
   writeFileSync(CONFIG_FILE, JSON.stringify(merged, null, 2), "utf-8");
 }
 
-export function getStorageMode(): "local" | "cloud" {
+export function getStorageMode(): "local" | "cloud" | "postgres" {
   return readConfig().storageMode;
 }
 
-export function setStorageMode(mode: "local" | "cloud"): void {
+export function setStorageMode(mode: "local" | "cloud" | "postgres"): void {
   mergeConfig({ storageMode: mode });
 }
 
 export function isCloudConfigured(): boolean {
   return Boolean(env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY);
+}
+
+export function isPostgresConfigured(): boolean {
+  return Boolean(env.DATABASE_URL);
 }
 
 // ---- Provider Credentials (legacy, backward compat) ----

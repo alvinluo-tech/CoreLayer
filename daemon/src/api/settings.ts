@@ -27,16 +27,17 @@ const app = new Hono();
 app.get("/", (c) => {
   return c.json({
     storageMode: getCurrentMode(),
-    availableModes: ["local", "cloud"],
+    availableModes: ["local", "cloud", "postgres"],
     cloudConfigured: isCloudConfigured(),
+    postgresConfigured: !!env.DATABASE_URL,
   });
 });
 
 app.put("/storage-mode", async (c) => {
   const body = await c.req.json<{ mode: string }>();
 
-  if (body.mode !== "local" && body.mode !== "cloud") {
-    return c.json({ error: "Invalid mode. Must be 'local' or 'cloud'." }, 400);
+  if (body.mode !== "local" && body.mode !== "cloud" && body.mode !== "postgres") {
+    return c.json({ error: "Invalid mode. Must be 'local', 'cloud' or 'postgres'." }, 400);
   }
 
   if (body.mode === "cloud" && !isCloudConfigured()) {
@@ -45,8 +46,14 @@ app.put("/storage-mode", async (c) => {
     }, 400);
   }
 
-  setStorageMode(body.mode);
-  await switchStorageMode(body.mode);
+  if (body.mode === "postgres" && !env.DATABASE_URL) {
+    return c.json({
+      error: "PostgreSQL 模式需要配置 DATABASE_URL 环境变量。",
+    }, 400);
+  }
+
+  setStorageMode(body.mode as "local" | "cloud" | "postgres");
+  await switchStorageMode(body.mode as "local" | "cloud" | "postgres");
 
   return c.json({
     storageMode: body.mode,

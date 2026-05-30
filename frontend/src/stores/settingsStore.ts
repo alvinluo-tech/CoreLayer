@@ -2,20 +2,22 @@ import { create } from "zustand";
 import * as tauri from "@/lib/tauri";
 
 interface SettingsState {
-  storageMode: "local" | "cloud";
+  storageMode: "local" | "cloud" | "postgres";
   cloudConfigured: boolean;
+  postgresConfigured: boolean;
   isLoading: boolean;
   error: string | null;
   dbStats: tauri.DbStats | null;
   isLoadingDbStats: boolean;
   fetchSettings: () => Promise<void>;
-  setStorageMode: (mode: "local" | "cloud") => Promise<void>;
+  setStorageMode: (mode: "local" | "cloud" | "postgres") => Promise<void>;
   fetchDbStats: () => Promise<void>;
 }
 
 export const useSettingsStore = create<SettingsState>((set) => ({
   storageMode: "local",
   cloudConfigured: false,
+  postgresConfigured: false,
   isLoading: false,
   error: null,
   dbStats: null,
@@ -25,9 +27,12 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     set({ isLoading: true, error: null });
     try {
       const result = await tauri.getSettings();
+      // Cast getSettings result fields
+      const res = result as any;
       set({
-        storageMode: result.storageMode as "local" | "cloud",
-        cloudConfigured: result.cloudConfigured as boolean,
+        storageMode: res.storageMode as "local" | "cloud" | "postgres",
+        cloudConfigured: res.cloudConfigured as boolean,
+        postgresConfigured: res.postgresConfigured as boolean,
         isLoading: false,
       });
     } catch (error) {

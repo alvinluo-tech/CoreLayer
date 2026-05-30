@@ -19,6 +19,7 @@ import {
   BookOpen,
   RefreshCw,
   Layers,
+  Server,
 } from "lucide-react";
 
 interface SettingsModalProps {
@@ -32,6 +33,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const {
     storageMode,
     cloudConfigured,
+    postgresConfigured,
     isLoading,
     error,
     fetchSettings,
@@ -49,7 +51,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
     }
   }, [open, fetchSettings, fetchDbStats]);
 
-  const handleModeChange = async (mode: "local" | "cloud") => {
+  const handleModeChange = async (mode: "local" | "cloud" | "postgres") => {
     if (mode === storageMode) return;
     await setStorageMode(mode);
     fetchDbStats();
@@ -112,7 +114,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
             <div className="space-y-3">
               <label className="text-sm font-medium">存储模式</label>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 {/* Local Mode */}
                 <button
                   onClick={() => handleModeChange("local")}
@@ -134,7 +136,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                   </div>
                 </button>
 
-                {/* Cloud Mode */}
+                {/* Supabase Cloud Mode */}
                 <button
                   onClick={() => handleModeChange("cloud")}
                   disabled={isLoading || !cloudConfigured}
@@ -150,8 +152,29 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                     }`}
                   />
                   <div className="text-center">
-                    <p className="text-sm font-medium">云端存储</p>
-                    <p className="text-xs text-muted-foreground">Supabase PostgreSQL</p>
+                    <p className="text-sm font-medium">云端 Supabase</p>
+                    <p className="text-xs text-muted-foreground">Hosted Postgres</p>
+                  </div>
+                </button>
+
+                {/* Direct Postgres Mode */}
+                <button
+                  onClick={() => handleModeChange("postgres")}
+                  disabled={isLoading || !postgresConfigured}
+                  className={`flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all ${
+                    storageMode === "postgres"
+                      ? "border-primary bg-primary/5"
+                      : "border-border hover:border-primary/50"
+                  } ${!postgresConfigured ? "opacity-50 cursor-not-allowed" : ""}`}
+                >
+                  <Server
+                    className={`h-8 w-8 ${
+                      storageMode === "postgres" ? "text-primary" : "text-muted-foreground"
+                    }`}
+                  />
+                  <div className="text-center">
+                    <p className="text-sm font-medium">通用 PG 云端</p>
+                    <p className="text-xs text-muted-foreground">Neon/RDS/General</p>
                   </div>
                 </button>
               </div>
@@ -161,7 +184,17 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                 <div className="flex items-start gap-2 p-3 rounded-md bg-yellow-500/10 border border-yellow-500/20">
                   <AlertTriangle className="h-4 w-4 text-yellow-500 mt-0.5 shrink-0" />
                   <p className="text-xs text-yellow-700 dark:text-yellow-400">
-                    云端模式需要配置 SUPABASE_URL 和 SUPABASE_SERVICE_ROLE_KEY 环境变量。
+                    Supabase 模式需要配置 SUPABASE_URL 和 SUPABASE_SERVICE_ROLE_KEY 环境变量。
+                  </p>
+                </div>
+              )}
+
+              {/* Postgres not configured warning */}
+              {!postgresConfigured && (
+                <div className="flex items-start gap-2 p-3 rounded-md bg-yellow-500/10 border border-yellow-500/20">
+                  <AlertTriangle className="h-4 w-4 text-yellow-500 mt-0.5 shrink-0" />
+                  <p className="text-xs text-yellow-700 dark:text-yellow-400">
+                    通用 PostgreSQL 模式需要配置 DATABASE_URL (或 POSTGRES_URL) 环境变量。
                   </p>
                 </div>
               )}

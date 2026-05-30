@@ -8,6 +8,7 @@ import {
   Plug,
   Wrench,
   Mic,
+  Database,
 } from "lucide-react";
 import { OverviewPage } from "./OverviewPage";
 import { SystemPage } from "./SystemPage";
@@ -15,6 +16,7 @@ import { ModelsPage } from "./ModelsPage";
 import { AppsPage } from "./AppsPage";
 import { ToolsPage } from "./ToolsPage";
 import { VoicePage } from "./VoicePage";
+import { DbPage } from "./DbPage";
 
 export type ControlPage =
   | "overview"
@@ -22,7 +24,8 @@ export type ControlPage =
   | "models"
   | "apps"
   | "tools"
-  | "voice";
+  | "voice"
+  | "db";
 
 interface ControlCenterProps {
   onBack: () => void;
@@ -35,6 +38,7 @@ const navItems: { id: ControlPage; label: string; icon: typeof LayoutDashboard }
   { id: "apps", label: "应用 & MCP", icon: Plug },
   { id: "tools", label: "工具", icon: Wrench },
   { id: "voice", label: "语音", icon: Mic },
+  { id: "db", label: "数据管理", icon: Database },
 ];
 
 const pages: Record<ControlPage, React.ComponentType> = {
@@ -44,6 +48,7 @@ const pages: Record<ControlPage, React.ComponentType> = {
   apps: AppsPage,
   tools: ToolsPage,
   voice: VoicePage,
+  db: DbPage,
 };
 
 export function ControlCenter({ onBack }: ControlCenterProps) {
