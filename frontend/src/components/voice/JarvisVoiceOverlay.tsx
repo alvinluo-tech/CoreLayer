@@ -185,9 +185,6 @@ export function JarvisVoiceOverlay({
       
       ctx.clearRect(0, 0, w, h);
       
-      const config = getStateColors();
-      phaseRef.current += config.speed;
-      
       // Draw background glow grid lines for futuristic HUD look
       ctx.strokeStyle = "rgba(255, 255, 255, 0.02)";
       ctx.lineWidth = 1;
@@ -203,12 +200,21 @@ export function JarvisVoiceOverlay({
         ctx.lineTo(w, y);
         ctx.stroke();
       }
-
-      // Smooth logarithmic scale matching human decibel perception.
-      // Capped strictly at 1.1x so that wave peaks stay safely and elegantly within container bounds.
+      
+      const config = getStateColors();
+      
+      // Smooth root-scale dynamic volume mapping.
+      // - Silent baseline is extremely thin (0.05x amplitude) to show an elegant, calm line.
+      // - Speaking/listening peaks react dramatically and instantly up to 1.3x amplitude.
       const volumeFactor = state === "listening" || state === "speaking"
-        ? Math.max(0.08, Math.min(1.1, Math.log10(1 + volumeRef.current) / 1.8))
+        ? Math.max(0.05, Math.min(1.3, Math.sqrt(volumeRef.current) / 6.5))
         : 1.0;
+
+      // Dynamic flow speed based on volume (silent wave is calm and slow, loud wave flows faster)
+      const speedFactor = state === "listening" || state === "speaking"
+        ? Math.max(0.3, volumeFactor)
+        : 1.0;
+      phaseRef.current += config.speed * speedFactor;
 
       // Draw multi-layered sine waves
       for (let i = 0; i < config.waves; i++) {
