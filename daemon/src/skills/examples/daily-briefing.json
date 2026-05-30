@@ -1,0 +1,28 @@
+{
+  "name": "daily-briefing",
+  "title": "Daily Briefing",
+  "description": "Generate a daily briefing with today's tasks, recent reviews, and focus areas",
+  "version": "1.0.0",
+  "triggers": ["daily briefing", "today summary", "what should I focus on"],
+  "toolsUsed": ["getTodayTasks", "getDailySummary"],
+  "risk": "low",
+  "steps": [
+    {
+      "id": "tasks",
+      "type": "tool_call",
+      "tool": "getTodayTasks",
+      "args": {}
+    },
+    {
+      "id": "review",
+      "type": "tool_call",
+      "tool": "getDailySummary",
+      "args": {}
+    },
+    {
+      "id": "summary",
+      "type": "output",
+      "template": "## Daily Briefing\n\n### Tasks Today\n{{tasks}}\n\n### Recent Review\n{{review}}"
+    }
+  ]
+}
