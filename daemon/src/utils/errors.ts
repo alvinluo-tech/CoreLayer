@@ -1,7 +1,7 @@
 import type { Context } from "hono";
 
 // ─── Standard HTTP status codes used by this app ────────────────────────────
-export type AppErrorStatus = 400 | 401 | 403 | 404 | 409 | 500 | 503;
+export type AppErrorStatus = 400 | 401 | 403 | 404 | 409 | 500 | 502 | 503;
 
 /**
  * Standard error response shape — used by EVERY route in this app.

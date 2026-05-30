@@ -14,7 +14,7 @@ import {
   logError,
   apiError,
   ErrorCodes,
-  type ErrorResponse,
+
   type AppErrorStatus,
 } from "./errors.js";
 

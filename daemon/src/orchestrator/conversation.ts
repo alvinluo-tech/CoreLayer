@@ -10,7 +10,7 @@ import { classifyError, extractErrorMessage, logError } from "../utils/errors.js
 
 const MAX_HISTORY_MESSAGES = 20;
 
-function isAiConfigured(): boolean {
+export function isAiConfigured(): boolean {
   // Accept any configured provider key — not just MIMO
   return Boolean(
     env.AI_PROVIDER &&
@@ -19,7 +19,7 @@ function isAiConfigured(): boolean {
   );
 }
 
-function generateTitleFromMessage(message: string): string {
+export function generateTitleFromMessage(message: string): string {
   const cleaned = message.replace(/\n/g, " ").trim();
   return cleaned.length > 30 ? cleaned.slice(0, 30) + "..." : cleaned;
 }

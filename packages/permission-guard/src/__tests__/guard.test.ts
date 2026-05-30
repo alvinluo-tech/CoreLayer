@@ -263,3 +263,103 @@ describe("PermissionGuard", () => {
     expect(entries[0].confirmedByUser).toBe(false);
   });
 });
+
+describe("PermissionGuard.updateConfig", () => {
+  it("shallow merges partial config with existing", () => {
+    const guard = new PermissionGuard();
+
+    // Default: low risk is auto, medium is notify
+    expect(guard.checkPermission(createTestTool({ risk: "low" })).allowed).toBe(true);
+
+    guard.updateConfig({
+      defaultPolicy: {
+        low: "confirm",
+        medium: "confirm",
+        high: "confirm",
+        critical: "deny",
+      },
+    });
+
+    // After update, low risk should require confirmation
+    const result = guard.checkPermission(createTestTool({ risk: "low" }));
+    expect(result.requiresConfirmation).toBe(true);
+  });
+
+  it("empty partial does not change config", () => {
+    const guard = new PermissionGuard();
+
+    const before = guard.checkPermission(createTestTool({ risk: "low" }));
+    guard.updateConfig({});
+    const after = guard.checkPermission(createTestTool({ risk: "low" }));
+
+    expect(after).toEqual(before);
+  });
+
+  it("replaces nested objects entirely, does not deep merge", () => {
+    const guard = new PermissionGuard();
+
+    // Set app permissions
+    guard.setAppPermissions("app-a", {
+      appId: "app-a",
+      read: true,
+      write: true,
+      delete: true,
+      bulkWrite: false,
+      execute: false,
+    });
+
+    // Verify app-a permissions are set
+    const toolA = createTestTool({ appId: "app-a", risk: "medium" });
+    expect(guard.checkPermission(toolA).requiresConfirmation).toBe(false);
+
+    // updateConfig with new defaultPolicy should NOT preserve appPermissions
+    // because shallow merge replaces the entire defaultPolicy object
+    guard.updateConfig({
+      defaultPolicy: {
+        low: "auto",
+        medium: "notify",
+        high: "confirm",
+        critical: "confirm",
+      },
+    });
+
+    // appPermissions should still be there since we only replaced defaultPolicy
+    const toolAAfter = createTestTool({ appId: "app-a", risk: "medium" });
+    expect(guard.checkPermission(toolAAfter).requiresConfirmation).toBe(false);
+  });
+
+  it("replaces appPermissions entirely when included in update", () => {
+    const guard = new PermissionGuard();
+
+    guard.setAppPermissions("app-a", {
+      appId: "app-a",
+      read: true,
+      write: true,
+      delete: true,
+      bulkWrite: false,
+      execute: false,
+    });
+
+    // Update with new appPermissions that only has app-b
+    guard.updateConfig({
+      appPermissions: {
+        "app-b": {
+          appId: "app-b",
+          read: true,
+          write: false,
+          delete: false,
+          bulkWrite: false,
+          execute: false,
+        },
+      },
+    });
+
+    // app-a should no longer have custom permissions (falls back to default)
+    const toolA = createTestTool({ appId: "app-a", risk: "high" });
+    expect(guard.checkPermission(toolA).requiresConfirmation).toBe(true); // default: confirm
+
+    // app-b should have its custom permissions
+    const toolB = createTestTool({ appId: "app-b", risk: "medium" });
+    expect(guard.checkPermission(toolB).requiresConfirmation).toBe(true); // write=false => confirm
+  });
+});
