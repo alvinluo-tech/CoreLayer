@@ -75,14 +75,29 @@ CoreLayer is the control layer between you, your tools, your models, and your pe
 
 ## Core Capabilities
 
+### Core Layer
+
 | | Feature | Description |
 |---|---|---|
-| <img src="./assets/icons/voice.svg" width="28" /> | **Voice-native** | Wake word, ASR, streaming LLM response, sentence-level TTS, and barge-in interruption. |
-| <img src="./assets/icons/mcp.svg" width="28" /> | **MCP-first** | Connect personal apps and external tools through the Model Context Protocol. |
-| <img src="./assets/icons/tools.svg" width="28" /> | **Tool-aware** | Unified tool layer for native, MCP, skill, and REST tools with structured display. |
-| <img src="./assets/icons/guard.svg" width="28" /> | **Permission Guard** | Risk-based execution with async confirmation, audit logging, and timeout handling. |
-| <img src="./assets/icons/models.svg" width="28" /> | **Model Router** | Route requests across MiMo, Groq, OpenRouter, Ollama, and any OpenAI-compatible provider. |
-| <img src="./assets/icons/memory.svg" width="28" /> | **Local-first Storage** | SQLite as the default data layer. Cloud sync via Supabase or PostgreSQL when needed. |
+| <img src="./public/assets/icons/voice.svg" width="28" /> | **Voice Pipeline** | Wake word, ASR, streaming LLM response, sentence-level TTS, and barge-in interruption. |
+| <img src="./public/assets/icons/chat.svg" width="28" /> | **Streaming Chat** | SSE streaming with context-aware tool calling, multi-turn memory, and natural language parsing. |
+| <img src="./public/assets/icons/mcp.svg" width="28" /> | **MCP Integration** | Connect personal apps and external tools through stdio, HTTP, and SSE via the Model Context Protocol. |
+| <img src="./public/assets/icons/registry.svg" width="28" /> | **Tool Registry** | Unified tool layer for native, MCP, skill, and REST tools with structured display and discovery. |
+| <img src="./public/assets/icons/guard.svg" width="28" /> | **Permission Guard** | Risk-based execution (low/medium/high/critical) with async confirmation and timeout handling. |
+| <img src="./public/assets/icons/models.svg" width="28" /> | **Model Router** | Route requests across MiMo, Groq, OpenRouter, Ollama, and any OpenAI-compatible provider. |
+| <img src="./public/assets/icons/memory.svg" width="28" /> | **Local-first Storage** | SQLite as the default data layer. Cloud sync via Supabase or PostgreSQL when needed. |
+| <img src="./public/assets/icons/hotswap.svg" width="28" /> | **Hot-swap Storage** | Switch between SQLite, Supabase, and PostgreSQL at runtime without restarting. |
+| <img src="./public/assets/icons/audit.svg" width="28" /> | **Audit Logs** | Track every tool call with duration, risk level, result status, and permission decisions. |
+| <img src="./public/assets/icons/control-center.svg" width="28" /> | **Control Center** | Desktop settings UI for models, MCP servers, tools, permissions, voice, and system health. |
+| <img src="./public/assets/icons/daemon.svg" width="28" /> | **Daemon Supervisor** | Node.js daemon with health checks, auto-restart, and process lifecycle management. |
+
+### Personal Tools
+
+| | Feature | Description |
+|---|---|---|
+| <img src="./public/assets/icons/todo.svg" width="28" /> | **Smart Todo** | Task manager with priority, due dates, tags, natural language creation, and daily focus view. |
+| <img src="./public/assets/icons/reading.svg" width="28" /> | **Reading Tracker** | Book/article tracking with status management, categories, ratings, and reading statistics. |
+| <img src="./public/assets/icons/review.svg" width="28" /> | **Daily Reviews** | Automated daily/weekly summaries with completion metrics, top tags, and trend analysis. |
 
 ---
 
@@ -131,7 +146,7 @@ CoreLayer Desktop App (Tauri 2.0)
 ## Meet Coreling
 
 <p align="center">
-  <img src="./assets/coreling.png" alt="Coreling — Jarvis AI Core Companion" width="360" />
+  <img src="./public/assets/coreling.png" alt="Coreling — Jarvis AI Core Companion" width="360" />
 </p>
 
 **Coreling** is Jarvis' holographic AI core companion.
@@ -141,25 +156,6 @@ It represents the voice-native, MCP-first, permission-aware command layer behind
 Coreling is not the product logo.
 The product identity is the **CoreLayer control system**.
 Coreling is the assistant avatar used in onboarding, voice mode, loading states, and documentation.
-
----
-
-## Features
-
-| Area | Description |
-|---|---|
-| **Desktop Command Center** | Tauri-powered desktop app with a dark product dashboard UI. |
-| **Jarvis Assistant Persona** | Built-in assistant identity for voice and text interaction. |
-| **MCP Integration** | Connect external MCP servers and register their tools into the unified registry. |
-| **Tool Registry** | Unified tool layer for native, MCP, skill, and REST tools. |
-| **Permission Guard** | Risk-based execution with async confirmation and audit logs. |
-| **Model Gateway** | Route requests across MiMo, Groq, OpenRouter, Ollama, and local models. |
-| **Voice Pipeline** | Wake word, ASR, streaming LLM response, TTS, and interruption. |
-| **Smart Todo** | Task manager with priority, due dates, tags, and natural language creation. |
-| **Reading Tracker** | Book/article tracking with status management and reading stats. |
-| **Daily Reviews** | Automated daily/weekly summaries with completion metrics. |
-| **3-in-1 Storage** | Local SQLite, Supabase cloud sync, or general PostgreSQL — hot-swappable. |
-| **Audit Logs** | Track tool calls, permissions, duration, risk levels, and results. |
 
 ---
 
@@ -220,11 +216,12 @@ corelayer/
 │   ├── tool-registry/           # Unified tool registration
 │   └── permission-guard/        # Risk-based execution guard
 │
-├── assets/                      # Visual assets
-│   ├── corelayer-hero.png       # README hero banner
-│   ├── coreling.png             # Assistant mascot
-│   ├── icon.png                 # Desktop app icon
-│   └── icons/                   # Feature module icons
+├── public/
+│   └── assets/                  # Visual assets
+│       ├── corelayer-hero.png   # README hero banner
+│       ├── coreling.png         # Assistant mascot
+│       ├── icon.png             # Desktop app icon
+│       └── icons/               # Feature module SVG icons
 │
 └── docs/                        # Documentation
 ```
@@ -312,20 +309,6 @@ Use the fast model for this voice command.
 ```text
 What tools are currently enabled?
 ```
-
----
-
-## Control Center
-
-CoreLayer includes a desktop control center for managing:
-
-- daemon status and health
-- connected apps and MCP servers
-- model profiles and routing rules
-- tool registry and discovery
-- permission policies and audit logs
-- voice profiles and test console
-- local memories and context
 
 ---
 
@@ -471,10 +454,10 @@ CoreLayer uses a dark, calm, futuristic visual language:
 Visual assets:
 
 ```text
-assets/corelayer-hero.png    README hero banner
-assets/coreling.png          Jarvis assistant mascot
-assets/icon.png              Desktop app icon source
-assets/icons/                Feature module icons
+public/assets/corelayer-hero.png    README hero banner
+public/assets/coreling.png          Assistant mascot
+public/assets/icon.png              Desktop app icon
+public/assets/icons/                Feature module SVG icons
 ```
 
 ---
