@@ -28,6 +28,44 @@ export function JarvisVoiceOverlay({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const animationFrameRef = useRef<number>(0);
   const phaseRef = useRef<number>(0);
+  const volumeRef = useRef<number>(0);
+
+  // Listen to real-time high-performance volume tick broadcasts from Tauri IPC
+  useEffect(() => {
+    let active = true;
+    let unlisten: (() => void) | null = null;
+
+    const setupVolumeListener = async () => {
+      try {
+        const { getCurrentWindow } = await import("@tauri-apps/api/window");
+        const appWindow = getCurrentWindow();
+        
+        if (!active) return;
+
+        const unsub = await appWindow.listen<{ volume: number }>("voice-volume-tick", (event) => {
+          if (!active) return;
+          volumeRef.current = event.payload.volume;
+        });
+
+        if (!active) {
+          try { unsub(); } catch {}
+          return;
+        }
+        unlisten = unsub;
+      } catch (e) {
+        console.warn("Failed to listen to voice volume ticks:", e);
+      }
+    };
+
+    setupVolumeListener();
+
+    return () => {
+      active = false;
+      if (unlisten) {
+        try { unlisten(); } catch {}
+      }
+    };
+  }, []);
 
   // Active Timer state
   const [timer, setTimer] = useState<number>(0);
@@ -166,11 +204,18 @@ export function JarvisVoiceOverlay({
         ctx.stroke();
       }
 
+      // Normal speaking volume averages between 10 and 120. We scale it smoothly to a multiplier.
+      // If silent (volumeRef.current is 0), we use 0.08 to show an elegant, thin, siri-like resting line.
+      // If active, it scales naturally up to 2.5x to represent voice peaks dynamically.
+      const volumeFactor = state === "listening" || state === "speaking"
+        ? Math.max(0.08, Math.min(2.5, volumeRef.current / 38))
+        : 1.0;
+
       // Draw multi-layered sine waves
       for (let i = 0; i < config.waves; i++) {
         ctx.beginPath();
         
-        const currentAmp = config.amplitude * (1 - i * 0.18);
+        const currentAmp = config.amplitude * volumeFactor * (1 - i * 0.18);
         const currentFreq = 0.008 + i * 0.003;
         
         ctx.shadowBlur = 15;

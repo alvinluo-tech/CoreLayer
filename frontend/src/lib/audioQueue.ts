@@ -2,6 +2,7 @@ import { voiceProfileManager } from "./voiceProfile.js";
 
 export class AudioQueueManager {
   private audioCtx: AudioContext;
+  private analyser: AnalyserNode | null = null;
   private ttsUrl: string;
   private voice: string;
   private model: string;
@@ -15,6 +16,11 @@ export class AudioQueueManager {
 
   constructor(ttsUrl: string, voice?: string) {
     this.audioCtx = new AudioContext();
+    try {
+      this.analyser = this.audioCtx.createAnalyser();
+      this.analyser.fftSize = 32;
+      this.analyser.connect(this.audioCtx.destination);
+    } catch {}
     this.ttsUrl = ttsUrl;
     this.voice = voice ?? voiceProfileManager.getVoiceName();
     this.model = voiceProfileManager.getTTSModel();
@@ -79,7 +85,11 @@ export class AudioQueueManager {
 
     const source = this.audioCtx.createBufferSource();
     source.buffer = buffer;
-    source.connect(this.audioCtx.destination);
+    if (this.analyser) {
+      source.connect(this.analyser);
+    } else {
+      source.connect(this.audioCtx.destination);
+    }
     this.currentSource = source;
 
     source.onended = () => {
@@ -132,12 +142,24 @@ export class AudioQueueManager {
     }
   }
 
+  getVolume(): number {
+    if (!this.analyser || this.stopped || !this.currentSource) return 0;
+    const dataArray = new Uint8Array(this.analyser.frequencyBinCount);
+    this.analyser.getByteFrequencyData(dataArray);
+    const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
+    return avg; // returns a number from 0 to 255
+  }
+
   get isPlaying(): boolean {
     return this.currentSource !== null;
   }
 
   dispose() {
     this.stop();
+    if (this.analyser) {
+      try { this.analyser.disconnect(); } catch {}
+      this.analyser = null;
+    }
     this.audioCtx.close().catch(() => {});
   }
 }

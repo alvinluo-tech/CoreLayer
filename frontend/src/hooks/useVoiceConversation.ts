@@ -1390,6 +1390,89 @@ export function useVoiceConversation(
     playFarewellAndExitRef.current = playFarewellAndExit;
   }, [playFarewellAndExit]);
 
+  // High-performance real-time volume tracker & emitter (bypasses React state to keep App rendering at 0% CPU)
+  useEffect(() => {
+    let active = true;
+    let animationId = 0;
+    let micStream: MediaStream | null = null;
+    let micAudioCtx: AudioContext | null = null;
+    let micAnalyser: AnalyserNode | null = null;
+    let micDataArray: any = null;
+    let appWindowInstance: any = null;
+
+    const initWindow = async () => {
+      try {
+        const { getCurrentWindow } = await import("@tauri-apps/api/window");
+        appWindowInstance = getCurrentWindow();
+      } catch {}
+    };
+    initWindow();
+
+    const runVolumeLoop = () => {
+      if (!active) return;
+
+      let vol = 0;
+      if (state === "speaking" && audioQueueRef.current) {
+        vol = audioQueueRef.current.getVolume();
+      } else if (state === "listening" && micAnalyser && micDataArray) {
+        micAnalyser.getByteFrequencyData(micDataArray);
+        vol = micDataArray.reduce((a: number, b: number) => a + b, 0) / micDataArray.length;
+      }
+
+      if (appWindowInstance) {
+        appWindowInstance.emit("voice-volume-tick", { volume: vol }).catch(() => {});
+      }
+
+      animationId = requestAnimationFrame(runVolumeLoop);
+    };
+
+    if (state === "speaking") {
+      runVolumeLoop();
+    } else if (state === "listening") {
+      if (typeof navigator !== "undefined" && navigator.mediaDevices) {
+        navigator.mediaDevices.getUserMedia({ audio: true })
+          .then((stream) => {
+            if (!active) {
+              stream.getTracks().forEach((t) => t.stop());
+              return;
+            }
+            micStream = stream;
+            micAudioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+            const source = micAudioCtx.createMediaStreamSource(stream);
+            micAnalyser = micAudioCtx.createAnalyser();
+            micAnalyser.fftSize = 32;
+            source.connect(micAnalyser);
+            micDataArray = new Uint8Array(micAnalyser.frequencyBinCount);
+            
+            runVolumeLoop();
+          })
+          .catch((err) => {
+            console.warn("[VoiceConversation] Failed to start mic volume tracker:", err);
+            runVolumeLoop();
+          });
+      } else {
+        runVolumeLoop();
+      }
+    }
+
+    return () => {
+      active = false;
+      if (animationId) {
+        cancelAnimationFrame(animationId);
+      }
+      if (micStream) {
+        micStream.getTracks().forEach((t) => t.stop());
+      }
+      if (micAudioCtx) {
+        micAudioCtx.close().catch(() => {});
+      }
+      // Emit a final 0 tick to reset visualizers
+      if (appWindowInstance) {
+        appWindowInstance.emit("voice-volume-tick", { volume: 0 }).catch(() => {});
+      }
+    };
+  }, [state]);
+
   // Cleanup on unmount
 
 
