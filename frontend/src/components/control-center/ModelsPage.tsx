@@ -16,6 +16,8 @@ import {
   Activity,
   CheckCircle2,
   AlertCircle,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { useModelStore, type ProviderEntry } from "@/stores/modelStore";
 import type { RoutingRule, ProviderPreset } from "@/lib/tauri";
@@ -107,6 +109,28 @@ function ProviderGallery({
   const { addProvider, addCustomProvider, updateProvider, removeProvider, discoverModels, testProvider } = useModelStore();
   const [showAdd, setShowAdd] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  const getProviderBrandStyle = (id: string, enabled: boolean) => {
+    if (!enabled) {
+      return "border-border/60 bg-muted/20 hover:bg-muted/40 text-muted-foreground hover:border-border/80";
+    }
+    switch (id) {
+      case "openai":
+        return "border-emerald-500/30 bg-emerald-500/[0.03] hover:bg-emerald-500/[0.06] hover:border-emerald-500/50 shadow-[0_0_12px_rgba(16,185,129,0.02)]";
+      case "deepseek":
+        return "border-blue-500/30 bg-blue-500/[0.03] hover:bg-blue-500/[0.06] hover:border-blue-500/50 shadow-[0_0_12px_rgba(59,130,246,0.02)]";
+      case "anthropic":
+        return "border-orange-500/30 bg-orange-500/[0.03] hover:bg-orange-500/[0.06] hover:border-orange-500/50 shadow-[0_0_12px_rgba(249,115,22,0.02)]";
+      case "google":
+        return "border-purple-500/30 bg-purple-500/[0.03] hover:bg-purple-500/[0.06] hover:border-purple-500/50 shadow-[0_0_12px_rgba(168,85,247,0.02)]";
+      case "ollama":
+        return "border-neutral-500/40 bg-neutral-500/[0.04] hover:bg-neutral-500/[0.08] hover:border-neutral-500/60 shadow-[0_0_12px_rgba(115,115,115,0.02)] dark:border-neutral-400/30 dark:bg-neutral-400/[0.03] dark:hover:bg-neutral-400/[0.06]";
+      case "groq":
+        return "border-amber-500/30 bg-amber-500/[0.03] hover:bg-amber-500/[0.06] hover:border-amber-500/50 shadow-[0_0_12px_rgba(245,158,11,0.02)]";
+      default:
+        return "border-primary/20 bg-primary/[0.02] hover:bg-primary/[0.05] hover:border-primary/40";
+    }
+  };
   const [editKey, setEditKey] = useState("");
   const [editURL, setEditURL] = useState("");
   const [discoveredModels, setDiscoveredModels] = useState<Record<string, { id: string; name: string }[]>>({});
@@ -117,6 +141,8 @@ function ProviderGallery({
   const [customName, setCustomName] = useState("");
   const [customURL, setCustomURL] = useState("");
   const [customKey, setCustomKey] = useState("");
+  const [showCustomKey, setShowCustomKey] = useState(false);
+  const [showEditKey, setShowEditKey] = useState(false);
 
   const connectedIds = new Set(providers.map((p) => p.id));
   const unconnectedPresets = presets.filter((p) => !connectedIds.has(p.id));
@@ -214,13 +240,22 @@ function ProviderGallery({
                 placeholder="Base URL (https://...)"
                 className="px-2.5 py-1.5 text-xs bg-background border rounded-md font-mono"
               />
-              <input
-                type="password"
-                value={customKey}
-                onChange={(e) => setCustomKey(e.target.value)}
-                placeholder="API Key (可选)"
-                className="px-2.5 py-1.5 text-xs bg-background border rounded-md"
-              />
+              <div className="relative">
+                <input
+                  type={showCustomKey ? "text" : "password"}
+                  value={customKey}
+                  onChange={(e) => setCustomKey(e.target.value)}
+                  placeholder="API Key (可选)"
+                  className="w-full pl-2.5 pr-8 py-1.5 text-xs bg-background border rounded-md"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowCustomKey(!showCustomKey)}
+                  className="absolute right-2 top-1.5 p-0.5 rounded hover:bg-muted text-muted-foreground"
+                >
+                  {showCustomKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                </button>
+              </div>
             </div>
             <div className="flex justify-end mt-2 gap-2">
               <Button variant="ghost" size="sm" onClick={() => setShowAdd(false)}>
@@ -239,11 +274,10 @@ function ProviderGallery({
         {providers.map((provider) => (
           <div
             key={provider.id}
-            className={`p-3 rounded-lg border transition-colors cursor-pointer ${
+            className={`p-3.5 rounded-xl border transition-all duration-300 cursor-pointer hover:scale-[1.02] active:scale-[0.99] backdrop-blur-sm ${getProviderBrandStyle(
+              provider.id,
               provider.enabled
-                ? "border-green-500/30 bg-green-500/5 hover:bg-green-500/10"
-                : "border-muted bg-muted/30 hover:bg-muted/50"
-            }`}
+            )}`}
             onClick={() => {
               if (expandedId === provider.id) {
                 setExpandedId(null);
@@ -254,10 +288,26 @@ function ProviderGallery({
               }
             }}
           >
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-sm font-medium truncate">{provider.name}</span>
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-sm font-semibold truncate">{provider.name}</span>
               {provider.enabled ? (
-                <Wifi className="h-3.5 w-3.5 text-green-500 shrink-0" />
+                <Wifi
+                  className={`h-3.5 w-3.5 shrink-0 ${
+                    provider.id === "openai"
+                      ? "text-emerald-500"
+                      : provider.id === "deepseek"
+                      ? "text-blue-500"
+                      : provider.id === "anthropic"
+                      ? "text-orange-500"
+                      : provider.id === "google"
+                      ? "text-purple-500"
+                      : provider.id === "ollama"
+                      ? "text-neutral-500 dark:text-neutral-400"
+                      : provider.id === "groq"
+                      ? "text-amber-500"
+                      : "text-primary"
+                  }`}
+                />
               ) : (
                 <WifiOff className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
               )}
@@ -266,24 +316,33 @@ function ProviderGallery({
               {provider.modelCount > 0 ? `${provider.modelCount} 模型` : "未配置模型"}
             </p>
             {expandedId === provider.id && (
-              <div className="mt-3 pt-3 border-t space-y-2" onClick={(e) => e.stopPropagation()}>
+              <div className="mt-3.5 pt-3.5 border-t border-border/60 space-y-2.5" onClick={(e) => e.stopPropagation()}>
                 <div>
-                  <label className="text-xs text-muted-foreground">API Key</label>
-                  <input
-                    type="password"
-                    value={editKey}
-                    onChange={(e) => setEditKey(e.target.value)}
-                    placeholder={provider.apiKey ? "已配置 (留空保持不变)" : "输入 API Key"}
-                    className="w-full mt-0.5 px-2 py-1 text-xs bg-background border rounded-md"
-                  />
+                  <label className="text-xs text-muted-foreground font-medium">API Key</label>
+                  <div className="relative mt-0.5">
+                    <input
+                      type={showEditKey ? "text" : "password"}
+                      value={editKey}
+                      onChange={(e) => setEditKey(e.target.value)}
+                      placeholder={provider.apiKey ? "已配置 (留空保持不变)" : "输入 API Key"}
+                      className="w-full pl-2.5 pr-8 py-1.5 text-xs bg-background border rounded-md"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowEditKey(!showEditKey)}
+                      className="absolute right-2 top-1.5 p-0.5 rounded hover:bg-muted text-muted-foreground"
+                    >
+                      {showEditKey ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                    </button>
+                  </div>
                 </div>
                 <div>
-                  <label className="text-xs text-muted-foreground">Base URL</label>
+                  <label className="text-xs text-muted-foreground font-medium">Base URL</label>
                   <input
                     type="text"
                     value={editURL}
                     onChange={(e) => setEditURL(e.target.value)}
-                    className="w-full mt-0.5 px-2 py-1 text-xs bg-background border rounded-md font-mono"
+                    className="w-full mt-0.5 px-2.5 py-1.5 text-xs bg-background border rounded-md font-mono"
                   />
                 </div>
                 <div className="flex gap-1.5">
@@ -396,6 +455,7 @@ function PresetCard({
 }) {
   const [showForm, setShowForm] = useState(false);
   const [apiKey, setApiKey] = useState("");
+  const [showApiKey, setShowApiKey] = useState(false);
 
   const handleAdd = async () => {
     if (preset.requiresApiKey && !apiKey) return;
@@ -409,14 +469,23 @@ function PresetCard({
       <div className="p-3 rounded-lg border bg-background space-y-2">
         <p className="text-xs font-medium">{preset.nameCN}</p>
         {preset.requiresApiKey && (
-          <input
-            type="password"
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            placeholder="API Key"
-            className="w-full px-2 py-1 text-xs bg-background border rounded-md"
-            autoFocus
-          />
+          <div className="relative">
+            <input
+              type={showApiKey ? "text" : "password"}
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              placeholder="API Key"
+              className="w-full pl-2 pr-8 py-1 text-xs bg-background border rounded-md"
+              autoFocus
+            />
+            <button
+              type="button"
+              onClick={() => setShowApiKey(!showApiKey)}
+              className="absolute right-2 top-1.5 p-0.5 rounded hover:bg-muted text-muted-foreground"
+            >
+              {showApiKey ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+            </button>
+          </div>
         )}
         <div className="flex gap-1">
           <Button variant="ghost" size="sm" onClick={() => setShowForm(false)} className="flex-1 text-xs">
