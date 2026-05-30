@@ -436,26 +436,24 @@ Voice profiles are configurable with different languages, models, and voice sett
 
 - [x] Settings as a full Control Center
 - [x] Model profile management UI
-- [ ] MCP connection manager UI
-- [ ] Tool registry explorer
-- [ ] Permission matrix UI
-- [ ] Voice test console
-- [ ] Daemon health dashboard
+- [x] MCP connection manager UI
+- [x] Tool registry explorer
+- [x] Permission matrix UI
+- [x] Voice test console
+- [x] Daemon health dashboard
 
 ### Phase 3 — Personal App Ecosystem
 
-- [ ] Veridia MCP integration
-- [ ] Todo as standalone MCP app
-- [ ] Fitness module
-- [ ] Calendar module
-- [ ] Project tracker module
+- [x] Veridia MCP integration (REST adapter)
+- [x] TaskFlow integration (native repo adapter)
+- [x] FlexiLog integration (REST adapter)
 
 ### Phase 4 — Skills and Automation
 
-- [ ] Local skills runtime
-- [ ] Workflow skills
-- [ ] Scheduled reviews
-- [ ] Plugin marketplace experiments
+- [x] Local skills runtime
+- [x] Workflow skills
+- [x] Scheduled reviews
+- [x] Plugin marketplace experiments
 
 ---
 
