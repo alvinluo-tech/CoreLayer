@@ -459,6 +459,26 @@ async fn db_manager_clear_table(table_name: String) -> Result<serde_json::Value,
     daemon_post(&format!("/api/settings/db-manager/tables/{}/clear", table_name), serde_json::json!({})).await
 }
 
+#[tauri::command]
+async fn db_config_get() -> Result<serde_json::Value, String> {
+    daemon_get("/api/settings/db-config").await
+}
+
+#[tauri::command]
+async fn db_config_set(config: serde_json::Value) -> Result<serde_json::Value, String> {
+    daemon_post("/api/settings/db-config", config).await
+}
+
+#[tauri::command]
+async fn db_config_test(test_params: serde_json::Value) -> Result<serde_json::Value, String> {
+    daemon_post("/api/settings/db-config/test", test_params).await
+}
+
+#[tauri::command]
+async fn db_config_migrate() -> Result<serde_json::Value, String> {
+    daemon_post("/api/settings/db-config/migrate", serde_json::json!({})).await
+}
+
 
 
 async fn daemon_put<T: for<'de> Deserialize<'de>>(path: &str, body: serde_json::Value) -> Result<T, String> {
@@ -727,6 +747,10 @@ pub fn run() {
             db_manager_get_table_rows,
             db_manager_delete_row,
             db_manager_clear_table,
+            db_config_get,
+            db_config_set,
+            db_config_test,
+            db_config_migrate,
             get_voice_status,
             get_daemon_url_command,
             list_mcp_servers,

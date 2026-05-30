@@ -13,8 +13,11 @@ import {
   setRoutingRules,
   getActiveModelId,
   setActiveModelId,
+  getDbConfig,
+  setDbConfig,
   type StoredProvider,
 } from "../config/storage-config.js";
+import pg from "pg";
 import { switchStorageMode, getCurrentMode } from "../db/factory.js";
 import { getRepositories } from "../db/factory.js";
 import { resetGateway, getModelGateway } from "../model/gateway.js";
@@ -46,9 +49,10 @@ app.put("/storage-mode", async (c) => {
     }, 400);
   }
 
-  if (body.mode === "postgres" && !env.DATABASE_URL) {
+  const dbConfig = getDbConfig();
+  if (body.mode === "postgres" && !env.DATABASE_URL && !dbConfig.postgresUrl) {
     return c.json({
-      error: "PostgreSQL 模式需要配置 DATABASE_URL 环境变量。",
+      error: "PostgreSQL 模式需要配置 DATABASE_URL 环境变量或在外接数据库中配置连接串。",
     }, 400);
   }
 
@@ -59,6 +63,279 @@ app.put("/storage-mode", async (c) => {
     storageMode: body.mode,
     message: `Storage mode switched to ${body.mode}.`,
   });
+});
+
+// ---- Dynamic Database Configuration Endpoints ----
+
+app.get("/db-config", (c) => {
+  const config = getDbConfig();
+  return c.json({
+    supabaseUrl: config.supabaseUrl ?? "",
+    supabaseServiceKey: maskApiKey(config.supabaseServiceKey),
+    postgresUrl: maskApiKey(config.postgresUrl),
+  });
+});
+
+app.post("/db-config", async (c) => {
+  try {
+    const body = await c.req.json<{
+      supabaseUrl?: string;
+      supabaseServiceKey?: string;
+      postgresUrl?: string;
+    }>();
+    
+    const current = getDbConfig();
+    const updated = {
+      supabaseUrl: body.supabaseUrl !== undefined ? body.supabaseUrl : current.supabaseUrl,
+      supabaseServiceKey: body.supabaseServiceKey !== undefined && !isMaskedKey(body.supabaseServiceKey)
+        ? body.supabaseServiceKey
+        : current.supabaseServiceKey,
+      postgresUrl: body.postgresUrl !== undefined && !isMaskedKey(body.postgresUrl)
+        ? body.postgresUrl
+        : current.postgresUrl,
+    };
+    
+    setDbConfig(updated);
+    
+    // Dynamically hot-switch repositories if currently active mode is cloud/postgres
+    const currentMode = getCurrentMode();
+    if (currentMode === "cloud" || currentMode === "postgres") {
+      await switchStorageMode(currentMode);
+    }
+    
+    return c.json({ success: true, message: "数据库外接配置已保存并应用" });
+  } catch (err) {
+    return c.json({ success: false, error: String(err) }, 500);
+  }
+});
+
+app.post("/db-config/test", async (c) => {
+  try {
+    const body = await c.req.json<{
+      type: "supabase" | "postgres";
+      supabaseUrl?: string;
+      supabaseServiceKey?: string;
+      postgresUrl?: string;
+    }>();
+
+    const current = getDbConfig();
+    const startTime = Date.now();
+
+    if (body.type === "supabase") {
+      const url = body.supabaseUrl || current.supabaseUrl;
+      const key = body.supabaseServiceKey && !isMaskedKey(body.supabaseServiceKey)
+        ? body.supabaseServiceKey
+        : current.supabaseServiceKey;
+
+      if (!url || !key) {
+        return c.json({ success: false, error: "未配置 Supabase URL 或 Key" });
+      }
+
+      // Test Supabase connection via health check REST API call
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      
+      const resp = await fetch(`${url}/rest/v1/`, {
+        headers: {
+          apikey: key,
+          Authorization: `Bearer ${key}`,
+        },
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      
+      const latencyMs = Date.now() - startTime;
+      if (resp.ok) {
+        return c.json({ success: true, latencyMs });
+      } else {
+        return c.json({ success: false, error: `Supabase 返回异常: ${resp.status} ${resp.statusText}`, latencyMs });
+      }
+    } else {
+      const connectionString = body.postgresUrl && !isMaskedKey(body.postgresUrl)
+        ? body.postgresUrl
+        : current.postgresUrl || env.DATABASE_URL;
+
+      if (!connectionString) {
+        return c.json({ success: false, error: "未配置 PostgreSQL 连接 URL" });
+      }
+
+      // Test general PostgreSQL connection
+      const client = new pg.Client({
+        connectionString,
+        connectionTimeoutMillis: 5000,
+      });
+      
+      await client.connect();
+      await client.query("SELECT 1;");
+      await client.end();
+      
+      const latencyMs = Date.now() - startTime;
+      return c.json({ success: true, latencyMs });
+    }
+  } catch (e) {
+    return c.json({ success: false, error: `连接测试失败: ${String(e)}` });
+  }
+});
+
+app.post("/db-config/migrate", async (c) => {
+  const current = getDbConfig();
+  const connectionString = current.postgresUrl || env.DATABASE_URL;
+
+  if (!connectionString) {
+    return c.json({ success: false, error: "未配置 PostgreSQL 连接 URL" }, 400);
+  }
+
+  const client = new pg.Client({ connectionString });
+  
+  try {
+    await client.connect();
+    
+    // Execute table migrations
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS tasks (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        description TEXT,
+        priority INTEGER DEFAULT 3 NOT NULL,
+        status TEXT DEFAULT 'pending' NOT NULL,
+        due_date TEXT,
+        tags TEXT,
+        completed_at TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS articles (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        url TEXT,
+        title TEXT NOT NULL,
+        description TEXT,
+        status TEXT DEFAULT 'unread' NOT NULL,
+        rating INTEGER,
+        notes TEXT,
+        category TEXT,
+        added_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        started_at TEXT,
+        finished_at TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS reviews (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        type TEXT NOT NULL,
+        period_start TEXT NOT NULL,
+        period_end TEXT NOT NULL,
+        task_completion_rate REAL,
+        articles_read INTEGER,
+        summary TEXT,
+        patterns TEXT,
+        suggestions TEXT,
+        raw_data TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS conversations (
+        id TEXT PRIMARY KEY,
+        user_id TEXT DEFAULT 'default' NOT NULL,
+        title TEXT DEFAULT 'New Chat' NOT NULL,
+        model_used TEXT DEFAULT 'mimo-v2.5-pro' NOT NULL,
+        message_count INTEGER DEFAULT 0 NOT NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS messages (
+        id TEXT PRIMARY KEY,
+        conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+        role TEXT NOT NULL,
+        content TEXT DEFAULT '' NOT NULL,
+        tool_calls TEXT,
+        tool_call_id TEXT,
+        token_count INTEGER,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS tool_call_logs (
+        id TEXT PRIMARY KEY,
+        tool_id TEXT NOT NULL,
+        tool_name TEXT NOT NULL,
+        app_id TEXT,
+        source TEXT NOT NULL,
+        args TEXT,
+        result_success INTEGER,
+        result_data TEXT,
+        result_error TEXT,
+        risk TEXT,
+        confirmed_by_user INTEGER,
+        duration_ms INTEGER,
+        conversation_id TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS app_connections (
+        id TEXT PRIMARY KEY,
+        app_id TEXT NOT NULL UNIQUE,
+        app_name TEXT NOT NULL,
+        source TEXT NOT NULL,
+        config TEXT,
+        status TEXT DEFAULT 'disconnected' NOT NULL,
+        last_connected TEXT,
+        last_error TEXT,
+        tool_count INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS model_profiles (
+        id TEXT PRIMARY KEY,
+        provider TEXT NOT NULL,
+        model_name TEXT NOT NULL,
+        display_name TEXT,
+        capabilities TEXT,
+        limits TEXT,
+        cost TEXT,
+        is_default INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS memories (
+        id TEXT PRIMARY KEY,
+        user_id TEXT DEFAULT 'default' NOT NULL,
+        type TEXT NOT NULL,
+        key TEXT NOT NULL,
+        value TEXT NOT NULL,
+        source TEXT,
+        confidence REAL,
+        expires_at TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS agent_runs (
+        id TEXT PRIMARY KEY,
+        conversation_id TEXT,
+        user_message_id TEXT,
+        assistant_message_id TEXT,
+        status TEXT DEFAULT 'running' NOT NULL,
+        selected_model TEXT,
+        route_reason TEXT,
+        tool_call_count INTEGER DEFAULT 0,
+        started_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        completed_at TEXT,
+        duration_ms INTEGER,
+        error TEXT
+      );
+    `);
+    
+    await client.end();
+    return c.json({ success: true, message: "所有数据表结构（Tasks, Conversations, Memories etc.）已成功自动初始化！" });
+  } catch (err) {
+    try { await client.end(); } catch {}
+    return c.json({ success: false, error: `初始化数据库表失败: ${String(err)}` }, 500);
+  }
 });
 
 // ---- Database Diagnostic Stats ----
