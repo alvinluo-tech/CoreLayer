@@ -79,29 +79,44 @@ CoreLayer is the control layer between you, your tools, your models, and your pe
 
 ## Core Capabilities
 
-### Core Layer
-
-| | Feature | Description |
-|---|---|---|
-| <img src="./public/assets/icons/voice.svg" width="28" /> | **Voice Pipeline** | Wake word, ASR, streaming LLM response, sentence-level TTS, and barge-in interruption. |
-| <img src="./public/assets/icons/chat.svg" width="28" /> | **Streaming Chat** | SSE streaming with context-aware tool calling, multi-turn memory, and natural language parsing. |
-| <img src="./public/assets/icons/mcp.svg" width="28" /> | **MCP Integration** | Connect personal apps and external tools through stdio, HTTP, and SSE via the Model Context Protocol. |
-| <img src="./public/assets/icons/registry.svg" width="28" /> | **Tool Registry** | Unified tool layer for native, MCP, skill, and REST tools with structured display and discovery. |
-| <img src="./public/assets/icons/guard.svg" width="28" /> | **Permission Guard** | Risk-based execution (low/medium/high/critical) with async confirmation and timeout handling. |
-| <img src="./public/assets/icons/models.svg" width="28" /> | **Model Router** | Route requests across MiMo, Groq, OpenRouter, Ollama, and any OpenAI-compatible provider. |
-| <img src="./public/assets/icons/memory.svg" width="28" /> | **Local-first Storage** | SQLite as the default data layer. Cloud sync via Supabase or PostgreSQL when needed. |
-| <img src="./public/assets/icons/hotswap.svg" width="28" /> | **Hot-swap Storage** | Switch between SQLite, Supabase, and PostgreSQL at runtime without restarting. |
-| <img src="./public/assets/icons/audit.svg" width="28" /> | **Audit Logs** | Track every tool call with duration, risk level, result status, and permission decisions. |
-| <img src="./public/assets/icons/control-center.svg" width="28" /> | **Control Center** | Desktop settings UI for models, MCP servers, tools, permissions, voice, and system health. |
-| <img src="./public/assets/icons/daemon.svg" width="28" /> | **Daemon Supervisor** | Node.js daemon with health checks, auto-restart, and process lifecycle management. |
-
-### Personal Tools
-
-| | Feature | Description |
-|---|---|---|
-| <img src="./public/assets/icons/todo.svg" width="28" /> | **Smart Todo** | Task manager with priority, due dates, tags, natural language creation, and daily focus view. |
-| <img src="./public/assets/icons/reading.svg" width="28" /> | **Reading Tracker** | Book/article tracking with status management, categories, ratings, and reading statistics. |
-| <img src="./public/assets/icons/review.svg" width="28" /> | **Daily Reviews** | Automated daily/weekly summaries with completion metrics, top tags, and trend analysis. |
+<table>
+  <tr>
+    <td width="50%">
+      <img src="./public/assets/icons/mcp.svg" width="32" />
+      <h3>MCP-first Integration</h3>
+      <p>Connect personal apps and external tools through MCP servers.</p>
+    </td>
+    <td width="50%">
+      <img src="./public/assets/icons/registry.svg" width="32" />
+      <h3>Unified Tool Calling</h3>
+      <p>Register, route, execute, and display tools from native modules, MCP, skills, and REST adapters.</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <img src="./public/assets/icons/guard.svg" width="32" />
+      <h3>Permission Guard</h3>
+      <p>Classify risky actions, pause for confirmation, and keep audit logs for every tool call.</p>
+    </td>
+    <td width="50%">
+      <img src="./public/assets/icons/models.svg" width="32" />
+      <h3>Model Router</h3>
+      <p>Route requests across MiMo, Groq, OpenRouter, and local models based on task needs.</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <img src="./public/assets/icons/voice.svg" width="32" />
+      <h3>Voice Pipeline</h3>
+      <p>Wake, listen, transcribe, stream responses, speak back, and support interruption.</p>
+    </td>
+    <td width="50%">
+      <img src="./public/assets/icons/control-center.svg" width="32" />
+      <h3>Control Center</h3>
+      <p>Manage models, apps, tools, permissions, voice profiles, daemon health, and logs.</p>
+    </td>
+  </tr>
+</table>
 
 ---
 
