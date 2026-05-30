@@ -42,3 +42,6 @@ Cargo.lock
 
 # TypeScript
 *.tsbuildinfo
+
+# Test coverage
+coverage/

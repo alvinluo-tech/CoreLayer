@@ -7,10 +7,12 @@
  * BUG-E4: ErrorCodes constants must match classifyError outputs
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   classifyError,
   extractErrorMessage,
+  logError,
+  apiError,
   ErrorCodes,
   type ErrorResponse,
   type AppErrorStatus,
@@ -162,5 +164,71 @@ describe("ErrorResponse shape", () => {
       expect(typeof result.code).toBe("string");
       expect(result.code.length).toBeGreaterThan(0);
     }
+  });
+});
+
+// ---- BUG-E5: logError must log structured prefix ----
+
+describe("logError", () => {
+  it("logs error message with structured prefix", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    logError("test-context", new Error("something broke"));
+    expect(spy).toHaveBeenCalledWith("[Jarvis][test-context]", "something broke");
+    spy.mockRestore();
+  });
+
+  it("logs stack trace for Error objects", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const err = new Error("with stack");
+    logError("ctx", err);
+    // Second call is the stack
+    expect(spy.mock.calls.length).toBeGreaterThanOrEqual(2);
+    spy.mockRestore();
+  });
+
+  it("logs raw value for non-Error types", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    logError("ctx", "raw string error");
+    expect(spy).toHaveBeenCalledWith("[Jarvis][ctx]", "raw string error");
+    spy.mockRestore();
+  });
+});
+
+// ---- BUG-E6: apiError must return consistent shape ----
+
+describe("apiError", () => {
+  function mockContext() {
+    let capturedBody: unknown;
+    let capturedStatus: number | undefined;
+    return {
+      json(body: unknown, status?: number) {
+        capturedBody = body;
+        capturedStatus = status;
+        return { body, status };
+      },
+      get captured() {
+        return { body: capturedBody, status: capturedStatus };
+      },
+    };
+  }
+
+  it("returns { error } with default 500 status", () => {
+    const c = mockContext();
+    apiError(c as any, "test error");
+    expect(c.captured.body).toEqual({ error: "test error" });
+    expect(c.captured.status).toBe(500);
+  });
+
+  it("returns { error } with custom status", () => {
+    const c = mockContext();
+    apiError(c as any, "not found", 404);
+    expect(c.captured.body).toEqual({ error: "not found" });
+    expect(c.captured.status).toBe(404);
+  });
+
+  it("includes code when provided", () => {
+    const c = mockContext();
+    apiError(c as any, "not configured", 503, "NOT_CONFIGURED");
+    expect(c.captured.body).toEqual({ error: "not configured", code: "NOT_CONFIGURED" });
   });
 });
