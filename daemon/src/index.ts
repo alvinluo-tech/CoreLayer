@@ -8,6 +8,7 @@ import { registerTodoTools } from "./tools/todo/connector.js";
 import { registerReadingTools } from "./tools/reading/connector.js";
 import { registerReviewTools } from "./tools/review/connector.js";
 import { logError } from "./utils/errors.js";
+import { registerAllAdapters } from "./mcp/adapters/index.js";
 import conversationRoutes from "./api/conversations.js";
 import taskRoutes from "./api/tasks.js";
 import articleRoutes from "./api/articles.js";
@@ -26,6 +27,7 @@ initializeRepositories(storageMode);
 registerTodoTools();
 registerReadingTools();
 registerReviewTools();
+registerAllAdapters();
 
 const app = new Hono();
 
