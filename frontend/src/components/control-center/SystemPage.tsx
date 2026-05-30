@@ -38,8 +38,10 @@ export function SystemPage() {
     try {
       const result = await restartDaemon();
       setDaemon(result);
-    } catch {
-      // ignore
+      await fetchData();
+    } catch (err) {
+      console.error("重启守护进程失败:", err);
+      await fetchData();
     } finally {
       setRestarting(false);
     }
