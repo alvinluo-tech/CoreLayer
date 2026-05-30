@@ -137,34 +137,61 @@ function ProviderGallery({
   const [discovering, setDiscovering] = useState<string | null>(null);
   const [testResults, setTestResults] = useState<Record<string, { success: boolean; latencyMs?: number; error?: string }>>({});
   const [testingId, setTestingId] = useState<string | null>(null);
-  const [customId, setCustomId] = useState("");
-  const [customName, setCustomName] = useState("");
-  const [customURL, setCustomURL] = useState("");
-  const [customKey, setCustomKey] = useState("");
-  const [showCustomKey, setShowCustomKey] = useState(false);
+  const [activePreset, setActivePreset] = useState<ProviderPreset | "custom" | null>(null);
+  const [formBaseURL, setFormBaseURL] = useState("");
+  const [formAPIKey, setFormAPIKey] = useState("");
+  const [formCustomId, setFormCustomId] = useState("");
+  const [formCustomName, setFormCustomName] = useState("");
+  const [showFormKey, setShowFormKey] = useState(false);
   const [showEditKey, setShowEditKey] = useState(false);
 
   const connectedIds = new Set(providers.map((p) => p.id));
   const unconnectedPresets = presets.filter((p) => !connectedIds.has(p.id));
 
-  const handleAddPreset = async (preset: ProviderPreset, apiKey?: string) => {
-    await addProvider(preset.id, apiKey);
-    setShowAdd(false);
+  const handleSelectPreset = (preset: ProviderPreset) => {
+    setActivePreset(preset);
+    setFormBaseURL(preset.defaultBaseURL);
+    setFormAPIKey("");
+    setFormCustomId("");
+    setFormCustomName("");
   };
 
-  const handleAddCustom = async () => {
-    if (!customId || !customName || !customURL) return;
-    await addCustomProvider({
-      id: customId,
-      name: customName,
-      baseURL: customURL,
-      apiKey: customKey || undefined,
-    });
+  const handleSelectCustom = () => {
+    setActivePreset("custom");
+    setFormBaseURL("");
+    setFormAPIKey("");
+    setFormCustomId("");
+    setFormCustomName("");
+  };
+
+  // Pre-select first unconnected preset on open
+  useEffect(() => {
+    if (showAdd) {
+      if (unconnectedPresets.length > 0 && unconnectedPresets[0]) {
+        handleSelectPreset(unconnectedPresets[0]);
+      } else {
+        handleSelectCustom();
+      }
+    } else {
+      setActivePreset(null);
+    }
+  }, [showAdd, unconnectedPresets.length]);
+
+  const handleSubmitForm = async () => {
+    if (!activePreset) return;
+    if (activePreset === "custom") {
+      if (!formCustomId || !formCustomName || !formBaseURL) return;
+      await addCustomProvider({
+        id: formCustomId,
+        name: formCustomName,
+        baseURL: formBaseURL,
+        apiKey: formAPIKey || undefined,
+      });
+    } else {
+      await addProvider(activePreset.id, formAPIKey || undefined);
+    }
     setShowAdd(false);
-    setCustomId("");
-    setCustomName("");
-    setCustomURL("");
-    setCustomKey("");
+    setActivePreset(null);
   };
 
   const handleSaveEdit = async (id: string) => {
@@ -205,65 +232,189 @@ function ProviderGallery({
 
       {/* Add Provider Panel */}
       {showAdd && (
-        <div className="p-4 rounded-lg border bg-muted/50 space-y-4 mb-4">
-          <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">选择提供商</h4>
-
-          {/* Preset Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
-            {unconnectedPresets.map((preset) => (
-              <PresetCard key={preset.id} preset={preset} onAdd={handleAddPreset} isLoading={isLoading} />
-            ))}
+        <div className="p-5 rounded-xl border border-border/80 bg-muted/30 shadow-sm space-y-5 mb-5 animate-in fade-in duration-300">
+          <div className="flex items-center justify-between border-b pb-3 border-border/60">
+            <div>
+              <h4 className="text-sm font-bold text-foreground">添加 AI 提供商</h4>
+              <p className="text-xs text-muted-foreground">选择内置的官方预设渠道，或接入兼容 OpenAI 的自定义服务商。</p>
+            </div>
+            <Button variant="ghost" size="icon" onClick={() => setShowAdd(false)} className="h-7 w-7 text-muted-foreground hover:text-foreground">
+              <X className="h-4 w-4" />
+            </Button>
           </div>
 
-          {/* Custom Provider */}
-          <div className="pt-3 border-t">
-            <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">自定义提供商 (OpenAI 兼容)</h4>
-            <div className="grid grid-cols-2 gap-2">
-              <input
-                type="text"
-                value={customId}
-                onChange={(e) => setCustomId(e.target.value)}
-                placeholder="ID (如 my-llm)"
-                className="px-2.5 py-1.5 text-xs bg-background border rounded-md"
-              />
-              <input
-                type="text"
-                value={customName}
-                onChange={(e) => setCustomName(e.target.value)}
-                placeholder="显示名称"
-                className="px-2.5 py-1.5 text-xs bg-background border rounded-md"
-              />
-              <input
-                type="text"
-                value={customURL}
-                onChange={(e) => setCustomURL(e.target.value)}
-                placeholder="Base URL (https://...)"
-                className="px-2.5 py-1.5 text-xs bg-background border rounded-md font-mono"
-              />
-              <div className="relative">
-                <input
-                  type={showCustomKey ? "text" : "password"}
-                  value={customKey}
-                  onChange={(e) => setCustomKey(e.target.value)}
-                  placeholder="API Key (可选)"
-                  className="w-full pl-2.5 pr-8 py-1.5 text-xs bg-background border rounded-md"
-                />
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-5">
+            {/* Left side: Channels list (5 columns) */}
+            <div className="md:col-span-5 space-y-3">
+              <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">1. 选择服务渠道</span>
+              <div className="grid grid-cols-2 gap-2 max-h-[300px] overflow-y-auto pr-1">
+                {/* Unconnected Preset Cards */}
+                {unconnectedPresets.map((preset) => {
+                  const isSelected = activePreset && typeof activePreset === "object" && activePreset.id === preset.id;
+                  return (
+                    <button
+                      key={preset.id}
+                      onClick={() => handleSelectPreset(preset)}
+                      className={`flex items-center gap-2.5 p-3 rounded-lg border-2 text-left transition-all hover:scale-[1.02] cursor-pointer ${
+                        isSelected
+                          ? "border-primary bg-primary/[0.03] font-semibold"
+                          : "border-border/60 bg-background/50 hover:border-primary/40"
+                      }`}
+                    >
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
+                        preset.id === "openai" ? "bg-emerald-500/10 text-emerald-600" :
+                        preset.id === "deepseek" ? "bg-blue-500/10 text-blue-600" :
+                        preset.id === "anthropic" ? "bg-orange-500/10 text-orange-600" :
+                        preset.id === "google" ? "bg-purple-500/10 text-purple-600" :
+                        preset.id === "ollama" ? "bg-neutral-500/10 text-neutral-600 dark:bg-neutral-400/10 dark:text-neutral-400" :
+                        preset.id === "groq" ? "bg-amber-500/10 text-amber-600" :
+                        "bg-primary/10 text-primary"
+                      }`}>
+                        {preset.name.charAt(0)}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs truncate font-medium">{preset.nameCN}</p>
+                        <p className="text-[10px] text-muted-foreground truncate">{preset.popularModels.length}个预设模型</p>
+                      </div>
+                    </button>
+                  );
+                })}
+
+                {/* Custom Card */}
                 <button
-                  type="button"
-                  onClick={() => setShowCustomKey(!showCustomKey)}
-                  className="absolute right-2 top-1.5 p-0.5 rounded hover:bg-muted text-muted-foreground"
+                  onClick={() => handleSelectCustom()}
+                  className={`flex items-center gap-2.5 p-3 rounded-lg border-2 text-left transition-all hover:scale-[1.02] cursor-pointer ${
+                    activePreset === "custom"
+                      ? "border-primary bg-primary/[0.03] font-semibold"
+                      : "border-border/60 bg-background/50 hover:border-primary/40"
+                  }`}
                 >
-                  {showCustomKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                  <div className="w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold shrink-0">
+                    +
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs truncate font-medium">自定义渠道</p>
+                    <p className="text-[10px] text-muted-foreground truncate">OpenAI 兼容协议</p>
+                  </div>
                 </button>
               </div>
             </div>
-            <div className="flex justify-end mt-2 gap-2">
-              <Button variant="ghost" size="sm" onClick={() => setShowAdd(false)}>
-                取消
-              </Button>
-              <Button size="sm" onClick={handleAddCustom} disabled={!customId || !customName || !customURL || isLoading}>
-                添加
-              </Button>
+
+            {/* Right side: Form (7 columns) */}
+            <div className="md:col-span-7 bg-background/40 border rounded-xl p-4 space-y-4">
+              <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">2. 配置连接凭证</span>
+              
+              {activePreset ? (
+                <div className="space-y-4 animate-in fade-in slide-in-from-right-2 duration-300">
+                  <div className="p-3 rounded-lg bg-primary/5 border border-primary/10 flex items-start gap-2.5 text-xs text-muted-foreground">
+                    <div className="mt-0.5 font-bold text-primary">💡</div>
+                    <div className="space-y-0.5">
+                      <span className="font-semibold text-foreground block">
+                        {activePreset === "custom" ? "自定义 Open compatible 提供商" : `连接 ${activePreset.nameCN}`}
+                      </span>
+                      <span>
+                        {activePreset === "custom" 
+                          ? "支持对接 OneAPI, FastGPT, LM Studio 或任何标准的第三方大模型转发代理端。" 
+                          : activePreset.id === "ollama"
+                          ? "本地推理引擎。请确保您的本地 Ollama 服务已启动，且默认端口 11434 可正常访问。"
+                          : `请输入您的 ${activePreset.name} 账户凭据，Jarvis 将自动为您加载预设的流式服务与工具包。`
+                        }
+                      </span>
+                    </div>
+                  </div>
+
+                  {activePreset === "custom" && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-muted-foreground uppercase">唯一 ID (英文标识)</label>
+                        <input
+                          type="text"
+                          value={formCustomId}
+                          onChange={(e) => setFormCustomId(e.target.value)}
+                          placeholder="e.g. fast-gpt"
+                          className="w-full px-2.5 py-1.5 text-xs bg-background border rounded-md font-mono focus:outline-none focus:border-primary"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-muted-foreground uppercase">显示名称</label>
+                        <input
+                          type="text"
+                          value={formCustomName}
+                          onChange={(e) => setFormCustomName(e.target.value)}
+                          placeholder="e.g. 我的私有大模型"
+                          className="w-full px-2.5 py-1.5 text-xs bg-background border rounded-md focus:outline-none focus:border-primary"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="space-y-3">
+                    {/* Base URL */}
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-muted-foreground uppercase">Base URL (接口根地址)</label>
+                      <input
+                        type="text"
+                        value={formBaseURL}
+                        onChange={(e) => setFormBaseURL(e.target.value)}
+                        disabled={activePreset !== "custom"}
+                        placeholder="https://..."
+                        className="w-full px-2.5 py-1.5 text-xs bg-background border rounded-md font-mono disabled:opacity-75 disabled:bg-muted/30 focus:outline-none focus:border-primary"
+                      />
+                    </div>
+
+                    {/* API Key */}
+                    {(activePreset === "custom" || (activePreset && typeof activePreset === "object" && activePreset.requiresApiKey)) && (
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-muted-foreground uppercase flex items-center justify-between">
+                          <span>API Key (密钥)</span>
+                        </label>
+                        <div className="relative">
+                          <input
+                            type={showFormKey ? "text" : "password"}
+                            value={formAPIKey}
+                            onChange={(e) => setFormAPIKey(e.target.value)}
+                            placeholder={activePreset === "custom" ? "sk-..." : `输入您的 ${activePreset.name} API Key`}
+                            className="w-full pl-2.5 pr-8 py-1.5 text-xs bg-background border rounded-md focus:outline-none focus:border-primary"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowFormKey(!showFormKey)}
+                            className="absolute right-2 top-1.5 p-0.5 rounded hover:bg-muted text-muted-foreground"
+                          >
+                            {showFormKey ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Actions & Explanations */}
+                  <div className="pt-3 border-t border-border/60 flex justify-between gap-3 items-center">
+                    <p className="text-[10px] text-muted-foreground">
+                      连接后，即可在提供商列表中测试连接延迟与发现模型。
+                    </p>
+                    <div className="flex gap-2">
+                      <Button variant="ghost" size="sm" onClick={() => setShowAdd(false)}>
+                        取消
+                      </Button>
+                      <Button
+                        size="sm"
+                        disabled={isLoading || (activePreset === "custom" ? (!formCustomId || !formCustomName || !formBaseURL) : (activePreset.requiresApiKey && !formAPIKey))}
+                        onClick={handleSubmitForm}
+                        className="h-8 text-xs bg-primary text-primary-foreground font-semibold"
+                      >
+                        {isLoading && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
+                        立即连接渠道
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="h-[200px] flex flex-col items-center justify-center text-center text-muted-foreground space-y-1.5">
+                  <span className="text-2xl">👈</span>
+                  <p className="text-xs">请在左侧选择需要配置的服务提供商或自定义渠道</p>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -444,73 +595,7 @@ function ProviderGallery({
   );
 }
 
-function PresetCard({
-  preset,
-  onAdd,
-  isLoading,
-}: {
-  preset: ProviderPreset;
-  onAdd: (preset: ProviderPreset, apiKey?: string) => Promise<void>;
-  isLoading: boolean;
-}) {
-  const [showForm, setShowForm] = useState(false);
-  const [apiKey, setApiKey] = useState("");
-  const [showApiKey, setShowApiKey] = useState(false);
 
-  const handleAdd = async () => {
-    if (preset.requiresApiKey && !apiKey) return;
-    await onAdd(preset, apiKey || undefined);
-    setShowForm(false);
-    setApiKey("");
-  };
-
-  if (showForm) {
-    return (
-      <div className="p-3 rounded-lg border bg-background space-y-2">
-        <p className="text-xs font-medium">{preset.nameCN}</p>
-        {preset.requiresApiKey && (
-          <div className="relative">
-            <input
-              type={showApiKey ? "text" : "password"}
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              placeholder="API Key"
-              className="w-full pl-2 pr-8 py-1 text-xs bg-background border rounded-md"
-              autoFocus
-            />
-            <button
-              type="button"
-              onClick={() => setShowApiKey(!showApiKey)}
-              className="absolute right-2 top-1.5 p-0.5 rounded hover:bg-muted text-muted-foreground"
-            >
-              {showApiKey ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
-            </button>
-          </div>
-        )}
-        <div className="flex gap-1">
-          <Button variant="ghost" size="sm" onClick={() => setShowForm(false)} className="flex-1 text-xs">
-            取消
-          </Button>
-          <Button size="sm" onClick={handleAdd} disabled={isLoading} className="flex-1 text-xs">
-            添加
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <button
-      onClick={() => setShowForm(true)}
-      className="p-3 rounded-lg border bg-background hover:bg-muted/50 transition-colors text-left"
-    >
-      <p className="text-sm font-medium">{preset.nameCN}</p>
-      <p className="text-xs text-muted-foreground mt-0.5">
-        {preset.popularModels.length} 预设模型
-      </p>
-    </button>
-  );
-}
 
 // ---- Section 2: Model Marketplace ----
 
