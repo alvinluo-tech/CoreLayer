@@ -82,12 +82,12 @@ CoreLayer is the control layer between you, your tools, your models, and your pe
 <table>
   <tr>
     <td width="50%">
-      <img src="./public/assets/icons/mcp.svg" width="32" />
+      <img src="./public/assets/icons/mcp-integration.png" width="32" />
       <h3>MCP-first Integration</h3>
       <p>Connect personal apps and external tools through MCP servers.</p>
     </td>
     <td width="50%">
-      <img src="./public/assets/icons/registry.svg" width="32" />
+      <img src="./public/assets/icons/tool-calling.png" width="32" />
       <h3>Unified Tool Calling</h3>
       <p>Register, route, execute, and display tools from native modules, MCP, skills, and REST adapters.</p>
     </td>
@@ -106,7 +106,7 @@ CoreLayer is the control layer between you, your tools, your models, and your pe
   </tr>
   <tr>
     <td width="50%">
-      <img src="./public/assets/icons/voice.svg" width="32" />
+      <img src="./public/assets/icons/voice-pipeline.png" width="32" />
       <h3>Voice Pipeline</h3>
       <p>Wake, listen, transcribe, stream responses, speak back, and support interruption.</p>
     </td>
