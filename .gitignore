@@ -12,6 +12,10 @@ target/
 .env.local
 .env.*.local
 
+# Claude Code
+.agents/
+.claude/
+
 # IDE
 .vscode/
 .idea/
