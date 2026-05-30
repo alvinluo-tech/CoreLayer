@@ -1,77 +1,244 @@
-<div align="center">
+<p align="center">
+  <img src="./public/assets/corelayer-hero.png" alt="CoreLayer — powered by Jarvis" width="100%" />
+</p>
 
-<img src=".github/logo.png" alt="Jarvis" width="96" height="96" />
+<h1 align="center">CoreLayer — powered by Jarvis</h1>
 
-# Jarvis
+<p align="center">
+  <strong>A desktop AI control layer for your personal apps.</strong>
+</p>
 
-**Personal AI Command Center**
+<p align="center">
+  Jarvis is the built-in assistant persona that helps you control tasks, tools, models, MCP apps, and voice workflows.
+</p>
 
-A secure, fast, and synced personal AI control layer built with Tauri 2.0 and Hono. Unifying conversations, tasks, readings, and daily memories into a single, cohesive interface.
+<p align="center">
+  Voice-native · MCP-first · Tool-aware · Permission-guarded · Local-first
+</p>
 
-[![Tauri 2.0](https://img.shields.io/badge/Tauri-2.0-FFC130?logo=tauri&logoColor=white)](https://tauri.app/)
-[![React 19](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)](https://react.dev/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+<p align="center">
+  <img src="https://img.shields.io/badge/Tauri-2.0-24C8DB?style=flat-square" />
+  <img src="https://img.shields.io/badge/React-19-61DAFB?style=flat-square" />
+  <img src="https://img.shields.io/badge/MCP--first-22D3EE?style=flat-square" />
+  <img src="https://img.shields.io/badge/Model_Router-enabled-8B5CF6?style=flat-square" />
+  <img src="https://img.shields.io/badge/Permission_Guard-enabled-F59E0B?style=flat-square" />
+  <img src="https://img.shields.io/badge/Local--first-SQLite-10B981?style=flat-square" />
+  <img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" />
+</p>
 
-[English](./README.md) | [简体中文](./README_zh.md)
-
-</div>
+<p align="center">
+  <a href="./README.md">English</a> · <a href="./README_zh.md">简体中文</a>
+</p>
 
 ---
 
-## Vision
+## What is CoreLayer?
 
-Jarvis is more than an AI assistant — it is the **unified brain** of your digital workspace. By binding AI Tool Calling with personal context databases, Jarvis bridges the gap between chat, task management, reading logs, and performance reviews.
+**CoreLayer** is a desktop AI command layer for personal apps.
 
-Whether you prefer a zero-config, private **local-first experience**, or seamless **cloud synchronization** across devices, Jarvis's dynamic database-switching architecture adapts to your needs.
+It is not another AI chat window.
+It is a local-first desktop control center that connects your tasks, tools, models, MCP apps, voice workflows, and personal data into one AI-operable interface.
 
-## Features
+The built-in assistant persona is called **Jarvis**.
 
-**Tauri 2.0 Desktop** — Ultra-lightweight client with near-zero memory footprint and native OS integration.
+Jarvis can help you:
 
-**3-in-1 Storage Factory**
-- Local SQLite — zero-config, offline-first, data stays in your hands
-- External Supabase — one-click multi-device cloud sync
-- General PostgreSQL — compatible with AWS RDS, Neon.tech, Aiven, or any self-hosted instance
+- ask about today's tasks and priorities
+- manage your reading list and track progress
+- capture daily reviews with automated summaries
+- control connected personal apps through MCP
+- call tools safely through permission policies
+- route requests across different AI models
+- interact through voice with streaming TTS
+- connect to external MCP servers
 
-**Hot-swapping & Online Migrations** — Switch databases in real-time without restarting. Run DDL migrations automatically.
+---
 
-**Multi-Provider Stream Engine** — SSE streaming, context-aware tool invocation, natural language parsing. Supports DeepSeek, Kimi, OpenRouter, and any OpenAI-compatible provider.
+## Why CoreLayer?
 
-**Model Marketplace** — Dynamic provider registration with preset catalog (OpenAI, Anthropic, Google, DeepSeek, Groq, Qwen, OpenRouter, Ollama). Add any custom OpenAI-compatible endpoint via UI.
+Most AI assistants are either:
+
+- general-purpose chatbots with no tool awareness
+- single-app copilots locked to one ecosystem
+- cloud-first automation tools that own your data
+- plugin-heavy dashboards with no safety model
+
+CoreLayer is different.
+
+It is designed around a simple idea:
+
+> Your personal apps should remain independent, but Jarvis should be able to understand, call, and coordinate them safely.
+
+CoreLayer is the control layer between you, your tools, your models, and your personal app ecosystem.
+
+---
+
+## Core Capabilities
+
+| | Feature | Description |
+|---|---|---|
+| <img src="./assets/icons/voice.svg" width="28" /> | **Voice-native** | Wake word, ASR, streaming LLM response, sentence-level TTS, and barge-in interruption. |
+| <img src="./assets/icons/mcp.svg" width="28" /> | **MCP-first** | Connect personal apps and external tools through the Model Context Protocol. |
+| <img src="./assets/icons/tools.svg" width="28" /> | **Tool-aware** | Unified tool layer for native, MCP, skill, and REST tools with structured display. |
+| <img src="./assets/icons/guard.svg" width="28" /> | **Permission Guard** | Risk-based execution with async confirmation, audit logging, and timeout handling. |
+| <img src="./assets/icons/models.svg" width="28" /> | **Model Router** | Route requests across MiMo, Groq, OpenRouter, Ollama, and any OpenAI-compatible provider. |
+| <img src="./assets/icons/memory.svg" width="28" /> | **Local-first Storage** | SQLite as the default data layer. Cloud sync via Supabase or PostgreSQL when needed. |
+
+---
 
 ## Architecture
 
-```mermaid
-graph TD
-    Client[Tauri 2.0 Desktop] <-->|IPC / HTTP| Daemon[Hono Daemon Server]
-    Daemon <-->|Multi-Model Gateway| LLM[LLM Agent Layer]
-    
-    subgraph Storage Factory
-        Daemon <-->|Drizzle ORM| SQLite[(Local SQLite)]
-        Daemon <-->|Drizzle ORM / pg| Postgres[(PostgreSQL)]
-        Daemon <-->|Drizzle ORM / Supabase SDK| Supabase[(Supabase)]
-    end
+```text
+User
+ │
+Voice / Text / Shortcut
+ │
+CoreLayer Desktop App (Tauri 2.0)
+ │
+├── Tauri Shell
+│   ├── Floating Jarvis Window
+│   ├── Command Palette
+│   └── Control Center UI
+│
+├── JarvisClient (Frontend)
+│   ├── HTTP Client with Retry
+│   ├── SSE Streaming Parser
+│   ├── ASR / TTS Client
+│   └── Zustand State Stores
+│
+├── Node.js Daemon (Hono)
+│   ├── AI Orchestrator
+│   ├── Model Gateway
+│   ├── Tool Registry
+│   ├── Permission Guard
+│   ├── MCP Client Manager
+│   └── Audit Logger
+│
+├── Tool Sources
+│   ├── Native Tools (Todo, Reading, Review)
+│   ├── MCP Tools
+│   ├── Skills
+│   └── REST Adapters
+│
+└── Data Layer
+    ├── SQLite (local-first)
+    ├── Supabase (cloud sync)
+    └── PostgreSQL (general)
 ```
 
-## Modules
+---
 
-| Module | Description |
-|:---|:---|
-| **Chat** | Streaming conversation with contextual memory and tool execution. |
-| **Todo** | Smart task manager with priority, due dates, tags, and natural language creation. |
-| **Reading** | Book/article tracking with AI-generated abstracts and progress gauges. |
-| **Review** | Daily/weekly insights with completion metrics and automated summaries. |
-| **Database** | Storage control panel — test connectivity, migrate schemas, hot-swap engines. |
-| **Models** | Model marketplace — manage providers, discover models, configure routing rules. |
+## Meet Coreling
+
+<p align="center">
+  <img src="./assets/coreling.png" alt="Coreling — Jarvis AI Core Companion" width="360" />
+</p>
+
+**Coreling** is Jarvis' holographic AI core companion.
+
+It represents the voice-native, MCP-first, permission-aware command layer behind CoreLayer.
+
+Coreling is not the product logo.
+The product identity is the **CoreLayer control system**.
+Coreling is the assistant avatar used in onboarding, voice mode, loading states, and documentation.
+
+---
+
+## Features
+
+| Area | Description |
+|---|---|
+| **Desktop Command Center** | Tauri-powered desktop app with a dark product dashboard UI. |
+| **Jarvis Assistant Persona** | Built-in assistant identity for voice and text interaction. |
+| **MCP Integration** | Connect external MCP servers and register their tools into the unified registry. |
+| **Tool Registry** | Unified tool layer for native, MCP, skill, and REST tools. |
+| **Permission Guard** | Risk-based execution with async confirmation and audit logs. |
+| **Model Gateway** | Route requests across MiMo, Groq, OpenRouter, Ollama, and local models. |
+| **Voice Pipeline** | Wake word, ASR, streaming LLM response, TTS, and interruption. |
+| **Smart Todo** | Task manager with priority, due dates, tags, and natural language creation. |
+| **Reading Tracker** | Book/article tracking with status management and reading stats. |
+| **Daily Reviews** | Automated daily/weekly summaries with completion metrics. |
+| **3-in-1 Storage** | Local SQLite, Supabase cloud sync, or general PostgreSQL — hot-swappable. |
+| **Audit Logs** | Track tool calls, permissions, duration, risk levels, and results. |
+
+---
+
+## Tech Stack
+
+| Layer | Tech |
+|---|---|
+| Desktop | Tauri 2 |
+| Frontend | React 19, Vite, Tailwind CSS, shadcn/ui |
+| State | Zustand |
+| Daemon | Node.js, Hono |
+| Database | SQLite, Drizzle ORM |
+| AI SDK | Vercel AI SDK |
+| Models | MiMo, Groq, OpenRouter, Ollama, OpenAI-compatible |
+| Voice | Web Speech API, Groq Whisper, MiMo TTS |
+| Protocol | MCP (Model Context Protocol) |
+| Package Manager | pnpm workspaces |
+
+---
+
+## Project Structure
+
+```text
+corelayer/
+├── frontend/                    # Tauri 2.0 desktop client
+│   ├── src/
+│   │   ├── components/          # React UI components
+│   │   ├── hooks/               # Custom React hooks
+│   │   ├── stores/              # Zustand state management
+│   │   ├── lib/                 # Client utilities
+│   │   │   ├── jarvisClient.ts  # HTTP client with retry
+│   │   │   ├── sseParser.ts     # SSE streaming parser
+│   │   │   └── voiceProfile.ts  # Voice profile manager
+│   │   └── App.tsx
+│   └── src-tauri/               # Rust native code
+│       └── src/
+│           ├── lib.rs           # Tauri commands
+│           └── daemon_supervisor.rs
+│
+├── daemon/                      # Node.js backend
+│   └── src/
+│       ├── api/                 # Hono REST endpoints
+│       ├── orchestrator/        # AI orchestrator & prompt builder
+│       ├── tools/               # Native tools
+│       │   ├── todo/            # Task management
+│       │   ├── reading/         # Reading list
+│       │   └── review/          # Daily/weekly reviews
+│       ├── voice/               # ASR & TTS
+│       ├── config/              # Env & storage config
+│       └── db/
+│           ├── sqlite/          # SQLite repositories
+│           └── supabase/        # Cloud repositories
+│
+├── packages/                    # Shared packages
+│   ├── types/                   # Shared TypeScript types
+│   ├── model-gateway/           # Multi-provider model routing
+│   ├── mcp-client/              # MCP server connections
+│   ├── tool-registry/           # Unified tool registration
+│   └── permission-guard/        # Risk-based execution guard
+│
+├── assets/                      # Visual assets
+│   ├── corelayer-hero.png       # README hero banner
+│   ├── coreling.png             # Assistant mascot
+│   ├── icon.png                 # Desktop app icon
+│   └── icons/                   # Feature module icons
+│
+└── docs/                        # Documentation
+```
+
+---
 
 ## Getting Started
 
 ### Prerequisites
 
-- Node.js >= 20.0.0
-- pnpm >= 9.0.0
+- Node.js 20+
+- pnpm 9+
 - Rust (latest stable, for Tauri)
+- Tauri prerequisites for your OS
 
 ### Install
 
@@ -81,59 +248,259 @@ cd Jarvis
 pnpm install
 ```
 
-### Configure
+### Environment
 
-Create `.env` in the root (or copy `.env.example`):
+Create `.env` in the project root:
 
-```properties
-AI_PROVIDER=deepseek
-AI_MODEL=deepseek-chat
-MIMO_API_KEY=your_key_here
+```env
+AI_PROVIDER=mimo
+
+MIMO_API_KEY=your_mimo_key
+MIMO_MODEL=mimo-v2.5
+
+GROQ_API_KEY=your_groq_key
+OPENROUTER_API_KEY=your_openrouter_key
+
+SQLITE_DB_PATH=./daemon/data/corelayer.db
 DAEMON_PORT=3001
-SQLITE_DB_PATH=./daemon/data/jarvis.db
 ```
 
-### Run
+### Run daemon
 
 ```bash
-pnpm dev
+pnpm --filter daemon dev
 ```
 
-Starts the Hono daemon and Tauri desktop window concurrently.
-
-## Developer Scripts
-
-For Windows file-lock issues (`os error 5: Access Denied`):
+### Run desktop app
 
 ```bash
-pnpm clean:app     # Kill desktop client zombie processes
-pnpm clean:daemon   # Release port 3001
-pnpm clean:all      # Both (recommended)
+pnpm --filter frontend tauri dev
 ```
 
-## Project Structure
+This starts the Hono daemon and Tauri desktop window concurrently.
 
+---
+
+## Example Commands
+
+Ask Jarvis:
+
+```text
+What should I focus on today?
 ```
-Jarvis/
-├── daemon/               # Node.js backend (Hono)
-│   ├── src/
-│   │   ├── api/          # REST API endpoints
-│   │   ├── db/           # Database stores & repository pattern
-│   │   ├── config/       # Env validation & persistent config
-│   │   └── index.ts      # Entry point
-│   └── data/             # Local SQLite storage
-├── frontend/             # Tauri 2.0 client (Vite + React)
-│   ├── src/
-│   │   ├── components/   # UI components
-│   │   ├── stores/       # Zustand state management
-│   │   └── main.tsx      # React entry
-│   ├── src-tauri/        # Rust native code
-│   │   ├── icons/        # Platform-adapted app icons
-│   │   └── src/lib.rs    # Tauri commands & window setup
-│   └── public/           # Static assets
-└── package.json          # Monorepo root config
+
+```text
+Show me my current tasks sorted by priority.
 ```
+
+```text
+Add this article to my reading list.
+```
+
+```text
+Summarize my weekly progress.
+```
+
+```text
+Connect to my GitHub MCP server.
+```
+
+```text
+Use the fast model for this voice command.
+```
+
+```text
+What tools are currently enabled?
+```
+
+---
+
+## Control Center
+
+CoreLayer includes a desktop control center for managing:
+
+- daemon status and health
+- connected apps and MCP servers
+- model profiles and routing rules
+- tool registry and discovery
+- permission policies and audit logs
+- voice profiles and test console
+- local memories and context
+
+---
+
+## Tool Safety
+
+CoreLayer classifies tools by risk level.
+
+| Risk | Behavior | Example |
+|---|---|---|
+| **Low** | Auto-execute | Reading current tasks |
+| **Medium** | Execute with notice | Creating a new task |
+| **High** | Requires confirmation | Deleting a project |
+| **Critical** | Explicit approval required | System-level commands |
+
+All tool calls are written to audit logs with duration, risk level, and result status.
+
+---
+
+## MCP Integration
+
+CoreLayer connects to MCP servers and registers their tools into the unified Tool Registry.
+
+Supported connection types:
+
+```text
+stdio · HTTP · SSE
+```
+
+MCP tools are normalized into CoreLayer's internal format:
+
+```text
+mcp:{serverId}:{toolName}
+```
+
+This allows Jarvis to call external tools through the same permission, logging, and display pipeline as native tools.
+
+---
+
+## Model Routing
+
+Different tasks need different models. CoreLayer routes requests across providers:
+
+```text
+Fast voice command       → low-latency model (MiMo, Groq)
+Tool-heavy workflow      → tool-agent model
+Private local request    → local model (Ollama)
+Long reasoning task      → reasoning model (OpenRouter)
+```
+
+Providers can be added via the Control Center UI with preset catalogs or custom OpenAI-compatible endpoints.
+
+---
+
+## Storage Modes
+
+CoreLayer supports three storage modes, hot-swappable at runtime:
+
+| Mode | Description |
+|---|---|
+| **Local SQLite** | Zero-config, offline-first, data stays on your machine. |
+| **Supabase** | One-click multi-device cloud sync. |
+| **PostgreSQL** | Compatible with AWS RDS, Neon, Aiven, or self-hosted. |
+
+Switch databases in real-time without restarting the app.
+
+---
+
+## Voice Pipeline
+
+Jarvis supports a voice-native interaction flow:
+
+```text
+Wake word detection
+  ↓
+ASR transcription
+  ↓
+Streaming model response
+  ↓
+Sentence-level TTS queuing
+  ↓
+Barge-in interruption
+  ↓
+Follow-up listening
+```
+
+Voice profiles are configurable with different languages, models, and voice settings.
+
+---
+
+## Roadmap
+
+### Phase 1 — Core Desktop Layer
+
+- [x] Tauri desktop shell
+- [x] Local daemon with Hono
+- [x] Unified JarvisClient
+- [x] Streaming chat with tool calling
+- [x] Tool Registry
+- [x] Permission Guard
+- [x] Tool call audit logs
+- [x] Model routing gateway
+- [x] Voice profile manager
+- [x] Smart Todo, Reading, Review tools
+
+### Phase 2 — Control Center
+
+- [x] Settings as a full Control Center
+- [x] Model profile management UI
+- [ ] MCP connection manager UI
+- [ ] Tool registry explorer
+- [ ] Permission matrix UI
+- [ ] Voice test console
+- [ ] Daemon health dashboard
+
+### Phase 3 — Personal App Ecosystem
+
+- [ ] Veridia MCP integration
+- [ ] Todo as standalone MCP app
+- [ ] Fitness module
+- [ ] Calendar module
+- [ ] Project tracker module
+
+### Phase 4 — Skills and Automation
+
+- [ ] Local skills runtime
+- [ ] Workflow skills
+- [ ] Scheduled reviews
+- [ ] Plugin marketplace experiments
+
+---
+
+## Design System
+
+CoreLayer uses a dark, calm, futuristic visual language:
+
+- deep navy / near-black backgrounds
+- cyan AI core glow
+- violet model routing accents
+- amber permission / reactor highlights
+- HUD-style rings and connected nodes
+- professional product dashboard layout
+
+Visual assets:
+
+```text
+assets/corelayer-hero.png    README hero banner
+assets/coreling.png          Jarvis assistant mascot
+assets/icon.png              Desktop app icon source
+assets/icons/                Feature module icons
+```
+
+---
+
+## Naming
+
+The repository and product system are called **CoreLayer**.
+
+The built-in assistant persona is called **Jarvis**.
+
+```text
+CoreLayer = the desktop AI control layer
+Jarvis    = the assistant persona inside CoreLayer
+Coreling  = the holographic AI core companion
+```
+
+---
 
 ## License
 
 [MIT](LICENSE)
+
+---
+
+## Status
+
+CoreLayer is currently experimental and built for personal use first.
+
+The long-term goal is to become an MCP-first, local-first desktop AI control layer for personal apps.
