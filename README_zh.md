@@ -1,9 +1,11 @@
 <p align="center">
-  <img src="./public/assets/icon.png" alt="CoreLayer Icon" width="96" />
+  <img src="./public/assets/corelayer-hero.png" alt="CoreLayer — powered by Jarvis" width="100%" />
 </p>
 
+<br />
+
 <p align="center">
-  <img src="./public/assets/corelayer-hero.png" alt="CoreLayer — powered by Jarvis" width="100%" />
+  <img src="./public/assets/icon.png" alt="CoreLayer Icon" width="96" height="96" />
 </p>
 
 <h1 align="center">CoreLayer — powered by Jarvis</h1>
@@ -22,12 +24,10 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Tauri-2.0-24C8DB?style=flat-square" />
-  <img src="https://img.shields.io/badge/React-19-61DAFB?style=flat-square" />
   <img src="https://img.shields.io/badge/MCP--first-22D3EE?style=flat-square" />
   <img src="https://img.shields.io/badge/Model_Router-enabled-8B5CF6?style=flat-square" />
   <img src="https://img.shields.io/badge/Permission_Guard-enabled-F59E0B?style=flat-square" />
   <img src="https://img.shields.io/badge/Local--first-SQLite-10B981?style=flat-square" />
-  <img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" />
 </p>
 
 <p align="center">
