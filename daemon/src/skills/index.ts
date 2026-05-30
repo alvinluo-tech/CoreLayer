@@ -22,3 +22,14 @@ export {
   registerAllLoadedSkills,
   registerSkillAsTool,
 } from "./registry.js";
+
+export {
+  executeWorkflow,
+  validateWorkflow,
+} from "./workflow.js";
+
+export type {
+  WorkflowStep,
+  WorkflowDefinition,
+  WorkflowResult,
+} from "./workflow.js";

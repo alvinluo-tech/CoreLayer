@@ -1,0 +1,9 @@
+{
+  "id": "weather",
+  "name": "Weather Plugin",
+  "version": "1.0.0",
+  "description": "Provides weather information tools for Jarvis",
+  "author": "Jarvis Team",
+  "dependencies": [],
+  "requiredEnv": ["WEATHER_API_KEY"]
+}
