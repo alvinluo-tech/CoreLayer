@@ -281,7 +281,7 @@
   1. 错误只在声音叠加层可见（JarvisVoiceOverlay），其他消费者（如 VoicePanel）无法读取错误消息
   2. 错误自动消失，用户来不及看清就消失了
   3. 无法被 ErrorBoundary 的 unhandledrejection 机制捕获
-- **修复状态**: ⏳ 待修复
+- **修复状态**: ✅ 已修复（2026-05-30）
 
 ---
 
@@ -314,7 +314,7 @@
 - **文件**: `frontend/src/hooks/useVoiceConversation.ts`（约 L856-862）
 - **问题**: `createConversation()` 失败时，代码 `console.error` 后将 `convId` 设为 `null` 并继续执行。后续消息在无对话上下文的情况下被发送，可能产生孤立消息记录，DB 一致性受损。
 - **修复方案**: `createConversation` 失败时应立即终止并向用户显示错误。
-- **修复状态**: ⏳ 待修复
+- **修复状态**: ✅ 已修复（2026-05-30）
 
 ---
 
@@ -393,7 +393,7 @@
 - **文件**: `frontend/src/lib/jarvisClient.ts`
 - **问题**: `TypeError: Failed to fetch`（网络断开、daemon 未启动）和 `HTTP 500`（daemon 有响应但内部错误）都抛出同一种 `Error` 类型，消费者无法区分"无法连接 daemon"和"daemon 返回错误"，两种场景的用户提示应该不同。
 - **修复方案**: 引入 `NetworkError` 类，在 `fetch` 的 catch 中抛出它，让上层可以 `instanceof NetworkError` 判断。
-- **修复状态**: ⏳ 待修复
+- **修复状态**: ✅ 已修复（2026-05-30）
 
 ---
 
@@ -401,7 +401,7 @@
 
 - **文件**: `frontend/src/components/control-center/SystemPage.tsx`
 - **问题**: `handleRestart()` 失败时只 `console.error` + 重新 `fetchData()`，没有向用户展示重启失败的提示。
-- **修复状态**: ⏳ 待修复
+- **修复状态**: ✅ 已修复（2026-05-30）
 
 ---
 
@@ -438,7 +438,7 @@
 - **文件**: `frontend/src/components/chat/MessageBubble.tsx`
 - **问题**: 复制文本失败时只 `console.error`，用户不知道复制是否成功。
 - **修复方案**: 失败时显示 toast 或将按钮文字临时改为"失败"。
-- **修复状态**: ⏳ 待修复
+- **修复状态**: ✅ 已修复（2026-05-30）
 
 ---
 
@@ -455,7 +455,7 @@
 
 - **文件**: `frontend/src/hooks/useChat.ts`（约 L107, L117, L126, L141）
 - **问题**: 多处 SSE 事件解析使用裸 `catch {}`，JSON 解析错误静默忽略，无任何日志。
-- **修复状态**: ⏳ 待修复（加 `console.warn`）
+- **修复状态**: ✅ 已修复（2026-05-30）
 
 ---
 
@@ -463,7 +463,7 @@
 
 - **文件**: `frontend/src/lib/jarvisClient.ts`
 - **问题**: 主 `request()` 方法有指数退避重试（最多 2 次），但 `synthesize()` 和 `transcribe()` 是独立实现，没有重试逻辑。TTS/ASR 的瞬时网络失败直接抛出。
-- **修复状态**: ⏳ 待修复
+- **修复状态**: ✅ 已修复（2026-05-30）
 
 ---
 
@@ -548,6 +548,13 @@ interface ErrorResponse {
 | F-L2 | `frontend/src/components/common/ErrorBoundary.tsx` | toast 按类型着色（error=红, warning=黄, info=蓝） |
 | F-L3 | `frontend/src/components/common/ErrorBoundary.tsx` | `handleRestart` 清空 toasts |
 | F-L5 | `frontend/src/hooks/useVoiceConversation.ts` | `transcribeWithWhisper` catch 加 console.warn |
+| F-H2 | `frontend/src/hooks/useVoiceConversation.ts` | 暴露持久化 `lastError: string | null`，错误状态自动同步 |
+| F-M3 | `frontend/src/hooks/useVoiceConversation.ts` | `createConversation` 失败时立即中止并显示错误 |
+| F-M12 | `frontend/src/lib/jarvisClient.ts` | 引入 `NetworkError` 类，`synthesize`/`transcribe`/`request` 网络失败时抛出 |
+| F-M13 | `frontend/src/components/control-center/SystemPage.tsx` | daemon 重启失败显示错误 banner |
+| F-L4 | `frontend/src/components/chat/MessageBubble.tsx` | 复制失败显示"复制失败"状态 |
+| F-L6 | `frontend/src/hooks/useChat.ts` | SSE 解析 catch 块加 `console.warn` |
+| F-L7 | `frontend/src/lib/jarvisClient.ts` | `synthesize`/`transcribe` 加重试逻辑（最多 2 次） |
 
 ---
 
@@ -557,20 +564,15 @@ interface ErrorResponse {
 
 ### 🔴 立即修复（影响核心功能）
 
-- [ ] **[F-H2]** `hooks/useVoiceConversation.ts` — 暴露持久化 `lastError: string | null`
+_(全部已完成)_
 
 ### 🟡 尽快修复（用户体验）
 
-- [ ] **[F-M3]** `hooks/useVoiceConversation.ts` — `createConversation` 失败时中止
-- [ ] **[F-M12]** `lib/jarvisClient.ts` — 引入 `NetworkError` 类区分网络错误
-- [ ] **[F-M13]** `components/control-center/SystemPage.tsx` — daemon 重启失败显示错误
+_(全部已完成)_
 
 ### 🟢 有空处理（代码质量）
 
 - [ ] **[B-M7]** `orchestrator/conversation.ts` — `handleLocally` 其余工具调用加 try/catch
-- [ ] **[F-L4]** `MessageBubble.tsx` — 复制失败显示 toast
-- [ ] **[F-L6]** `useChat.ts` — SSE 解析 catch 加 console.warn
-- [ ] **[F-L7]** `jarvisClient.ts` — `synthesize`/`transcribe` 加重试
 
 ### 🏗 架构改进（长期）
 

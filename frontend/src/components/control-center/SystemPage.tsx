@@ -22,6 +22,7 @@ export function SystemPage() {
     timestamp: string;
   } | null>(null);
   const [restarting, setRestarting] = useState(false);
+  const [restartError, setRestartError] = useState<string | null>(null);
 
   const fetchData = async () => {
     const [d, h] = await Promise.allSettled([getDaemonStatus(), getHealth()]);
@@ -35,12 +36,15 @@ export function SystemPage() {
 
   const handleRestart = async () => {
     setRestarting(true);
+    setRestartError(null);
     try {
       const result = await restartDaemon();
       setDaemon(result);
       await fetchData();
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
       console.error("重启守护进程失败:", err);
+      setRestartError(message);
       await fetchData();
     } finally {
       setRestarting(false);
@@ -114,6 +118,13 @@ export function SystemPage() {
             </p>
           </div>
         </div>
+
+        {restartError && (
+          <div className="flex items-center gap-2 p-2.5 rounded-lg bg-destructive/5 border border-destructive/20 text-destructive text-xs">
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+            <span>重启失败: {restartError}</span>
+          </div>
+        )}
 
         <div className="flex gap-2 pt-2">
           <Button

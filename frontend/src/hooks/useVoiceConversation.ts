@@ -101,6 +101,7 @@ export function useVoiceConversation(
   const [interimTranscript, setInterimTranscript] = useState("");
   const [finalTranscript, setFinalTranscript] = useState("");
   const [assistantText, setAssistantText] = useState("");
+  const [lastError, setLastError] = useState<string | null>(null);
   const [isSupported, setIsSupported] = useState(false);
   const [layoutMode, setLayoutMode] = useState<"centered" | "bottom-right">("centered");
   const isAppFocusedRef = useRef(true);
@@ -612,9 +613,11 @@ export function useVoiceConversation(
       console.log("[VoiceConversation:Realtime] WebRTC Connection fully established!");
 
     } catch (error) {
+      const message = error instanceof Error ? error.message : "连接 ChatGPT Realtime 失败，请检查网络或配置";
       console.error("[VoiceConversation:Realtime] Initialization error:", error);
       setState("error");
-      setAssistantText(error instanceof Error ? error.message : "连接 ChatGPT Realtime 失败，请检查网络或配置");
+      setLastError(message);
+      setAssistantText(message);
       setTimeout(() => {
         if (isActiveRef.current) setState("idle");
       }, 4000);
@@ -859,7 +862,13 @@ export function useVoiceConversation(
           const conv = await createConversation();
           convId = conv.id;
         } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
           console.error("[VoiceConversation] Failed to create conversation:", err);
+          setLastError(message);
+          setState("error");
+          setAssistantText(`无法创建对话: ${message}`);
+          isActiveRef.current = false;
+          return;
         }
       }
 
@@ -952,7 +961,9 @@ export function useVoiceConversation(
         }
       } catch (error) {
         if ((error as Error).name !== "AbortError") {
+          const message = error instanceof Error ? error.message : String(error);
           console.error("[VoiceConversation] Error:", error);
+          setLastError(message);
           setState("error");
           setTimeout(() => {
             if (isActiveRef.current) setState("idle");
@@ -1129,6 +1140,7 @@ export function useVoiceConversation(
     setInterimTranscript("");
     setFinalTranscript("");
     setAssistantText("");
+    setLastError(null);
   }, [cleanup]);
 
   const bargeIn = useCallback(() => {
@@ -1281,6 +1293,7 @@ export function useVoiceConversation(
     interimTranscript,
     finalTranscript: displayUserText,
     assistantText: displayAssistantText,
+    lastError,
     isSupported,
     startListening,
     playGreetingAndListen,

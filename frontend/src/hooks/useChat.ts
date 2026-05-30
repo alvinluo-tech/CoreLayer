@@ -114,7 +114,7 @@ export function useChat() {
                 const payload = JSON.parse(data) as { name: string; toolCallId: string; args: unknown };
                 toolCallsMap.set(payload.toolCallId, { name: payload.name, args: payload.args, result: null });
                 messageListUpdated = true;
-              } catch {}
+              } catch (e) { console.warn("[useChat] Failed to parse tool-call event:", e); }
             } else if (event === "tool-result") {
               try {
                 const payload = JSON.parse(data) as { name: string; toolCallId: string; result: unknown };
@@ -123,7 +123,7 @@ export function useChat() {
                   existing.result = payload.result;
                   messageListUpdated = true;
                 }
-              } catch {}
+              } catch (e) { console.warn("[useChat] Failed to parse tool-result event:", e); }
             } else if (event === "done") {
               try {
                 const payload = JSON.parse(data) as {
@@ -138,7 +138,7 @@ export function useChat() {
                 setMessages(updatedFromDb);
                 tauri.listConversations().then(setConversations).catch(() => {});
                 messageListUpdated = false;
-              } catch {}
+              } catch (e) { console.warn("[useChat] Failed to parse done event:", e); }
             }
 
             if (messageListUpdated) {

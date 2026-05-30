@@ -5,6 +5,13 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_MAX_RETRIES = 2;
 const DEFAULT_RETRY_DELAY_MS = 1_000;
 
+export class NetworkError extends Error {
+  constructor(message: string, public readonly cause?: Error) {
+    super(message);
+    this.name = "NetworkError";
+  }
+}
+
 interface SSERequestOptions {
   path: string;
   method?: "GET" | "POST";
@@ -106,36 +113,74 @@ class JarvisClient {
 
   async synthesize(text: string, voice?: string, model?: string): Promise<ArrayBuffer> {
     const url = await this.getDaemonUrl();
-    const response = await fetch(`${url}/api/voice/synthesize`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text, voice, model }),
-    });
+    const maxRetries = DEFAULT_MAX_RETRIES;
+    let lastError: Error | null = null;
 
-    if (!response.ok) {
-      throw new Error(`TTS failed (${response.status})`);
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const response = await fetch(`${url}/api/voice/synthesize`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text, voice, model }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`TTS failed (${response.status})`);
+        }
+
+        return response.arrayBuffer();
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+
+        if (lastError.name === "AbortError" || lastError.message.includes("(")) {
+          throw lastError;
+        }
+
+        if (attempt < maxRetries) {
+          await new Promise((resolve) => setTimeout(resolve, DEFAULT_RETRY_DELAY_MS * (attempt + 1)));
+        }
+      }
     }
 
-    return response.arrayBuffer();
+    throw new NetworkError(`TTS 请求失败，请检查 daemon 是否运行: ${lastError?.message}`, lastError ?? undefined);
   }
 
   async transcribe(audioBlob: Blob, language?: string): Promise<string> {
     const url = await this.getDaemonUrl();
-    const formData = new FormData();
-    formData.append("audio", audioBlob, "recording.wav");
-    if (language) formData.append("language", language);
+    const maxRetries = DEFAULT_MAX_RETRIES;
+    let lastError: Error | null = null;
 
-    const response = await fetch(`${url}/api/voice/transcribe`, {
-      method: "POST",
-      body: formData,
-    });
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const formData = new FormData();
+        formData.append("audio", audioBlob, "recording.wav");
+        if (language) formData.append("language", language);
 
-    if (!response.ok) {
-      throw new Error(`Transcription failed (${response.status})`);
+        const response = await fetch(`${url}/api/voice/transcribe`, {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!response.ok) {
+          throw new Error(`Transcription failed (${response.status})`);
+        }
+
+        const result = await response.json() as { text: string };
+        return result.text;
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+
+        if (lastError.name === "AbortError" || lastError.message.includes("(")) {
+          throw lastError;
+        }
+
+        if (attempt < maxRetries) {
+          await new Promise((resolve) => setTimeout(resolve, DEFAULT_RETRY_DELAY_MS * (attempt + 1)));
+        }
+      }
     }
 
-    const result = await response.json() as { text: string };
-    return result.text;
+    throw new NetworkError(`语音识别请求失败，请检查 daemon 是否运行: ${lastError?.message}`, lastError ?? undefined);
   }
 
   // ---- Tauri IPC Passthrough ----
@@ -196,6 +241,11 @@ class JarvisClient {
           await new Promise((resolve) => setTimeout(resolve, retryDelayMs * (attempt + 1)));
         }
       }
+    }
+
+    // Wrap network failures (Failed to fetch) in NetworkError for caller differentiation
+    if (lastError && lastError.message.includes("Failed to fetch")) {
+      throw new NetworkError("无法连接到 daemon，请确认 Jarvis 后端已启动", lastError);
     }
 
     throw lastError;

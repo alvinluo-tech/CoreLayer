@@ -37,6 +37,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
   
   const [isThoughtExpanded, setIsThoughtExpanded] = useState(!isThoughtClosed);
   const [copied, setCopied] = useState(false);
+  const [copyFailed, setCopyFailed] = useState(false);
 
   useEffect(() => {
     if (isThoughtClosed) {
@@ -53,6 +54,8 @@ export function MessageBubble({ message }: MessageBubbleProps) {
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
       console.error("Failed to copy text", err);
+      setCopyFailed(true);
+      setTimeout(() => setCopyFailed(false), 2000);
     }
   };
 
@@ -198,6 +201,11 @@ export function MessageBubble({ message }: MessageBubbleProps) {
                 <>
                   <Check className="h-3 w-3 text-green-500" />
                   <span className="text-green-500">已复制</span>
+                </>
+              ) : copyFailed ? (
+                <>
+                  <Copy className="h-3 w-3 text-red-400" />
+                  <span className="text-red-400">复制失败</span>
                 </>
               ) : (
                 <>
