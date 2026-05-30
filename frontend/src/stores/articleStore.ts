@@ -20,7 +20,7 @@ export const useArticleStore = create<ArticleState>((set) => ({
     set({ isLoading: true, error: null });
     try {
       const result = await tauri.getReadingList();
-      set({ articles: result.articles as Article[], isLoading: false });
+      set({ articles: result.articles, isLoading: false });
     } catch (error) {
       set({ error: String(error), isLoading: false });
     }
@@ -29,7 +29,7 @@ export const useArticleStore = create<ArticleState>((set) => ({
   addArticle: async (input) => {
     try {
       const result = await tauri.addArticle(input);
-      const article = result.article as Article;
+      const article = result.article;
       set((state) => ({ articles: [...state.articles, article] }));
       return article;
     } catch (error) {
@@ -41,7 +41,7 @@ export const useArticleStore = create<ArticleState>((set) => ({
   updateStatus: async (input) => {
     try {
       const result = await tauri.updateReadingStatus(input);
-      const article = result.article as Article;
+      const article = result.article;
       set((state) => ({
         articles: state.articles.map((a) => (a.id === input.articleId ? article : a)),
       }));

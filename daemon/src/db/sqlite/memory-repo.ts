@@ -124,5 +124,10 @@ export function createSqliteMemoryRepo(database?: DrizzleDb): MemoryRepository {
       }
       return deleted;
     },
+
+    async clear(): Promise<number> {
+      const result = db.delete(schema.memories).run();
+      return result.changes;
+    },
   };
 }

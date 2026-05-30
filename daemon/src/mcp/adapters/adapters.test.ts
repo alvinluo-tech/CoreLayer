@@ -257,6 +257,35 @@ describe("REST Adapter — Fetch Pattern (Veridia)", () => {
     expect(response.ok).toBe(false);
     expect(response.status).toBe(500);
   });
+
+  // BUG-REGRESSION: baseUrl port was stripped by path param regex
+  // http://localhost:3000/api/jarvis/current → http://localhost/api/jarvis/current
+  // because :3000 matched /:(\w+)/g
+  it("preserves port number in baseUrl (BUG-port-strip regression)", async () => {
+    process.env["VERIDIA_BASE_URL"] = "http://localhost:3000";
+
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ success: true, data: [] }),
+    });
+
+    // Import and register to get the actual tool
+    const { registerVeridiaAdapter: register } = await import("./veridia.js");
+    const { getRegistry } = await import("../../tools/registry.js");
+    register();
+
+    const registry = getRegistry();
+    const tool = registry.getTool("rest:veridia:veridia_get_current");
+    expect(tool).toBeDefined();
+
+    await tool!.execute({});
+
+    // Verify fetch was called with port preserved
+    expect(mockFetch).toHaveBeenCalledWith(
+      "http://localhost:3000/api/jarvis/current",
+      expect.any(Object),
+    );
+  });
 });
 
 describe("REST Adapter — Fetch Pattern (FlexiLog)", () => {

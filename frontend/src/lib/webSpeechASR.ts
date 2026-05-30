@@ -150,7 +150,9 @@ export function createWebSpeechASR(options: WebSpeechASROptions): WebSpeechASR {
     clearSilenceTimer();
     try {
       recognition.abort();
-    } catch {}
+    } catch {
+      // Already aborted or not started
+    }
     currentOnEnd?.();
   };
 
@@ -193,7 +195,9 @@ export function createWebSpeechASR(options: WebSpeechASROptions): WebSpeechASR {
     clearSilenceTimer();
     try {
       recognition.abort();
-    } catch {}
+    } catch {
+      // Already aborted or not started
+    }
   };
 
   const updateOptions = (newOptions: Partial<WebSpeechASROptions>) => {

@@ -20,7 +20,9 @@ export class AudioQueueManager {
       this.analyser = this.audioCtx.createAnalyser();
       this.analyser.fftSize = 32;
       this.analyser.connect(this.audioCtx.destination);
-    } catch {}
+    } catch {
+      // Analyser creation may fail in some environments; TTS still works without it
+    }
     this.ttsUrl = ttsUrl;
     this.voice = voice ?? voiceProfileManager.getVoiceName();
     this.model = voiceProfileManager.getTTSModel();
@@ -132,7 +134,9 @@ export class AudioQueueManager {
     if (this.currentSource) {
       try {
         this.currentSource.stop();
-      } catch {}
+      } catch {
+        // Already stopped or disconnected
+      }
       this.currentSource = null;
     }
     this.buffers.clear();
@@ -157,7 +161,9 @@ export class AudioQueueManager {
   dispose() {
     this.stop();
     if (this.analyser) {
-      try { this.analyser.disconnect(); } catch {}
+      try { this.analyser.disconnect(); } catch {
+        // Already disconnected
+      }
       this.analyser = null;
     }
     this.audioCtx.close().catch(() => {});

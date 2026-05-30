@@ -103,10 +103,8 @@ export class PermissionGuard {
       }
     }
 
-    const startTime = Date.now();
     try {
       const result = await tool.execute(args);
-      const durationMs = Date.now() - startTime;
 
       this.auditLog.log({
         action: "execute",
@@ -122,7 +120,6 @@ export class PermissionGuard {
 
       return { result, confirmed };
     } catch (error) {
-      const durationMs = Date.now() - startTime;
       const errorMessage = error instanceof Error ? error.message : String(error);
 
       this.auditLog.log({
@@ -220,7 +217,7 @@ export class PermissionGuard {
 
     // Store resolve so confirm/deny can signal the pending promise
     let storedResolve: (value: boolean) => void = () => {};
-    const _pendingPromise = new Promise<boolean>((resolve) => {
+    new Promise<boolean>((resolve) => {
       storedResolve = resolve;
       this.pendingConfirmations.set(confirmationId, {
         ...confirmation,

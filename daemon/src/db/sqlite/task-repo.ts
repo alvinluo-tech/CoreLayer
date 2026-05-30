@@ -90,5 +90,10 @@ export function createSqliteTaskRepo(): TaskRepository {
       );
       return todayTasks.map(normalizeTask);
     },
+
+    async clear(): Promise<number> {
+      const result = db.delete(schema.tasks).run();
+      return result.changes;
+    },
   };
 }

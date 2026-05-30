@@ -230,6 +230,7 @@ export interface TaskRepository {
   update(id: string, data: UpdateTaskData): Promise<TaskRow>;
   delete(id: string): Promise<boolean>;
   getTodayTasks(): Promise<TaskRow[]>;
+  clear(): Promise<number>;
 }
 
 export interface ArticleRepository {
@@ -238,6 +239,7 @@ export interface ArticleRepository {
   getById(id: string): Promise<ArticleRow | null>;
   update(id: string, data: UpdateArticleData): Promise<ArticleRow>;
   delete(id: string): Promise<boolean>;
+  clear(): Promise<number>;
 }
 
 export interface ReviewRepository {
@@ -255,6 +257,7 @@ export interface ConversationRepository {
   delete(id: string): Promise<boolean>;
   addMessage(conversationId: string, data: MessageInput): Promise<MessageRow>;
   getMessages(conversationId: string): Promise<MessageRow[]>;
+  clear(): Promise<number>;
 }
 
 // ---- Input Types: New Tables ----
@@ -336,6 +339,7 @@ export interface MemoryRepository {
   upsert(input: UpsertMemoryInput): Promise<MemoryRow>;
   delete(id: string): Promise<boolean>;
   cleanExpired(): Promise<number>;
+  clear(): Promise<number>;
 }
 
 // ---- Agent Run ----

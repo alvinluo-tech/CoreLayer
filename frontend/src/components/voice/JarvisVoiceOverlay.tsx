@@ -48,7 +48,9 @@ export function JarvisVoiceOverlay({
         });
 
         if (!active) {
-          try { unsub(); } catch {}
+          try { unsub(); } catch {
+            // Cleanup during teardown is best-effort
+          }
           return;
         }
         unlisten = unsub;
@@ -62,7 +64,9 @@ export function JarvisVoiceOverlay({
     return () => {
       active = false;
       if (unlisten) {
-        try { unlisten(); } catch {}
+        try { unlisten(); } catch {
+          // Cleanup during teardown is best-effort
+        }
       }
     };
   }, []);

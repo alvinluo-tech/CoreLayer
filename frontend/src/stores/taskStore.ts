@@ -21,7 +21,7 @@ export const useTaskStore = create<TaskState>((set) => ({
     set({ isLoading: true, error: null });
     try {
       const result = await tauri.queryTasks();
-      set({ tasks: result.tasks as Task[], isLoading: false });
+      set({ tasks: result.tasks, isLoading: false });
     } catch (error) {
       set({ error: String(error), isLoading: false });
     }
@@ -30,7 +30,7 @@ export const useTaskStore = create<TaskState>((set) => ({
   createTask: async (input) => {
     try {
       const result = await tauri.createTask(input);
-      const task = result.task as Task;
+      const task = result.task;
       set((state) => ({ tasks: [...state.tasks, task] }));
       return task;
     } catch (error) {
@@ -42,7 +42,7 @@ export const useTaskStore = create<TaskState>((set) => ({
   updateTask: async (input) => {
     try {
       const result = await tauri.updateTask(input);
-      const task = result.task as Task;
+      const task = result.task;
       set((state) => ({
         tasks: state.tasks.map((t) => (t.id === input.taskId ? task : t)),
       }));

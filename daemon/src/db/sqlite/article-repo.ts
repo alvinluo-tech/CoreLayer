@@ -67,5 +67,10 @@ export function createSqliteArticleRepo(): ArticleRepository {
       const result = db.delete(schema.articles).where(eq(schema.articles.id, id)).run();
       return result.changes > 0;
     },
+
+    async clear(): Promise<number> {
+      const result = db.delete(schema.articles).run();
+      return result.changes;
+    },
   };
 }

@@ -94,7 +94,7 @@ voiceRoutes.get("/status", (c) => {
     asr: isAsrAvailable(),
     tts: isTtsAvailable(),
     ttsModels: ["mimo-v2.5-tts", "mimo-v2.5-tts-voiceclone", "mimo-v2.5-tts-voicedesign"],
-    porcupineAccessKey: env.PORCUPINE_ACCESS_KEY || null,
+    wakeWord: !!(env.PORCUPINE_ACCESS_KEY || null),
   });
 });
 

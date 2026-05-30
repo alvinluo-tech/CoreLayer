@@ -120,5 +120,14 @@ export function createSupabaseTaskRepo(): TaskRepository {
         (t) => t.dueDate === today || (t.priority <= 2 && t.status !== "done"),
       );
     },
+
+    async clear(): Promise<number> {
+      const { count, error } = await client
+        .from(TABLE)
+        .delete({ count: "exact" })
+        .neq("id", "");
+      if (error) throw new Error(`Failed to clear tasks: ${error.message}`);
+      return count ?? 0;
+    },
   };
 }

@@ -33,18 +33,17 @@ registerAllAdapters();
 
 const app = new Hono();
 
-app.use("/*", cors());
+app.use("/*", cors({ origin: ["http://localhost:*", "http://127.0.0.1:*"] }));
 
 // ─── Global error handler (safety net for any unhandled route exception) ─────
 app.onError((err, c) => {
   logError("UnhandledRouteError", err);
-  const message = err instanceof Error ? err.message : "Internal server error";
-  return c.json({ error: message }, 500);
+  return c.json({ error: "Internal server error" }, 500);
 });
 
 // ─── 404 handler ─────────────────────────────────────────────────────────────
 app.notFound((c) => {
-  return c.json({ error: `Route not found: ${c.req.method} ${c.req.path}` }, 404);
+  return c.json({ error: "Route not found" }, 404);
 });
 
 app.get("/health", (c) => {
@@ -82,7 +81,7 @@ app.route("/api/tools", toolRoutes);
 
 function startServer(port: number) {
   try {
-    serve({ fetch: app.fetch, port }, (info) => {
+    const server = serve({ fetch: app.fetch, port }, (info) => {
       console.log(`Jarvis Daemon running on http://localhost:${info.port}`);
     }).on("error", (err: NodeJS.ErrnoException) => {
       if (err.code === "EADDRINUSE") {
@@ -93,6 +92,20 @@ function startServer(port: number) {
         process.exit(1);
       }
     });
+
+    // Graceful shutdown
+    const shutdown = async (signal: string) => {
+      console.log(`[Jarvis] Received ${signal}, shutting down gracefully...`);
+      server.close();
+      try {
+        const { disconnectAllMCPServers } = await import("./mcp/client.js");
+        await disconnectAllMCPServers();
+      } catch {}
+      process.exit(0);
+    };
+
+    process.on("SIGTERM", () => shutdown("SIGTERM"));
+    process.on("SIGINT", () => shutdown("SIGINT"));
   } catch (err) {
     console.error("Failed to start server:", err);
     process.exit(1);

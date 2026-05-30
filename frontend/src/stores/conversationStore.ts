@@ -76,7 +76,9 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
       try {
         const { messages } = await tauri.getConversation(defaultConv.id);
         set({ messages });
-      } catch {}
+      } catch {
+        // Message fetch failure is non-critical; conversation list is already loaded
+      }
       return defaultConv;
     }
 

@@ -6,8 +6,10 @@ import { ReadingList } from "@/components/modules/reading/ReadingList";
 import { DailySummary } from "@/components/modules/review/DailySummary";
 import { VoicePanel } from "@/components/voice/VoicePanel";
 import { JarvisVoiceOverlay } from "@/components/voice/JarvisVoiceOverlay";
+import { AssistantMirror } from "@/components/voice/AssistantMirror";
 import { ControlCenter } from "@/components/control-center/ControlCenter";
 import type { ControlPage } from "@/components/control-center/ControlCenter";
+import { logger } from "@/lib/logger";
 import { CommandPalette } from "@/components/palette/CommandPalette";
 import { useChat } from "@/hooks/useChat";
 import { useVoice } from "@/hooks/useVoice";
@@ -25,128 +27,10 @@ import { TitleBar } from "@/components/layout/TitleBar";
 const isAssistantWindow = typeof window !== "undefined" && window.location.search.includes("assistant=true");
 
 function App() {
-  // If this is the assistant floating window, run in a super-lightweight pure visual mirroring mode!
   if (isAssistantWindow) {
-    const [mirroredState, setMirroredState] = useState<any>("idle");
-    const [interimTranscript, setInterimTranscript] = useState("");
-    const [finalTranscript, setFinalTranscript] = useState("");
-    const [assistantText, setAssistantText] = useState("");
-
-    // Ensure the document background is fully transparent so Tauri window transparency works
-    useEffect(() => {
-      if (typeof document !== "undefined") {
-        document.body.style.backgroundColor = "transparent";
-        document.documentElement.style.backgroundColor = "transparent";
-        document.body.style.overflow = "hidden";
-        document.documentElement.style.overflow = "hidden";
-      }
-    }, []);
-
-    // Listen to voice state mirror events and notify main window only when fully ready
-    useEffect(() => {
-      let active = true;
-      let unlistenMirror: (() => void) | null = null;
-      
-      const setupAssistantMirror = async () => {
-        try {
-          const { getCurrentWindow } = await import("@tauri-apps/api/window");
-          const appWindow = getCurrentWindow();
-          
-          if (!active) return;
-          
-          // 1. Register voice state mirror event listener FIRST
-          const unsub = await appWindow.listen<{
-            state: any;
-            interimTranscript: string;
-            finalTranscript: string;
-            assistantText: string;
-          }>("voice-state-mirror", (event) => {
-            if (!active) return;
-            const p = event.payload;
-            console.log("[Assistant Window] Received voice mirror state:", p);
-            setMirroredState(p.state);
-            setInterimTranscript(p.interimTranscript);
-            setFinalTranscript(p.finalTranscript);
-            setAssistantText(p.assistantText);
-          });
-          
-          if (!active) {
-            try { unsub(); } catch {}
-            return;
-          }
-          unlistenMirror = unsub;
-          console.log("[Assistant Window] Mirror listener successfully registered. Notifying main window...");
-          
-          // 2. ONLY notify the main window AFTER listener is guaranteed to be active to avoid event loss
-          await appWindow.emit("assistant-ready").catch(() => {});
-        } catch (e) {
-          console.warn("Failed to set up assistant window mirroring:", e);
-        }
-      };
-      
-      setupAssistantMirror();
-      
-      return () => {
-        active = false;
-        if (unlistenMirror) {
-          try { unlistenMirror(); } catch (err) {}
-        }
-      };
-    }, []);
-
-    // Cleanly emit a close/stop event back to the main window
-    const handleStopMirror = useCallback(async () => {
-      try {
-        const { getCurrentWindow } = await import("@tauri-apps/api/window");
-        const appWindow = getCurrentWindow();
-        await appWindow.emit("stop-voice-from-assistant").catch(() => {});
-        await appWindow.close().catch(() => {});
-      } catch (e) {
-        console.warn("Failed to emit stop from assistant:", e);
-      }
-    }, []);
-
-    const handleFinishMirror = useCallback(async () => {
-      try {
-        const { getCurrentWindow } = await import("@tauri-apps/api/window");
-        const appWindow = getCurrentWindow();
-        await appWindow.emit("finish-voice-from-assistant").catch(() => {});
-      } catch (e) {
-        console.warn("Failed to emit finish from assistant:", e);
-      }
-    }, []);
-
-    const handleOpenSettings = useCallback(async () => {
-      try {
-        const { WebviewWindow } = await import("@tauri-apps/api/webviewWindow");
-        const mainWin = await WebviewWindow.getByLabel("main");
-        if (mainWin) {
-          await mainWin.show().catch(() => {});
-          await mainWin.unminimize().catch(() => {});
-          await mainWin.setFocus().catch(() => {});
-        }
-        const { getCurrentWindow } = await import("@tauri-apps/api/window");
-        const appWindow = getCurrentWindow();
-        await appWindow.emit("open-settings-from-assistant").catch(() => {});
-        await appWindow.close().catch(() => {});
-      } catch (e) {
-        console.warn("Failed to open settings from assistant:", e);
-      }
-    }, []);
-
-    return (
-      <JarvisVoiceOverlay
-        state={mirroredState}
-        interimTranscript={interimTranscript}
-        finalTranscript={finalTranscript}
-        assistantText={assistantText}
-        onClose={handleStopMirror}
-        onStop={mirroredState === "listening" ? handleFinishMirror : handleStopMirror}
-        onOpenSettings={handleOpenSettings}
-        layoutMode="bottom-right"
-      />
-    );
+    return <AssistantMirror />;
   }
+
   const { messages, sendMessage, isLoading, activeConversationId, error } = useChat();
   const [isMainWindowFocused, setIsMainWindowFocused] = useState(true);
   const [currentView, setCurrentView] = useState<"main" | "control-center">("main");
@@ -177,7 +61,7 @@ function App() {
     setTimeout(() => {
       const v = voiceRef.current;
       if (v && !v.isWakeWordListening) {
-        console.log("[App] Restarting wake word after conversation idle (background-safe)");
+        logger.debug("[App] Restarting wake word after conversation idle (background-safe)");
         v.toggleListening();
       }
     }, 500);
@@ -211,14 +95,14 @@ function App() {
       const MARGIN_BOTTOM = 24;
       
       if (!assistant) {
-        console.log("[App] Assistant window not found, creating dynamically...");
+        logger.debug("[App] Assistant window not found, creating dynamically...");
         
         let unlistenReady: (() => void) | null = null;
         
         const { getCurrentWindow } = await import("@tauri-apps/api/window");
         const appWindow = getCurrentWindow();
         unlistenReady = await appWindow.listen("assistant-ready", async () => {
-          console.log("[App] Main window received assistant-ready! Syncing voice state mirror...");
+          logger.debug("[App] Main window received assistant-ready! Syncing voice state mirror...");
           if (unlistenReady) {
             unlistenReady();
             unlistenReady = null;
@@ -319,16 +203,16 @@ function App() {
 
   // Wake word detection (from useVoice)
   const handleWake = useCallback(() => {
-    console.log("[App] Wake-word detected. Starting voice session on core engine...");
+    logger.debug("[App] Wake-word detected. Starting voice session on core engine...");
     // 1. Play greeting and start listening on core engine
     voiceConv.playGreetingAndListen();
     
     // 2. Only open assistant mirror window if main window is in background
     if (!document.hasFocus()) {
-      console.log("[App] Background wake-word: opening assistant mirror bubble...");
+      logger.debug("[App] Background wake-word: opening assistant mirror bubble...");
       showAssistantWindow();
     } else {
-      console.log("[App] Foreground wake-word: keeping centered overlay inside main window.");
+      logger.debug("[App] Foreground wake-word: keeping centered overlay inside main window.");
     }
   }, [voiceConv, showAssistantWindow]);
 
@@ -376,7 +260,7 @@ function App() {
   const fetchDailySummary = useReviewStore((s) => s.fetchDailySummary);
 
   const refreshAllDashboardStates = useCallback(async () => {
-    console.log("[App] Refreshing all dashboard states from database...");
+    logger.debug("[App] Refreshing all dashboard states from database...");
     try {
       await Promise.all([
         fetchConversations().catch(() => {}),
@@ -444,21 +328,21 @@ function App() {
         const appWindow = getCurrentWindow();
         
         const stop = await appWindow.listen("stop-voice-from-assistant", () => {
-          console.log("[Main Window] Received stop command from assistant window. Stopping conversation...");
+          logger.debug("[Main Window] Received stop command from assistant window. Stopping conversation...");
           voiceConvRef.current.stopConversation();
         });
         if (!active) { stop(); return; }
         unlisteners.push(stop);
         
         const finish = await appWindow.listen("finish-voice-from-assistant", () => {
-          console.log("[Main Window] Received finish command from assistant window. Submitting current text...");
+          logger.debug("[Main Window] Received finish command from assistant window. Submitting current text...");
           voiceConvRef.current.finishListening();
         });
         if (!active) { finish(); return; }
         unlisteners.push(finish);
 
         const settings = await appWindow.listen("open-settings-from-assistant", () => {
-          console.log("[Main Window] Received open-settings command from assistant window.");
+          logger.debug("[Main Window] Received open-settings command from assistant window.");
           setInitialControlPage("models");
           setCurrentView("control-center");
         });
@@ -488,7 +372,9 @@ function App() {
           if (assistant) {
             await assistant.close().catch(() => {});
           }
-        } catch {}
+        } catch {
+          // Assistant window may not exist yet
+        }
       };
       closeAssistant();
     }
@@ -511,7 +397,7 @@ function App() {
           const v = voiceRef.current;
           
           if (!focused) {
-            console.log("[App] Main window lost focus (blurred).");
+            logger.debug("[App] Main window lost focus (blurred).");
             
             // Update focused state to hide centered overlay
             setIsMainWindowFocused(false);
@@ -523,11 +409,11 @@ function App() {
             // If conversation is active, open the assistant window as a mirror
             const isConversationActive = vc.state !== "idle" && vc.state !== "error";
             if (isConversationActive) {
-              console.log("[App] Blur during active conversation: showing assistant window to mirror state.");
+              logger.debug("[App] Blur during active conversation: showing assistant window to mirror state.");
               showAssistantWindow();
             }
           } else {
-            console.log("[App] Main window gained focus (focused). Closing assistant window...");
+            logger.debug("[App] Main window gained focus (focused). Closing assistant window...");
             
             // Restore focused state to show centered overlay
             setIsMainWindowFocused(true);
@@ -561,7 +447,9 @@ function App() {
         });
         
         if (!active) {
-          try { unsub(); } catch {}
+          try { unsub(); } catch {
+            // Cleanup during teardown is best-effort
+          }
           return;
         }
         unlisten = unsub;

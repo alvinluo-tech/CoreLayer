@@ -139,5 +139,15 @@ export function createSupabaseConversationRepo(): ConversationRepository {
       if (error) throw new Error(`Failed to get messages: ${error.message}`);
       return (data ?? []).map(toMessageRow);
     },
+
+    async clear(): Promise<number> {
+      await client.from("messages").delete({ count: "exact" }).neq("id", "");
+      const { count, error } = await client
+        .from("conversations")
+        .delete({ count: "exact" })
+        .neq("id", "");
+      if (error) throw new Error(`Failed to clear conversations: ${error.message}`);
+      return count ?? 0;
+    },
   };
 }

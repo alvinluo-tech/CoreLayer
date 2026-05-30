@@ -1,4 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
+import type { Task } from "@/types/task";
+import type { Article } from "@/types/article";
 
 // ---- Types ----
 
@@ -82,7 +84,7 @@ export async function sendConversationMessage(
 
 // ---- Task Management ----
 
-export async function queryTasks(options?: { status?: string; priority?: number }): Promise<{ tasks: unknown[]; count: number }> {
+export async function queryTasks(options?: { status?: string; priority?: number }): Promise<{ tasks: Task[]; count: number }> {
   return invoke("query_tasks", {
     status: options?.status ?? null,
     priority: options?.priority ?? null,
@@ -95,7 +97,7 @@ export async function createTask(input: {
   dueDate?: string;
   tags?: string[];
   description?: string;
-}): Promise<{ task: unknown }> {
+}): Promise<{ task: Task }> {
   return invoke("create_task", {
     title: input.title,
     priority: input.priority ?? null,
@@ -112,7 +114,7 @@ export async function updateTask(input: {
   status?: string;
   dueDate?: string;
   tags?: string[];
-}): Promise<{ task: unknown }> {
+}): Promise<{ task: Task }> {
   return invoke("update_task", {
     taskId: input.taskId,
     title: input.title ?? null,
@@ -129,7 +131,7 @@ export async function deleteTask(taskId: string): Promise<void> {
 
 // ---- Article Management ----
 
-export async function getReadingList(options?: { status?: string; category?: string }): Promise<{ articles: unknown[]; count: number }> {
+export async function getReadingList(options?: { status?: string; category?: string }): Promise<{ articles: Article[]; count: number }> {
   return invoke("get_reading_list", {
     status: options?.status ?? null,
     category: options?.category ?? null,
@@ -141,7 +143,7 @@ export async function addArticle(input: {
   url?: string;
   category?: string;
   description?: string;
-}): Promise<{ article: unknown }> {
+}): Promise<{ article: Article }> {
   return invoke("add_article", {
     title: input.title,
     url: input.url ?? null,
@@ -155,7 +157,7 @@ export async function updateReadingStatus(input: {
   status: string;
   rating?: number;
   notes?: string;
-}): Promise<{ article: unknown }> {
+}): Promise<{ article: Article }> {
   return invoke("update_reading_status", {
     articleId: input.articleId,
     status: input.status,
@@ -229,7 +231,7 @@ export async function dbManagerListTables(): Promise<{ success: boolean; tables:
   return invoke("db_manager_list_tables");
 }
 
-export async function dbManagerGetTableRows(tableName: string): Promise<{ success: boolean; rows: any[] }> {
+export async function dbManagerGetTableRows(tableName: string): Promise<{ success: boolean; rows: Record<string, unknown>[] }> {
   return invoke("db_manager_get_table_rows", { tableName });
 }
 

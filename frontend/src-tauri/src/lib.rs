@@ -2,7 +2,25 @@ mod daemon_supervisor;
 
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::Mutex;
+
+/// Shared HTTP client with connection pooling and timeout.
+/// Created once at app startup, reused across all daemon proxy calls.
+fn create_daemon_client() -> reqwest::Client {
+    reqwest::Client::builder()
+        .timeout(Duration::from_secs(15))
+        .pool_max_idle_per_host(4)
+        .build()
+        .expect("failed to build shared HTTP client")
+}
+
+/// Global singleton HTTP client for daemon proxy calls.
+static DAEMON_CLIENT: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock::new();
+
+fn get_daemon_client() -> &'static reqwest::Client {
+    DAEMON_CLIENT.get_or_init(create_daemon_client)
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ChatResponse {
@@ -80,8 +98,34 @@ async fn get_daemon_url() -> String {
     std::env::var("DAEMON_URL").unwrap_or_else(|_| "http://127.0.0.1:3001".to_string())
 }
 
-async fn daemon_get<T: for<'de> Deserialize<'de>>(path: &str) -> Result<T, String> {
-    let client = reqwest::Client::new();
+/// Percent-encode a string for safe use in URL path segments.
+fn encode_path_segment(s: &str) -> String {
+    let mut encoded = String::with_capacity(s.len() * 3);
+    for byte in s.bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                encoded.push(byte as char);
+            }
+            _ => {
+                encoded.push('%');
+                encoded.push_str(&format!("{:02X}", byte));
+            }
+        }
+    }
+    encoded
+}
+
+/// Extract a safe, generic error message for the client.
+fn sanitize_daemon_error(status: reqwest::StatusCode, body_text: &str) -> String {
+    if let Ok(err_resp) = serde_json::from_str::<DaemonErrorResponse>(body_text) {
+        if let Some(err) = err_resp.error {
+            return format!("Daemon error: {}", err);
+        }
+    }
+    format!("Daemon error (HTTP {})", status.as_u16())
+}
+
+async fn daemon_get<T: for<'de> Deserialize<'de>>(client: &reqwest::Client, path: &str) -> Result<T, String> {
     let url = format!("{}{}", get_daemon_url().await, path);
 
     let response = client
@@ -97,20 +141,15 @@ async fn daemon_get<T: for<'de> Deserialize<'de>>(path: &str) -> Result<T, Strin
         .map_err(|e| format!("读取响应失败: {}", e))?;
 
     if !status.is_success() {
-        if let Ok(err_resp) = serde_json::from_str::<DaemonErrorResponse>(&body_text) {
-            if let Some(err) = err_resp.error {
-                return Err(format!("Daemon 错误: {}", err));
-            }
-        }
-        return Err(format!("Daemon 返回错误 ({}): {}", status, body_text));
+        log::error!("Daemon GET {} returned {}: {}", path, status, body_text);
+        return Err(sanitize_daemon_error(status, &body_text));
     }
 
     serde_json::from_str::<T>(&body_text)
         .map_err(|e| format!("解析响应失败: {}", e))
 }
 
-async fn daemon_post<T: for<'de> Deserialize<'de>>(path: &str, body: serde_json::Value) -> Result<T, String> {
-    let client = reqwest::Client::new();
+async fn daemon_post<T: for<'de> Deserialize<'de>>(client: &reqwest::Client, path: &str, body: serde_json::Value) -> Result<T, String> {
     let url = format!("{}{}", get_daemon_url().await, path);
 
     let response = client
@@ -127,20 +166,15 @@ async fn daemon_post<T: for<'de> Deserialize<'de>>(path: &str, body: serde_json:
         .map_err(|e| format!("读取响应失败: {}", e))?;
 
     if !status.is_success() {
-        if let Ok(err_resp) = serde_json::from_str::<DaemonErrorResponse>(&body_text) {
-            if let Some(err) = err_resp.error {
-                return Err(format!("Daemon 错误: {}", err));
-            }
-        }
-        return Err(format!("Daemon 返回错误 ({}): {}", status, body_text));
+        log::error!("Daemon POST {} returned {}: {}", path, status, body_text);
+        return Err(sanitize_daemon_error(status, &body_text));
     }
 
     serde_json::from_str::<T>(&body_text)
         .map_err(|e| format!("解析响应失败: {}", e))
 }
 
-async fn daemon_patch<T: for<'de> Deserialize<'de>>(path: &str, body: serde_json::Value) -> Result<T, String> {
-    let client = reqwest::Client::new();
+async fn daemon_patch<T: for<'de> Deserialize<'de>>(client: &reqwest::Client, path: &str, body: serde_json::Value) -> Result<T, String> {
     let url = format!("{}{}", get_daemon_url().await, path);
 
     let response = client
@@ -157,20 +191,15 @@ async fn daemon_patch<T: for<'de> Deserialize<'de>>(path: &str, body: serde_json
         .map_err(|e| format!("读取响应失败: {}", e))?;
 
     if !status.is_success() {
-        if let Ok(err_resp) = serde_json::from_str::<DaemonErrorResponse>(&body_text) {
-            if let Some(err) = err_resp.error {
-                return Err(format!("Daemon 错误: {}", err));
-            }
-        }
-        return Err(format!("Daemon 返回错误 ({}): {}", status, body_text));
+        log::error!("Daemon PATCH {} returned {}: {}", path, status, body_text);
+        return Err(sanitize_daemon_error(status, &body_text));
     }
 
     serde_json::from_str::<T>(&body_text)
         .map_err(|e| format!("解析响应失败: {}", e))
 }
 
-async fn daemon_delete(path: &str) -> Result<serde_json::Value, String> {
-    let client = reqwest::Client::new();
+async fn daemon_delete(client: &reqwest::Client, path: &str) -> Result<serde_json::Value, String> {
     let url = format!("{}{}", get_daemon_url().await, path);
 
     let response = client
@@ -186,12 +215,8 @@ async fn daemon_delete(path: &str) -> Result<serde_json::Value, String> {
         .map_err(|e| format!("读取响应失败: {}", e))?;
 
     if !status.is_success() {
-        if let Ok(err_resp) = serde_json::from_str::<DaemonErrorResponse>(&body_text) {
-            if let Some(err) = err_resp.error {
-                return Err(format!("Daemon 错误: {}", err));
-            }
-        }
-        return Err(format!("Daemon 返回错误 ({}): {}", status, body_text));
+        log::error!("Daemon DELETE {} returned {}: {}", path, status, body_text);
+        return Err(sanitize_daemon_error(status, &body_text));
     }
 
     serde_json::from_str::<serde_json::Value>(&body_text)
@@ -202,24 +227,24 @@ async fn daemon_delete(path: &str) -> Result<serde_json::Value, String> {
 
 #[tauri::command]
 async fn send_message(message: String) -> Result<ChatResponse, String> {
-    daemon_post("/api/chat", serde_json::json!({ "message": message })).await
+    daemon_post(get_daemon_client(), "/api/chat", serde_json::json!({ "message": message })).await
 }
 
 #[tauri::command]
 async fn health_check() -> Result<HealthResponse, String> {
-    daemon_get("/health").await
+    daemon_get(get_daemon_client(), "/health").await
 }
 
 #[tauri::command]
 async fn get_health() -> Result<DetailedHealthResponse, String> {
-    daemon_get("/health").await
+    daemon_get(get_daemon_client(), "/health").await
 }
 
 // ---- Conversation Commands ----
 
 #[tauri::command]
 async fn list_conversations() -> Result<ConversationListResponse, String> {
-    daemon_get("/api/conversations").await
+    daemon_get(get_daemon_client(), "/api/conversations").await
 }
 
 #[tauri::command]
@@ -228,25 +253,26 @@ async fn create_conversation(title: Option<String>) -> Result<Conversation, Stri
         Some(t) => serde_json::json!({ "title": t }),
         None => serde_json::json!({}),
     };
-    let resp: serde_json::Value = daemon_post("/api/conversations", body).await?;
+    let resp: serde_json::Value = daemon_post(get_daemon_client(), "/api/conversations", body).await?;
     serde_json::from_value(resp.get("conversation").cloned().unwrap_or(resp))
         .map_err(|e| format!("解析 conversation 失败: {}", e))
 }
 
 #[tauri::command]
 async fn get_conversation(id: String) -> Result<ConversationWithMessages, String> {
-    daemon_get(&format!("/api/conversations/{}", id)).await
+    daemon_get(get_daemon_client(), &format!("/api/conversations/{}", encode_path_segment(&id))).await
 }
 
 #[tauri::command]
 async fn delete_conversation(id: String) -> Result<serde_json::Value, String> {
-    daemon_delete(&format!("/api/conversations/{}", id)).await
+    daemon_delete(get_daemon_client(), &format!("/api/conversations/{}", encode_path_segment(&id))).await
 }
 
 #[tauri::command]
 async fn update_conversation(id: String, title: String) -> Result<Conversation, String> {
     let resp: serde_json::Value = daemon_patch(
-        &format!("/api/conversations/{}", id),
+        get_daemon_client(),
+        &format!("/api/conversations/{}", encode_path_segment(&id)),
         serde_json::json!({ "title": title }),
     )
     .await?;
@@ -260,7 +286,8 @@ async fn send_conversation_message(
     content: String,
 ) -> Result<SendMessageResponse, String> {
     daemon_post(
-        &format!("/api/conversations/{}/messages", conversation_id),
+        get_daemon_client(),
+        &format!("/api/conversations/{}/messages", encode_path_segment(&conversation_id)),
         serde_json::json!({ "content": content }),
     )
     .await
@@ -284,7 +311,7 @@ async fn query_tasks(
     if !params.is_empty() {
         path = format!("{}?{}", path, params.join("&"));
     }
-    daemon_get(&path).await
+    daemon_get(get_daemon_client(), &path).await
 }
 
 #[tauri::command]
@@ -308,7 +335,7 @@ async fn create_task(
     if let Some(d) = description {
         body["description"] = serde_json::json!(d);
     }
-    daemon_post("/api/tasks", body).await
+    daemon_post(get_daemon_client(), "/api/tasks", body).await
 }
 
 #[tauri::command]
@@ -336,12 +363,12 @@ async fn update_task(
     if let Some(t) = tags {
         body["tags"] = serde_json::json!(t);
     }
-    daemon_patch(&format!("/api/tasks/{}", task_id), body).await
+    daemon_patch(get_daemon_client(), &format!("/api/tasks/{}", encode_path_segment(&task_id)), body).await
 }
 
 #[tauri::command]
 async fn delete_task(task_id: String) -> Result<serde_json::Value, String> {
-    daemon_delete(&format!("/api/tasks/{}", task_id)).await
+    daemon_delete(get_daemon_client(), &format!("/api/tasks/{}", encode_path_segment(&task_id))).await
 }
 
 // ---- Article Commands ----
@@ -362,7 +389,7 @@ async fn get_reading_list(
     if !params.is_empty() {
         path = format!("{}?{}", path, params.join("&"));
     }
-    daemon_get(&path).await
+    daemon_get(get_daemon_client(), &path).await
 }
 
 #[tauri::command]
@@ -382,7 +409,7 @@ async fn add_article(
     if let Some(d) = description {
         body["description"] = serde_json::json!(d);
     }
-    daemon_post("/api/articles", body).await
+    daemon_post(get_daemon_client(), "/api/articles", body).await
 }
 
 #[tauri::command]
@@ -399,7 +426,7 @@ async fn update_reading_status(
     if let Some(n) = notes {
         body["notes"] = serde_json::json!(n);
     }
-    daemon_patch(&format!("/api/articles/{}", article_id), body).await
+    daemon_patch(get_daemon_client(), &format!("/api/articles/{}", encode_path_segment(&article_id)), body).await
 }
 
 // ---- Review Commands ----
@@ -410,7 +437,7 @@ async fn get_daily_summary(date: Option<String>) -> Result<serde_json::Value, St
     if let Some(d) = date {
         path = format!("{}?date={}", path, d);
     }
-    daemon_get(&path).await
+    daemon_get(get_daemon_client(), &path).await
 }
 
 #[tauri::command]
@@ -419,70 +446,69 @@ async fn get_weekly_stats(week_start: Option<String>) -> Result<serde_json::Valu
     if let Some(w) = week_start {
         path = format!("{}?weekStart={}", path, w);
     }
-    daemon_get(&path).await
+    daemon_get(get_daemon_client(), &path).await
 }
 
 // ---- Settings Commands ----
 
 #[tauri::command]
 async fn get_settings() -> Result<serde_json::Value, String> {
-    daemon_get("/api/settings").await
+    daemon_get(get_daemon_client(), "/api/settings").await
 }
 
 #[tauri::command]
 async fn update_storage_mode(mode: String) -> Result<serde_json::Value, String> {
-    daemon_put("/api/settings/storage-mode", serde_json::json!({ "mode": mode })).await
+    daemon_put(get_daemon_client(), "/api/settings/storage-mode", serde_json::json!({ "mode": mode })).await
 }
 
 #[tauri::command]
 async fn get_db_stats() -> Result<serde_json::Value, String> {
-    daemon_get("/api/settings/db-stats").await
+    daemon_get(get_daemon_client(), "/api/settings/db-stats").await
 }
 
 #[tauri::command]
 async fn db_manager_list_tables() -> Result<serde_json::Value, String> {
-    daemon_get("/api/settings/db-manager/tables").await
+    daemon_get(get_daemon_client(), "/api/settings/db-manager/tables").await
 }
 
 #[tauri::command]
 async fn db_manager_get_table_rows(table_name: String) -> Result<serde_json::Value, String> {
-    daemon_get(&format!("/api/settings/db-manager/tables/{}", table_name)).await
+    daemon_get(get_daemon_client(), &format!("/api/settings/db-manager/tables/{}", encode_path_segment(&table_name))).await
 }
 
 #[tauri::command]
 async fn db_manager_delete_row(table_name: String, id: String) -> Result<serde_json::Value, String> {
-    daemon_delete(&format!("/api/settings/db-manager/tables/{}/{}", table_name, id)).await
+    daemon_delete(get_daemon_client(), &format!("/api/settings/db-manager/tables/{}/{}", encode_path_segment(&table_name), encode_path_segment(&id))).await
 }
 
 #[tauri::command]
 async fn db_manager_clear_table(table_name: String) -> Result<serde_json::Value, String> {
-    daemon_post(&format!("/api/settings/db-manager/tables/{}/clear", table_name), serde_json::json!({})).await
+    daemon_post(get_daemon_client(), &format!("/api/settings/db-manager/tables/{}/clear", encode_path_segment(&table_name)), serde_json::json!({})).await
 }
 
 #[tauri::command]
 async fn db_config_get() -> Result<serde_json::Value, String> {
-    daemon_get("/api/settings/db-config").await
+    daemon_get(get_daemon_client(), "/api/settings/db-config").await
 }
 
 #[tauri::command]
 async fn db_config_set(config: serde_json::Value) -> Result<serde_json::Value, String> {
-    daemon_post("/api/settings/db-config", config).await
+    daemon_post(get_daemon_client(), "/api/settings/db-config", config).await
 }
 
 #[tauri::command]
 async fn db_config_test(test_params: serde_json::Value) -> Result<serde_json::Value, String> {
-    daemon_post("/api/settings/db-config/test", test_params).await
+    daemon_post(get_daemon_client(), "/api/settings/db-config/test", test_params).await
 }
 
 #[tauri::command]
 async fn db_config_migrate() -> Result<serde_json::Value, String> {
-    daemon_post("/api/settings/db-config/migrate", serde_json::json!({})).await
+    daemon_post(get_daemon_client(), "/api/settings/db-config/migrate", serde_json::json!({})).await
 }
 
 
 
-async fn daemon_put<T: for<'de> Deserialize<'de>>(path: &str, body: serde_json::Value) -> Result<T, String> {
-    let client = reqwest::Client::new();
+async fn daemon_put<T: for<'de> Deserialize<'de>>(client: &reqwest::Client, path: &str, body: serde_json::Value) -> Result<T, String> {
     let url = format!("{}{}", get_daemon_url().await, path);
 
     let response = client
@@ -499,12 +525,8 @@ async fn daemon_put<T: for<'de> Deserialize<'de>>(path: &str, body: serde_json::
         .map_err(|e| format!("读取响应失败: {}", e))?;
 
     if !status.is_success() {
-        if let Ok(err_resp) = serde_json::from_str::<DaemonErrorResponse>(&body_text) {
-            if let Some(err) = err_resp.error {
-                return Err(format!("Daemon 错误: {}", err));
-            }
-        }
-        return Err(format!("Daemon 返回错误 ({}): {}", status, body_text));
+        log::error!("Daemon PUT {} returned {}: {}", path, status, body_text);
+        return Err(sanitize_daemon_error(status, &body_text));
     }
 
     serde_json::from_str::<T>(&body_text)
@@ -543,7 +565,7 @@ struct DaemonVoiceStatus {
 
 #[tauri::command]
 async fn get_voice_status() -> Result<VoiceStatus, String> {
-    let raw: DaemonVoiceStatus = daemon_get("/api/voice/status").await?;
+    let raw: DaemonVoiceStatus = daemon_get(get_daemon_client(), "/api/voice/status").await?;
     
     let tts_provider = if raw.tts {
         "MiMo TTS".to_string()
@@ -580,64 +602,64 @@ async fn get_daemon_url_command() -> Result<String, String> {
 
 #[tauri::command]
 async fn list_mcp_servers() -> Result<serde_json::Value, String> {
-    daemon_get("/api/mcp/servers").await
+    daemon_get(get_daemon_client(), "/api/mcp/servers").await
 }
 
 #[tauri::command]
 async fn connect_mcp_server(config: serde_json::Value) -> Result<serde_json::Value, String> {
-    daemon_post("/api/mcp/servers", config).await
+    daemon_post(get_daemon_client(), "/api/mcp/servers", config).await
 }
 
 #[tauri::command]
 async fn disconnect_mcp_server(server_id: String) -> Result<serde_json::Value, String> {
-    daemon_delete(&format!("/api/mcp/servers/{}", server_id)).await
+    daemon_delete(get_daemon_client(), &format!("/api/mcp/servers/{}", encode_path_segment(&server_id))).await
 }
 
 #[tauri::command]
 async fn list_mcp_tools() -> Result<serde_json::Value, String> {
-    daemon_get("/api/mcp/tools").await
+    daemon_get(get_daemon_client(), "/api/mcp/tools").await
 }
 
 #[tauri::command]
 async fn list_mcp_resources() -> Result<serde_json::Value, String> {
-    daemon_get("/api/mcp/resources").await
+    daemon_get(get_daemon_client(), "/api/mcp/resources").await
 }
 
 #[tauri::command]
 async fn list_mcp_prompts() -> Result<serde_json::Value, String> {
-    daemon_get("/api/mcp/prompts").await
+    daemon_get(get_daemon_client(), "/api/mcp/prompts").await
 }
 
 // ---- Unified Tool Registry Commands ----
 
 #[tauri::command]
 async fn list_all_tools() -> Result<serde_json::Value, String> {
-    daemon_get("/api/tools").await
+    daemon_get(get_daemon_client(), "/api/tools").await
 }
 
 #[tauri::command]
 async fn get_tool(tool_id: String) -> Result<serde_json::Value, String> {
-    daemon_get(&format!("/api/tools/{}", tool_id)).await
+    daemon_get(get_daemon_client(), &format!("/api/tools/{}", encode_path_segment(&tool_id))).await
 }
 
 #[tauri::command]
 async fn get_tool_call_logs(limit: Option<u32>) -> Result<serde_json::Value, String> {
     let l = limit.unwrap_or(20);
-    daemon_get(&format!("/api/tools/logs?limit={}", l)).await
+    daemon_get(get_daemon_client(), &format!("/api/tools/logs?limit={}", l)).await
 }
 
 // ---- Model Gateway Commands ----
 
 #[tauri::command]
 async fn list_model_profiles() -> Result<serde_json::Value, String> {
-    daemon_get("/api/mcp/models").await
+    daemon_get(get_daemon_client(), "/api/mcp/models").await
 }
 
 // ---- Provider Config Commands ----
 
 #[tauri::command]
 async fn get_provider_configs() -> Result<serde_json::Value, String> {
-    daemon_get("/api/settings/providers").await
+    daemon_get(get_daemon_client(), "/api/settings/providers").await
 }
 
 #[tauri::command]
@@ -645,72 +667,72 @@ async fn update_provider_config(name: String, api_key: Option<String>, base_url:
     let mut body = serde_json::json!({});
     if let Some(k) = api_key { body["apiKey"] = serde_json::json!(k); }
     if let Some(u) = base_url { body["baseURL"] = serde_json::json!(u); }
-    daemon_put(&format!("/api/settings/providers/{}", name), body).await
+    daemon_put(get_daemon_client(), &format!("/api/settings/providers/{}", encode_path_segment(&name)), body).await
 }
 
 // ---- Provider Presets ----
 
 #[tauri::command]
 async fn list_provider_presets() -> Result<serde_json::Value, String> {
-    daemon_get("/api/settings/providers/presets").await
+    daemon_get(get_daemon_client(), "/api/settings/providers/presets").await
 }
 
 // ---- Provider CRUD ----
 
 #[tauri::command]
 async fn add_provider(config: serde_json::Value) -> Result<serde_json::Value, String> {
-    daemon_post("/api/settings/providers", config).await
+    daemon_post(get_daemon_client(), "/api/settings/providers", config).await
 }
 
 #[tauri::command]
 async fn remove_provider(id: String) -> Result<serde_json::Value, String> {
-    daemon_delete(&format!("/api/settings/providers/{}", id)).await
+    daemon_delete(get_daemon_client(), &format!("/api/settings/providers/{}", encode_path_segment(&id))).await
 }
 
 #[tauri::command]
 async fn discover_models(provider_id: String) -> Result<serde_json::Value, String> {
-    daemon_post(&format!("/api/settings/providers/{}/discover", provider_id), serde_json::json!({})).await
+    daemon_post(get_daemon_client(), &format!("/api/settings/providers/{}/discover", encode_path_segment(&provider_id)), serde_json::json!({})).await
 }
 
 #[tauri::command]
 async fn test_provider_connection(provider_id: String) -> Result<serde_json::Value, String> {
-    daemon_post(&format!("/api/settings/providers/{}/test", provider_id), serde_json::json!({})).await
+    daemon_post(get_daemon_client(), &format!("/api/settings/providers/{}/test", encode_path_segment(&provider_id)), serde_json::json!({})).await
 }
 
 // ---- Routing Rules Commands ----
 
 #[tauri::command]
 async fn get_routing_rules() -> Result<serde_json::Value, String> {
-    daemon_get("/api/settings/routing-rules").await
+    daemon_get(get_daemon_client(), "/api/settings/routing-rules").await
 }
 
 #[tauri::command]
 async fn update_routing_rules(rules: serde_json::Value) -> Result<serde_json::Value, String> {
-    daemon_put("/api/settings/routing-rules", serde_json::json!({ "rules": rules })).await
+    daemon_put(get_daemon_client(), "/api/settings/routing-rules", serde_json::json!({ "rules": rules })).await
 }
 
 // ---- Active Model Commands ----
 
 #[tauri::command]
 async fn get_active_model() -> Result<serde_json::Value, String> {
-    daemon_get("/api/settings/active-model").await
+    daemon_get(get_daemon_client(), "/api/settings/active-model").await
 }
 
 #[tauri::command]
 async fn set_active_model(model_id: String) -> Result<serde_json::Value, String> {
-    daemon_put("/api/settings/active-model", serde_json::json!({ "modelId": model_id })).await
+    daemon_put(get_daemon_client(), "/api/settings/active-model", serde_json::json!({ "modelId": model_id })).await
 }
 
 // ---- Model Profile CRUD Commands ----
 
 #[tauri::command]
 async fn upsert_model_profile(profile: serde_json::Value) -> Result<serde_json::Value, String> {
-    daemon_post("/api/settings/model-profiles", profile).await
+    daemon_post(get_daemon_client(), "/api/settings/model-profiles", profile).await
 }
 
 #[tauri::command]
 async fn delete_model_profile(id: String) -> Result<serde_json::Value, String> {
-    daemon_delete(&format!("/api/settings/model-profiles/{}", id)).await
+    daemon_delete(get_daemon_client(), &format!("/api/settings/model-profiles/{}", encode_path_segment(&id))).await
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

@@ -115,5 +115,11 @@ export function createSqliteConversationRepo(): ConversationRepository {
         .all();
       return rows as MessageRow[];
     },
+
+    async clear(): Promise<number> {
+      db.delete(schema.messages).run();
+      const result = db.delete(schema.conversations).run();
+      return result.changes;
+    },
   };
 }

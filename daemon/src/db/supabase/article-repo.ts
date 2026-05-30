@@ -104,5 +104,14 @@ export function createSupabaseArticleRepo(): ArticleRepository {
       if (error) throw new Error(`Failed to delete article: ${error.message}`);
       return true;
     },
+
+    async clear(): Promise<number> {
+      const { count, error } = await client
+        .from(TABLE)
+        .delete({ count: "exact" })
+        .neq("id", "");
+      if (error) throw new Error(`Failed to clear articles: ${error.message}`);
+      return count ?? 0;
+    },
   };
 }

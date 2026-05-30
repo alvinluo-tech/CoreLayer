@@ -27,5 +27,8 @@ export function createSupabaseMemoryRepo(): MemoryRepository {
     async cleanExpired(): Promise<number> {
       throw new Error("Supabase MemoryRepository not implemented — use SQLite mode");
     },
+    async clear(): Promise<number> {
+      throw new Error("Supabase MemoryRepository not implemented — use SQLite mode");
+    },
   };
 }

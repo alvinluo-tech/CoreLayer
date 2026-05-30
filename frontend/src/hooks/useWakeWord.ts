@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from "react";
+import { logger } from "@/lib/logger";
 
 // Wake words for Web Speech API fallback
 const WAKE_WORDS = [
@@ -89,7 +90,7 @@ export function useWakeWord(onWake: () => void, daemonUrl?: string) {
         accessKey,
         BuiltInKeyword.Jarvis,
         (detection) => {
-          console.log("[WakeWord:Porcupine] Detected:", detection.label);
+          logger.debug("[WakeWord:Porcupine] Detected:", detection.label);
           onWakeRef.current();
         },
         { publicPath: "" },
@@ -101,7 +102,7 @@ export function useWakeWord(onWake: () => void, daemonUrl?: string) {
         release: () => porcupine.release(),
       };
       setMethod("porcupine");
-      console.log("[WakeWord] Porcupine listening for 'Jarvis'");
+      logger.debug("[WakeWord] Porcupine listening for 'Jarvis'");
       return true;
     } catch (err) {
       console.warn("[WakeWord] Porcupine failed:", err);
@@ -127,7 +128,7 @@ export function useWakeWord(onWake: () => void, daemonUrl?: string) {
       let wakeTriggered = false;
 
       recognition.onstart = () => {
-        console.log("[WakeWord:WebSpeech] Web Speech session active...");
+        logger.debug("[WakeWord:WebSpeech] Web Speech session active...");
         lastErrorRef.current = null;
       };
 
@@ -137,11 +138,11 @@ export function useWakeWord(onWake: () => void, daemonUrl?: string) {
           const result = event.results[i];
           if (!result?.[0]) continue;
           const transcript = result[0].transcript.toLowerCase();
-          console.log("[WakeWord:WebSpeech] Heard:", transcript, "final:", result.isFinal);
+          logger.debug("[WakeWord:WebSpeech] Heard:", transcript, "final:", result.isFinal);
           const matched = WAKE_WORDS.some((word) => transcript.includes(word));
           if (matched) {
             wakeTriggered = true;
-            console.log("[WakeWord:WebSpeech] WAKE WORD DETECTED:", transcript);
+            logger.debug("[WakeWord:WebSpeech] WAKE WORD DETECTED:", transcript);
             onWakeRef.current();
             break;
           }
@@ -182,7 +183,7 @@ export function useWakeWord(onWake: () => void, daemonUrl?: string) {
       recognition.start();
       recognitionRef.current = recognition;
       setMethod("webspeech");
-      console.log("[WakeWord] Web Speech API listening for 'Hey Jarvis' or Chinese homophones");
+      logger.debug("[WakeWord] Web Speech API listening for 'Hey Jarvis' or Chinese homophones");
       return true;
     } catch (err) {
       console.warn("[WakeWord] Web Speech API failed:", err);
@@ -193,21 +194,14 @@ export function useWakeWord(onWake: () => void, daemonUrl?: string) {
   // --- Public API ---
   const start = useCallback(async (accessKey?: string) => {
     if (isActiveRef.current) {
-      console.log("[WakeWord] Already active, skipping");
+      logger.debug("[WakeWord] Already active, skipping");
       return;
     }
     setError(null);
-    console.log("[WakeWord] Starting...");
+    logger.debug("[WakeWord] Starting...");
 
-    // Try Porcupine first
+    // Try Porcupine first (accessKey must be provided directly, never fetched from server)
     let key = accessKey;
-    if (!key && daemonUrl) {
-      try {
-        const res = await fetch(`${daemonUrl}/api/voice/status`);
-        const data = (await res.json()) as { porcupineAccessKey?: string };
-        key = data.porcupineAccessKey || undefined;
-      } catch {}
-    }
 
     if (key) {
       const ok = await startPorcupine(key);
@@ -219,12 +213,12 @@ export function useWakeWord(onWake: () => void, daemonUrl?: string) {
     }
 
     // Fallback to Web Speech API
-    console.log("[WakeWord] Trying Web Speech API...");
+    logger.debug("[WakeWord] Trying Web Speech API...");
     const ok = startWebSpeech();
     if (ok) {
       isActiveRef.current = true;
       setIsListening(true);
-      console.log("[WakeWord] Web Speech API started successfully");
+      logger.debug("[WakeWord] Web Speech API started successfully");
     } else {
       console.error("[WakeWord] Both Porcupine and Web Speech API failed");
       setError("无法启动唤醒词检测（Porcupine key 未配置，Web Speech API 不可用）");
@@ -239,18 +233,18 @@ export function useWakeWord(onWake: () => void, daemonUrl?: string) {
       try {
         await porcupineRef.current.unsubscribe();
         await porcupineRef.current.release();
-      } catch {}
+      } catch (e) { logger.debug("[WakeWord] porcupine cleanup ignored:", e); }
       porcupineRef.current = null;
     }
 
     if (method === "webspeech" && recognitionRef.current) {
-      try { recognitionRef.current.abort(); } catch {}
+      try { recognitionRef.current.abort(); } catch (e) { logger.debug("[WakeWord] recognition abort ignored:", e); }
       recognitionRef.current = null;
     }
 
     setMethod(null);
     setIsListening(false);
-    console.log("[WakeWord] Stopped");
+    logger.debug("[WakeWord] Stopped");
   }, [method]);
 
   // Cleanup on unmount
@@ -263,7 +257,9 @@ export function useWakeWord(onWake: () => void, daemonUrl?: string) {
         porcupineRef.current = null;
       }
       if (recognitionRef.current) {
-        try { recognitionRef.current.abort(); } catch {}
+        try { recognitionRef.current.abort(); } catch {
+          // Already aborted or not started
+        }
         recognitionRef.current = null;
       }
     };

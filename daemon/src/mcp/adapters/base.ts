@@ -56,14 +56,18 @@ async function callRestApi(
   toolDef: AdapterToolDef,
   args: Record<string, unknown>,
 ): Promise<unknown> {
-  let url = `${config.baseUrl}${toolDef.path}`;
+  // Shallow copy to avoid mutating frozen/const objects
+  const params = { ...args };
+  let path = toolDef.path;
 
-  // Replace path params like :id
-  url = url.replace(/:(\w+)/g, (_match, key) => {
-    const value = args[key];
-    delete args[key];
+  // Replace path params like :id (only in the path, not the scheme/port)
+  path = path.replace(/:(\w+)/g, (_match, key) => {
+    const value = params[key];
+    delete params[key];
     return String(value ?? "");
   });
+
+  let url = `${config.baseUrl}${path}`;
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -77,14 +81,14 @@ async function callRestApi(
     headers,
   };
 
-  if (toolDef.method !== "GET" && Object.keys(args).length > 0) {
-    fetchOptions.body = JSON.stringify(args);
-  } else if (toolDef.method === "GET" && Object.keys(args).length > 0) {
-    const params = new URLSearchParams();
-    for (const [key, value] of Object.entries(args)) {
-      if (value != null) params.set(key, String(value));
+  if (toolDef.method !== "GET" && Object.keys(params).length > 0) {
+    fetchOptions.body = JSON.stringify(params);
+  } else if (toolDef.method === "GET" && Object.keys(params).length > 0) {
+    const searchParams = new URLSearchParams();
+    for (const [key, value] of Object.entries(params)) {
+      if (value != null) searchParams.set(key, String(value));
     }
-    url += `?${params.toString()}`;
+    url += `?${searchParams.toString()}`;
   }
 
   const response = await fetch(url, fetchOptions);

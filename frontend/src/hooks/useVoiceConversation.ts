@@ -3,13 +3,18 @@ import { getDaemonUrl } from "@/lib/tauri";
 import { splitSentences } from "@/lib/sentenceSplitter";
 import { AudioQueueManager } from "@/lib/audioQueue";
 import { voiceProfileManager } from "@/lib/voiceProfile";
+import { logger } from "@/lib/logger";
 import { jarvisClient } from "@/lib/jarvisClient";
 import { startAudioCapture, encodeWav } from "@/lib/audioCapture";
 import {
   createWebSpeechASR,
   isWebSpeechASRAvailable,
   type WebSpeechASR,
+  type WebSpeechASROptions,
 } from "@/lib/webSpeechASR";
+import { HALLUCINATION_PATTERNS, getSpokenText, playSciFiChime } from "@/lib/voiceUtils";
+import { createCleanup, createCleanupStreaming } from "./voiceConversationCleanup";
+import { createConnectRealtimeSession } from "./voiceRealtimeSession";
 
 export type VoiceConversationState =
   | "idle"
@@ -18,79 +23,6 @@ export type VoiceConversationState =
   | "streaming"
   | "speaking"
   | "error";
-
-const HALLUCINATION_PATTERNS = [
-  "请不吝点赞", "订阅", "转发", "打赏", "支持", "栏目",
-  "字幕", "谢谢观看", "谢谢收看", "感谢观看", "下集",
-  "拜拜", "再见", "字幕由", "制作", "敬请关注",
-];
-
-function getSpokenText(text: string): string {
-  let result = "";
-  let currentIndex = 0;
-  
-  while (currentIndex < text.length) {
-    const thoughtStart = text.indexOf("<thought>", currentIndex);
-    if (thoughtStart === -1) {
-      result += text.slice(currentIndex);
-      break;
-    }
-    
-    result += text.slice(currentIndex, thoughtStart);
-    
-    const thoughtEnd = text.indexOf("</thought>", thoughtStart);
-    if (thoughtEnd === -1) {
-      break; // Thought block is open and not closed yet; strip subsequent streaming tokens
-    }
-    
-    currentIndex = thoughtEnd + "</thought>".length;
-  }
-  
-  return result;
-}
-
-function playSciFiChime() {
-  try {
-    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-    const now = ctx.currentTime;
-    
-    // Osc 1 - High bell chime
-    const osc1 = ctx.createOscillator();
-    const gain1 = ctx.createGain();
-    osc1.type = "sine";
-    osc1.frequency.setValueAtTime(880, now); // A5
-    osc1.frequency.exponentialRampToValueAtTime(1760, now + 0.15); // A6
-    
-    gain1.gain.setValueAtTime(0, now);
-    gain1.gain.linearRampToValueAtTime(0.35, now + 0.05);
-    gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
-    
-    // Osc 2 - Harmony chime
-    const osc2 = ctx.createOscillator();
-    const gain2 = ctx.createGain();
-    osc2.type = "triangle";
-    osc2.frequency.setValueAtTime(1108.73, now); // C#6
-    osc2.frequency.exponentialRampToValueAtTime(2217.46, now + 0.2); // C#7
-    
-    gain2.gain.setValueAtTime(0, now);
-    gain2.gain.linearRampToValueAtTime(0.18, now + 0.08);
-    gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
-    
-    osc1.connect(gain1);
-    gain1.connect(ctx.destination);
-    
-    osc2.connect(gain2);
-    gain2.connect(ctx.destination);
-    
-    osc1.start(now);
-    osc1.stop(now + 0.8);
-    
-    osc2.start(now);
-    osc2.stop(now + 0.8);
-  } catch (e) {
-    console.warn("Failed to play sci-fi chime programmatically:", e);
-  }
-}
 
 export function useVoiceConversation(
   conversationId: string | null,
@@ -137,7 +69,7 @@ export function useVoiceConversation(
   const accumulatedFinalTextRef = useRef<string>("");
 
   // Lazily get or create ASR instance, or update options if it already exists
-  const getOrCreateASR = useCallback((options: any) => {
+  const getOrCreateASR = useCallback((options: WebSpeechASROptions) => {
     if (!webAsrRef.current) {
       if (isWebSpeechASRAvailable()) {
         webAsrRef.current = createWebSpeechASR(options);
@@ -154,9 +86,9 @@ export function useVoiceConversation(
 
   // Start post-conversation listening window (5s to speak, then wake word)
   const startPostConversationListen = useCallback(() => {
-    console.log(`[VoiceConversation] startPostConversationListen called, isActive: ${isActiveRef.current}`);
+    logger.debug(`[VoiceConversation] startPostConversationListen called, isActive: ${isActiveRef.current}`);
     if (isActiveRef.current) return;
-    console.log("[VoiceConversation] Starting post-conversation listen (5s window)");
+    logger.debug("[VoiceConversation] Starting post-conversation listen (5s window)");
     
     if (postListenTimerRef.current) {
       clearTimeout(postListenTimerRef.current);
@@ -188,7 +120,7 @@ export function useVoiceConversation(
           console.warn("[VoiceConversation] Post-listen ASR error:", err);
         },
         onEnd: () => {
-          console.log("[VoiceConversation] Post-listen ASR ended");
+          logger.debug("[VoiceConversation] Post-listen ASR ended");
           if (postListenTimerRef.current) {
             clearTimeout(postListenTimerRef.current);
             postListenTimerRef.current = null;
@@ -198,10 +130,10 @@ export function useVoiceConversation(
           
           isActiveRef.current = false;
           if (textToSubmit) {
-            console.log("[VoiceConversation] Post-listen submitting accumulated text:", textToSubmit);
+            logger.debug("[VoiceConversation] Post-listen submitting accumulated text:", textToSubmit);
             startConversationRef.current(textToSubmit);
           } else {
-            console.log("[VoiceConversation] Post-listen no speech detected, exiting...");
+            logger.debug("[VoiceConversation] Post-listen no speech detected, exiting...");
             playFarewellAndExitRef.current();
           }
         },
@@ -219,12 +151,12 @@ export function useVoiceConversation(
   // When transitioning to idle state, return to wake word mode
   useEffect(() => {
     if (state === "idle" && prevStateRef.current !== "idle") {
-      console.log(`[VoiceConversation] Transition: ${prevStateRef.current} → idle, isActive: ${isActiveRef.current}`);
+      logger.debug(`[VoiceConversation] Transition: ${prevStateRef.current} → idle, isActive: ${isActiveRef.current}`);
       if (isFarewellPlayingRef.current) {
         isFarewellPlayingRef.current = false;
-        console.log("[VoiceConversation] Farewell completed. Back to wake word mode.");
+        logger.debug("[VoiceConversation] Farewell completed. Back to wake word mode.");
       } else {
-        console.log("[VoiceConversation] Stopped or timed out. Back to wake word mode.");
+        logger.debug("[VoiceConversation] Stopped or timed out. Back to wake word mode.");
       }
       onIdleRef.current?.();
     }
@@ -238,7 +170,7 @@ export function useVoiceConversation(
       const appWindow = getCurrentWindow();
       const { size, position } = originalBoundsRef.current;
       
-      console.log("[Tauri Window] Restoring original window bounds...", originalBoundsRef.current);
+      logger.debug("[Tauri Window] Restoring original window bounds...", originalBoundsRef.current);
       await appWindow.setAlwaysOnTop(false).catch(() => {});
       await appWindow.setDecorations(true).catch(() => {});
       if (size) {
@@ -272,14 +204,14 @@ export function useVoiceConversation(
         if (isActive) {
           // If the app was not focused when triggered, shrink it and place in bottom-right
           if (!isAppFocusedRef.current) {
-            console.log("[Tauri Window] App not focused. Entering system-level bottom-right overlay mode...");
+            logger.debug("[Tauri Window] App not focused. Entering system-level bottom-right overlay mode...");
             
             // Only capture original bounds if we haven't already
             if (!originalBoundsRef.current) {
               const size = await appWindow.outerSize().catch(() => null);
               const position = await appWindow.outerPosition().catch(() => null);
               originalBoundsRef.current = { size, position };
-              console.log("[Tauri Window] Saved original bounds:", originalBoundsRef.current);
+              logger.debug("[Tauri Window] Saved original bounds:", originalBoundsRef.current);
             }
             
             // Apply borderless, shrunken dimensions, always-on-top
@@ -310,7 +242,7 @@ export function useVoiceConversation(
               await appWindow.setPosition(new LogicalPosition(targetX, targetY)).catch(() => {});
             }
           } else {
-            console.log("[Tauri Window] App is already focused. Showing centered overlay inside application.");
+            logger.debug("[Tauri Window] App is already focused. Showing centered overlay inside application.");
             // Just ensure always on top without shrinking
             await appWindow.setAlwaysOnTop(true).catch(() => {});
           }
@@ -319,7 +251,7 @@ export function useVoiceConversation(
           await appWindow.unminimize().catch(() => {});
           await appWindow.setFocus().catch(() => {});
         } else {
-          console.log("[Tauri Window] Voice state is idle. Restoring window...");
+          logger.debug("[Tauri Window] Voice state is idle. Restoring window...");
           await restoreWindow();
         }
       } catch (e) {
@@ -340,272 +272,34 @@ export function useVoiceConversation(
       .catch(() => {});
   }, []);
 
+  // Cleanup refs object for extracted cleanup factories
+  const cleanupRefs = {
+    postListenTimerRef, breathingTimerRef, webAsrRef, listeningSafetyTimerRef,
+    audioQueueRef, abortControllerRef, peerConnectionRef, localStreamRef,
+    remoteAudioRef, dataChannelRef, greetingSourceRef, greetingAudioCtxRef,
+    bargeInMonitorRef,
+  };
+
   const cleanup = useCallback(() => {
+    // Also stop barge-in monitor (not in the shared refs object for cleanup)
     if (bargeInMonitorRef.current) {
       bargeInMonitorRef.current.stop();
       bargeInMonitorRef.current = null;
     }
-    if (postListenTimerRef.current) {
-      clearTimeout(postListenTimerRef.current);
-      postListenTimerRef.current = null;
-    }
-    if (breathingTimerRef.current) {
-      clearTimeout(breathingTimerRef.current);
-      breathingTimerRef.current = null;
-    }
-    if (webAsrRef.current) {
-
-      webAsrRef.current.stop();
-      webAsrRef.current = null;
-    }
-    if (listeningSafetyTimerRef.current) {
-      clearTimeout(listeningSafetyTimerRef.current);
-      listeningSafetyTimerRef.current = null;
-    }
-    if (audioQueueRef.current) {
-      audioQueueRef.current.dispose();
-      audioQueueRef.current = null;
-    }
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
-    }
-    
-    // Stop any active Realtime WebSocket socket
-    if ((window as any)._realtimeSocket) {
-      try {
-        (window as any)._realtimeSocket.close();
-      } catch {}
-      (window as any)._realtimeSocket = null;
-    }
-
-    // Stop WebRTC peer connection & media resources
-    if (peerConnectionRef.current) {
-      try {
-        peerConnectionRef.current.close();
-      } catch {}
-      peerConnectionRef.current = null;
-    }
-    if (localStreamRef.current) {
-      try {
-        localStreamRef.current.getTracks().forEach((track) => track.stop());
-      } catch {}
-      localStreamRef.current = null;
-    }
-    if (remoteAudioRef.current) {
-      try {
-        remoteAudioRef.current.pause();
-        remoteAudioRef.current.srcObject = null;
-        remoteAudioRef.current.remove();
-      } catch {}
-      remoteAudioRef.current = null;
-    }
-    if (dataChannelRef.current) {
-      try {
-        dataChannelRef.current.close();
-      } catch {}
-      dataChannelRef.current = null;
-    }
-    
-    // Stop any active greeting audio playback immediately
-    if (greetingSourceRef.current) {
-      try {
-        greetingSourceRef.current.stop();
-      } catch {}
-      greetingSourceRef.current = null;
-    }
-    if (greetingAudioCtxRef.current) {
-      try {
-        greetingAudioCtxRef.current.close();
-      } catch {}
-      greetingAudioCtxRef.current = null;
-    }
-  }, []);
+    createCleanup(cleanupRefs)();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const cleanupStreaming = useCallback(() => {
-    if (bargeInMonitorRef.current) {
-      bargeInMonitorRef.current.stop();
-      bargeInMonitorRef.current = null;
-    }
-    if (audioQueueRef.current) {
-      audioQueueRef.current.dispose();
-      audioQueueRef.current = null;
-    }
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
-    }
-  }, []);
+    createCleanupStreaming(cleanupRefs)();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const connectRealtimeSession = useCallback(async () => {
-    // 1. Clean up any existing connection first
-    if (peerConnectionRef.current) {
-      try { peerConnectionRef.current.close(); } catch {}
-      peerConnectionRef.current = null;
-    }
-    if (localStreamRef.current) {
-      try { localStreamRef.current.getTracks().forEach(t => t.stop()); } catch {}
-      localStreamRef.current = null;
-    }
-    if (remoteAudioRef.current) {
-      try {
-        remoteAudioRef.current.pause();
-        remoteAudioRef.current.srcObject = null;
-        remoteAudioRef.current.remove();
-      } catch {}
-      remoteAudioRef.current = null;
-    }
-    if (dataChannelRef.current) {
-      try { dataChannelRef.current.close(); } catch {}
-      dataChannelRef.current = null;
-    }
-
-    try {
-      setState("listening");
-      setAssistantText("正在初始化超清实时语音...");
-      
-      // 2. Fetch session from backend
-      const response = await fetch(`${daemonUrlRef.current}/api/voice/realtime-session`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      });
-      if (!response.ok) {
-        let errMessage = "未能建立实时语音会话，请确认 API Key 是否正确配置";
-        try {
-          const errData = await response.json();
-          if (errData && errData.error) {
-            errMessage = errData.error;
-          }
-        } catch {}
-        throw new Error(errMessage);
-      }
-      
-      const sessionData = await response.json();
-      const ephemeralKey = sessionData.client_secret.value;
-
-      // 3. Create WebRTC Peer Connection
-      const pc = new RTCPeerConnection();
-      peerConnectionRef.current = pc;
-
-      // 4. Setup remote audio element
-      const audioEl = document.createElement("audio");
-      audioEl.autoplay = true;
-      remoteAudioRef.current = audioEl;
-
-      pc.ontrack = (event) => {
-        console.log("[VoiceConversation:Realtime] Got remote audio track");
-        if (event.streams && event.streams[0]) {
-          audioEl.srcObject = event.streams[0];
-        }
-      };
-
-      // 5. Add local microphone track
-      console.log("[VoiceConversation:Realtime] Requesting microphone stream...");
-      const localStream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-      });
-      localStreamRef.current = localStream;
-      
-      const track = localStream.getTracks()[0];
-      if (track) {
-        pc.addTrack(track, localStream);
-      } else {
-        throw new Error("未能捕获麦克风音频轨道");
-      }
-
-      // 6. Setup DataChannel for text/state events
-      const dc = pc.createDataChannel("oai-events");
-      dataChannelRef.current = dc;
-
-      dc.onopen = () => {
-        console.log("[VoiceConversation:Realtime] Data channel established");
-        setAssistantText("连线上啦！主人，随时可以对我说任何话。");
-        setTimeout(() => {
-          if (isActiveRef.current) {
-            setAssistantText("主人，请讲，我在听。");
-          }
-        }, 1500);
-      };
-
-      let realtimeAssistantBuffer = "";
-
-      dc.onmessage = (event) => {
-        try {
-          const msg = JSON.parse(event.data);
-          console.log("[VoiceConversation:Realtime] Message:", msg.type, msg);
-
-          switch (msg.type) {
-            case "response.created":
-              setState("streaming");
-              realtimeAssistantBuffer = "";
-              setAssistantText("");
-              break;
-            case "response.audio_transcript.delta":
-              if (msg.delta) {
-                realtimeAssistantBuffer += msg.delta;
-                setState("speaking");
-                setAssistantText(realtimeAssistantBuffer);
-              }
-              break;
-            case "response.audio_transcript.done":
-              setState("listening");
-              break;
-            case "conversation.item.input_audio_transcription.completed":
-              if (msg.transcript) {
-                setFinalTranscript(msg.transcript);
-              }
-              break;
-            case "input_audio_buffer.speech_started":
-              console.log("[VoiceConversation:Realtime] Speech started (VAD barge-in)");
-              setState("listening");
-              break;
-            case "error":
-              console.error("[VoiceConversation:Realtime] Error event:", msg.error);
-              setAssistantText(`实时连接异常: ${msg.error?.message || "未知错误"}`);
-              break;
-          }
-        } catch (err) {
-          console.warn("[VoiceConversation:Realtime] Failed to parse event:", err);
-        }
-      };
-
-      // 7. Exchange SDP Offer / Answer
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-
-      const sdpResponse = await fetch(`https://api.openai.com/v1/realtime/calls?model=gpt-4o-realtime-preview`, {
-        method: "POST",
-        body: offer.sdp,
-        headers: {
-          "Authorization": `Bearer ${ephemeralKey}`,
-          "Content-Type": "application/sdp"
-        }
-      });
-
-      if (!sdpResponse.ok) {
-        const errText = await sdpResponse.text();
-        throw new Error(`OpenAI SDP Exchange failed: ${errText}`);
-      }
-
-      const answerSdp = await sdpResponse.text();
-      await pc.setRemoteDescription({ type: "answer", sdp: answerSdp });
-      console.log("[VoiceConversation:Realtime] WebRTC Connection fully established!");
-
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "连接 ChatGPT Realtime 失败，请检查网络或配置";
-      console.error("[VoiceConversation:Realtime] Initialization error:", error);
-      setState("error");
-      setLastError(message);
-      setAssistantText(message);
-      setTimeout(() => {
-        if (isActiveRef.current) setState("idle");
-      }, 4000);
-    }
-  }, []);
+    const realtimeRefs = {
+      peerConnectionRef, localStreamRef, remoteAudioRef, dataChannelRef, isActiveRef,
+    };
+    const realtimeCallbacks = { setState, setAssistantText, setFinalTranscript, setLastError };
+    await createConnectRealtimeSession(realtimeRefs, realtimeCallbacks)();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- Batch ASR fallback (P0) ---
   const transcribeWithWhisper = useCallback(async (): Promise<string> => {
@@ -738,7 +432,7 @@ export function useVoiceConversation(
     // If the main window is in the background (blurred), we disable active microphone VAD barge-in
     // to prevent hardware speaker loopback/feedback and eliminate background mic locks.
     if (!document.hasFocus()) {
-      console.log("[VoiceConversation] Main window is in background. Skipping VAD barge-in monitor.");
+      logger.debug("[VoiceConversation] Main window is in background. Skipping VAD barge-in monitor.");
       return;
     }
 
@@ -804,7 +498,7 @@ export function useVoiceConversation(
                 // If the AI is still "thinking" (generating text) or silent, we ignore environmental noises.
                 const isTtsPlaying = audioQueueRef.current && audioQueueRef.current.isPlaying;
                 if (isTtsPlaying) {
-                  console.log("[VoiceConversation:BargeIn] Voice activity detected! Interrupting AI...");
+                  logger.debug("[VoiceConversation:BargeIn] Voice activity detected! Interrupting AI...");
                   stop();
                   bargeInRef.current(); // Call barge-in via ref
                   return;
@@ -830,7 +524,7 @@ export function useVoiceConversation(
   // Monitor window focus/blur to dynamically enable/disable the VAD barge-in microphone capture
   useEffect(() => {
     const handleBlur = () => {
-      console.log("[VoiceConversation] Main window blurred. Stopping barge-in monitor to prevent loopback.");
+      logger.debug("[VoiceConversation] Main window blurred. Stopping barge-in monitor to prevent loopback.");
       if (bargeInMonitorRef.current) {
         bargeInMonitorRef.current.stop();
         bargeInMonitorRef.current = null;
@@ -838,7 +532,7 @@ export function useVoiceConversation(
     };
     const handleFocus = () => {
       if (isActiveRef.current && (state === "speaking" || state === "streaming")) {
-        console.log("[VoiceConversation] Main window focused while AI is responding. Restarting barge-in monitor.");
+        logger.debug("[VoiceConversation] Main window focused while AI is responding. Restarting barge-in monitor.");
         startBargeInMonitor();
       }
     };
@@ -888,11 +582,11 @@ export function useVoiceConversation(
 
       // 2. Failsafe Cleanup: Force stop and dispose any lingering audio queues or streams before creating new ones
       if (audioQueueRef.current) {
-        try { audioQueueRef.current.dispose(); } catch {}
+        try { audioQueueRef.current.dispose(); } catch (e) { logger.debug("[VoiceConversation] audio queue dispose ignored:", e); }
         audioQueueRef.current = null;
       }
       if (abortControllerRef.current) {
-        try { abortControllerRef.current.abort(); } catch {}
+        try { abortControllerRef.current.abort(); } catch (e) { logger.debug("[VoiceConversation] abort controller abort ignored:", e); }
         abortControllerRef.current = null;
       }
 
@@ -955,7 +649,7 @@ export function useVoiceConversation(
         // Done — keep assistantText visible until persisted messages load
         if (isActiveRef.current) {
           lastStreamedTextRef.current = fullText;
-          console.log("[VoiceConversation] Audio done, waiting 800ms breathing delay...");
+          logger.debug("[VoiceConversation] Audio done, waiting 800ms breathing delay...");
           
           await new Promise<void>((resolve) => {
             if (breathingTimerRef.current) {
@@ -968,7 +662,7 @@ export function useVoiceConversation(
           });
           
           if (isActiveRef.current) {
-            console.log("[VoiceConversation] Breathing pause done, starting post-conversation listen...");
+            logger.debug("[VoiceConversation] Breathing pause done, starting post-conversation listen...");
             isActiveRef.current = false;
             startPostConversationListen();
           }
@@ -1064,14 +758,14 @@ export function useVoiceConversation(
           console.warn("[VoiceConversation] ASR error:", err);
         },
         onEnd: () => {
-          console.log("[VoiceConversation] ASR onEnd called");
+          logger.debug("[VoiceConversation] ASR onEnd called");
           if (listeningSafetyTimerRef.current) {
             clearTimeout(listeningSafetyTimerRef.current);
             listeningSafetyTimerRef.current = null;
           }
           
           const textToSubmit = (accumulatedFinalTextRef.current + latestInterimText).trim();
-          console.log("[VoiceConversation] ASR finished. Text to submit:", textToSubmit);
+          logger.debug("[VoiceConversation] ASR finished. Text to submit:", textToSubmit);
           
           isActiveRef.current = false;
           if (textToSubmit) {
@@ -1127,7 +821,7 @@ export function useVoiceConversation(
       // 2. Fetch spoken response
       const buffer = await jarvisClient.synthesize("我在的，主人。", voiceProfileManager.getVoiceName());
       if (!isActiveRef.current) {
-        console.log("[VoiceConversation] Greeting fetch completed but conversation was already stopped. Aborting playback.");
+        logger.debug("[VoiceConversation] Greeting fetch completed but conversation was already stopped. Aborting playback.");
         return;
       }
       const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -1238,9 +932,9 @@ export function useVoiceConversation(
           latestInterimText = "";
         },
         onEnd: () => {
-          console.log("[VoiceConversation:BargeIn] ASR onEnd called");
+          logger.debug("[VoiceConversation:BargeIn] ASR onEnd called");
           const textToSubmit = (accumulatedFinalTextRef.current + latestInterimText).trim();
-          console.log("[VoiceConversation:BargeIn] Text to submit:", textToSubmit);
+          logger.debug("[VoiceConversation:BargeIn] Text to submit:", textToSubmit);
           
           isActiveRef.current = false;
           if (textToSubmit) {
@@ -1257,7 +951,7 @@ export function useVoiceConversation(
 
   const finishListening = useCallback(() => {
     if (state !== "listening") return;
-    console.log("[VoiceConversation] finishListening called, stopping ASR and submitting current transcripts...");
+    logger.debug("[VoiceConversation] finishListening called, stopping ASR and submitting current transcripts...");
     
     const textToSubmit = (accumulatedFinalTextRef.current + interimTranscript).trim();
     
@@ -1283,21 +977,21 @@ export function useVoiceConversation(
   }, [state, interimTranscript, startConversation]);
 
   const handleWindowBlur = useCallback(() => {
-    console.log("[VoiceConversation] handleWindowBlur called. Stopping physical WebSpeech ASR...");
+    logger.debug("[VoiceConversation] handleWindowBlur called. Stopping physical WebSpeech ASR...");
     if (webAsrRef.current) {
       webAsrRef.current.stop();
     }
   }, []);
 
   const handleWindowFocus = useCallback(() => {
-    console.log("[VoiceConversation] handleWindowFocus called. Resuming physical WebSpeech ASR if state is listening...");
+    logger.debug("[VoiceConversation] handleWindowFocus called. Resuming physical WebSpeech ASR if state is listening...");
     if (state === "listening") {
       startListening(true, true);
     }
   }, [state, startListening]);
 
   const playFarewellAndExit = useCallback(async () => {
-    console.log("[VoiceConversation] Silence detected, playing farewell and exiting...");
+    logger.debug("[VoiceConversation] Silence detected, playing farewell and exiting...");
     cleanup();
     
     isActiveRef.current = true;
@@ -1383,7 +1077,7 @@ export function useVoiceConversation(
       try {
         const { getCurrentWindow } = await import("@tauri-apps/api/window");
         appWindowInstance = getCurrentWindow();
-      } catch {}
+      } catch (e) { logger.debug("[VoiceConversation] window init ignored:", e); }
     };
     initWindow();
 
@@ -1476,7 +1170,7 @@ export function useVoiceConversation(
     final: string,
     assistant: string
   ) => {
-    console.log("[VoiceConversation] restoreState called with:", { newState, interim, final, assistant });
+    logger.debug("[VoiceConversation] restoreState called with:", { newState, interim, final, assistant });
     
     cleanup();
     

@@ -2,6 +2,9 @@ import { Hono } from "hono";
 import type { ToolSource, RiskLevel } from "@jarvis/types";
 import { getRegistry } from "../tools/registry.js";
 import { getRepositories } from "../db/factory.js";
+import { PermissionGuard } from "@jarvis/permission-guard";
+
+const permissionGuard = new PermissionGuard();
 
 const app = new Hono();
 
@@ -110,12 +113,12 @@ app.post("/:id/execute", async (c) => {
   }
 
   try {
-    const result = await tool.execute(args);
+    const { result } = await permissionGuard.executeWithGuard(tool, args);
     return c.json(result);
   } catch (error) {
     return c.json({
       success: false,
-      error: error instanceof Error ? error.message : String(error),
+      error: "Tool execution failed",
     }, 500);
   }
 });

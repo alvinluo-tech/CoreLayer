@@ -32,7 +32,9 @@ export function TitleBar() {
           });
 
           if (!active) {
-            try { unsub(); } catch {}
+            try { unsub(); } catch {
+              // Cleanup during teardown is best-effort
+            }
             return;
           }
           unlisten = unsub;

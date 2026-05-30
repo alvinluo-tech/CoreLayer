@@ -171,7 +171,9 @@ export function useChat() {
               try {
                 const convs = await tauri.listConversations();
                 setConversations(convs);
-              } catch {}
+              } catch {
+                // Conversation refresh after fallback is best-effort
+              }
               return;
             }
           } catch (fallbackErr) {
