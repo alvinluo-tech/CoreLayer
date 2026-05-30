@@ -132,11 +132,23 @@ export function useVoiceConversation(
   const localStreamRef = useRef<MediaStream | null>(null);
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
+  const listeningSafetyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
 
 
   const POST_LISTEN_TIMEOUT = 7000; // 7s silence → back to wake word
 
+  // Lazily get or create ASR instance, or update options if it already exists
+  const getOrCreateASR = useCallback((options: any) => {
+    if (!webAsrRef.current) {
+      if (isWebSpeechASRAvailable()) {
+        webAsrRef.current = createWebSpeechASR(options);
+      }
+    } else {
+      webAsrRef.current.updateOptions(options);
+    }
+    return webAsrRef.current!;
+  }, []);
 
   useEffect(() => {
     onIdleRef.current = onIdle;
@@ -166,7 +178,6 @@ export function useVoiceConversation(
           gotResult = true;
           if (webAsrRef.current) {
             webAsrRef.current.stop();
-            webAsrRef.current = null;
           }
           isActiveRef.current = false;
           startConversationRef.current(latestInterimText);
@@ -175,24 +186,32 @@ export function useVoiceConversation(
 
         if (webAsrRef.current) {
           webAsrRef.current.stop();
-          webAsrRef.current = null;
         }
         isActiveRef.current = false;
         playFarewellAndExitRef.current();
       }, POST_LISTEN_TIMEOUT);
 
-      const asr = createWebSpeechASR({
+      const asr = getOrCreateASR({
         lang: "zh-CN",
-        onInterim: (text) => {
-          // Cancel the post-listen timeout because the user has started speaking!
+        onInterim: (text: string) => {
+          // Refresh the post-listen safety timeout because the user is actively speaking!
           if (postListenTimerRef.current) {
             clearTimeout(postListenTimerRef.current);
-            postListenTimerRef.current = null;
           }
+          postListenTimerRef.current = setTimeout(() => {
+            if (gotResult) return;
+            console.log("[VoiceConversation] Post-listen safety timeout (silence after speech) fired.");
+            if (webAsrRef.current) {
+              webAsrRef.current.stop();
+            }
+            isActiveRef.current = false;
+            playFarewellAndExitRef.current();
+          }, POST_LISTEN_TIMEOUT);
+
           setInterimTranscript(text);
           latestInterimText = text;
         },
-        onFinal: (text) => {
+        onFinal: (text: string) => {
           gotResult = true;
           if (postListenTimerRef.current) {
             clearTimeout(postListenTimerRef.current);
@@ -200,12 +219,11 @@ export function useVoiceConversation(
           }
           if (webAsrRef.current) {
             webAsrRef.current.stop();
-            webAsrRef.current = null;
           }
           isActiveRef.current = false;
           startConversationRef.current(text);
         },
-        onError: (err) => {
+        onError: (err: string) => {
           console.warn("[VoiceConversation] Post-listen ASR error:", err);
         },
         onEnd: () => {
@@ -227,7 +245,6 @@ export function useVoiceConversation(
         },
         silenceTimeout: POST_LISTEN_TIMEOUT,
       });
-      webAsrRef.current = asr;
       asr.start();
     } else {
       // No Web Speech API — fall back to immediate wake word
@@ -235,7 +252,7 @@ export function useVoiceConversation(
       isActiveRef.current = false;
       playFarewellAndExitRef.current();
     }
-  }, []);
+  }, [getOrCreateASR]);
 
   // When transitioning to idle state, return to wake word mode
   useEffect(() => {
@@ -378,6 +395,10 @@ export function useVoiceConversation(
 
       webAsrRef.current.stop();
       webAsrRef.current = null;
+    }
+    if (listeningSafetyTimerRef.current) {
+      clearTimeout(listeningSafetyTimerRef.current);
+      listeningSafetyTimerRef.current = null;
     }
     if (audioQueueRef.current) {
       audioQueueRef.current.dispose();
@@ -751,6 +772,14 @@ export function useVoiceConversation(
   );
 
   const startBargeInMonitor = useCallback(() => {
+    // Only monitor for voice barge-in if the main window is actively focused!
+    // If the main window is in the background (blurred), we disable active microphone VAD barge-in
+    // to prevent hardware speaker loopback/feedback and eliminate background mic locks.
+    if (!document.hasFocus()) {
+      console.log("[VoiceConversation] Main window is in background. Skipping VAD barge-in monitor.");
+      return;
+    }
+
     if (bargeInMonitorRef.current) {
       bargeInMonitorRef.current.stop();
       bargeInMonitorRef.current = null;
@@ -835,6 +864,29 @@ export function useVoiceConversation(
         console.warn("[VoiceConversation:BargeIn] Failed to start barge-in mic monitor:", err);
       });
   }, []);
+
+  // Monitor window focus/blur to dynamically enable/disable the VAD barge-in microphone capture
+  useEffect(() => {
+    const handleBlur = () => {
+      console.log("[VoiceConversation] Main window blurred. Stopping barge-in monitor to prevent loopback.");
+      if (bargeInMonitorRef.current) {
+        bargeInMonitorRef.current.stop();
+        bargeInMonitorRef.current = null;
+      }
+    };
+    const handleFocus = () => {
+      if (isActiveRef.current && (state === "speaking" || state === "streaming")) {
+        console.log("[VoiceConversation] Main window focused while AI is responding. Restarting barge-in monitor.");
+        startBargeInMonitor();
+      }
+    };
+    window.addEventListener("blur", handleBlur);
+    window.addEventListener("focus", handleFocus);
+    return () => {
+      window.removeEventListener("blur", handleBlur);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, [state, startBargeInMonitor]);
 
   // --- Main conversation flow ---
   const startConversation = useCallback(
@@ -980,8 +1032,8 @@ export function useVoiceConversation(
   startConversationRef.current = startConversation;
 
   // --- Start listening (Web Speech API or batch fallback) ---
-  const startListening = useCallback(() => {
-    if (isActiveRef.current) return;
+  const startListening = useCallback((keepAssistantText = false, force = false) => {
+    if (isActiveRef.current && !force) return;
 
     const voiceMode = localStorage.getItem("jarvis_voice_mode") || "pipeline";
     if (voiceMode === "realtime") {
@@ -991,7 +1043,9 @@ export function useVoiceConversation(
     }
     
     lastStreamedTextRef.current = "";
-    lastUserTextRef.current = "";
+    if (!keepAssistantText) {
+      lastUserTextRef.current = "";
+    }
     
     const isFocused = document.hasFocus();
     isAppFocusedRef.current = isFocused;
@@ -1001,31 +1055,55 @@ export function useVoiceConversation(
     setState("listening");
     setInterimTranscript("");
     setFinalTranscript("");
-    setAssistantText("");
+    if (!keepAssistantText) {
+      setAssistantText("");
+    }
+
+    // Safety timeout: if ASR never produces a result, recover to idle
+    if (listeningSafetyTimerRef.current) {
+      clearTimeout(listeningSafetyTimerRef.current);
+    }
+    listeningSafetyTimerRef.current = setTimeout(() => {
+      if (!isActiveRef.current) return;
+      console.warn("[VoiceConversation] Listening safety timeout — ASR may have failed to start");
+      if (webAsrRef.current) {
+        webAsrRef.current.stop();
+      }
+      isActiveRef.current = false;
+      listeningSafetyTimerRef.current = null;
+      setState("idle");
+    }, 5000);
 
     if (isWebSpeechASRAvailable()) {
       let gotFinalResult = false;
       let latestInterimText = "";
 
-      const asr = createWebSpeechASR({
+      const asr = getOrCreateASR({
         lang: "zh-CN",
-        onInterim: (text) => {
+        onInterim: (text: string) => {
           setInterimTranscript(text);
           latestInterimText = text;
         },
-        onFinal: (text) => {
+        onFinal: (text: string) => {
           gotFinalResult = true;
+          if (listeningSafetyTimerRef.current) {
+            clearTimeout(listeningSafetyTimerRef.current);
+            listeningSafetyTimerRef.current = null;
+          }
           if (webAsrRef.current) {
             webAsrRef.current.stop();
-            webAsrRef.current = null;
           }
           isActiveRef.current = false;
           startConversation(text);
         },
-        onError: (err) => {
+        onError: (err: string) => {
           console.warn("[VoiceConversation] ASR error:", err);
         },
         onEnd: () => {
+          if (listeningSafetyTimerRef.current) {
+            clearTimeout(listeningSafetyTimerRef.current);
+            listeningSafetyTimerRef.current = null;
+          }
           if (gotFinalResult) return;
           if (latestInterimText.trim()) {
             console.log("[VoiceConversation] Silence timeout but got interim text, submitting:", latestInterimText);
@@ -1039,7 +1117,6 @@ export function useVoiceConversation(
         },
         silenceTimeout: 4000,
       });
-      webAsrRef.current = asr;
       asr.start();
     } else {
       // Batch ASR fallback
@@ -1084,12 +1161,20 @@ export function useVoiceConversation(
       
       // 2. Fetch spoken response
       const buffer = await jarvisClient.synthesize("我在的，主人。", voiceProfileManager.getVoiceName());
+      if (!isActiveRef.current) {
+        console.log("[VoiceConversation] Greeting fetch completed but conversation was already stopped. Aborting playback.");
+        return;
+      }
       const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
       greetingAudioCtxRef.current = ctx;
       
       ctx.decodeAudioData(
         buffer,
         (decoded) => {
+          if (!isActiveRef.current) {
+            ctx.close().catch(() => {});
+            return;
+          }
           const source = ctx.createBufferSource();
           source.buffer = decoded;
           source.connect(ctx.destination);
@@ -1118,8 +1203,10 @@ export function useVoiceConversation(
           source.start(0);
         },
         () => {
-          isActiveRef.current = false;
-          startListening();
+          if (isActiveRef.current) {
+            isActiveRef.current = false;
+            startListening();
+          }
           ctx.close().catch(() => {});
         }
       );
@@ -1164,17 +1251,16 @@ export function useVoiceConversation(
       let gotFinalResult = false;
       let latestInterimText = "";
 
-      const asr = createWebSpeechASR({
+      const asr = getOrCreateASR({
         lang: "zh-CN",
-        onInterim: (text) => {
+        onInterim: (text: string) => {
           setInterimTranscript(text);
           latestInterimText = text;
         },
-        onFinal: (text) => {
+        onFinal: (text: string) => {
           gotFinalResult = true;
           if (webAsrRef.current) {
             webAsrRef.current.stop();
-            webAsrRef.current = null;
           }
           isActiveRef.current = false;
           startConversation(text);
@@ -1193,10 +1279,50 @@ export function useVoiceConversation(
         },
         silenceTimeout: 4000,
       });
-      webAsrRef.current = asr;
       asr.start();
     }
-  }, [startConversation]);
+  }, [startConversation, getOrCreateASR]);
+
+  const finishListening = useCallback(() => {
+    if (state !== "listening") return;
+    console.log("[VoiceConversation] finishListening called, stopping ASR and submitting current transcripts...");
+    
+    const textToSubmit = (interimTranscript || finalTranscript || "").trim();
+    
+    if (webAsrRef.current) {
+      webAsrRef.current.stop();
+    }
+    if (listeningSafetyTimerRef.current) {
+      clearTimeout(listeningSafetyTimerRef.current);
+      listeningSafetyTimerRef.current = null;
+    }
+    if (postListenTimerRef.current) {
+      clearTimeout(postListenTimerRef.current);
+      postListenTimerRef.current = null;
+    }
+    
+    isActiveRef.current = false;
+    
+    if (textToSubmit) {
+      startConversation(textToSubmit);
+    } else {
+      playFarewellAndExitRef.current();
+    }
+  }, [state, interimTranscript, finalTranscript, startConversation]);
+
+  const handleWindowBlur = useCallback(() => {
+    console.log("[VoiceConversation] handleWindowBlur called. Stopping physical WebSpeech ASR...");
+    if (webAsrRef.current) {
+      webAsrRef.current.stop();
+    }
+  }, []);
+
+  const handleWindowFocus = useCallback(() => {
+    console.log("[VoiceConversation] handleWindowFocus called. Resuming physical WebSpeech ASR if state is listening...");
+    if (state === "listening") {
+      startListening(true, true);
+    }
+  }, [state, startListening]);
 
   const playFarewellAndExit = useCallback(async () => {
     console.log("[VoiceConversation] Silence detected, playing farewell and exiting...");
@@ -1210,6 +1336,10 @@ export function useVoiceConversation(
     try {
       const buffer = await jarvisClient.synthesize("如果没啥事我就先退下咯，如果有需要随时喊我哦！", voiceProfileManager.getVoiceName());
       const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      
+      if (ctx.state === "suspended") {
+        ctx.resume().catch(() => {});
+      }
       
       ctx.decodeAudioData(
         buffer,
@@ -1271,6 +1401,30 @@ export function useVoiceConversation(
     };
   }, [cleanup, restoreWindow]);
 
+  // Restore a specific state (e.g. from the closing assistant bubble)
+  const restoreState = useCallback((
+    newState: VoiceConversationState,
+    interim: string,
+    final: string,
+    assistant: string
+  ) => {
+    console.log("[VoiceConversation] restoreState called with:", { newState, interim, final, assistant });
+    
+    cleanup();
+    
+    isActiveRef.current = newState !== "idle" && newState !== "error";
+    setState(newState);
+    setInterimTranscript(interim);
+    setFinalTranscript(final);
+    setAssistantText(assistant);
+    
+    // If the restored state is listening, start physical microphone capture
+    if (newState === "listening") {
+      isActiveRef.current = false; // startListening will set it back to true
+      startListening(true);
+    }
+  }, [cleanup, startListening]);
+
   // Clear persisted text when new messages arrive from server
   const clearLastStreamedText = useCallback(() => {
     lastStreamedTextRef.current = "";
@@ -1299,8 +1453,12 @@ export function useVoiceConversation(
     playGreetingAndListen,
     stopConversation,
     bargeIn,
+    finishListening,
+    handleWindowBlur,
+    handleWindowFocus,
     startConversation,
     clearLastStreamedText,
     layoutMode,
+    restoreState,
   };
 }

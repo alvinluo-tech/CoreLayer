@@ -35,6 +35,7 @@ interface SpeechRecognitionInstance {
   onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
   onend: (() => void) | null;
   onstart: (() => void) | null;
+  onspeechstart: (() => void) | null;
 }
 
 function getSpeechRecognition(): (new () => SpeechRecognitionInstance) | null {
@@ -58,6 +59,7 @@ export interface WebSpeechASR {
   start: () => void;
   stop: () => void;
   readonly isActive: boolean;
+  updateOptions: (newOptions: Partial<WebSpeechASROptions>) => void;
 }
 
 export function isWebSpeechASRAvailable(): boolean {
@@ -65,14 +67,12 @@ export function isWebSpeechASRAvailable(): boolean {
 }
 
 export function createWebSpeechASR(options: WebSpeechASROptions): WebSpeechASR {
-  const {
-    lang = "zh-CN",
-    onInterim,
-    onFinal,
-    onError,
-    onEnd,
-    silenceTimeout = 2500,
-  } = options;
+  let currentSilenceTimeout = options.silenceTimeout ?? 2500;
+  let currentOnInterim = options.onInterim;
+  let currentOnFinal = options.onFinal;
+  let currentOnError = options.onError;
+  let currentOnEnd = options.onEnd;
+  const lang = options.lang ?? "zh-CN";
 
   const SpeechRecognition = getSpeechRecognition();
   if (!SpeechRecognition) {
@@ -87,6 +87,8 @@ export function createWebSpeechASR(options: WebSpeechASROptions): WebSpeechASR {
 
   let active = false;
   let silenceTimer: ReturnType<typeof setTimeout> | null = null;
+  let consecutiveRestarts = 0;
+  const MAX_RESTARTS = 3; // Give up after 3 consecutive restarts with no audio
 
   const clearSilenceTimer = () => {
     if (silenceTimer) {
@@ -100,9 +102,9 @@ export function createWebSpeechASR(options: WebSpeechASROptions): WebSpeechASR {
     silenceTimer = setTimeout(() => {
       if (active) {
         stop();
-        onEnd?.();
+        currentOnEnd?.();
       }
-    }, silenceTimeout);
+    }, currentSilenceTimeout);
   };
 
   recognition.onstart = () => {
@@ -112,6 +114,8 @@ export function createWebSpeechASR(options: WebSpeechASROptions): WebSpeechASR {
 
   recognition.onresult = (event: SpeechRecognitionEvent) => {
     if (!active) return;
+    // Reset restart counter when actual audio is received
+    consecutiveRestarts = 0;
     resetSilenceTimer();
 
     let interimText = "";
@@ -129,28 +133,45 @@ export function createWebSpeechASR(options: WebSpeechASROptions): WebSpeechASR {
     }
 
     if (interimText) {
-      onInterim?.(interimText);
+      currentOnInterim?.(interimText);
     }
     if (finalText) {
-      onFinal?.(finalText);
+      currentOnFinal?.(finalText);
     }
   };
 
   recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
     if (event.error === "no-speech" || event.error === "aborted") return;
     console.warn("[WebSpeechASR] Error:", event.error);
-    onError?.(event.error);
+    currentOnError?.(event.error);
+
+    // Stop recognition and reset active status on critical errors (including audio-capture) to prevent infinite loops in WebView2
+    active = false;
+    clearSilenceTimer();
+    try {
+      recognition.abort();
+    } catch {}
+    currentOnEnd?.();
   };
 
   recognition.onend = () => {
     clearSilenceTimer();
     if (active) {
+      consecutiveRestarts++;
+      if (consecutiveRestarts > MAX_RESTARTS) {
+        // Too many restarts with no audio — mic is likely locked or unavailable.
+        // Give up cleanly to prevent an infinite loop.
+        console.warn(`[WebSpeechASR] Giving up after ${MAX_RESTARTS} restarts with no audio (mic locked?).`);
+        active = false;
+        currentOnEnd?.();
+        return;
+      }
       // Auto-restart if still active (browser may stop unexpectedly)
       try {
         recognition.start();
       } catch {
         active = false;
-        onEnd?.();
+        currentOnEnd?.();
       }
     }
   };
@@ -162,6 +183,8 @@ export function createWebSpeechASR(options: WebSpeechASROptions): WebSpeechASR {
       recognition.start();
     } catch {
       active = false;
+      clearSilenceTimer();
+      currentOnEnd?.();
     }
   };
 
@@ -173,11 +196,21 @@ export function createWebSpeechASR(options: WebSpeechASROptions): WebSpeechASR {
     } catch {}
   };
 
+  const updateOptions = (newOptions: Partial<WebSpeechASROptions>) => {
+    if (newOptions.silenceTimeout !== undefined) currentSilenceTimeout = newOptions.silenceTimeout;
+    if (newOptions.onInterim !== undefined) currentOnInterim = newOptions.onInterim;
+    if (newOptions.onFinal !== undefined) currentOnFinal = newOptions.onFinal;
+    if (newOptions.onError !== undefined) currentOnError = newOptions.onError;
+    if (newOptions.onEnd !== undefined) currentOnEnd = newOptions.onEnd;
+  };
+
   return {
     start,
     stop,
+    updateOptions,
     get isActive() {
       return active;
     },
   };
 }
+

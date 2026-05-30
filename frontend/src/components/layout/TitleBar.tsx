@@ -5,6 +5,7 @@ export function TitleBar() {
   const [isMaximized, setIsMaximized] = useState(false);
 
   useEffect(() => {
+    let active = true;
     let unlisten: (() => void) | null = null;
 
     // Check if running inside Tauri
@@ -16,10 +17,12 @@ export function TitleBar() {
           
           // Set initial maximized state
           const maximized = await appWindow.isMaximized();
+          if (!active) return;
           setIsMaximized(maximized);
 
           // Listen to window resize/maximize events to keep state in sync
-          unlisten = await appWindow.onResized(async () => {
+          const unsub = await appWindow.onResized(async () => {
+            if (!active) return;
             try {
               const max = await appWindow.isMaximized();
               setIsMaximized(max);
@@ -27,6 +30,12 @@ export function TitleBar() {
               console.warn("Failed to check maximized state in resize listener:", err);
             }
           });
+
+          if (!active) {
+            try { unsub(); } catch {}
+            return;
+          }
+          unlisten = unsub;
         } catch (err) {
           console.error("Failed to initialize Tauri window listeners:", err);
         }
@@ -36,8 +45,9 @@ export function TitleBar() {
     }
 
     return () => {
+      active = false;
       if (unlisten) {
-        unlisten();
+        try { unlisten(); } catch (err) {}
       }
     };
   }, []);

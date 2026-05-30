@@ -212,12 +212,12 @@ export function JarvisVoiceOverlay({
 
   // Custom styling based on state
   const glowColors: Record<VoiceConversationState, string> = {
-    idle: "shadow-slate-500/20 border-slate-500/30",
-    listening: "shadow-cyan-500/30 border-cyan-500/30 bg-cyan-950/10",
-    transcribing: "shadow-blue-500/30 border-blue-500/30 bg-blue-950/10",
-    streaming: "shadow-amber-500/30 border-amber-500/30 bg-amber-950/10",
-    speaking: "shadow-violet-500/30 border-violet-500/30 bg-violet-950/10",
-    error: "shadow-red-500/30 border-red-500/30 bg-red-950/10",
+    idle: "shadow-slate-500/40 border-slate-700/50 bg-[#0B0F19]/95 text-white",
+    listening: "shadow-cyan-500/40 border-cyan-500/40 bg-[#091E2A]/95 text-white",
+    transcribing: "shadow-blue-500/40 border-blue-500/40 bg-[#0A1A30]/95 text-white",
+    streaming: "shadow-amber-500/40 border-amber-500/40 bg-[#251A0A]/95 text-white",
+    speaking: "shadow-violet-500/40 border-violet-500/40 bg-[#1D0E2E]/95 text-white",
+    error: "shadow-red-500/40 border-red-500/40 bg-[#2C0B0B]/95 text-white",
   };
 
   const stateTitle: Record<VoiceConversationState, string> = {
@@ -252,12 +252,12 @@ export function JarvisVoiceOverlay({
         className={cn(
           isCentered
             ? "relative w-full max-w-md p-6 mx-4 rounded-2xl border backdrop-blur-2xl shadow-2xl transition-all duration-500 transform scale-100 animate-in zoom-in-95"
-            : "relative w-full h-full p-4 flex flex-col border rounded-none backdrop-blur-2xl shadow-2xl transition-all duration-500 transform scale-100",
+            : "relative w-full h-full p-4 flex flex-col border rounded-2xl backdrop-blur-2xl shadow-2xl transition-all duration-500 transform scale-100",
           glowColors[state]
         )}
       >
         {/* Glow overlay grid effect */}
-        <div className={cn("absolute inset-0 bg-radial-gradient from-transparent to-black/10 pointer-events-none", isCentered ? "rounded-2xl" : "rounded-none")} />
+        <div className="absolute inset-0 bg-radial-gradient from-transparent to-black/10 pointer-events-none rounded-2xl" />
 
         {/* HUD top decorative bar */}
         <div className={cn("flex items-center justify-between border-b border-white/10 pb-2", isCentered ? "mb-4" : "mb-3")}>
@@ -328,7 +328,7 @@ export function JarvisVoiceOverlay({
           <div className={cn("space-y-3", !isCentered ? "flex-1 overflow-y-auto min-h-0 py-2 pr-1" : "")}>
             {/* User speech transcript bubble */}
             {(state === "listening" || finalTranscript) && (
-              <div className="rounded-lg border border-white/5 bg-white/5 p-2.5 space-y-1">
+              <div className="rounded-lg border border-white/10 bg-white/10 p-2.5 space-y-1">
                 <p className="font-mono text-[9px] text-cyan-400 uppercase tracking-widest font-semibold">
                   Host Voice Command:
                 </p>
@@ -346,7 +346,7 @@ export function JarvisVoiceOverlay({
 
             {/* Holographic Thought Ticker */}
             {(state === "streaming" || state === "transcribing" || state === "error") && !assistantText && (
-              <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-2.5 space-y-1.5 animate-pulse">
+              <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5 space-y-1.5 animate-pulse">
                 <div className="flex items-center justify-between">
                   <p className="font-mono text-[9px] text-amber-400 uppercase tracking-widest font-bold">
                     🧠 COGNITIVE MATRIX SCANNERS:
@@ -366,8 +366,8 @@ export function JarvisVoiceOverlay({
               <div className={cn(
                 "rounded-lg p-2.5 space-y-1 border transition-all duration-300",
                 state === "error"
-                  ? "border-red-500/20 bg-red-500/5 shadow-[inset_0_0_10px_rgba(239,68,68,0.05)]"
-                  : "border-purple-500/10 bg-purple-500/5"
+                  ? "border-red-500/30 bg-red-500/10 shadow-[inset_0_0_10px_rgba(239,68,68,0.1)]"
+                  : "border-purple-500/25 bg-purple-500/10"
               )}>
                 <p className={cn(
                   "font-mono text-[9px] uppercase tracking-widest font-semibold",

@@ -70,6 +70,13 @@ export class AudioQueueManager {
     this.buffers.delete(this.nextPlayIndex);
     this.nextPlayIndex++;
 
+    // Proactively resume AudioContext if it was suspended due to window focus loss or browser policies
+    if (this.audioCtx.state === "suspended") {
+      this.audioCtx.resume().catch((err) => {
+        console.warn("[AudioQueue] Proactive AudioContext resume failed:", err);
+      });
+    }
+
     const source = this.audioCtx.createBufferSource();
     source.buffer = buffer;
     source.connect(this.audioCtx.destination);
