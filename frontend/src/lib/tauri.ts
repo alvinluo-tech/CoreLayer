@@ -291,7 +291,7 @@ export async function getHealth(): Promise<{
   aiProvider: string;
   aiModel: string;
 }> {
-  return invoke("get_health");
+  return invoke("health_check");
 }
 
 // ---- MCP Server Management ----

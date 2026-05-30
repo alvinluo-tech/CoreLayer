@@ -15,9 +15,8 @@ export function createRepositories(mode: "local" | "cloud" | "postgres"): Reposi
   }
   
   if (mode === "postgres") {
-    // Fallback to SQLite or lazy load PostgreSQL adapter if configured.
-    // For seamless integration, we default to the SQLite engine if pg isn't active,
-    // or let cloud repositories redirect PG connections.
+    // PostgreSQL adapter not yet implemented — fall back to SQLite with a warning.
+    console.warn("[Jarvis] PostgreSQL mode requested but not implemented, falling back to SQLite");
     return createSqliteRepositories();
   }
   

@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from "react";
+import type { PhysicalSize, PhysicalPosition } from "@tauri-apps/api/window";
 import { getDaemonUrl } from "@/lib/tauri";
 import { splitSentences } from "@/lib/sentenceSplitter";
 import { AudioQueueManager } from "@/lib/audioQueue";
@@ -15,6 +16,11 @@ import {
 import { HALLUCINATION_PATTERNS, getSpokenText, playSciFiChime } from "@/lib/voiceUtils";
 import { createCleanup, createCleanupStreaming } from "./voiceConversationCleanup";
 import { createConnectRealtimeSession } from "./voiceRealtimeSession";
+
+function createAudioContext(): AudioContext {
+  const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+  return new Ctor();
+}
 
 export type VoiceConversationState =
   | "idle"
@@ -38,8 +44,8 @@ export function useVoiceConversation(
   const [layoutMode, setLayoutMode] = useState<"centered" | "bottom-right">("centered");
   const isAppFocusedRef = useRef(true);
   const originalBoundsRef = useRef<{
-    size: any;
-    position: any;
+    size: PhysicalSize | null;
+    position: PhysicalPosition | null;
   } | null>(null);
 
   const daemonUrlRef = useRef<string>("http://127.0.0.1:3001");
@@ -824,7 +830,7 @@ export function useVoiceConversation(
         logger.debug("[VoiceConversation] Greeting fetch completed but conversation was already stopped. Aborting playback.");
         return;
       }
-      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const ctx = createAudioContext();
       greetingAudioCtxRef.current = ctx;
       
       const analyser = ctx.createAnalyser();
@@ -1001,7 +1007,7 @@ export function useVoiceConversation(
     
     try {
       const buffer = await jarvisClient.synthesize("如果没啥事我就先退下咯，如果有需要随时喊我哦！", voiceProfileManager.getVoiceName());
-      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const ctx = createAudioContext();
       
       if (ctx.state === "suspended") {
         ctx.resume().catch(() => {});
@@ -1070,8 +1076,8 @@ export function useVoiceConversation(
     let micStream: MediaStream | null = null;
     let micAudioCtx: AudioContext | null = null;
     let micAnalyser: AnalyserNode | null = null;
-    let micDataArray: any = null;
-    let appWindowInstance: any = null;
+    let micDataArray: Uint8Array<ArrayBuffer> | null = null;
+    let appWindowInstance: Awaited<ReturnType<typeof import("@tauri-apps/api/window").getCurrentWindow>> | null = null;
 
     const initWindow = async () => {
       try {
@@ -1116,7 +1122,7 @@ export function useVoiceConversation(
               return;
             }
             micStream = stream;
-            micAudioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+            micAudioCtx = createAudioContext();
             const source = micAudioCtx.createMediaStreamSource(stream);
             micAnalyser = micAudioCtx.createAnalyser();
             micAnalyser.fftSize = 32;

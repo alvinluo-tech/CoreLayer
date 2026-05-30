@@ -228,7 +228,11 @@ class JarvisClient {
           return undefined as T;
         }
 
-        return (await response.json()) as T;
+        const data: unknown = await response.json();
+        if (data === null || data === undefined) {
+          throw new Error("Unexpected empty response body");
+        }
+        return data as T;
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
 

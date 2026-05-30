@@ -352,7 +352,7 @@ export async function streamMessageInConversation(
   }
 }
 
-export function streamChat(messages: ModelMessage[], mode: "text" | "voice" = "text", conversationId?: string): any {
+export function streamChat(messages: ModelMessage[], mode: "text" | "voice" = "text", conversationId?: string): ReturnType<typeof streamText> {
   try {
     return streamText({
       model: getModel(),

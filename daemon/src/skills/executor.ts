@@ -265,6 +265,7 @@ function resolvePath(path: string, context: Record<string, unknown>): unknown {
   let current: unknown = context;
   for (const part of parts) {
     if (current == null || typeof current !== "object") return undefined;
+    if (part === "__proto__" || part === "constructor" || part === "prototype") return undefined;
     current = (current as Record<string, unknown>)[part];
   }
   return current;
@@ -279,6 +280,11 @@ function evaluateExpression(
   context: Record<string, unknown>,
 ): boolean {
   const trimmed = expr.trim();
+
+  // Reject expressions containing potentially dangerous patterns
+  if (/[();{}[\]]/.test(trimmed) || /\b(eval|Function|require|import|exec)\b/.test(trimmed)) {
+    return false;
+  }
 
   // "truthy" — check if a path resolves to a truthy value
   if (!trimmed.includes(" ")) {

@@ -3,6 +3,8 @@ import { Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
+const MAX_MESSAGE_LENGTH = 4000;
+
 interface ChatInputProps {
   onSend: (text: string) => void;
   disabled?: boolean;
@@ -14,7 +16,7 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
   const handleSend = () => {
     const trimmed = text.trim();
     if (!trimmed || disabled) return;
-    onSend(trimmed);
+    onSend(trimmed.slice(0, MAX_MESSAGE_LENGTH));
     setText("");
   };
 
@@ -38,10 +40,11 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
         <input
           type="text"
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => setText(e.target.value.slice(0, MAX_MESSAGE_LENGTH))}
           onKeyDown={handleKeyDown}
           placeholder={disabled ? "Jarvis 正在思考中..." : "给 Jarvis 发送消息..."}
           disabled={disabled}
+          maxLength={MAX_MESSAGE_LENGTH}
           className="w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none disabled:cursor-not-allowed"
         />
       </div>

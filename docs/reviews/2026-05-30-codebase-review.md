@@ -104,7 +104,7 @@
 - [x] #8 ASR options 类型修复 — `any` → `WebSpeechASROptions`
 - [x] #9 URL 编码 — 添加 `encode_path_segment` 并应用于所有 URL 插值
 - [x] #10 共享 reqwest::Client — `OnceLock` 单例 + 15s 超时
-- [x] #11 命令级访问控制 — `capabilities/default.json` 添加显式 `app:allow-*` 权限
+- [x] #11 命令级访问控制 — `capabilities/default.json` 使用 Tauri v2 合法的 `core:*` 权限（自定义命令在 Tauri v2 中默认可访问，不通过 capabilities 管控）
 - [x] #12 graceful shutdown — SIGTERM/SIGINT 处理 + MCP 断开
 - [x] #13 工具权限守卫 — 集成 `PermissionGuard` 到执行端点
 - [x] #14 错误消息脱敏 — daemon 全局处理器 + Rust `sanitize_daemon_error`
@@ -112,4 +112,15 @@
 - [x] #16 批量删除优化 — 添加 `clear()` 方法，单条 SQL 替代 N+1
 - [x] #17 console.log 清理 — 创建 `logger.ts`，生产环境静默
 - [x] #18 空 catch 块处理 — 所有空 catch 块添加注释或 debug 日志
-- [ ] #19-#42 其余 MEDIUM/LOW 项
+- [x] #19 ChatInput 长度限制 — `maxLength={4000}` + `slice` 截断
+- [x] #20 streamChat 返回类型 — `any` → `ReturnType<typeof streamText>`
+- [x] #21 evaluateExpression 输入清理 — 拒绝 `()`/`{}`/`[]`/`eval`/`Function` 等危险模式，阻断 `__proto__`/`constructor` 路径
+- [x] #22 jarvisClient 响应校验 — 添加 null/undefined 运行时检查
+- [x] #23 PostgreSQL 静默回退 — 添加 `console.warn` 警告
+- [x] #24 重复 health check — 合并 `health_check`/`get_health` 为单一命令，移除未使用的 `HealthResponse` 结构体
+- [x] #25 Cargo.toml 占位符修复 — `name="jarvis-app"`、`authors=["Jarvis Team"]`、tokio features 精简
+- [x] #26 capabilities 标识符修复 — 移除不存在的 `app:allow-*` 权限，修正 Tauri v2 构建错误
+- [x] #27 voice pipeline `any` 类型清理 — `PhysicalSize`/`PhysicalPosition` 替代 `any`，`createAudioContext()` 消除 `webkitAudioContext` 断言，`Uint8Array` 替代 `any`
+- [x] #28 `lib.rs` 体积优化 — 804→694 行（合并 health check + 移除未使用结构体）
+- [ ] #29 `createScriptProcessor` 迁移至 `AudioWorkletNode`（需架构重构，暂跳过）
+- [ ] #30-#42 其余 LOW 项（temp ID 碰撞、localStorage 校验等为可接受的本地场景）

@@ -30,12 +30,6 @@ pub struct ChatResponse {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct HealthResponse {
-    pub status: String,
-    pub timestamp: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DetailedHealthResponse {
     pub status: String,
@@ -231,12 +225,7 @@ async fn send_message(message: String) -> Result<ChatResponse, String> {
 }
 
 #[tauri::command]
-async fn health_check() -> Result<HealthResponse, String> {
-    daemon_get(get_daemon_client(), "/health").await
-}
-
-#[tauri::command]
-async fn get_health() -> Result<DetailedHealthResponse, String> {
+async fn health_check() -> Result<DetailedHealthResponse, String> {
     daemon_get(get_daemon_client(), "/health").await
 }
 
@@ -746,7 +735,6 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             send_message,
             health_check,
-            get_health,
             list_conversations,
             create_conversation,
             get_conversation,
