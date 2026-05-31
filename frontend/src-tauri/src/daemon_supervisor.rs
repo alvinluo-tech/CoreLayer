@@ -81,8 +81,7 @@ impl DaemonSupervisor {
         }
 
         self.restart_attempts += 1;
-        *self.last_error.lock().await =
-            Some(format!("Restart attempt {}", self.restart_attempts));
+        *self.last_error.lock().await = Some(format!("Restart attempt {}", self.restart_attempts));
 
         // Verify daemon is accessible after restart
         tokio::time::sleep(Duration::from_millis(500)).await;
@@ -116,7 +115,9 @@ use tauri::State;
 pub struct DaemonSupervisorState(pub Arc<Mutex<DaemonSupervisor>>);
 
 #[tauri::command]
-pub async fn daemon_status(state: State<'_, DaemonSupervisorState>) -> Result<DaemonStatus, String> {
+pub async fn daemon_status(
+    state: State<'_, DaemonSupervisorState>,
+) -> Result<DaemonStatus, String> {
     let supervisor = state.0.lock().await;
     Ok(supervisor.get_status().await)
 }
@@ -140,7 +141,9 @@ pub async fn stop_daemon(state: State<'_, DaemonSupervisorState>) -> Result<Daem
 }
 
 #[tauri::command]
-pub async fn restart_daemon(state: State<'_, DaemonSupervisorState>) -> Result<DaemonStatus, String> {
+pub async fn restart_daemon(
+    state: State<'_, DaemonSupervisorState>,
+) -> Result<DaemonStatus, String> {
     let mut supervisor = state.0.lock().await;
     supervisor.restart().await
 }
