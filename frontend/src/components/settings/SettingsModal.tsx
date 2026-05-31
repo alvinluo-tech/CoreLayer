@@ -1,14 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState } from 'react';
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
-} from "@/components/ui/dialog";
-import { useSettingsStore } from "@/stores/settingsStore";
-import { MCPSettings } from "./MCPSettings";
-import { DbManager } from "./DbManager";
+} from '@/components/ui/dialog';
+import { useSettingsStore } from '@/stores/settingsStore';
+import { MCPSettings } from './MCPSettings';
+import { DbManager } from './DbManager';
 import {
   Database,
   Cloud,
@@ -20,14 +20,14 @@ import {
   RefreshCw,
   Layers,
   Server,
-} from "lucide-react";
+} from 'lucide-react';
 
 interface SettingsModalProps {
   open: boolean;
   onClose: () => void;
 }
 
-type SettingsTab = "storage" | "mcp" | "dbManager";
+type SettingsTab = 'storage' | 'mcp' | 'dbManager';
 
 export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const {
@@ -42,7 +42,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
     isLoadingDbStats,
     fetchDbStats,
   } = useSettingsStore();
-  const [activeTab, setActiveTab] = useState<SettingsTab>("storage");
+  const [activeTab, setActiveTab] = useState<SettingsTab>('storage');
 
   useEffect(() => {
     if (open) {
@@ -51,7 +51,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
     }
   }, [open, fetchSettings, fetchDbStats]);
 
-  const handleModeChange = async (mode: "local" | "cloud" | "postgres") => {
+  const handleModeChange = async (mode: 'local' | 'cloud' | 'postgres') => {
     if (mode === storageMode) return;
     await setStorageMode(mode);
     fetchDbStats();
@@ -62,7 +62,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
       <DialogContent
         onClose={onClose}
         className={`relative transition-all duration-300 ${
-          activeTab === "dbManager" ? "max-w-4xl" : "max-w-2xl"
+          activeTab === 'dbManager' ? 'max-w-4xl' : 'max-w-2xl'
         }`}
       >
         <DialogHeader>
@@ -73,33 +73,33 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
         {/* Tab Navigation */}
         <div className="flex gap-1 p-1 bg-muted rounded-lg">
           <button
-            onClick={() => setActiveTab("storage")}
+            onClick={() => setActiveTab('storage')}
             className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-sm rounded-md transition-colors ${
-              activeTab === "storage"
-                ? "bg-background shadow-sm font-medium"
-                : "text-muted-foreground hover:text-foreground"
+              activeTab === 'storage'
+                ? 'bg-background shadow-sm font-medium'
+                : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             <Database className="h-4 w-4" />
             存储
           </button>
           <button
-            onClick={() => setActiveTab("mcp")}
+            onClick={() => setActiveTab('mcp')}
             className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-sm rounded-md transition-colors ${
-              activeTab === "mcp"
-                ? "bg-background shadow-sm font-medium"
-                : "text-muted-foreground hover:text-foreground"
+              activeTab === 'mcp'
+                ? 'bg-background shadow-sm font-medium'
+                : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             <Plug className="h-4 w-4" />
             MCP & 模型
           </button>
           <button
-            onClick={() => setActiveTab("dbManager")}
+            onClick={() => setActiveTab('dbManager')}
             className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-sm rounded-md transition-colors ${
-              activeTab === "dbManager"
-                ? "bg-background shadow-sm font-medium"
-                : "text-muted-foreground hover:text-foreground"
+              activeTab === 'dbManager'
+                ? 'bg-background shadow-sm font-medium'
+                : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             <Layers className="h-4 w-4" />
@@ -108,7 +108,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
         </div>
 
         {/* Tab Content */}
-        {activeTab === "storage" && (
+        {activeTab === 'storage' && (
           <div className="space-y-4">
             {/* Storage Mode Selector */}
             <div className="space-y-3">
@@ -117,17 +117,17 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
               <div className="grid grid-cols-3 gap-3">
                 {/* Local Mode */}
                 <button
-                  onClick={() => handleModeChange("local")}
+                  onClick={() => handleModeChange('local')}
                   disabled={isLoading}
                   className={`flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all ${
-                    storageMode === "local"
-                      ? "border-primary bg-primary/5"
-                      : "border-border hover:border-primary/50"
+                    storageMode === 'local'
+                      ? 'border-primary bg-primary/5'
+                      : 'border-border hover:border-primary/50'
                   }`}
                 >
                   <Database
                     className={`h-8 w-8 ${
-                      storageMode === "local" ? "text-primary" : "text-muted-foreground"
+                      storageMode === 'local' ? 'text-primary' : 'text-muted-foreground'
                     }`}
                   />
                   <div className="text-center">
@@ -138,17 +138,17 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
 
                 {/* Supabase Cloud Mode */}
                 <button
-                  onClick={() => handleModeChange("cloud")}
+                  onClick={() => handleModeChange('cloud')}
                   disabled={isLoading || !cloudConfigured}
                   className={`flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all ${
-                    storageMode === "cloud"
-                      ? "border-primary bg-primary/5"
-                      : "border-border hover:border-primary/50"
-                  } ${!cloudConfigured ? "opacity-50 cursor-not-allowed" : ""}`}
+                    storageMode === 'cloud'
+                      ? 'border-primary bg-primary/5'
+                      : 'border-border hover:border-primary/50'
+                  } ${!cloudConfigured ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   <Cloud
                     className={`h-8 w-8 ${
-                      storageMode === "cloud" ? "text-primary" : "text-muted-foreground"
+                      storageMode === 'cloud' ? 'text-primary' : 'text-muted-foreground'
                     }`}
                   />
                   <div className="text-center">
@@ -159,17 +159,17 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
 
                 {/* Direct Postgres Mode */}
                 <button
-                  onClick={() => handleModeChange("postgres")}
+                  onClick={() => handleModeChange('postgres')}
                   disabled={isLoading || !postgresConfigured}
                   className={`flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all ${
-                    storageMode === "postgres"
-                      ? "border-primary bg-primary/5"
-                      : "border-border hover:border-primary/50"
-                  } ${!postgresConfigured ? "opacity-50 cursor-not-allowed" : ""}`}
+                    storageMode === 'postgres'
+                      ? 'border-primary bg-primary/5'
+                      : 'border-border hover:border-primary/50'
+                  } ${!postgresConfigured ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   <Server
                     className={`h-8 w-8 ${
-                      storageMode === "postgres" ? "text-primary" : "text-muted-foreground"
+                      storageMode === 'postgres' ? 'text-primary' : 'text-muted-foreground'
                     }`}
                   />
                   <div className="text-center">
@@ -216,14 +216,16 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                     <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                   </div>
-                  <h4 className="text-sm font-semibold tracking-tight text-foreground">数据健康诊断</h4>
+                  <h4 className="text-sm font-semibold tracking-tight text-foreground">
+                    数据健康诊断
+                  </h4>
                 </div>
                 <button
                   onClick={() => fetchDbStats()}
                   disabled={isLoadingDbStats}
                   className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
                 >
-                  <RefreshCw className={`h-3 w-3 ${isLoadingDbStats ? "animate-spin" : ""}`} />
+                  <RefreshCw className={`h-3 w-3 ${isLoadingDbStats ? 'animate-spin' : ''}`} />
                   刷新诊断
                 </button>
               </div>
@@ -245,7 +247,8 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                     <div className="space-y-0.5">
                       <span className="text-xs text-muted-foreground block">会话历史</span>
                       <span className="text-lg font-mono font-semibold text-foreground">
-                        {dbStats.entryCount.conversations} <span className="text-xs text-muted-foreground font-normal">个会话</span>
+                        {dbStats.entryCount.conversations}{' '}
+                        <span className="text-xs text-muted-foreground font-normal">个会话</span>
                       </span>
                     </div>
                     <MessageSquare className="h-4 w-4 text-muted-foreground/70" />
@@ -256,7 +259,8 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                     <div className="space-y-0.5">
                       <span className="text-xs text-muted-foreground block">任务执行</span>
                       <span className="text-lg font-mono font-semibold text-foreground">
-                        {dbStats.entryCount.tasks} <span className="text-xs text-muted-foreground font-normal">个任务</span>
+                        {dbStats.entryCount.tasks}{' '}
+                        <span className="text-xs text-muted-foreground font-normal">个任务</span>
                       </span>
                     </div>
                     <ListTodo className="h-4 w-4 text-muted-foreground/70" />
@@ -267,7 +271,8 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                     <div className="space-y-0.5">
                       <span className="text-xs text-muted-foreground block">阅读列表</span>
                       <span className="text-lg font-mono font-semibold text-foreground">
-                        {dbStats.entryCount.articles} <span className="text-xs text-muted-foreground font-normal">篇文章</span>
+                        {dbStats.entryCount.articles}{' '}
+                        <span className="text-xs text-muted-foreground font-normal">篇文章</span>
                       </span>
                     </div>
                     <BookOpen className="h-4 w-4 text-muted-foreground/70" />
@@ -293,19 +298,18 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
             {/* Current mode indicator */}
             <div className="text-center pt-1">
               <p className="text-xs text-muted-foreground">
-                当前模式:{" "}
+                当前模式:{' '}
                 <span className="font-medium text-foreground">
-                  {storageMode === "local" ? "本地 SQLite" : "云端 Supabase"}
+                  {storageMode === 'local' ? '本地 SQLite' : '云端 Supabase'}
                 </span>
               </p>
             </div>
           </div>
         )}
 
-        {activeTab === "mcp" && <MCPSettings className="max-h-[60vh] overflow-y-auto pr-1" />}
-        {activeTab === "dbManager" && <DbManager className="max-h-[65vh] overflow-y-auto pr-1" />}
+        {activeTab === 'mcp' && <MCPSettings className="max-h-[60vh] overflow-y-auto pr-1" />}
+        {activeTab === 'dbManager' && <DbManager className="max-h-[65vh] overflow-y-auto pr-1" />}
       </DialogContent>
     </Dialog>
   );
 }
-

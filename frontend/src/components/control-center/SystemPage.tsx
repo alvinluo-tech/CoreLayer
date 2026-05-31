@@ -1,16 +1,9 @@
-import { useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { StatusBadge } from "./StatusBadge";
-import {
-  Server,
-  RefreshCw,
-  Loader2,
-  Clock,
-  AlertTriangle,
-  RotateCw,
-} from "lucide-react";
-import { getDaemonStatus, getHealth, restartDaemon, type DaemonStatus } from "@/lib/tauri";
+import { useEffect, useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { StatusBadge } from './StatusBadge';
+import { Server, RefreshCw, Loader2, Clock, AlertTriangle, RotateCw } from 'lucide-react';
+import { getDaemonStatus, getHealth, restartDaemon, type DaemonStatus } from '@/lib/tauri';
 
 export function SystemPage() {
   const [daemon, setDaemon] = useState<DaemonStatus | null>(null);
@@ -26,8 +19,8 @@ export function SystemPage() {
 
   const fetchData = async () => {
     const [d, h] = await Promise.allSettled([getDaemonStatus(), getHealth()]);
-    if (d.status === "fulfilled") setDaemon(d.value);
-    if (h.status === "fulfilled") setHealth(h.value);
+    if (d.status === 'fulfilled') setDaemon(d.value);
+    if (h.status === 'fulfilled') setHealth(h.value);
   };
 
   useEffect(() => {
@@ -43,7 +36,7 @@ export function SystemPage() {
       await fetchData();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      console.error("重启守护进程失败:", err);
+      console.error('重启守护进程失败:', err);
       setRestartError(message);
       await fetchData();
     } finally {
@@ -52,16 +45,12 @@ export function SystemPage() {
   };
 
   const daemonStatus = daemon?.healthy
-    ? ("healthy" as const)
+    ? ('healthy' as const)
     : daemon?.running
-      ? ("warning" as const)
-      : ("error" as const);
+      ? ('warning' as const)
+      : ('error' as const);
 
-  const daemonLabel = daemon?.healthy
-    ? "运行中"
-    : daemon?.running
-      ? "异常"
-      : "未运行";
+  const daemonLabel = daemon?.healthy ? '运行中' : daemon?.running ? '异常' : '未运行';
 
   return (
     <div className="space-y-6">
@@ -83,13 +72,11 @@ export function SystemPage() {
         <div className="grid grid-cols-2 gap-4 text-sm">
           <div>
             <p className="text-muted-foreground text-xs">URL</p>
-            <p className="font-mono text-xs mt-0.5">{daemon?.url ?? "—"}</p>
+            <p className="font-mono text-xs mt-0.5">{daemon?.url ?? '—'}</p>
           </div>
           <div>
             <p className="text-muted-foreground text-xs">重启次数</p>
-            <p className="mt-0.5">
-              {daemon?.restartAttempts ?? 0} / 3
-            </p>
+            <p className="mt-0.5">{daemon?.restartAttempts ?? 0} / 3</p>
           </div>
           <div>
             <p className="text-muted-foreground text-xs">最后健康检查</p>
@@ -97,11 +84,11 @@ export function SystemPage() {
               <Clock className="h-3 w-3 text-muted-foreground" />
               {daemon?.lastHealthCheck
                 ? !isNaN(Number(daemon.lastHealthCheck))
-                  ? new Date(Number(daemon.lastHealthCheck)).toLocaleString("zh-CN")
-                  : new Date(daemon.lastHealthCheck).toString() !== "Invalid Date"
-                    ? new Date(daemon.lastHealthCheck).toLocaleString("zh-CN")
+                  ? new Date(Number(daemon.lastHealthCheck)).toLocaleString('zh-CN')
+                  : new Date(daemon.lastHealthCheck).toString() !== 'Invalid Date'
+                    ? new Date(daemon.lastHealthCheck).toLocaleString('zh-CN')
                     : daemon.lastHealthCheck
-                : "—"}
+                : '—'}
             </p>
           </div>
           <div>
@@ -113,7 +100,7 @@ export function SystemPage() {
                   <span className="text-amber-600 text-xs">{daemon.lastError}</span>
                 </>
               ) : (
-                "无"
+                '无'
               )}
             </p>
           </div>
@@ -127,12 +114,7 @@ export function SystemPage() {
         )}
 
         <div className="flex gap-2 pt-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={fetchData}
-            className="gap-1.5"
-          >
+          <Button variant="outline" size="sm" onClick={fetchData} className="gap-1.5">
             <RefreshCw className="h-3.5 w-3.5" />
             刷新
           </Button>
@@ -159,15 +141,15 @@ export function SystemPage() {
         <div className="space-y-2">
           {[
             {
-              name: "Daemon",
+              name: 'Daemon',
               ok: daemon?.healthy ?? false,
             },
             {
-              name: "数据库",
-              ok: health?.status === "ok",
+              name: '数据库',
+              ok: health?.status === 'ok',
             },
             {
-              name: "AI Provider",
+              name: 'AI Provider',
               ok: !!health?.aiProvider,
             },
           ].map((check) => (
@@ -177,15 +159,15 @@ export function SystemPage() {
             >
               <span className="text-sm">{check.name}</span>
               <StatusBadge
-                status={check.ok ? "healthy" : "error"}
-                label={check.ok ? "正常" : "异常"}
+                status={check.ok ? 'healthy' : 'error'}
+                label={check.ok ? '正常' : '异常'}
               />
             </div>
           ))}
         </div>
         {health?.timestamp && (
           <p className="text-xs text-muted-foreground mt-3">
-            检查时间: {new Date(health.timestamp).toLocaleString("zh-CN")}
+            检查时间: {new Date(health.timestamp).toLocaleString('zh-CN')}
           </p>
         )}
       </Card>

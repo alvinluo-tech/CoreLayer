@@ -1,9 +1,9 @@
-import type { RiskLevel } from "./tool.js";
+import type { RiskLevel } from './tool.js';
 
-export type SkillType = "tool" | "workflow" | "ui" | "scheduled";
+export type SkillType = 'tool' | 'workflow' | 'ui' | 'scheduled';
 
 export interface SkillTrigger {
-  type: "command" | "schedule" | "event";
+  type: 'command' | 'schedule' | 'event';
   phrases?: string[];
   cron?: string;
   event?: string;

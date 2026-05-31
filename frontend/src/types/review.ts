@@ -1,4 +1,4 @@
-export type ReviewType = "daily" | "weekly";
+export type ReviewType = 'daily' | 'weekly';
 
 export interface Review {
   id: string;

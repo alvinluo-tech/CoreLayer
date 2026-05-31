@@ -1,25 +1,17 @@
-import { useEffect, useState } from "react";
-import {
-  Server,
-  Brain,
-  Plug,
-  Wrench,
-  Mic,
-  Database,
-  Activity,
-} from "lucide-react";
-import { Card } from "@/components/ui/card";
-import { StatusBadge } from "./StatusBadge";
-import { useMCPStore } from "@/stores/mcpStore";
-import { useModelStore } from "@/stores/modelStore";
-import { useSettingsStore } from "@/stores/settingsStore";
+import { useEffect, useState } from 'react';
+import { Server, Brain, Plug, Wrench, Mic, Database, Activity } from 'lucide-react';
+import { Card } from '@/components/ui/card';
+import { StatusBadge } from './StatusBadge';
+import { useMCPStore } from '@/stores/mcpStore';
+import { useModelStore } from '@/stores/modelStore';
+import { useSettingsStore } from '@/stores/settingsStore';
 import {
   getDaemonStatus,
   getVoiceStatus,
   getHealth,
   type DaemonStatus,
   type VoiceStatus,
-} from "@/lib/tauri";
+} from '@/lib/tauri';
 
 export function OverviewPage() {
   const { servers, toolCounts, fetchServers, fetchTools } = useMCPStore();
@@ -38,71 +30,68 @@ export function OverviewPage() {
     fetchTools();
     fetchModels();
     fetchSettings();
-    getDaemonStatus().then(setDaemon).catch(() => {});
-    getVoiceStatus().then(setVoiceStatus).catch(() => {});
-    getHealth().then(setHealth).catch(() => {});
+    getDaemonStatus()
+      .then(setDaemon)
+      .catch(() => {});
+    getVoiceStatus()
+      .then(setVoiceStatus)
+      .catch(() => {});
+    getHealth()
+      .then(setHealth)
+      .catch(() => {});
   }, [fetchServers, fetchTools, fetchModels, fetchSettings]);
 
-  const connectedServers = servers.filter((s) => s.status === "connected").length;
+  const connectedServers = servers.filter((s) => s.status === 'connected').length;
   const totalTools = toolCounts.native + toolCounts.mcp + toolCounts.skill + toolCounts.rest;
 
   const cards: {
     title: string;
     icon: typeof Server;
-    status: "healthy" | "warning" | "error" | "idle";
+    status: 'healthy' | 'warning' | 'error' | 'idle';
     statusLabel: string;
     detail: string;
   }[] = [
     {
-      title: "守护进程",
+      title: '守护进程',
       icon: Server,
-      status: daemon?.healthy ? "healthy" : daemon?.running ? "warning" : "error",
-      statusLabel: daemon?.healthy ? "运行中" : daemon?.running ? "异常" : "未运行",
-      detail: daemon?.url ?? "未知",
+      status: daemon?.healthy ? 'healthy' : daemon?.running ? 'warning' : 'error',
+      statusLabel: daemon?.healthy ? '运行中' : daemon?.running ? '异常' : '未运行',
+      detail: daemon?.url ?? '未知',
     },
     {
-      title: "AI 模型",
+      title: 'AI 模型',
       icon: Brain,
-      status: health ? "healthy" : "idle",
-      statusLabel: health?.aiModel ?? "未连接",
-      detail: health?.aiProvider ?? "",
+      status: health ? 'healthy' : 'idle',
+      statusLabel: health?.aiModel ?? '未连接',
+      detail: health?.aiProvider ?? '',
     },
     {
-      title: "MCP 服务器",
+      title: 'MCP 服务器',
       icon: Plug,
-      status:
-        connectedServers > 0
-          ? "healthy"
-          : servers.length > 0
-            ? "warning"
-            : "idle",
+      status: connectedServers > 0 ? 'healthy' : servers.length > 0 ? 'warning' : 'idle',
       statusLabel: `${connectedServers} / ${servers.length} 已连接`,
       detail: `${servers.length} 个服务器`,
     },
     {
-      title: "工具注册表",
+      title: '工具注册表',
       icon: Wrench,
-      status: totalTools > 0 ? "healthy" : "idle",
+      status: totalTools > 0 ? 'healthy' : 'idle',
       statusLabel: `${totalTools} 个工具`,
       detail: `原生 ${toolCounts.native} · MCP ${toolCounts.mcp} · 技能 ${toolCounts.skill}`,
     },
     {
-      title: "语音系统",
+      title: '语音系统',
       icon: Mic,
-      status: voiceStatus?.asr
-        ? "healthy"
-        : voiceStatus
-          ? "warning"
-          : "idle",
-      statusLabel: voiceStatus?.asr ? "可用" : voiceStatus ? "部分可用" : "检测中",
-      detail: `TTS: ${voiceStatus?.tts?.provider ?? "未知"}`,
+      status: voiceStatus?.asr ? 'healthy' : voiceStatus ? 'warning' : 'idle',
+      statusLabel: voiceStatus?.asr ? '可用' : voiceStatus ? '部分可用' : '检测中',
+      detail: `TTS: ${voiceStatus?.tts?.provider ?? '未知'}`,
     },
     {
-      title: "存储模式",
+      title: '存储模式',
       icon: Database,
-      status: storageMode === "cloud" ? "healthy" : "idle",
-      statusLabel: storageMode === "cloud" ? "云端" : "本地",
-      detail: storageMode === "local" ? "SQLite" : "Supabase",
+      status: storageMode === 'cloud' ? 'healthy' : 'idle',
+      statusLabel: storageMode === 'cloud' ? '云端' : '本地',
+      detail: storageMode === 'local' ? 'SQLite' : 'Supabase',
     },
   ];
 

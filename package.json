@@ -1,6 +1,7 @@
 {
   "name": "jarvis",
   "private": true,
+  "type": "module",
   "version": "0.1.0",
   "description": "Jarvis Personal Command Center",
   "scripts": {
@@ -8,16 +9,35 @@
     "dev:web": "pnpm --filter frontend dev",
     "dev:daemon": "pnpm --filter daemon dev",
     "build": "pnpm --filter daemon build && pnpm --filter frontend tauri build",
-    "lint": "pnpm -r lint",
+    "lint": "eslint frontend/src/ packages/",
+    "lint:fix": "eslint --fix frontend/src/ packages/",
+    "format": "prettier --write \"frontend/src/**/*.{ts,tsx}\" \"packages/**/*.{ts,tsx}\"",
+    "format:check": "prettier --check \"frontend/src/**/*.{ts,tsx}\" \"packages/**/*.{ts,tsx}\"",
     "test": "pnpm -r test",
     "clean": "pnpm -r clean",
     "clean:app": "taskkill /f /im jarvis-app.exe /im Jarvis.exe 2>nul || exit 0",
     "clean:daemon": "for /f \"tokens=5\" %a in ('netstat -aon ^| findstr 3001') do taskkill /f /pid %a 2>nul || exit 0",
-    "clean:all": "pnpm clean:app && pnpm clean:daemon"
+    "clean:all": "pnpm clean:app && pnpm clean:daemon",
+    "prepare": "husky",
+    "commitlint": "commitlint --edit",
+    "release": "standard-version",
+    "release:minor": "standard-version --release-as minor",
+    "release:major": "standard-version --release-as major"
   },
   "devDependencies": {
+    "@commitlint/cli": "^19.0.0",
+    "@commitlint/config-conventional": "^19.0.0",
+    "@eslint/js": "^9.0.0",
     "concurrently": "^9.1.0",
-    "typescript": "^5.7.0"
+    "eslint": "^9.0.0",
+    "eslint-plugin-react": "^7.37.0",
+    "eslint-plugin-react-hooks": "^5.0.0",
+    "husky": "^9.0.0",
+    "lint-staged": "^15.0.0",
+    "prettier": "^3.4.0",
+    "standard-version": "^9.5.0",
+    "typescript": "^5.7.0",
+    "typescript-eslint": "^8.0.0"
   },
   "engines": {
     "node": ">=20.0.0",

@@ -1,13 +1,13 @@
 interface StatusBadgeProps {
-  status: "healthy" | "warning" | "error" | "idle";
+  status: 'healthy' | 'warning' | 'error' | 'idle';
   label: string;
 }
 
 const statusColors = {
-  healthy: "bg-green-500",
-  warning: "bg-amber-500",
-  error: "bg-red-500",
-  idle: "bg-muted-foreground",
+  healthy: 'bg-green-500',
+  warning: 'bg-amber-500',
+  error: 'bg-red-500',
+  idle: 'bg-muted-foreground',
 };
 
 export function StatusBadge({ status, label }: StatusBadgeProps) {

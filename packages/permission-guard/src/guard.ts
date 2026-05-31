@@ -5,16 +5,19 @@ import type {
   ToolResult,
   PendingConfirmation,
   PendingExecution,
-} from "@jarvis/types";
-import { AuditLog } from "./audit.js";
-import { DEFAULT_PERMISSION_CONFIG, getRiskAction } from "./policies.js";
+} from '@jarvis/types';
+import { AuditLog } from './audit.js';
+import { DEFAULT_PERMISSION_CONFIG, getRiskAction } from './policies.js';
 
 const PENDING_CONFIRMATION_TIMEOUT_MS = 30_000;
 
 export class PermissionGuard {
   private config: PermissionGuardConfig;
   private auditLog: AuditLog;
-  private pendingConfirmations: Map<string, PendingConfirmation & { resolve: (value: boolean) => void }> = new Map();
+  private pendingConfirmations: Map<
+    string,
+    PendingConfirmation & { resolve: (value: boolean) => void }
+  > = new Map();
 
   constructor(config?: Partial<PermissionGuardConfig>) {
     this.config = { ...DEFAULT_PERMISSION_CONFIG, ...config };
@@ -25,27 +28,27 @@ export class PermissionGuard {
     const action = getRiskAction(tool.risk, this.config, tool.appId);
 
     switch (action) {
-      case "auto":
+      case 'auto':
         return {
           allowed: true,
           requiresConfirmation: false,
           riskLevel: tool.risk,
         };
-      case "notify":
+      case 'notify':
         return {
           allowed: true,
           requiresConfirmation: false,
           riskLevel: tool.risk,
           reason: `执行后通知: ${tool.title}`,
         };
-      case "confirm":
+      case 'confirm':
         return {
           allowed: true,
           requiresConfirmation: true,
           riskLevel: tool.risk,
           reason: `需要确认: ${tool.title} (风险等级: ${tool.risk})`,
         };
-      case "deny":
+      case 'deny':
         return {
           allowed: false,
           requiresConfirmation: false,
@@ -58,19 +61,19 @@ export class PermissionGuard {
   async executeWithGuard(
     tool: JarvisTool,
     args: unknown,
-    confirmCallback?: (tool: JarvisTool, args: unknown) => Promise<boolean>,
+    confirmCallback?: (tool: JarvisTool, args: unknown) => Promise<boolean>
   ): Promise<{ result: ToolResult; confirmed: boolean }> {
     const check = this.checkPermission(tool);
     let confirmed = false;
 
     if (!check.allowed) {
       this.auditLog.log({
-        action: "execute",
+        action: 'execute',
         toolId: tool.id,
         toolName: tool.name,
         appId: tool.appId,
         args,
-        result: "denied",
+        result: 'denied',
         riskLevel: tool.risk,
         confirmedByUser: false,
         error: check.reason,
@@ -86,18 +89,18 @@ export class PermissionGuard {
       confirmed = await confirmCallback(tool, args);
       if (!confirmed) {
         this.auditLog.log({
-          action: "execute",
+          action: 'execute',
           toolId: tool.id,
           toolName: tool.name,
           appId: tool.appId,
           args,
-          result: "cancelled",
+          result: 'cancelled',
           riskLevel: tool.risk,
           confirmedByUser: false,
         });
 
         return {
-          result: { success: false, error: "用户取消执行" },
+          result: { success: false, error: '用户取消执行' },
           confirmed: false,
         };
       }
@@ -107,12 +110,12 @@ export class PermissionGuard {
       const result = await tool.execute(args);
 
       this.auditLog.log({
-        action: "execute",
+        action: 'execute',
         toolId: tool.id,
         toolName: tool.name,
         appId: tool.appId,
         args,
-        result: result.success ? "success" : "failure",
+        result: result.success ? 'success' : 'failure',
         riskLevel: tool.risk,
         confirmedByUser: confirmed,
         error: result.error,
@@ -123,12 +126,12 @@ export class PermissionGuard {
       const errorMessage = error instanceof Error ? error.message : String(error);
 
       this.auditLog.log({
-        action: "execute",
+        action: 'execute',
         toolId: tool.id,
         toolName: tool.name,
         appId: tool.appId,
         args,
-        result: "failure",
+        result: 'failure',
         riskLevel: tool.risk,
         confirmedByUser: confirmed,
         error: errorMessage,
@@ -149,14 +152,17 @@ export class PermissionGuard {
     this.config = { ...this.config, ...config };
   }
 
-  setAppPermissions(appId: string, permissions: PermissionGuardConfig["appPermissions"][string]): void {
+  setAppPermissions(
+    appId: string,
+    permissions: PermissionGuardConfig['appPermissions'][string]
+  ): void {
     this.config.appPermissions[appId] = permissions;
   }
 
   async executeWithPendingConfirmation(
     tool: JarvisTool,
     args: unknown,
-    options?: { timeoutMs?: number },
+    options?: { timeoutMs?: number }
   ): Promise<PendingExecution> {
     const check = this.checkPermission(tool);
     const now = new Date();
@@ -167,12 +173,12 @@ export class PermissionGuard {
     if (!check.requiresConfirmation) {
       const result = await tool.execute(args);
       this.auditLog.log({
-        action: "execute",
+        action: 'execute',
         toolId: tool.id,
         toolName: tool.name,
         appId: tool.appId,
         args,
-        result: result.success ? "success" : "failure",
+        result: result.success ? 'success' : 'failure',
         riskLevel: tool.risk,
         confirmedByUser: false,
         error: result.error,
@@ -194,7 +200,7 @@ export class PermissionGuard {
         confirmationId,
         confirmation,
         confirm: async () => result,
-        deny: async () => ({ success: false, error: "已自动执行，无法拒绝" }),
+        deny: async () => ({ success: false, error: '已自动执行，无法拒绝' }),
         isExpired: false,
       };
     }
@@ -236,7 +242,7 @@ export class PermissionGuard {
 
     const confirm = async (): Promise<ToolResult> => {
       if (expired) {
-        return { success: false, error: "确认已过期" };
+        return { success: false, error: '确认已过期' };
       }
       resolved = true;
       storedResolve(true);
@@ -244,12 +250,12 @@ export class PermissionGuard {
 
       const result = await tool.execute(args);
       this.auditLog.log({
-        action: "execute",
+        action: 'execute',
         toolId: tool.id,
         toolName: tool.name,
         appId: tool.appId,
         args,
-        result: result.success ? "success" : "failure",
+        result: result.success ? 'success' : 'failure',
         riskLevel: tool.risk,
         confirmedByUser: true,
         error: result.error,
@@ -259,23 +265,23 @@ export class PermissionGuard {
 
     const deny = async (): Promise<ToolResult> => {
       if (expired) {
-        return { success: false, error: "确认已过期" };
+        return { success: false, error: '确认已过期' };
       }
       resolved = true;
       storedResolve(false);
       this.pendingConfirmations.delete(confirmationId);
 
       this.auditLog.log({
-        action: "execute",
+        action: 'execute',
         toolId: tool.id,
         toolName: tool.name,
         appId: tool.appId,
         args,
-        result: "cancelled",
+        result: 'cancelled',
         riskLevel: tool.risk,
         confirmedByUser: false,
       });
-      return { success: false, error: "用户拒绝执行" };
+      return { success: false, error: '用户拒绝执行' };
     };
 
     return {

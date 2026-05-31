@@ -1,11 +1,11 @@
-import type { ModelProfile, ModelRoutingRule } from "@jarvis/types";
+import type { ModelProfile, ModelRoutingRule } from '@jarvis/types';
 
 export const DEFAULT_PROFILES: ModelProfile[] = [
   {
-    id: "mimo-2.5-pro",
-    provider: "mimo",
-    modelName: "mimo-v2.5-pro",
-    displayName: "MiMo 2.5 Pro",
+    id: 'mimo-2.5-pro',
+    provider: 'mimo',
+    modelName: 'mimo-v2.5-pro',
+    displayName: 'MiMo 2.5 Pro',
     capabilities: {
       text: true,
       streaming: true,
@@ -20,10 +20,10 @@ export const DEFAULT_PROFILES: ModelProfile[] = [
     cost: { input: 0, output: 0 },
   },
   {
-    id: "mimo-2.5-fast",
-    provider: "mimo",
-    modelName: "mimo-v2.5-fast",
-    displayName: "MiMo 2.5 Fast",
+    id: 'mimo-2.5-fast',
+    provider: 'mimo',
+    modelName: 'mimo-v2.5-fast',
+    displayName: 'MiMo 2.5 Fast',
     capabilities: {
       text: true,
       streaming: true,
@@ -38,10 +38,10 @@ export const DEFAULT_PROFILES: ModelProfile[] = [
     cost: { input: 0, output: 0 },
   },
   {
-    id: "groq-llama",
-    provider: "groq",
-    modelName: "llama-3.3-70b-versatile",
-    displayName: "Groq Llama 3.3 70B",
+    id: 'groq-llama',
+    provider: 'groq',
+    modelName: 'llama-3.3-70b-versatile',
+    displayName: 'Groq Llama 3.3 70B',
     capabilities: {
       text: true,
       streaming: true,
@@ -56,10 +56,10 @@ export const DEFAULT_PROFILES: ModelProfile[] = [
     cost: { input: 0, output: 0 },
   },
   {
-    id: "openrouter-default",
-    provider: "openrouter",
-    modelName: "anthropic/claude-sonnet-4",
-    displayName: "Claude Sonnet 4 (OpenRouter)",
+    id: 'openrouter-default',
+    provider: 'openrouter',
+    modelName: 'anthropic/claude-sonnet-4',
+    displayName: 'Claude Sonnet 4 (OpenRouter)',
     capabilities: {
       text: true,
       streaming: true,
@@ -74,10 +74,10 @@ export const DEFAULT_PROFILES: ModelProfile[] = [
     cost: { input: 3, output: 15 },
   },
   {
-    id: "local-ollama",
-    provider: "local",
-    modelName: "llama3.2",
-    displayName: "Ollama Local",
+    id: 'local-ollama',
+    provider: 'local',
+    modelName: 'llama3.2',
+    displayName: 'Ollama Local',
     capabilities: {
       text: true,
       streaming: true,
@@ -95,27 +95,27 @@ export const DEFAULT_PROFILES: ModelProfile[] = [
 
 export const DEFAULT_ROUTING_RULES: ModelRoutingRule[] = [
   {
-    taskType: "fast",
-    modelId: "groq-llama",
-    conditions: { expectedAnswerLength: "short" },
+    taskType: 'fast',
+    modelId: 'groq-llama',
+    conditions: { expectedAnswerLength: 'short' },
   },
   {
-    taskType: "toolAgent",
-    modelId: "mimo-2.5-pro",
+    taskType: 'toolAgent',
+    modelId: 'mimo-2.5-pro',
     conditions: { requiresToolCalling: true },
   },
   {
-    taskType: "reasoning",
-    modelId: "mimo-2.5-pro",
+    taskType: 'reasoning',
+    modelId: 'mimo-2.5-pro',
     conditions: { requiresLongContext: true },
   },
   {
-    taskType: "private",
-    modelId: "local-ollama",
+    taskType: 'private',
+    modelId: 'local-ollama',
     conditions: { requiresPrivacy: true },
   },
   {
-    taskType: "chat",
-    modelId: "mimo-2.5-pro",
+    taskType: 'chat',
+    modelId: 'mimo-2.5-pro',
   },
 ];

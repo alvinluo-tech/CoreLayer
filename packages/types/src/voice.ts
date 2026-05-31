@@ -3,7 +3,7 @@ export interface VoiceProfile {
   name: string;
   language: string;
   model: string;
-  gender: "male" | "female" | "neutral";
+  gender: 'male' | 'female' | 'neutral';
   style: string;
 }
 

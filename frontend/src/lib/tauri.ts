@@ -1,6 +1,6 @@
-import { invoke } from "@tauri-apps/api/core";
-import type { Task } from "@/types/task";
-import type { Article } from "@/types/article";
+import { invoke } from '@tauri-apps/api/core';
+import type { Task } from '@/types/task';
+import type { Article } from '@/types/article';
 
 // ---- Types ----
 
@@ -21,7 +21,7 @@ export interface Conversation {
 export interface ConversationMessage {
   id: string;
   conversationId: string;
-  role: "user" | "assistant" | "system" | "tool";
+  role: 'user' | 'assistant' | 'system' | 'tool';
   content: string;
   toolCalls: string | null;
   toolCallId: string | null;
@@ -42,41 +42,41 @@ export interface SendMessageResponse {
 // ---- Legacy Chat ----
 
 export async function sendChatMessage(message: string): Promise<ChatResponse> {
-  return invoke<ChatResponse>("send_message", { message });
+  return invoke<ChatResponse>('send_message', { message });
 }
 
 export async function getHealthStatus(): Promise<{ status: string; timestamp: string }> {
-  return invoke("health_check");
+  return invoke('health_check');
 }
 
 // ---- Conversation Management ----
 
 export async function listConversations(): Promise<Conversation[]> {
-  const resp = await invoke<{ conversations: Conversation[] }>("list_conversations");
+  const resp = await invoke<{ conversations: Conversation[] }>('list_conversations');
   return resp.conversations;
 }
 
 export async function createConversation(title?: string): Promise<Conversation> {
-  return invoke<Conversation>("create_conversation", { title: title ?? null });
+  return invoke<Conversation>('create_conversation', { title: title ?? null });
 }
 
 export async function getConversation(id: string): Promise<ConversationWithMessages> {
-  return invoke<ConversationWithMessages>("get_conversation", { id });
+  return invoke<ConversationWithMessages>('get_conversation', { id });
 }
 
 export async function deleteConversation(id: string): Promise<void> {
-  await invoke("delete_conversation", { id });
+  await invoke('delete_conversation', { id });
 }
 
 export async function updateConversation(id: string, title: string): Promise<Conversation> {
-  return invoke<Conversation>("update_conversation", { id, title });
+  return invoke<Conversation>('update_conversation', { id, title });
 }
 
 export async function sendConversationMessage(
   conversationId: string,
-  content: string,
+  content: string
 ): Promise<SendMessageResponse> {
-  return invoke<SendMessageResponse>("send_conversation_message", {
+  return invoke<SendMessageResponse>('send_conversation_message', {
     conversationId,
     content,
   });
@@ -84,8 +84,11 @@ export async function sendConversationMessage(
 
 // ---- Task Management ----
 
-export async function queryTasks(options?: { status?: string; priority?: number }): Promise<{ tasks: Task[]; count: number }> {
-  return invoke("query_tasks", {
+export async function queryTasks(options?: {
+  status?: string;
+  priority?: number;
+}): Promise<{ tasks: Task[]; count: number }> {
+  return invoke('query_tasks', {
     status: options?.status ?? null,
     priority: options?.priority ?? null,
   });
@@ -98,7 +101,7 @@ export async function createTask(input: {
   tags?: string[];
   description?: string;
 }): Promise<{ task: Task }> {
-  return invoke("create_task", {
+  return invoke('create_task', {
     title: input.title,
     priority: input.priority ?? null,
     dueDate: input.dueDate ?? null,
@@ -115,7 +118,7 @@ export async function updateTask(input: {
   dueDate?: string;
   tags?: string[];
 }): Promise<{ task: Task }> {
-  return invoke("update_task", {
+  return invoke('update_task', {
     taskId: input.taskId,
     title: input.title ?? null,
     priority: input.priority ?? null,
@@ -126,13 +129,16 @@ export async function updateTask(input: {
 }
 
 export async function deleteTask(taskId: string): Promise<void> {
-  await invoke("delete_task", { taskId });
+  await invoke('delete_task', { taskId });
 }
 
 // ---- Article Management ----
 
-export async function getReadingList(options?: { status?: string; category?: string }): Promise<{ articles: Article[]; count: number }> {
-  return invoke("get_reading_list", {
+export async function getReadingList(options?: {
+  status?: string;
+  category?: string;
+}): Promise<{ articles: Article[]; count: number }> {
+  return invoke('get_reading_list', {
     status: options?.status ?? null,
     category: options?.category ?? null,
   });
@@ -144,7 +150,7 @@ export async function addArticle(input: {
   category?: string;
   description?: string;
 }): Promise<{ article: Article }> {
-  return invoke("add_article", {
+  return invoke('add_article', {
     title: input.title,
     url: input.url ?? null,
     category: input.category ?? null,
@@ -158,7 +164,7 @@ export async function updateReadingStatus(input: {
   rating?: number;
   notes?: string;
 }): Promise<{ article: Article }> {
-  return invoke("update_reading_status", {
+  return invoke('update_reading_status', {
     articleId: input.articleId,
     status: input.status,
     rating: input.rating ?? null,
@@ -175,7 +181,7 @@ export async function getDailySummary(date?: string): Promise<{
   articlesRead: number;
   highlights: string[];
 }> {
-  return invoke("get_daily_summary", { date: date ?? null });
+  return invoke('get_daily_summary', { date: date ?? null });
 }
 
 export async function getWeeklyStats(weekStart?: string): Promise<{
@@ -186,7 +192,7 @@ export async function getWeeklyStats(weekStart?: string): Promise<{
   articlesFinished: number;
   topTags: { tag: string; count: number }[];
 }> {
-  return invoke("get_weekly_stats", { weekStart: weekStart ?? null });
+  return invoke('get_weekly_stats', { weekStart: weekStart ?? null });
 }
 
 // ---- Settings Management ----
@@ -196,14 +202,14 @@ export async function getSettings(): Promise<{
   availableModes: string[];
   cloudConfigured: boolean;
 }> {
-  return invoke("get_settings");
+  return invoke('get_settings');
 }
 
 export async function updateStorageMode(mode: string): Promise<{
   storageMode: string;
   message: string;
 }> {
-  return invoke("update_storage_mode", { mode });
+  return invoke('update_storage_mode', { mode });
 }
 
 export interface DbStats {
@@ -217,7 +223,7 @@ export interface DbStats {
 }
 
 export async function getDbStats(): Promise<DbStats> {
-  return invoke("get_db_stats");
+  return invoke('get_db_stats');
 }
 
 export interface DbTableInfo {
@@ -228,19 +234,26 @@ export interface DbTableInfo {
 }
 
 export async function dbManagerListTables(): Promise<{ success: boolean; tables: DbTableInfo[] }> {
-  return invoke("db_manager_list_tables");
+  return invoke('db_manager_list_tables');
 }
 
-export async function dbManagerGetTableRows(tableName: string): Promise<{ success: boolean; rows: Record<string, unknown>[] }> {
-  return invoke("db_manager_get_table_rows", { tableName });
+export async function dbManagerGetTableRows(
+  tableName: string
+): Promise<{ success: boolean; rows: Record<string, unknown>[] }> {
+  return invoke('db_manager_get_table_rows', { tableName });
 }
 
-export async function dbManagerDeleteRow(tableName: string, id: string): Promise<{ success: boolean; deleted: boolean }> {
-  return invoke("db_manager_delete_row", { tableName, id });
+export async function dbManagerDeleteRow(
+  tableName: string,
+  id: string
+): Promise<{ success: boolean; deleted: boolean }> {
+  return invoke('db_manager_delete_row', { tableName, id });
 }
 
-export async function dbManagerClearTable(tableName: string): Promise<{ success: boolean; message: string }> {
-  return invoke("db_manager_clear_table", { tableName });
+export async function dbManagerClearTable(
+  tableName: string
+): Promise<{ success: boolean; message: string }> {
+  return invoke('db_manager_clear_table', { tableName });
 }
 
 export interface DbConfig {
@@ -250,23 +263,27 @@ export interface DbConfig {
 }
 
 export async function dbConfigGet(): Promise<DbConfig> {
-  return invoke("db_config_get");
+  return invoke('db_config_get');
 }
 
-export async function dbConfigSet(config: DbConfig): Promise<{ success: boolean; message: string }> {
-  return invoke("db_config_set", { config });
+export async function dbConfigSet(
+  config: DbConfig
+): Promise<{ success: boolean; message: string }> {
+  return invoke('db_config_set', { config });
 }
 
-export async function dbConfigTest(testParams: { type: "supabase" | "postgres"; supabaseUrl?: string; supabaseServiceKey?: string; postgresUrl?: string }): Promise<{ success: boolean; latencyMs?: number; error?: string }> {
-  return invoke("db_config_test", { testParams });
+export async function dbConfigTest(testParams: {
+  type: 'supabase' | 'postgres';
+  supabaseUrl?: string;
+  supabaseServiceKey?: string;
+  postgresUrl?: string;
+}): Promise<{ success: boolean; latencyMs?: number; error?: string }> {
+  return invoke('db_config_test', { testParams });
 }
 
 export async function dbConfigMigrate(): Promise<{ success: boolean; message: string }> {
-  return invoke("db_config_migrate");
+  return invoke('db_config_migrate');
 }
-
-
-
 
 // ---- Voice ----
 
@@ -277,11 +294,11 @@ export interface VoiceStatus {
 }
 
 export async function getVoiceStatus(): Promise<VoiceStatus> {
-  return invoke("get_voice_status");
+  return invoke('get_voice_status');
 }
 
 export async function getDaemonUrl(): Promise<string> {
-  return invoke("get_daemon_url_command");
+  return invoke('get_daemon_url_command');
 }
 
 export async function getHealth(): Promise<{
@@ -291,7 +308,7 @@ export async function getHealth(): Promise<{
   aiProvider: string;
   aiModel: string;
 }> {
-  return invoke("health_check");
+  return invoke('health_check');
 }
 
 // ---- MCP Server Management ----
@@ -304,7 +321,7 @@ export interface MCPServerInfo {
     url?: string;
     enabled: boolean;
   };
-  status: "disconnected" | "connecting" | "connected" | "error";
+  status: 'disconnected' | 'connecting' | 'connected' | 'error';
   tools: { name: string; description?: string }[];
   resources: { uri: string; name: string; description?: string }[];
   prompts: { name: string; description?: string }[];
@@ -313,34 +330,45 @@ export interface MCPServerInfo {
 }
 
 export async function listMCPServers(): Promise<{ servers: MCPServerInfo[] }> {
-  return invoke("list_mcp_servers");
+  return invoke('list_mcp_servers');
 }
 
 export async function connectMCPServer(config: {
   id: string;
   name: string;
-  transport: "http" | "stdio" | "sse";
+  transport: 'http' | 'stdio' | 'sse';
   url?: string;
   command?: string;
   enabled: boolean;
 }): Promise<{ success: boolean; server?: MCPServerInfo; error?: string }> {
-  return invoke("connect_mcp_server", { config });
+  return invoke('connect_mcp_server', { config });
 }
 
-export async function disconnectMCPServer(serverId: string): Promise<{ success: boolean; error?: string }> {
-  return invoke("disconnect_mcp_server", { serverId });
+export async function disconnectMCPServer(
+  serverId: string
+): Promise<{ success: boolean; error?: string }> {
+  return invoke('disconnect_mcp_server', { serverId });
 }
 
-export async function listMCPTools(): Promise<{ tools: { name: string; description?: string }[]; count: number }> {
-  return invoke("list_mcp_tools");
+export async function listMCPTools(): Promise<{
+  tools: { name: string; description?: string }[];
+  count: number;
+}> {
+  return invoke('list_mcp_tools');
 }
 
-export async function listMCPResources(): Promise<{ resources: { uri: string; name: string }[]; count: number }> {
-  return invoke("list_mcp_resources");
+export async function listMCPResources(): Promise<{
+  resources: { uri: string; name: string }[];
+  count: number;
+}> {
+  return invoke('list_mcp_resources');
 }
 
-export async function listMCPPrompts(): Promise<{ prompts: { name: string; description?: string }[]; count: number }> {
-  return invoke("list_mcp_prompts");
+export async function listMCPPrompts(): Promise<{
+  prompts: { name: string; description?: string }[];
+  count: number;
+}> {
+  return invoke('list_mcp_prompts');
 }
 
 // ---- Unified Tool Registry ----
@@ -348,11 +376,11 @@ export async function listMCPPrompts(): Promise<{ prompts: { name: string; descr
 export interface ToolInfo {
   id: string;
   appId: string;
-  source: "mcp" | "native" | "skill" | "rest";
+  source: 'mcp' | 'native' | 'skill' | 'rest';
   name: string;
   title: string;
   description: string;
-  risk: "low" | "medium" | "high" | "critical";
+  risk: 'low' | 'medium' | 'high' | 'critical';
   permissions: string[];
   requiresConfirmation: boolean;
   inputSchema: Record<string, unknown>;
@@ -363,15 +391,15 @@ export async function listAllTools(): Promise<{
   count: number;
   bySource: { native: number; mcp: number; skill: number; rest: number };
 }> {
-  return invoke("list_all_tools");
+  return invoke('list_all_tools');
 }
 
 export async function getTool(toolId: string): Promise<ToolInfo> {
-  return invoke("get_tool", { toolId });
+  return invoke('get_tool', { toolId });
 }
 
 export async function getToolCallLogs(limit = 20): Promise<{ logs: ToolCallLogEntry[] }> {
-  return invoke("get_tool_call_logs", { limit });
+  return invoke('get_tool_call_logs', { limit });
 }
 
 // ---- Model Gateway ----
@@ -396,7 +424,7 @@ export interface ModelProfile {
 }
 
 export async function listModelProfiles(): Promise<{ profiles: ModelProfile[] }> {
-  return invoke("list_model_profiles");
+  return invoke('list_model_profiles');
 }
 
 // ---- Provider Config ----
@@ -406,15 +434,17 @@ export interface ProviderCredentialView {
   baseURL: string;
 }
 
-export async function getProviderConfigs(): Promise<{ providers: Record<string, ProviderCredentialView> }> {
-  return invoke("get_provider_configs");
+export async function getProviderConfigs(): Promise<{
+  providers: Record<string, ProviderCredentialView>;
+}> {
+  return invoke('get_provider_configs');
 }
 
 export async function updateProviderConfig(
   name: string,
-  config: { apiKey?: string; baseURL?: string },
+  config: { apiKey?: string; baseURL?: string }
 ): Promise<{ success: boolean }> {
-  return invoke("update_provider_config", { name, apiKey: config.apiKey, baseUrl: config.baseURL });
+  return invoke('update_provider_config', { name, apiKey: config.apiKey, baseUrl: config.baseURL });
 }
 
 // ---- Provider Presets & CRUD ----
@@ -423,7 +453,7 @@ export interface ProviderPreset {
   id: string;
   name: string;
   nameCN: string;
-  type: "openai_compatible" | "ollama";
+  type: 'openai_compatible' | 'ollama';
   defaultBaseURL: string;
   requiresApiKey: boolean;
   popularModels: { id: string; name: string }[];
@@ -432,18 +462,21 @@ export interface ProviderPreset {
 export interface StoredProvider {
   id: string;
   name: string;
-  type: "openai_compatible" | "ollama";
+  type: 'openai_compatible' | 'ollama';
   baseURL: string;
   apiKey?: string;
   enabled: boolean;
 }
 
 export async function listProviderPresets(): Promise<{ presets: ProviderPreset[] }> {
-  return invoke("list_provider_presets");
+  return invoke('list_provider_presets');
 }
 
-export async function getProviders(): Promise<{ providers: StoredProvider[] | Record<string, StoredProvider & { enabled: boolean }>; isLegacy: boolean }> {
-  return invoke("get_provider_configs");
+export async function getProviders(): Promise<{
+  providers: StoredProvider[] | Record<string, StoredProvider & { enabled: boolean }>;
+  isLegacy: boolean;
+}> {
+  return invoke('get_provider_configs');
 }
 
 export async function addProvider(config: {
@@ -454,19 +487,23 @@ export async function addProvider(config: {
   apiKey?: string;
   enabled?: boolean;
 }): Promise<{ success: boolean }> {
-  return invoke("add_provider", { config });
+  return invoke('add_provider', { config });
 }
 
 export async function removeProvider(id: string): Promise<{ success: boolean }> {
-  return invoke("remove_provider", { id });
+  return invoke('remove_provider', { id });
 }
 
-export async function discoverModels(providerId: string): Promise<{ models: { id: string; name: string }[] }> {
-  return invoke("discover_models", { providerId });
+export async function discoverModels(
+  providerId: string
+): Promise<{ models: { id: string; name: string }[] }> {
+  return invoke('discover_models', { providerId });
 }
 
-export async function testProviderConnection(providerId: string): Promise<{ success: boolean; latencyMs?: number; error?: string }> {
-  return invoke("test_provider_connection", { providerId });
+export async function testProviderConnection(
+  providerId: string
+): Promise<{ success: boolean; latencyMs?: number; error?: string }> {
+  return invoke('test_provider_connection', { providerId });
 }
 
 // ---- Routing Rules ----
@@ -478,21 +515,21 @@ export interface RoutingRule {
 }
 
 export async function getRoutingRules(): Promise<{ rules: RoutingRule[]; isCustom: boolean }> {
-  return invoke("get_routing_rules");
+  return invoke('get_routing_rules');
 }
 
 export async function updateRoutingRules(rules: RoutingRule[]): Promise<{ success: boolean }> {
-  return invoke("update_routing_rules", { rules });
+  return invoke('update_routing_rules', { rules });
 }
 
 // ---- Active Model ----
 
 export async function getActiveModel(): Promise<{ modelId: string; profile: ModelProfile | null }> {
-  return invoke("get_active_model");
+  return invoke('get_active_model');
 }
 
 export async function setActiveModel(modelId: string): Promise<{ success: boolean }> {
-  return invoke("set_active_model", { modelId });
+  return invoke('set_active_model', { modelId });
 }
 
 // ---- Model Profile CRUD ----
@@ -505,11 +542,11 @@ export async function upsertModelProfile(profile: {
   limits?: { contextWindow: number; maxOutputTokens: number };
   cost?: { input: number; output: number };
 }): Promise<{ success: boolean; profile: ModelProfile }> {
-  return invoke("upsert_model_profile", { profile });
+  return invoke('upsert_model_profile', { profile });
 }
 
 export async function deleteModelProfile(id: string): Promise<{ success: boolean }> {
-  return invoke("delete_model_profile", { id });
+  return invoke('delete_model_profile', { id });
 }
 
 // ---- Daemon Supervisor ----
@@ -524,11 +561,11 @@ export interface DaemonStatus {
 }
 
 export async function getDaemonStatus(): Promise<DaemonStatus> {
-  return invoke("daemon_status");
+  return invoke('daemon_status');
 }
 
 export async function restartDaemon(): Promise<DaemonStatus> {
-  return invoke("restart_daemon");
+  return invoke('restart_daemon');
 }
 
 // ---- Tool Call Audit Logs ----

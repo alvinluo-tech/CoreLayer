@@ -1,9 +1,9 @@
-import type React from "react";
-import { useEffect } from "react";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, Circle, Clock } from "lucide-react";
-import { useTaskStore } from "@/stores/taskStore";
+import type React from 'react';
+import { useEffect } from 'react';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { CheckCircle2, Circle, Clock } from 'lucide-react';
+import { useTaskStore } from '@/stores/taskStore';
 
 const statusIcon = {
   done: <CheckCircle2 className="h-4 w-4 text-green-500" />,
@@ -26,13 +26,12 @@ export function TodayView() {
     fetchTasks();
   }, [fetchTasks]);
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = new Date().toISOString().split('T')[0];
   const todayTasks = tasks.filter(
     (t) =>
-      t.status !== "deleted" &&
-      (t.dueDate === today || (t.priority <= 2 && t.status !== "done")),
+      t.status !== 'deleted' && (t.dueDate === today || (t.priority <= 2 && t.status !== 'done'))
   );
-  const completed = todayTasks.filter((t) => t.status === "done").length;
+  const completed = todayTasks.filter((t) => t.status === 'done').length;
 
   return (
     <Card>

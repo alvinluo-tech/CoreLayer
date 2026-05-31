@@ -1,5 +1,5 @@
-import { Component, type ErrorInfo, type ReactNode } from "react";
-import { AlertOctagon, RefreshCw, Terminal, Copy, X, ShieldAlert } from "lucide-react";
+import { Component, type ErrorInfo, type ReactNode } from 'react';
+import { AlertOctagon, RefreshCw, Terminal, Copy, X, ShieldAlert } from 'lucide-react';
 
 interface Props {
   children: ReactNode;
@@ -12,7 +12,7 @@ interface State {
   toasts: Array<{
     id: string;
     message: string;
-    type: "error" | "warning" | "info";
+    type: 'error' | 'warning' | 'info';
     timestamp: Date;
   }>;
 }
@@ -30,57 +30,57 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error("[Jarvis ErrorBoundary] Fatal render crash captured:", error, errorInfo);
+    console.error('[Jarvis ErrorBoundary] Fatal render crash captured:', error, errorInfo);
     this.setState({ errorInfo });
   }
 
   public componentDidMount() {
     // 1. Listen to uncaught javascript errors (async/timeouts/etc)
-    window.addEventListener("error", this.handleGlobalError);
+    window.addEventListener('error', this.handleGlobalError);
     // 2. Listen to uncaught promise rejections (failed fetches, IPC/Tauri failures)
-    window.addEventListener("unhandledrejection", this.handleUnhandledRejection);
+    window.addEventListener('unhandledrejection', this.handleUnhandledRejection);
   }
 
   public componentWillUnmount() {
-    window.removeEventListener("error", this.handleGlobalError);
-    window.removeEventListener("unhandledrejection", this.handleUnhandledRejection);
+    window.removeEventListener('error', this.handleGlobalError);
+    window.removeEventListener('unhandledrejection', this.handleUnhandledRejection);
   }
 
   private handleGlobalError = (event: ErrorEvent) => {
     // Ignore errors originating from browser extensions
-    if (event.filename && (event.filename.includes("extension") || event.filename.includes("chrome-extension"))) {
+    if (
+      event.filename &&
+      (event.filename.includes('extension') || event.filename.includes('chrome-extension'))
+    ) {
       return;
     }
-    
-    this.addToast(
-      event.message || "未知脚本运行异常",
-      "error"
-    );
+
+    this.addToast(event.message || '未知脚本运行异常', 'error');
   };
 
   private handleUnhandledRejection = (event: PromiseRejectionEvent) => {
     let rawReason = event.reason;
-    let message = "未捕获的后台异步操作错误";
-    
+    let message = '未捕获的后台异步操作错误';
+
     if (rawReason) {
-      if (typeof rawReason === "string") {
+      if (typeof rawReason === 'string') {
         message = rawReason;
       } else if (rawReason instanceof Error) {
         message = rawReason.message;
-      } else if (typeof rawReason === "object") {
+      } else if (typeof rawReason === 'object') {
         message = rawReason.message || JSON.stringify(rawReason);
       }
     }
 
     // Ignore benign developer console or extension rejections
-    if (message.includes("Extension") || message.includes("React DevTools")) {
+    if (message.includes('Extension') || message.includes('React DevTools')) {
       return;
     }
 
-    this.addToast(message, "error");
+    this.addToast(message, 'error');
   };
 
-  private addToast = (message: string, type: "error" | "warning" | "info" = "error") => {
+  private addToast = (message: string, type: 'error' | 'warning' | 'info' = 'error') => {
     const id = Math.random().toString(36).substring(2, 9);
     const newToast = { id, message, type, timestamp: new Date() };
 
@@ -112,14 +112,17 @@ export class ErrorBoundary extends Component<Props, State> {
 Timestamp: ${new Date().toISOString()}
 Error: ${error.message}
 Stack: ${error.stack}
-Component Stack: ${errorInfo?.componentStack || "N/A"}
+Component Stack: ${errorInfo?.componentStack || 'N/A'}
     `.trim();
 
-    navigator.clipboard.writeText(logText).then(() => {
-      this.addToast("系统错误日志已成功复制到剪贴板", "info");
-    }).catch(() => {
-      alert("复制失败，请手动选择复制。");
-    });
+    navigator.clipboard
+      .writeText(logText)
+      .then(() => {
+        this.addToast('系统错误日志已成功复制到剪贴板', 'info');
+      })
+      .catch(() => {
+        alert('复制失败，请手动选择复制。');
+      });
   };
 
   private handleRestart = () => {
@@ -143,7 +146,6 @@ Component Stack: ${errorInfo?.componentStack || "N/A"}
       return (
         <div className="fixed inset-0 flex items-center justify-center bg-black bg-gradient-to-tr from-slate-950 via-black to-red-950 p-6 z-[9999] overflow-y-auto font-sans select-text">
           <div className="w-full max-w-3xl rounded-2xl border border-red-500/30 bg-black/60 backdrop-blur-2xl p-8 relative overflow-hidden shadow-[0_0_50px_rgba(239,68,68,0.15)] flex flex-col gap-6">
-            
             {/* Glowing Cyber Accent */}
             <div className="absolute -top-32 -left-32 w-64 h-64 bg-red-500/10 rounded-full blur-[120px]" />
             <div className="absolute -bottom-32 -right-32 w-64 h-64 bg-red-500/5 rounded-full blur-[120px]" />
@@ -170,9 +172,11 @@ Component Stack: ${errorInfo?.componentStack || "N/A"}
             <div className="p-4 rounded-xl bg-red-500/[0.03] border border-red-500/10 flex items-start gap-3">
               <ShieldAlert className="h-5 w-5 text-red-400 shrink-0 mt-0.5" />
               <div className="min-w-0">
-                <p className="text-xs font-semibold text-red-400 uppercase tracking-wider font-mono">Exception Signature</p>
+                <p className="text-xs font-semibold text-red-400 uppercase tracking-wider font-mono">
+                  Exception Signature
+                </p>
                 <p className="text-sm font-semibold text-slate-100 mt-1 break-words leading-relaxed">
-                  {error?.message || "Internal Rendering Crash"}
+                  {error?.message || 'Internal Rendering Crash'}
                 </p>
               </div>
             </div>
@@ -191,7 +195,7 @@ Component Stack: ${errorInfo?.componentStack || "N/A"}
                 </button>
               </div>
               <div className="flex-1 p-4 font-mono text-[11px] leading-relaxed overflow-auto text-red-400/90 whitespace-pre selection:bg-red-500/20 max-h-[300px]">
-                {error?.stack || "No call stack available."}
+                {error?.stack || 'No call stack available.'}
                 {errorInfo?.componentStack && (
                   <div className="text-zinc-500 mt-4 border-t border-zinc-800/50 pt-2">
                     <span className="text-zinc-400 font-bold">Component Structure:</span>
@@ -231,9 +235,30 @@ Component Stack: ${errorInfo?.componentStack || "N/A"}
           <div className="fixed top-4 right-4 z-[99999] flex flex-col gap-2 max-w-sm w-full pointer-events-none select-none font-sans">
             {toasts.map((toast) => {
               const colorMap = {
-                error: { border: "border-red-500/30", bar: "bg-red-500", iconBg: "bg-red-500/10 border-red-500/20", iconText: "text-red-500", label: "text-red-400", labelName: "异常 (Error)" },
-                warning: { border: "border-amber-500/30", bar: "bg-amber-500", iconBg: "bg-amber-500/10 border-amber-500/20", iconText: "text-amber-500", label: "text-amber-400", labelName: "警告 (Warning)" },
-                info: { border: "border-blue-500/30", bar: "bg-blue-500", iconBg: "bg-blue-500/10 border-blue-500/20", iconText: "text-blue-500", label: "text-blue-400", labelName: "提示 (Info)" },
+                error: {
+                  border: 'border-red-500/30',
+                  bar: 'bg-red-500',
+                  iconBg: 'bg-red-500/10 border-red-500/20',
+                  iconText: 'text-red-500',
+                  label: 'text-red-400',
+                  labelName: '异常 (Error)',
+                },
+                warning: {
+                  border: 'border-amber-500/30',
+                  bar: 'bg-amber-500',
+                  iconBg: 'bg-amber-500/10 border-amber-500/20',
+                  iconText: 'text-amber-500',
+                  label: 'text-amber-400',
+                  labelName: '警告 (Warning)',
+                },
+                info: {
+                  border: 'border-blue-500/30',
+                  bar: 'bg-blue-500',
+                  iconBg: 'bg-blue-500/10 border-blue-500/20',
+                  iconText: 'text-blue-500',
+                  label: 'text-blue-400',
+                  labelName: '提示 (Info)',
+                },
               };
               const c = colorMap[toast.type] || colorMap.error;
               return (
@@ -248,7 +273,9 @@ Component Stack: ${errorInfo?.componentStack || "N/A"}
                   </div>
 
                   <div className="flex-1 min-w-0 pr-4">
-                    <p className={`text-[11px] uppercase tracking-wider ${c.label} font-semibold font-mono`}>
+                    <p
+                      className={`text-[11px] uppercase tracking-wider ${c.label} font-semibold font-mono`}
+                    >
                       {c.labelName}
                     </p>
                     <p className="text-xs font-medium text-slate-100 mt-1 break-words leading-relaxed select-text">

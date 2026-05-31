@@ -1,5 +1,5 @@
-import { create } from "zustand";
-import * as tauri from "@/lib/tauri";
+import { create } from 'zustand';
+import * as tauri from '@/lib/tauri';
 
 export interface DailySummaryData {
   tasksCompleted: number;

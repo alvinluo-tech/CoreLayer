@@ -1,20 +1,23 @@
-import { invoke } from "@tauri-apps/api/core";
-import { createSSEParser } from "./sseParser";
+import { invoke } from '@tauri-apps/api/core';
+import { createSSEParser } from './sseParser';
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_MAX_RETRIES = 2;
 const DEFAULT_RETRY_DELAY_MS = 1_000;
 
 export class NetworkError extends Error {
-  constructor(message: string, public readonly cause?: Error) {
+  constructor(
+    message: string,
+    public readonly cause?: Error
+  ) {
     super(message);
-    this.name = "NetworkError";
+    this.name = 'NetworkError';
   }
 }
 
 interface SSERequestOptions {
   path: string;
-  method?: "GET" | "POST";
+  method?: 'GET' | 'POST';
   body?: unknown;
   signal?: AbortSignal;
   onEvent: (event: { event: string; data: string }) => void;
@@ -37,7 +40,7 @@ class JarvisClient {
    */
   async getDaemonUrl(): Promise<string> {
     if (!this.daemonUrlPromise) {
-      this.daemonUrlPromise = invoke<string>("get_daemon_url_command");
+      this.daemonUrlPromise = invoke<string>('get_daemon_url_command');
     }
     return this.daemonUrlPromise;
   }
@@ -50,23 +53,23 @@ class JarvisClient {
   // ---- HTTP Methods with Retry ----
 
   async get<T>(path: string, options?: RequestOptions): Promise<T> {
-    return this.request<T>("GET", path, undefined, options);
+    return this.request<T>('GET', path, undefined, options);
   }
 
   async post<T>(path: string, body?: unknown, options?: RequestOptions): Promise<T> {
-    return this.request<T>("POST", path, body, options);
+    return this.request<T>('POST', path, body, options);
   }
 
   async patch<T>(path: string, body?: unknown, options?: RequestOptions): Promise<T> {
-    return this.request<T>("PATCH", path, body, options);
+    return this.request<T>('PATCH', path, body, options);
   }
 
   async put<T>(path: string, body?: unknown, options?: RequestOptions): Promise<T> {
-    return this.request<T>("PUT", path, body, options);
+    return this.request<T>('PUT', path, body, options);
   }
 
   async del(path: string, options?: RequestOptions): Promise<void> {
-    await this.request<void>("DELETE", path, undefined, options);
+    await this.request<void>('DELETE', path, undefined, options);
   }
 
   // ---- SSE Streaming ----
@@ -76,18 +79,18 @@ class JarvisClient {
     const fullUrl = `${url}${options.path}`;
 
     const response = await fetch(fullUrl, {
-      method: options.method ?? "POST",
-      headers: { "Content-Type": "application/json" },
+      method: options.method ?? 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: options.body ? JSON.stringify(options.body) : undefined,
       signal: options.signal,
     });
 
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${await response.text().catch(() => "")}`);
+      throw new Error(`HTTP ${response.status}: ${await response.text().catch(() => '')}`);
     }
 
     const reader = response.body?.getReader();
-    if (!reader) throw new Error("No response body reader");
+    if (!reader) throw new Error('No response body reader');
 
     const decoder = new TextDecoder();
     const parser = createSSEParser({
@@ -119,8 +122,8 @@ class JarvisClient {
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
         const response = await fetch(`${url}/api/voice/synthesize`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text, voice, model }),
         });
 
@@ -132,17 +135,22 @@ class JarvisClient {
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
 
-        if (lastError.name === "AbortError" || lastError.message.includes("(")) {
+        if (lastError.name === 'AbortError' || lastError.message.includes('(')) {
           throw lastError;
         }
 
         if (attempt < maxRetries) {
-          await new Promise((resolve) => setTimeout(resolve, DEFAULT_RETRY_DELAY_MS * (attempt + 1)));
+          await new Promise((resolve) =>
+            setTimeout(resolve, DEFAULT_RETRY_DELAY_MS * (attempt + 1))
+          );
         }
       }
     }
 
-    throw new NetworkError(`TTS 请求失败，请检查 daemon 是否运行: ${lastError?.message}`, lastError ?? undefined);
+    throw new NetworkError(
+      `TTS 请求失败，请检查 daemon 是否运行: ${lastError?.message}`,
+      lastError ?? undefined
+    );
   }
 
   async transcribe(audioBlob: Blob, language?: string): Promise<string> {
@@ -153,11 +161,11 @@ class JarvisClient {
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
         const formData = new FormData();
-        formData.append("audio", audioBlob, "recording.wav");
-        if (language) formData.append("language", language);
+        formData.append('audio', audioBlob, 'recording.wav');
+        if (language) formData.append('language', language);
 
         const response = await fetch(`${url}/api/voice/transcribe`, {
-          method: "POST",
+          method: 'POST',
           body: formData,
         });
 
@@ -165,22 +173,27 @@ class JarvisClient {
           throw new Error(`Transcription failed (${response.status})`);
         }
 
-        const result = await response.json() as { text: string };
+        const result = (await response.json()) as { text: string };
         return result.text;
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
 
-        if (lastError.name === "AbortError" || lastError.message.includes("(")) {
+        if (lastError.name === 'AbortError' || lastError.message.includes('(')) {
           throw lastError;
         }
 
         if (attempt < maxRetries) {
-          await new Promise((resolve) => setTimeout(resolve, DEFAULT_RETRY_DELAY_MS * (attempt + 1)));
+          await new Promise((resolve) =>
+            setTimeout(resolve, DEFAULT_RETRY_DELAY_MS * (attempt + 1))
+          );
         }
       }
     }
 
-    throw new NetworkError(`语音识别请求失败，请检查 daemon 是否运行: ${lastError?.message}`, lastError ?? undefined);
+    throw new NetworkError(
+      `语音识别请求失败，请检查 daemon 是否运行: ${lastError?.message}`,
+      lastError ?? undefined
+    );
   }
 
   // ---- Tauri IPC Passthrough ----
@@ -195,7 +208,7 @@ class JarvisClient {
     method: string,
     path: string,
     body?: unknown,
-    options?: RequestOptions,
+    options?: RequestOptions
   ): Promise<T> {
     const url = await this.getDaemonUrl();
     const fullUrl = `${url}${path}`;
@@ -212,7 +225,7 @@ class JarvisClient {
 
         const response = await fetch(fullUrl, {
           method,
-          headers: { "Content-Type": "application/json" },
+          headers: { 'Content-Type': 'application/json' },
           body: body ? JSON.stringify(body) : undefined,
           signal: controller.signal,
         });
@@ -220,24 +233,27 @@ class JarvisClient {
         clearTimeout(timeout);
 
         if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${await response.text().catch(() => "")}`);
+          throw new Error(`HTTP ${response.status}: ${await response.text().catch(() => '')}`);
         }
 
         // Handle void responses
-        if (response.status === 204 || response.headers.get("content-length") === "0") {
+        if (response.status === 204 || response.headers.get('content-length') === '0') {
           return undefined as T;
         }
 
         const data: unknown = await response.json();
         if (data === null || data === undefined) {
-          throw new Error("Unexpected empty response body");
+          throw new Error('Unexpected empty response body');
         }
         return data as T;
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
 
         // Don't retry on abort or client errors
-        if (lastError.name === "AbortError" || (lastError.message.includes("HTTP 4") && !lastError.message.includes("HTTP 429"))) {
+        if (
+          lastError.name === 'AbortError' ||
+          (lastError.message.includes('HTTP 4') && !lastError.message.includes('HTTP 429'))
+        ) {
           throw lastError;
         }
 
@@ -248,8 +264,8 @@ class JarvisClient {
     }
 
     // Wrap network failures (Failed to fetch) in NetworkError for caller differentiation
-    if (lastError && lastError.message.includes("Failed to fetch")) {
-      throw new NetworkError("无法连接到 daemon，请确认 Jarvis 后端已启动", lastError);
+    if (lastError && lastError.message.includes('Failed to fetch')) {
+      throw new NetworkError('无法连接到 daemon，请确认 Jarvis 后端已启动', lastError);
     }
 
     throw lastError;

@@ -1,4 +1,4 @@
-export type ArticleStatus = "unread" | "reading" | "finished";
+export type ArticleStatus = 'unread' | 'reading' | 'finished';
 
 export interface Article {
   id: string;

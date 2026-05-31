@@ -1,4 +1,4 @@
-import { create } from "zustand";
+import { create } from 'zustand';
 import {
   getProviderConfigs,
   updateProviderConfig as tauriUpdateProvider,
@@ -18,7 +18,7 @@ import {
   type ProviderCredentialView,
   type RoutingRule,
   type ProviderPreset,
-} from "@/lib/tauri";
+} from '@/lib/tauri';
 
 export interface ProviderEntry {
   id: string;
@@ -43,11 +43,18 @@ interface ModelState {
 
   fetchAll: () => Promise<void>;
   addProvider: (presetId: string, apiKey?: string) => Promise<void>;
-  addCustomProvider: (config: { id: string; name: string; baseURL: string; apiKey?: string }) => Promise<void>;
+  addCustomProvider: (config: {
+    id: string;
+    name: string;
+    baseURL: string;
+    apiKey?: string;
+  }) => Promise<void>;
   updateProvider: (id: string, config: { apiKey?: string; baseURL?: string }) => Promise<void>;
   removeProvider: (id: string) => Promise<void>;
   discoverModels: (providerId: string) => Promise<{ id: string; name: string }[]>;
-  testProvider: (providerId: string) => Promise<{ success: boolean; latencyMs?: number; error?: string }>;
+  testProvider: (
+    providerId: string
+  ) => Promise<{ success: boolean; latencyMs?: number; error?: string }>;
   updateRoutingRules: (rules: RoutingRule[]) => Promise<void>;
   setActiveModel: (modelId: string) => Promise<void>;
   upsertProfile: (profile: {
@@ -75,40 +82,55 @@ export const useModelStore = create<ModelState>((set, get) => ({
   fetchAll: async () => {
     set({ isLoading: true, error: null });
     try {
-      const [providersResult, presetsResult, rulesResult, activeResult, profilesResult] = await Promise.allSettled([
-        getProviderConfigs(),
-        listProviderPresets(),
-        tauriGetRoutingRules(),
-        getActiveModel(),
-        listModelProfiles(),
-      ]);
+      const [providersResult, presetsResult, rulesResult, activeResult, profilesResult] =
+        await Promise.allSettled([
+          getProviderConfigs(),
+          listProviderPresets(),
+          tauriGetRoutingRules(),
+          getActiveModel(),
+          listModelProfiles(),
+        ]);
 
-      const providersResp = providersResult.status === "fulfilled" ? providersResult.value : null;
-      const presetsResp = presetsResult.status === "fulfilled" ? presetsResult.value : null;
-      const rulesResp = rulesResult.status === "fulfilled" ? rulesResult.value : null;
-      const activeResp = activeResult.status === "fulfilled" ? activeResult.value : null;
-      const profilesResp = profilesResult.status === "fulfilled" ? profilesResult.value : null;
+      const providersResp = providersResult.status === 'fulfilled' ? providersResult.value : null;
+      const presetsResp = presetsResult.status === 'fulfilled' ? presetsResult.value : null;
+      const rulesResp = rulesResult.status === 'fulfilled' ? rulesResult.value : null;
+      const activeResp = activeResult.status === 'fulfilled' ? activeResult.value : null;
+      const profilesResp = profilesResult.status === 'fulfilled' ? profilesResult.value : null;
 
       const profiles = profilesResp?.profiles ?? [];
       let providers: ProviderEntry[] = [];
 
       if (providersResp) {
         if (Array.isArray((providersResp as Record<string, unknown>).providers)) {
-          providers = ((providersResp as unknown as { providers: { id: string; name: string; type: string; baseURL: string; apiKey?: string; enabled: boolean }[] }).providers).map((p) => ({
+          providers = (
+            providersResp as unknown as {
+              providers: {
+                id: string;
+                name: string;
+                type: string;
+                baseURL: string;
+                apiKey?: string;
+                enabled: boolean;
+              }[];
+            }
+          ).providers.map((p) => ({
             id: p.id,
             name: p.name,
             type: p.type,
             baseURL: p.baseURL,
-            apiKey: p.apiKey ?? "",
+            apiKey: p.apiKey ?? '',
             enabled: p.enabled,
             modelCount: profiles.filter((mp) => mp.provider === p.id).length,
           }));
         } else {
-          const legacy = providersResp.providers as Record<string, ProviderCredentialView & { enabled?: boolean }>;
+          const legacy = providersResp.providers as Record<
+            string,
+            ProviderCredentialView & { enabled?: boolean }
+          >;
           providers = Object.entries(legacy).map(([id, p]) => ({
             id,
             name: id.charAt(0).toUpperCase() + id.slice(1),
-            type: "openai_compatible",
+            type: 'openai_compatible',
             baseURL: p.baseURL,
             apiKey: p.apiKey,
             enabled: p.enabled ?? true,
@@ -118,7 +140,7 @@ export const useModelStore = create<ModelState>((set, get) => ({
       }
 
       const errors = [providersResult, presetsResult, rulesResult, activeResult, profilesResult]
-        .filter((r): r is PromiseRejectedResult => r.status === "rejected")
+        .filter((r): r is PromiseRejectedResult => r.status === 'rejected')
         .map((r) => r.reason);
 
       set({
@@ -130,7 +152,7 @@ export const useModelStore = create<ModelState>((set, get) => ({
         activeModelProfile: activeResp?.profile ?? null,
         modelProfiles: profiles,
         isLoading: false,
-        error: errors.length > 0 ? errors.map(String).join("; ") : null,
+        error: errors.length > 0 ? errors.map(String).join('; ') : null,
       });
     } catch (e) {
       set({ error: String(e), isLoading: false });
@@ -163,7 +185,7 @@ export const useModelStore = create<ModelState>((set, get) => ({
       await tauriAddProvider({
         id: config.id,
         name: config.name,
-        type: "openai_compatible",
+        type: 'openai_compatible',
         baseURL: config.baseURL,
         apiKey: config.apiKey,
         enabled: true,

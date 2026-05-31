@@ -1,11 +1,21 @@
-import { useState, useEffect } from "react";
-import { cn } from "@/lib/utils";
-import { Brain, ChevronDown, ChevronUp, Check, Copy, Loader2, CheckCircle2, Terminal, X } from "lucide-react";
-import { Streamdown } from "streamdown";
+import { useState, useEffect } from 'react';
+import { cn } from '@/lib/utils';
+import {
+  Brain,
+  ChevronDown,
+  ChevronUp,
+  Check,
+  Copy,
+  Loader2,
+  CheckCircle2,
+  Terminal,
+  X,
+} from 'lucide-react';
+import { Streamdown } from 'streamdown';
 
 interface Message {
   id: string;
-  role: "user" | "assistant";
+  role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
   toolCalls?: { name: string; args: unknown; result: unknown }[];
@@ -22,8 +32,8 @@ function parseThoughtAndContent(content: string) {
   const match = content.match(thoughtRegex);
 
   if (match) {
-    const thought = (match[1] || "").trim();
-    const rest = content.replace(thoughtRegex, "").trim();
+    const thought = (match[1] || '').trim();
+    const rest = content.replace(thoughtRegex, '').trim();
     return { thought, content: rest, isThoughtClosed: !!match[2] };
   }
 
@@ -31,9 +41,13 @@ function parseThoughtAndContent(content: string) {
 }
 
 export function MessageBubble({ message }: MessageBubbleProps) {
-  const isUser = message.role === "user";
-  const { thought, content: cleanContent, isThoughtClosed } = parseThoughtAndContent(message.content);
-  
+  const isUser = message.role === 'user';
+  const {
+    thought,
+    content: cleanContent,
+    isThoughtClosed,
+  } = parseThoughtAndContent(message.content);
+
   const [isThoughtExpanded, setIsThoughtExpanded] = useState(!isThoughtClosed);
   const [copied, setCopied] = useState(false);
   const [copyFailed, setCopyFailed] = useState(false);
@@ -52,20 +66,25 @@ export function MessageBubble({ message }: MessageBubbleProps) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
-      console.error("Failed to copy text", err);
+      console.error('Failed to copy text', err);
       setCopyFailed(true);
       setTimeout(() => setCopyFailed(false), 2000);
     }
   };
 
   return (
-    <div className={cn("flex w-full group/bubble my-5 animate-in fade-in slide-in-from-bottom-2 duration-300", isUser ? "justify-end" : "justify-start")}>
+    <div
+      className={cn(
+        'flex w-full group/bubble my-5 animate-in fade-in slide-in-from-bottom-2 duration-300',
+        isUser ? 'justify-end' : 'justify-start'
+      )}
+    >
       <div
         className={cn(
-          "max-w-[85%] rounded-2xl px-4 py-3.5 text-sm shadow-sm transition-all duration-300 relative border overflow-hidden",
+          'max-w-[85%] rounded-2xl px-4 py-3.5 text-sm shadow-sm transition-all duration-300 relative border overflow-hidden',
           isUser
-            ? "bg-gradient-to-br from-indigo-600 to-blue-600 dark:from-indigo-500 dark:to-blue-600 text-primary-foreground border-primary/20 rounded-tr-sm shadow-[0_4px_12px_rgba(99,102,241,0.15)]"
-            : "bg-card/60 backdrop-blur-md text-card-foreground border-border/60 rounded-tl-sm hover:shadow-[0_4px_20px_rgba(0,0,0,0.03)] dark:hover:shadow-[0_4px_20px_rgba(0,0,0,0.15)] hover:border-border/80"
+            ? 'bg-gradient-to-br from-indigo-600 to-blue-600 dark:from-indigo-500 dark:to-blue-600 text-primary-foreground border-primary/20 rounded-tr-sm shadow-[0_4px_12px_rgba(99,102,241,0.15)]'
+            : 'bg-card/60 backdrop-blur-md text-card-foreground border-border/60 rounded-tl-sm hover:shadow-[0_4px_20px_rgba(0,0,0,0.03)] dark:hover:shadow-[0_4px_20px_rgba(0,0,0,0.15)] hover:border-border/80'
         )}
       >
         {/* User Message Rendering */}
@@ -77,10 +96,10 @@ export function MessageBubble({ message }: MessageBubbleProps) {
             {thought && (
               <div
                 className={cn(
-                  "rounded-xl border transition-all duration-500 overflow-hidden shadow-[inset_0_1px_2px_rgba(0,0,0,0.01)]",
+                  'rounded-xl border transition-all duration-500 overflow-hidden shadow-[inset_0_1px_2px_rgba(0,0,0,0.01)]',
                   isThoughtClosed
-                    ? "border-border/60 bg-muted/20 hover:border-border/80"
-                    : "border-purple-500/20 dark:border-purple-500/30 bg-gradient-to-br from-purple-500/5 via-violet-500/5 to-indigo-500/5"
+                    ? 'border-border/60 bg-muted/20 hover:border-border/80'
+                    : 'border-purple-500/20 dark:border-purple-500/30 bg-gradient-to-br from-purple-500/5 via-violet-500/5 to-indigo-500/5'
                 )}
               >
                 {/* Header bar */}
@@ -100,11 +119,11 @@ export function MessageBubble({ message }: MessageBubbleProps) {
                       </div>
                     )}
                     <span className="font-semibold tracking-tight">
-                      {isThoughtClosed ? "已完成深度思考与分析" : "Jarvis 正在进行多维逻辑解密..."}
+                      {isThoughtClosed ? '已完成深度思考与分析' : 'Jarvis 正在进行多维逻辑解密...'}
                     </span>
                   </div>
                   <div className="flex items-center gap-1.5 font-mono text-[9px] opacity-75">
-                    <span>{isThoughtExpanded ? "折叠" : "展开"}</span>
+                    <span>{isThoughtExpanded ? '折叠' : '展开'}</span>
                     {isThoughtExpanded ? (
                       <ChevronUp className="h-3 w-3 stroke-[2.5]" />
                     ) : (
@@ -129,15 +148,16 @@ export function MessageBubble({ message }: MessageBubbleProps) {
             {cleanContent ? (
               <div className="relative leading-relaxed prose prose-sm dark:prose-invert max-w-none markdown-body text-foreground/90 font-normal">
                 <Streamdown
-                  key={message.isStreaming && isThoughtClosed ? "streaming" : "static"}
-                  mode={message.isStreaming && isThoughtClosed ? "streaming" : "static"}
+                  key={message.isStreaming && isThoughtClosed ? 'streaming' : 'static'}
+                  mode={message.isStreaming && isThoughtClosed ? 'streaming' : 'static'}
                   parseIncompleteMarkdown={true}
                 >
                   {cleanContent}
                 </Streamdown>
               </div>
             ) : (
-              message.isStreaming && !thought && (
+              message.isStreaming &&
+              !thought && (
                 <div className="flex items-center gap-2 text-muted-foreground py-1 animate-pulse">
                   <Loader2 className="h-4 w-4 animate-spin text-primary" />
                   <span className="text-xs font-medium">正在生成最优回复...</span>
@@ -154,10 +174,10 @@ export function MessageBubble({ message }: MessageBubbleProps) {
                     <div
                       key={i}
                       className={cn(
-                        "flex items-center justify-between gap-3 px-3 py-2 rounded-xl border text-xs font-mono transition-all duration-300 shadow-[inset_0_1px_1px_rgba(0,0,0,0.01)]",
+                        'flex items-center justify-between gap-3 px-3 py-2 rounded-xl border text-xs font-mono transition-all duration-300 shadow-[inset_0_1px_1px_rgba(0,0,0,0.01)]',
                         isPending
-                          ? "bg-amber-500/5 border-amber-500/20 text-amber-600 dark:text-amber-400"
-                          : "bg-zinc-950/5 dark:bg-zinc-950/30 border-border/40 text-muted-foreground hover:border-primary/25",
+                          ? 'bg-amber-500/5 border-amber-500/20 text-amber-600 dark:text-amber-400'
+                          : 'bg-zinc-950/5 dark:bg-zinc-950/30 border-border/40 text-muted-foreground hover:border-primary/25'
                       )}
                     >
                       <div className="flex items-center gap-2 overflow-hidden">
@@ -174,7 +194,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
                         </span>
                         <span className="truncate font-semibold text-foreground/80">{tc.name}</span>
                       </div>
-                      
+
                       {Boolean(tc.args) && (
                         <span className="text-[10px] opacity-60 truncate max-w-[40%] bg-background/50 dark:bg-zinc-800/50 px-1.5 py-0.5 rounded border border-border/20">
                           {JSON.stringify(tc.args)}
@@ -191,9 +211,9 @@ export function MessageBubble({ message }: MessageBubbleProps) {
         {/* Footer controls & Timestamp */}
         <div className="flex items-center justify-between gap-4 mt-3 pt-2.5 border-t border-border/10">
           <time className="text-[10px] text-muted-foreground/60 select-none font-mono">
-            {message.timestamp.toLocaleTimeString("zh-CN", {
-              hour: "2-digit",
-              minute: "2-digit",
+            {message.timestamp.toLocaleTimeString('zh-CN', {
+              hour: '2-digit',
+              minute: '2-digit',
             })}
           </time>
 

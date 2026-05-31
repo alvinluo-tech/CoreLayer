@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
-import { useMCPStore } from "@/stores/mcpStore";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { useEffect, useState } from 'react';
+import { useMCPStore } from '@/stores/mcpStore';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import {
   Shield,
   RefreshCw,
@@ -11,37 +11,40 @@ import {
   Clock,
   ChevronDown,
   ChevronRight,
-} from "lucide-react";
-import { getToolCallLogs, type ToolCallLogEntry } from "@/lib/tauri";
+} from 'lucide-react';
+import { getToolCallLogs, type ToolCallLogEntry } from '@/lib/tauri';
 
-const riskConfig: Record<string, { label: string; color: string; icon: typeof Shield; description: string }> = {
+const riskConfig: Record<
+  string,
+  { label: string; color: string; icon: typeof Shield; description: string }
+> = {
   low: {
-    label: "低",
-    color: "bg-green-500/10 text-green-600 border-green-500/20",
+    label: '低',
+    color: 'bg-green-500/10 text-green-600 border-green-500/20',
     icon: CheckCircle2,
-    description: "自动执行，无需确认",
+    description: '自动执行，无需确认',
   },
   medium: {
-    label: "中",
-    color: "bg-yellow-500/10 text-yellow-600 border-yellow-500/20",
+    label: '中',
+    color: 'bg-yellow-500/10 text-yellow-600 border-yellow-500/20',
     icon: AlertTriangle,
-    description: "执行并通知",
+    description: '执行并通知',
   },
   high: {
-    label: "高",
-    color: "bg-orange-500/10 text-orange-600 border-orange-500/20",
+    label: '高',
+    color: 'bg-orange-500/10 text-orange-600 border-orange-500/20',
     icon: AlertTriangle,
-    description: "需要用户确认",
+    description: '需要用户确认',
   },
   critical: {
-    label: "极高",
-    color: "bg-red-500/10 text-red-600 border-red-500/20",
+    label: '极高',
+    color: 'bg-red-500/10 text-red-600 border-red-500/20',
     icon: XCircle,
-    description: "需要显式批准",
+    description: '需要显式批准',
   },
 };
 
-type RiskLevel = "low" | "medium" | "high" | "critical";
+type RiskLevel = 'low' | 'medium' | 'high' | 'critical';
 
 export function PermissionPage() {
   const { tools, fetchTools, isLoading } = useMCPStore();
@@ -59,10 +62,10 @@ export function PermissionPage() {
   }, [fetchTools]);
 
   const toolsByRisk: Record<RiskLevel, typeof tools> = {
-    low: tools.filter((t) => t.risk === "low"),
-    medium: tools.filter((t) => t.risk === "medium"),
-    high: tools.filter((t) => t.risk === "high"),
-    critical: tools.filter((t) => t.risk === "critical"),
+    low: tools.filter((t) => t.risk === 'low'),
+    medium: tools.filter((t) => t.risk === 'medium'),
+    high: tools.filter((t) => t.risk === 'high'),
+    critical: tools.filter((t) => t.risk === 'critical'),
   };
 
   const totalTools = tools.length;
@@ -89,14 +92,14 @@ export function PermissionPage() {
           }}
           className="gap-1.5"
         >
-          <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`} />
+          <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? 'animate-spin' : ''}`} />
           刷新
         </Button>
       </div>
 
       {/* Summary Cards */}
       <div className="grid grid-cols-4 gap-3">
-        {(["low", "medium", "high", "critical"] as RiskLevel[]).map((risk) => {
+        {(['low', 'medium', 'high', 'critical'] as RiskLevel[]).map((risk) => {
           const config = riskConfig[risk]!;
           const Icon = config.icon;
           return (
@@ -137,7 +140,7 @@ export function PermissionPage() {
           风险等级明细
         </h3>
         <div className="space-y-2">
-          {(["low", "medium", "high", "critical"] as RiskLevel[]).map((risk) => {
+          {(['low', 'medium', 'high', 'critical'] as RiskLevel[]).map((risk) => {
             const config = riskConfig[risk]!;
             const riskTools = toolsByRisk[risk];
             const isExpanded = expandedRisk === risk;
@@ -176,7 +179,9 @@ export function PermissionPage() {
                       >
                         <div className="min-w-0">
                           <p className="font-medium truncate">{tool.title || tool.name}</p>
-                          <p className="text-xs text-muted-foreground truncate font-mono">{tool.name}</p>
+                          <p className="text-xs text-muted-foreground truncate font-mono">
+                            {tool.name}
+                          </p>
                         </div>
                         <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground w-fit">
                           {tool.source}
@@ -219,21 +224,21 @@ export function PermissionPage() {
                 <div className="flex items-center gap-2">
                   <Clock className="h-3 w-3 text-muted-foreground" />
                   <span className="text-muted-foreground">
-                    {new Date(log.createdAt).toLocaleString("zh-CN", {
-                      month: "2-digit",
-                      day: "2-digit",
-                      hour: "2-digit",
-                      minute: "2-digit",
+                    {new Date(log.createdAt).toLocaleString('zh-CN', {
+                      month: '2-digit',
+                      day: '2-digit',
+                      hour: '2-digit',
+                      minute: '2-digit',
                     })}
                   </span>
                   <span className="font-mono">{log.toolName}</span>
                 </div>
                 <span
                   className={`px-1.5 py-0.5 rounded ${
-                    riskConfig[log.risk as RiskLevel]?.color ?? "bg-muted text-muted-foreground"
+                    riskConfig[log.risk as RiskLevel]?.color ?? 'bg-muted text-muted-foreground'
                   }`}
                 >
-                  {log.risk ?? "—"}
+                  {log.risk ?? '—'}
                 </span>
               </div>
             ))}

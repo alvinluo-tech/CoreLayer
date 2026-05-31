@@ -1,6 +1,6 @@
-import { create } from "zustand";
-import type { Task, CreateTaskInput, UpdateTaskInput } from "@/types/task";
-import * as tauri from "@/lib/tauri";
+import { create } from 'zustand';
+import type { Task, CreateTaskInput, UpdateTaskInput } from '@/types/task';
+import * as tauri from '@/lib/tauri';
 
 interface TaskState {
   tasks: Task[];

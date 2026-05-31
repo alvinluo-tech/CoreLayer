@@ -1,39 +1,34 @@
-import { useEffect, useState } from "react";
-import { useMCPStore } from "@/stores/mcpStore";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import {
-  Search,
-  RefreshCw,
-  Shield,
-  Clock,
-  CheckCircle2,
-  XCircle,
-} from "lucide-react";
-import { getToolCallLogs, type ToolCallLogEntry } from "@/lib/tauri";
+import { useEffect, useState } from 'react';
+import { useMCPStore } from '@/stores/mcpStore';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Search, RefreshCw, Shield, Clock, CheckCircle2, XCircle } from 'lucide-react';
+import { getToolCallLogs, type ToolCallLogEntry } from '@/lib/tauri';
 
-type SourceFilter = "all" | "native" | "mcp" | "skill" | "rest";
+type SourceFilter = 'all' | 'native' | 'mcp' | 'skill' | 'rest';
 
 const riskColors: Record<string, string> = {
-  low: "bg-green-500/10 text-green-600",
-  medium: "bg-yellow-500/10 text-yellow-600",
-  high: "bg-orange-500/10 text-orange-600",
-  critical: "bg-red-500/10 text-red-600",
+  low: 'bg-green-500/10 text-green-600',
+  medium: 'bg-yellow-500/10 text-yellow-600',
+  high: 'bg-orange-500/10 text-orange-600',
+  critical: 'bg-red-500/10 text-red-600',
 };
 
 export function ToolsPage() {
   const { tools, fetchTools, isLoading } = useMCPStore();
-  const [search, setSearch] = useState("");
-  const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
+  const [search, setSearch] = useState('');
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
   const [logs, setLogs] = useState<ToolCallLogEntry[]>([]);
 
   useEffect(() => {
     fetchTools();
-    getToolCallLogs(20).then((r) => setLogs(r.logs as ToolCallLogEntry[])).catch(() => {});
+    getToolCallLogs(20)
+      .then((r) => setLogs(r.logs as ToolCallLogEntry[]))
+      .catch(() => {});
   }, [fetchTools]);
 
   const filtered = tools.filter((t) => {
-    const matchesSource = sourceFilter === "all" || t.source === sourceFilter;
+    const matchesSource = sourceFilter === 'all' || t.source === sourceFilter;
     const matchesSearch =
       !search ||
       t.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -43,11 +38,11 @@ export function ToolsPage() {
   });
 
   const sourceButtons: { id: SourceFilter; label: string }[] = [
-    { id: "all", label: "全部" },
-    { id: "native", label: "原生" },
-    { id: "mcp", label: "MCP" },
-    { id: "skill", label: "技能" },
-    { id: "rest", label: "REST" },
+    { id: 'all', label: '全部' },
+    { id: 'native', label: '原生' },
+    { id: 'mcp', label: 'MCP' },
+    { id: 'skill', label: '技能' },
+    { id: 'rest', label: 'REST' },
   ];
 
   return (
@@ -62,11 +57,13 @@ export function ToolsPage() {
           size="sm"
           onClick={() => {
             fetchTools();
-            getToolCallLogs(20).then((r) => setLogs(r.logs as ToolCallLogEntry[])).catch(() => {});
+            getToolCallLogs(20)
+              .then((r) => setLogs(r.logs as ToolCallLogEntry[]))
+              .catch(() => {});
           }}
           className="gap-1.5"
         >
-          <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`} />
+          <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? 'animate-spin' : ''}`} />
           刷新
         </Button>
       </div>
@@ -88,7 +85,7 @@ export function ToolsPage() {
             {sourceButtons.map((btn) => (
               <Button
                 key={btn.id}
-                variant={sourceFilter === btn.id ? "default" : "ghost"}
+                variant={sourceFilter === btn.id ? 'default' : 'ghost'}
                 size="sm"
                 onClick={() => setSourceFilter(btn.id)}
                 className="text-xs"
@@ -130,19 +127,17 @@ export function ToolsPage() {
                 {tool.source}
               </span>
               <span
-                className={`text-xs px-1.5 py-0.5 rounded w-fit ${riskColors[tool.risk] ?? "bg-muted text-muted-foreground"}`}
+                className={`text-xs px-1.5 py-0.5 rounded w-fit ${riskColors[tool.risk] ?? 'bg-muted text-muted-foreground'}`}
               >
                 {tool.risk}
               </span>
               <span className="text-xs text-muted-foreground">
-                {tool.requiresConfirmation ? "需确认" : "自动"}
+                {tool.requiresConfirmation ? '需确认' : '自动'}
               </span>
             </div>
           ))}
           {filtered.length === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-6">
-              无匹配工具
-            </p>
+            <p className="text-sm text-muted-foreground text-center py-6">无匹配工具</p>
           )}
         </div>
       </Card>
@@ -171,11 +166,11 @@ export function ToolsPage() {
               >
                 <span className="text-muted-foreground flex items-center gap-1">
                   <Clock className="h-3 w-3" />
-                  {new Date(log.createdAt).toLocaleString("zh-CN", {
-                    month: "2-digit",
-                    day: "2-digit",
-                    hour: "2-digit",
-                    minute: "2-digit",
+                  {new Date(log.createdAt).toLocaleString('zh-CN', {
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
                   })}
                 </span>
                 <span className="truncate font-mono">{log.toolName}</span>
@@ -187,12 +182,12 @@ export function ToolsPage() {
                   )}
                 </span>
                 <span
-                  className={`px-1.5 py-0.5 rounded ${riskColors[log.risk ?? "low"] ?? "bg-muted text-muted-foreground"}`}
+                  className={`px-1.5 py-0.5 rounded ${riskColors[log.risk ?? 'low'] ?? 'bg-muted text-muted-foreground'}`}
                 >
-                  {log.risk ?? "—"}
+                  {log.risk ?? '—'}
                 </span>
                 <span className="text-muted-foreground">
-                  {log.durationMs != null ? `${log.durationMs}ms` : "—"}
+                  {log.durationMs != null ? `${log.durationMs}ms` : '—'}
                 </span>
               </div>
             ))}

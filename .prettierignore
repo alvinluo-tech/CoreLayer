@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+frontend/src-tauri/target/
+frontend/src-tauri/gen/
+
+# Generated files
+pnpm-lock.yaml
+*.tsbuildinfo
+
+# Coverage
+coverage/
+
+# Rust
+*.rs
+
+# Supabase
+supabase/

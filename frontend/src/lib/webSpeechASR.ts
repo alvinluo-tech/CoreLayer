@@ -39,9 +39,9 @@ interface SpeechRecognitionInstance {
 }
 
 function getSpeechRecognition(): (new () => SpeechRecognitionInstance) | null {
-  if (typeof window === "undefined") return null;
+  if (typeof window === 'undefined') return null;
   const w = window as unknown as Record<string, unknown>;
-  return (w["webkitSpeechRecognition"] ?? w["SpeechRecognition"]) as
+  return (w['webkitSpeechRecognition'] ?? w['SpeechRecognition']) as
     | (new () => SpeechRecognitionInstance)
     | null;
 }
@@ -72,11 +72,11 @@ export function createWebSpeechASR(options: WebSpeechASROptions): WebSpeechASR {
   let currentOnFinal = options.onFinal;
   let currentOnError = options.onError;
   let currentOnEnd = options.onEnd;
-  const lang = options.lang ?? "zh-CN";
+  const lang = options.lang ?? 'zh-CN';
 
   const SpeechRecognition = getSpeechRecognition();
   if (!SpeechRecognition) {
-    throw new Error("Web Speech API not available");
+    throw new Error('Web Speech API not available');
   }
 
   const recognition = new SpeechRecognition();
@@ -118,8 +118,8 @@ export function createWebSpeechASR(options: WebSpeechASROptions): WebSpeechASR {
     consecutiveRestarts = 0;
     resetSilenceTimer();
 
-    let interimText = "";
-    let finalText = "";
+    let interimText = '';
+    let finalText = '';
 
     for (let i = event.resultIndex; i < event.results.length; i++) {
       const result = event.results[i];
@@ -141,8 +141,8 @@ export function createWebSpeechASR(options: WebSpeechASROptions): WebSpeechASR {
   };
 
   recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-    if (event.error === "no-speech" || event.error === "aborted") return;
-    console.warn("[WebSpeechASR] Error:", event.error);
+    if (event.error === 'no-speech' || event.error === 'aborted') return;
+    console.warn('[WebSpeechASR] Error:', event.error);
     currentOnError?.(event.error);
 
     // Stop recognition and reset active status on critical errors (including audio-capture) to prevent infinite loops in WebView2
@@ -163,7 +163,9 @@ export function createWebSpeechASR(options: WebSpeechASROptions): WebSpeechASR {
       if (consecutiveRestarts > MAX_RESTARTS) {
         // Too many restarts with no audio — mic is likely locked or unavailable.
         // Give up cleanly to prevent an infinite loop.
-        console.warn(`[WebSpeechASR] Giving up after ${MAX_RESTARTS} restarts with no audio (mic locked?).`);
+        console.warn(
+          `[WebSpeechASR] Giving up after ${MAX_RESTARTS} restarts with no audio (mic locked?).`
+        );
         active = false;
         currentOnEnd?.();
         return;
@@ -217,4 +219,3 @@ export function createWebSpeechASR(options: WebSpeechASROptions): WebSpeechASR {
     },
   };
 }
-

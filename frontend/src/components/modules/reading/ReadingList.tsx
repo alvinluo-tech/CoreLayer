@@ -1,8 +1,8 @@
-import { useEffect } from "react";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { BookOpen, CheckCircle2, Eye } from "lucide-react";
-import { useArticleStore } from "@/stores/articleStore";
+import { useEffect } from 'react';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { BookOpen, CheckCircle2, Eye } from 'lucide-react';
+import { useArticleStore } from '@/stores/articleStore';
 
 const statusIcon = {
   finished: <CheckCircle2 className="h-3 w-3 text-green-500" />,
@@ -23,16 +23,14 @@ export function ReadingList() {
     fetchArticles();
   }, [fetchArticles]);
 
-  const unreadCount = articles.filter((a) => a.status === "unread").length;
+  const unreadCount = articles.filter((a) => a.status === 'unread').length;
 
   return (
     <Card>
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <CardTitle className="text-sm font-medium">阅读清单</CardTitle>
-          <span className="text-xs text-muted-foreground">
-            {unreadCount} 篇未读
-          </span>
+          <span className="text-xs text-muted-foreground">{unreadCount} 篇未读</span>
         </div>
       </CardHeader>
       <CardContent>

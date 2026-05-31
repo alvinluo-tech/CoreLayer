@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
-import { useMCPStore } from "@/stores/mcpStore";
-import { useModelStore } from "@/stores/modelStore";
+import { useEffect, useState } from 'react';
+import { useMCPStore } from '@/stores/mcpStore';
+import { useModelStore } from '@/stores/modelStore';
 import {
   Plug,
   PlugZap,
@@ -16,7 +16,7 @@ import {
   Loader2,
   ChevronDown,
   ChevronUp,
-} from "lucide-react";
+} from 'lucide-react';
 
 interface MCPSettingsProps {
   className?: string;
@@ -39,12 +39,11 @@ export function MCPSettings({ className }: MCPSettingsProps) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [expandedServerId, setExpandedServerId] = useState<string | null>(null);
   const [newServer, setNewServer] = useState({
-    id: "",
-    name: "",
-    transport: "http" as "http" | "stdio" | "sse",
-    url: "",
+    id: '',
+    name: '',
+    transport: 'http' as 'http' | 'stdio' | 'sse',
+    url: '',
   });
-
 
   useEffect(() => {
     fetchServers();
@@ -55,7 +54,7 @@ export function MCPSettings({ className }: MCPSettingsProps) {
   const handleConnect = async () => {
     if (!newServer.id || !newServer.name) return;
     await connectServer(newServer);
-    setNewServer({ id: "", name: "", transport: "http", url: "" });
+    setNewServer({ id: '', name: '', transport: 'http', url: '' });
     setShowAddForm(false);
   };
 
@@ -65,11 +64,11 @@ export function MCPSettings({ className }: MCPSettingsProps) {
 
   const statusIcon = (status: string) => {
     switch (status) {
-      case "connected":
+      case 'connected':
         return <CheckCircle2 className="h-4 w-4 text-green-500" />;
-      case "connecting":
+      case 'connecting':
         return <Loader2 className="h-4 w-4 text-yellow-500 animate-spin" />;
-      case "error":
+      case 'error':
         return <XCircle className="h-4 w-4 text-red-500" />;
       default:
         return <Unplug className="h-4 w-4 text-muted-foreground" />;
@@ -86,9 +85,7 @@ export function MCPSettings({ className }: MCPSettingsProps) {
               <Plug className="h-5 w-5" />
               MCP 服务器
             </h3>
-            <p className="text-sm text-muted-foreground">
-              管理 MCP 服务器连接和工具
-            </p>
+            <p className="text-sm text-muted-foreground">管理 MCP 服务器连接和工具</p>
           </div>
           <div className="flex gap-2">
             <button
@@ -100,7 +97,7 @@ export function MCPSettings({ className }: MCPSettingsProps) {
               className="p-2 rounded-md hover:bg-muted transition-colors"
               title="刷新"
             >
-              <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+              <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
             </button>
             <button
               onClick={() => setShowAddForm(!showAddForm)}
@@ -152,7 +149,7 @@ export function MCPSettings({ className }: MCPSettingsProps) {
                   onChange={(e) =>
                     setNewServer({
                       ...newServer,
-                      transport: e.target.value as "http" | "stdio" | "sse",
+                      transport: e.target.value as 'http' | 'stdio' | 'sse',
                     })
                   }
                   className="w-full mt-1 px-3 py-1.5 text-sm bg-background border rounded-md"
@@ -218,20 +215,18 @@ export function MCPSettings({ className }: MCPSettingsProps) {
                       </span>
                       <span
                         className={`text-xs px-1.5 py-0.5 rounded ${
-                          server.status === "connected"
-                            ? "bg-green-500/10 text-green-600"
-                            : server.status === "error"
-                              ? "bg-red-500/10 text-red-600"
-                              : "bg-muted text-muted-foreground"
+                          server.status === 'connected'
+                            ? 'bg-green-500/10 text-green-600'
+                            : server.status === 'error'
+                              ? 'bg-red-500/10 text-red-600'
+                              : 'bg-muted text-muted-foreground'
                         }`}
                       >
                         {server.status}
                       </span>
                     </div>
                     {server.config.url && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {server.config.url}
-                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">{server.config.url}</p>
                     )}
                     {server.lastError && (
                       <p className="text-xs text-red-500 mt-1">{server.lastError}</p>
@@ -250,7 +245,7 @@ export function MCPSettings({ className }: MCPSettingsProps) {
                       </span>
                     </div>
 
-                    {server.status === "connected" && server.tools.length > 0 && (
+                    {server.status === 'connected' && server.tools.length > 0 && (
                       <button
                         onClick={() =>
                           setExpandedServerId(
@@ -283,7 +278,7 @@ export function MCPSettings({ className }: MCPSettingsProps) {
                 </button>
               </div>
 
-              {expandedServerId === server.config.id && server.status === "connected" && (
+              {expandedServerId === server.config.id && server.status === 'connected' && (
                 <div className="mt-4 pt-3 border-t border-border/40 space-y-3">
                   <h5 className="text-xs font-semibold text-foreground flex items-center gap-1">
                     <Wrench className="h-3 w-3 text-primary" /> 注册的工具详情:
@@ -291,7 +286,7 @@ export function MCPSettings({ className }: MCPSettingsProps) {
                   <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
                     {(() => {
                       const serverTools = _tools.filter(
-                        (t) => t.source === "mcp" && t.appId === server.config.id
+                        (t) => t.source === 'mcp' && t.appId === server.config.id
                       );
                       if (serverTools.length === 0) {
                         return (
@@ -300,8 +295,15 @@ export function MCPSettings({ className }: MCPSettingsProps) {
                             <ul className="list-disc pl-4 mt-1.5 not-italic space-y-1">
                               {server.tools.map((t) => (
                                 <li key={t.name}>
-                                  <span className="font-mono font-semibold text-foreground">{t.name}</span>
-                                  {t.description && <span className="text-muted-foreground"> - {t.description}</span>}
+                                  <span className="font-mono font-semibold text-foreground">
+                                    {t.name}
+                                  </span>
+                                  {t.description && (
+                                    <span className="text-muted-foreground">
+                                      {' '}
+                                      - {t.description}
+                                    </span>
+                                  )}
                                 </li>
                               ))}
                             </ul>
@@ -314,31 +316,41 @@ export function MCPSettings({ className }: MCPSettingsProps) {
                           className="p-2.5 rounded bg-muted/40 border border-border/60 text-xs space-y-1.5"
                         >
                           <div className="flex items-center justify-between">
-                            <span className="font-mono font-semibold text-foreground">{tool.name}</span>
+                            <span className="font-mono font-semibold text-foreground">
+                              {tool.name}
+                            </span>
                             <div className="flex gap-1">
                               {tool.requiresConfirmation && (
                                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 font-medium border border-amber-500/10">
                                   需确认
                                 </span>
                               )}
-                              <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium border ${
-                                tool.risk === "low"
-                                  ? "bg-green-500/10 text-green-600 border-green-500/10"
-                                  : tool.risk === "medium"
-                                  ? "bg-amber-500/10 text-amber-600 border-amber-500/10"
-                                  : "bg-red-500/10 text-red-600 border-red-500/10"
-                              }`}>
+                              <span
+                                className={`text-[10px] px-1.5 py-0.5 rounded font-medium border ${
+                                  tool.risk === 'low'
+                                    ? 'bg-green-500/10 text-green-600 border-green-500/10'
+                                    : tool.risk === 'medium'
+                                      ? 'bg-amber-500/10 text-amber-600 border-amber-500/10'
+                                      : 'bg-red-500/10 text-red-600 border-red-500/10'
+                                }`}
+                              >
                                 风险: {tool.risk}
                               </span>
                             </div>
                           </div>
                           {tool.description && (
-                            <p className="text-muted-foreground text-[11px] leading-relaxed">{tool.description}</p>
+                            <p className="text-muted-foreground text-[11px] leading-relaxed">
+                              {tool.description}
+                            </p>
                           )}
                           {tool.inputSchema && Object.keys(tool.inputSchema).length > 0 && (
                             <div className="bg-muted/75 p-2 rounded border border-border/30 mt-1 font-mono text-[10px] max-h-32 overflow-y-auto text-muted-foreground leading-relaxed">
-                              <span className="text-foreground/75 font-semibold block mb-1">参数 Schema:</span>
-                              <pre className="whitespace-pre-wrap">{JSON.stringify(tool.inputSchema, null, 2)}</pre>
+                              <span className="text-foreground/75 font-semibold block mb-1">
+                                参数 Schema:
+                              </span>
+                              <pre className="whitespace-pre-wrap">
+                                {JSON.stringify(tool.inputSchema, null, 2)}
+                              </pre>
                             </div>
                           )}
                         </div>

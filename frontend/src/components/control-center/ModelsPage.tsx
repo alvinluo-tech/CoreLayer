@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { useEffect, useState } from 'react';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import {
   Plus,
   Trash2,
@@ -18,18 +18,18 @@ import {
   AlertCircle,
   Eye,
   EyeOff,
-} from "lucide-react";
-import { useModelStore, type ProviderEntry } from "@/stores/modelStore";
-import type { RoutingRule, ProviderPreset } from "@/lib/tauri";
+} from 'lucide-react';
+import { useModelStore, type ProviderEntry } from '@/stores/modelStore';
+import type { RoutingRule, ProviderPreset } from '@/lib/tauri';
 
 const taskTypeLabels: Record<string, string> = {
-  chat: "默认聊天",
-  fast: "快速响应",
-  reasoning: "深度推理",
-  toolAgent: "工具调用",
-  coding: "代码生成",
-  voice: "语音对话",
-  private: "隐私模式",
+  chat: '默认聊天',
+  fast: '快速响应',
+  reasoning: '深度推理',
+  toolAgent: '工具调用',
+  coding: '代码生成',
+  voice: '语音对话',
+  private: '隐私模式',
 };
 
 export function ModelsPage() {
@@ -57,7 +57,7 @@ export function ModelsPage() {
           <p className="text-sm text-muted-foreground">管理 AI 提供商、模型和路由规则</p>
         </div>
         <Button variant="outline" size="sm" onClick={fetchAll} className="gap-1.5">
-          <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`} />
+          <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? 'animate-spin' : ''}`} />
           刷新
         </Button>
       </div>
@@ -69,11 +69,7 @@ export function ModelsPage() {
       )}
 
       {/* Section 1: Provider Gallery */}
-      <ProviderGallery
-        providers={providers}
-        presets={providerPresets}
-        isLoading={isLoading}
-      />
+      <ProviderGallery providers={providers} presets={providerPresets} isLoading={isLoading} />
 
       {/* Section 2: Model Marketplace */}
       <ModelMarketplace
@@ -106,42 +102,53 @@ function ProviderGallery({
   presets: ProviderPreset[];
   isLoading: boolean;
 }) {
-  const { addProvider, addCustomProvider, updateProvider, removeProvider, discoverModels, testProvider } = useModelStore();
+  const {
+    addProvider,
+    addCustomProvider,
+    updateProvider,
+    removeProvider,
+    discoverModels,
+    testProvider,
+  } = useModelStore();
   const [showAdd, setShowAdd] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const getProviderBrandStyle = (id: string, enabled: boolean) => {
     if (!enabled) {
-      return "border-border/60 bg-muted/20 hover:bg-muted/40 text-muted-foreground hover:border-border/80";
+      return 'border-border/60 bg-muted/20 hover:bg-muted/40 text-muted-foreground hover:border-border/80';
     }
     switch (id) {
-      case "openai":
-        return "border-emerald-500/30 bg-emerald-500/[0.03] hover:bg-emerald-500/[0.06] hover:border-emerald-500/50 shadow-[0_0_12px_rgba(16,185,129,0.02)]";
-      case "deepseek":
-        return "border-blue-500/30 bg-blue-500/[0.03] hover:bg-blue-500/[0.06] hover:border-blue-500/50 shadow-[0_0_12px_rgba(59,130,246,0.02)]";
-      case "anthropic":
-        return "border-orange-500/30 bg-orange-500/[0.03] hover:bg-orange-500/[0.06] hover:border-orange-500/50 shadow-[0_0_12px_rgba(249,115,22,0.02)]";
-      case "google":
-        return "border-purple-500/30 bg-purple-500/[0.03] hover:bg-purple-500/[0.06] hover:border-purple-500/50 shadow-[0_0_12px_rgba(168,85,247,0.02)]";
-      case "ollama":
-        return "border-neutral-500/40 bg-neutral-500/[0.04] hover:bg-neutral-500/[0.08] hover:border-neutral-500/60 shadow-[0_0_12px_rgba(115,115,115,0.02)] dark:border-neutral-400/30 dark:bg-neutral-400/[0.03] dark:hover:bg-neutral-400/[0.06]";
-      case "groq":
-        return "border-amber-500/30 bg-amber-500/[0.03] hover:bg-amber-500/[0.06] hover:border-amber-500/50 shadow-[0_0_12px_rgba(245,158,11,0.02)]";
+      case 'openai':
+        return 'border-emerald-500/30 bg-emerald-500/[0.03] hover:bg-emerald-500/[0.06] hover:border-emerald-500/50 shadow-[0_0_12px_rgba(16,185,129,0.02)]';
+      case 'deepseek':
+        return 'border-blue-500/30 bg-blue-500/[0.03] hover:bg-blue-500/[0.06] hover:border-blue-500/50 shadow-[0_0_12px_rgba(59,130,246,0.02)]';
+      case 'anthropic':
+        return 'border-orange-500/30 bg-orange-500/[0.03] hover:bg-orange-500/[0.06] hover:border-orange-500/50 shadow-[0_0_12px_rgba(249,115,22,0.02)]';
+      case 'google':
+        return 'border-purple-500/30 bg-purple-500/[0.03] hover:bg-purple-500/[0.06] hover:border-purple-500/50 shadow-[0_0_12px_rgba(168,85,247,0.02)]';
+      case 'ollama':
+        return 'border-neutral-500/40 bg-neutral-500/[0.04] hover:bg-neutral-500/[0.08] hover:border-neutral-500/60 shadow-[0_0_12px_rgba(115,115,115,0.02)] dark:border-neutral-400/30 dark:bg-neutral-400/[0.03] dark:hover:bg-neutral-400/[0.06]';
+      case 'groq':
+        return 'border-amber-500/30 bg-amber-500/[0.03] hover:bg-amber-500/[0.06] hover:border-amber-500/50 shadow-[0_0_12px_rgba(245,158,11,0.02)]';
       default:
-        return "border-primary/20 bg-primary/[0.02] hover:bg-primary/[0.05] hover:border-primary/40";
+        return 'border-primary/20 bg-primary/[0.02] hover:bg-primary/[0.05] hover:border-primary/40';
     }
   };
-  const [editKey, setEditKey] = useState("");
-  const [editURL, setEditURL] = useState("");
-  const [discoveredModels, setDiscoveredModels] = useState<Record<string, { id: string; name: string }[]>>({});
+  const [editKey, setEditKey] = useState('');
+  const [editURL, setEditURL] = useState('');
+  const [discoveredModels, setDiscoveredModels] = useState<
+    Record<string, { id: string; name: string }[]>
+  >({});
   const [discovering, setDiscovering] = useState<string | null>(null);
-  const [testResults, setTestResults] = useState<Record<string, { success: boolean; latencyMs?: number; error?: string }>>({});
+  const [testResults, setTestResults] = useState<
+    Record<string, { success: boolean; latencyMs?: number; error?: string }>
+  >({});
   const [testingId, setTestingId] = useState<string | null>(null);
-  const [activePreset, setActivePreset] = useState<ProviderPreset | "custom" | null>(null);
-  const [formBaseURL, setFormBaseURL] = useState("");
-  const [formAPIKey, setFormAPIKey] = useState("");
-  const [formCustomId, setFormCustomId] = useState("");
-  const [formCustomName, setFormCustomName] = useState("");
+  const [activePreset, setActivePreset] = useState<ProviderPreset | 'custom' | null>(null);
+  const [formBaseURL, setFormBaseURL] = useState('');
+  const [formAPIKey, setFormAPIKey] = useState('');
+  const [formCustomId, setFormCustomId] = useState('');
+  const [formCustomName, setFormCustomName] = useState('');
   const [showFormKey, setShowFormKey] = useState(false);
   const [showEditKey, setShowEditKey] = useState(false);
 
@@ -151,17 +158,17 @@ function ProviderGallery({
   const handleSelectPreset = (preset: ProviderPreset) => {
     setActivePreset(preset);
     setFormBaseURL(preset.defaultBaseURL);
-    setFormAPIKey("");
-    setFormCustomId("");
-    setFormCustomName("");
+    setFormAPIKey('');
+    setFormCustomId('');
+    setFormCustomName('');
   };
 
   const handleSelectCustom = () => {
-    setActivePreset("custom");
-    setFormBaseURL("");
-    setFormAPIKey("");
-    setFormCustomId("");
-    setFormCustomName("");
+    setActivePreset('custom');
+    setFormBaseURL('');
+    setFormAPIKey('');
+    setFormCustomId('');
+    setFormCustomName('');
   };
 
   // Pre-select first unconnected preset on open
@@ -179,7 +186,7 @@ function ProviderGallery({
 
   const handleSubmitForm = async () => {
     if (!activePreset) return;
-    if (activePreset === "custom") {
+    if (activePreset === 'custom') {
       if (!formCustomId || !formCustomName || !formBaseURL) return;
       await addCustomProvider({
         id: formCustomId,
@@ -202,8 +209,8 @@ function ProviderGallery({
       await updateProvider(id, updates);
     }
     setExpandedId(null);
-    setEditKey("");
-    setEditURL("");
+    setEditKey('');
+    setEditURL('');
   };
 
   const handleDiscover = async (id: string) => {
@@ -236,9 +243,16 @@ function ProviderGallery({
           <div className="flex items-center justify-between border-b pb-3 border-border/60">
             <div>
               <h4 className="text-sm font-bold text-foreground">添加 AI 提供商</h4>
-              <p className="text-xs text-muted-foreground">选择内置的官方预设渠道，或接入兼容 OpenAI 的自定义服务商。</p>
+              <p className="text-xs text-muted-foreground">
+                选择内置的官方预设渠道，或接入兼容 OpenAI 的自定义服务商。
+              </p>
             </div>
-            <Button variant="ghost" size="icon" onClick={() => setShowAdd(false)} className="h-7 w-7 text-muted-foreground hover:text-foreground">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setShowAdd(false)}
+              className="h-7 w-7 text-muted-foreground hover:text-foreground"
+            >
               <X className="h-4 w-4" />
             </Button>
           </div>
@@ -246,35 +260,50 @@ function ProviderGallery({
           <div className="grid grid-cols-1 md:grid-cols-12 gap-5">
             {/* Left side: Channels list (5 columns) */}
             <div className="md:col-span-5 space-y-3">
-              <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">1. 选择服务渠道</span>
+              <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">
+                1. 选择服务渠道
+              </span>
               <div className="grid grid-cols-2 gap-2 max-h-[300px] overflow-y-auto pr-1">
                 {/* Unconnected Preset Cards */}
                 {unconnectedPresets.map((preset) => {
-                  const isSelected = activePreset && typeof activePreset === "object" && activePreset.id === preset.id;
+                  const isSelected =
+                    activePreset &&
+                    typeof activePreset === 'object' &&
+                    activePreset.id === preset.id;
                   return (
                     <button
                       key={preset.id}
                       onClick={() => handleSelectPreset(preset)}
                       className={`flex items-center gap-2.5 p-3 rounded-lg border-2 text-left transition-all hover:scale-[1.02] cursor-pointer ${
                         isSelected
-                          ? "border-primary bg-primary/[0.03] font-semibold"
-                          : "border-border/60 bg-background/50 hover:border-primary/40"
+                          ? 'border-primary bg-primary/[0.03] font-semibold'
+                          : 'border-border/60 bg-background/50 hover:border-primary/40'
                       }`}
                     >
-                      <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
-                        preset.id === "openai" ? "bg-emerald-500/10 text-emerald-600" :
-                        preset.id === "deepseek" ? "bg-blue-500/10 text-blue-600" :
-                        preset.id === "anthropic" ? "bg-orange-500/10 text-orange-600" :
-                        preset.id === "google" ? "bg-purple-500/10 text-purple-600" :
-                        preset.id === "ollama" ? "bg-neutral-500/10 text-neutral-600 dark:bg-neutral-400/10 dark:text-neutral-400" :
-                        preset.id === "groq" ? "bg-amber-500/10 text-amber-600" :
-                        "bg-primary/10 text-primary"
-                      }`}>
+                      <div
+                        className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
+                          preset.id === 'openai'
+                            ? 'bg-emerald-500/10 text-emerald-600'
+                            : preset.id === 'deepseek'
+                              ? 'bg-blue-500/10 text-blue-600'
+                              : preset.id === 'anthropic'
+                                ? 'bg-orange-500/10 text-orange-600'
+                                : preset.id === 'google'
+                                  ? 'bg-purple-500/10 text-purple-600'
+                                  : preset.id === 'ollama'
+                                    ? 'bg-neutral-500/10 text-neutral-600 dark:bg-neutral-400/10 dark:text-neutral-400'
+                                    : preset.id === 'groq'
+                                      ? 'bg-amber-500/10 text-amber-600'
+                                      : 'bg-primary/10 text-primary'
+                        }`}
+                      >
                         {preset.name.charAt(0)}
                       </div>
                       <div className="min-w-0">
                         <p className="text-xs truncate font-medium">{preset.nameCN}</p>
-                        <p className="text-[10px] text-muted-foreground truncate">{preset.popularModels.length}个预设模型</p>
+                        <p className="text-[10px] text-muted-foreground truncate">
+                          {preset.popularModels.length}个预设模型
+                        </p>
                       </div>
                     </button>
                   );
@@ -284,9 +313,9 @@ function ProviderGallery({
                 <button
                   onClick={() => handleSelectCustom()}
                   className={`flex items-center gap-2.5 p-3 rounded-lg border-2 text-left transition-all hover:scale-[1.02] cursor-pointer ${
-                    activePreset === "custom"
-                      ? "border-primary bg-primary/[0.03] font-semibold"
-                      : "border-border/60 bg-background/50 hover:border-primary/40"
+                    activePreset === 'custom'
+                      ? 'border-primary bg-primary/[0.03] font-semibold'
+                      : 'border-border/60 bg-background/50 hover:border-primary/40'
                   }`}
                 >
                   <div className="w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold shrink-0">
@@ -302,31 +331,36 @@ function ProviderGallery({
 
             {/* Right side: Form (7 columns) */}
             <div className="md:col-span-7 bg-background/40 border rounded-xl p-4 space-y-4">
-              <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">2. 配置连接凭证</span>
-              
+              <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">
+                2. 配置连接凭证
+              </span>
+
               {activePreset ? (
                 <div className="space-y-4 animate-in fade-in slide-in-from-right-2 duration-300">
                   <div className="p-3 rounded-lg bg-primary/5 border border-primary/10 flex items-start gap-2.5 text-xs text-muted-foreground">
                     <div className="mt-0.5 font-bold text-primary">💡</div>
                     <div className="space-y-0.5">
                       <span className="font-semibold text-foreground block">
-                        {activePreset === "custom" ? "自定义 Open compatible 提供商" : `连接 ${activePreset.nameCN}`}
+                        {activePreset === 'custom'
+                          ? '自定义 Open compatible 提供商'
+                          : `连接 ${activePreset.nameCN}`}
                       </span>
                       <span>
-                        {activePreset === "custom" 
-                          ? "支持对接 OneAPI, FastGPT, LM Studio 或任何标准的第三方大模型转发代理端。" 
-                          : activePreset.id === "ollama"
-                          ? "本地推理引擎。请确保您的本地 Ollama 服务已启动，且默认端口 11434 可正常访问。"
-                          : `请输入您的 ${activePreset.name} 账户凭据，Jarvis 将自动为您加载预设的流式服务与工具包。`
-                        }
+                        {activePreset === 'custom'
+                          ? '支持对接 OneAPI, FastGPT, LM Studio 或任何标准的第三方大模型转发代理端。'
+                          : activePreset.id === 'ollama'
+                            ? '本地推理引擎。请确保您的本地 Ollama 服务已启动，且默认端口 11434 可正常访问。'
+                            : `请输入您的 ${activePreset.name} 账户凭据，Jarvis 将自动为您加载预设的流式服务与工具包。`}
                       </span>
                     </div>
                   </div>
 
-                  {activePreset === "custom" && (
+                  {activePreset === 'custom' && (
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-muted-foreground uppercase">唯一 ID (英文标识)</label>
+                        <label className="text-[10px] font-bold text-muted-foreground uppercase">
+                          唯一 ID (英文标识)
+                        </label>
                         <input
                           type="text"
                           value={formCustomId}
@@ -336,7 +370,9 @@ function ProviderGallery({
                         />
                       </div>
                       <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-muted-foreground uppercase">显示名称</label>
+                        <label className="text-[10px] font-bold text-muted-foreground uppercase">
+                          显示名称
+                        </label>
                         <input
                           type="text"
                           value={formCustomName}
@@ -351,29 +387,38 @@ function ProviderGallery({
                   <div className="space-y-3">
                     {/* Base URL */}
                     <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-muted-foreground uppercase">Base URL (接口根地址)</label>
+                      <label className="text-[10px] font-bold text-muted-foreground uppercase">
+                        Base URL (接口根地址)
+                      </label>
                       <input
                         type="text"
                         value={formBaseURL}
                         onChange={(e) => setFormBaseURL(e.target.value)}
-                        disabled={activePreset !== "custom"}
+                        disabled={activePreset !== 'custom'}
                         placeholder="https://..."
                         className="w-full px-2.5 py-1.5 text-xs bg-background border rounded-md font-mono disabled:opacity-75 disabled:bg-muted/30 focus:outline-none focus:border-primary"
                       />
                     </div>
 
                     {/* API Key */}
-                    {(activePreset === "custom" || (activePreset && typeof activePreset === "object" && activePreset.requiresApiKey)) && (
+                    {(activePreset === 'custom' ||
+                      (activePreset &&
+                        typeof activePreset === 'object' &&
+                        activePreset.requiresApiKey)) && (
                       <div className="space-y-1">
                         <label className="text-[10px] font-bold text-muted-foreground uppercase flex items-center justify-between">
                           <span>API Key (密钥)</span>
                         </label>
                         <div className="relative">
                           <input
-                            type={showFormKey ? "text" : "password"}
+                            type={showFormKey ? 'text' : 'password'}
                             value={formAPIKey}
                             onChange={(e) => setFormAPIKey(e.target.value)}
-                            placeholder={activePreset === "custom" ? "sk-..." : `输入您的 ${activePreset.name} API Key`}
+                            placeholder={
+                              activePreset === 'custom'
+                                ? 'sk-...'
+                                : `输入您的 ${activePreset.name} API Key`
+                            }
                             className="w-full pl-2.5 pr-8 py-1.5 text-xs bg-background border rounded-md focus:outline-none focus:border-primary"
                           />
                           <button
@@ -381,7 +426,11 @@ function ProviderGallery({
                             onClick={() => setShowFormKey(!showFormKey)}
                             className="absolute right-2 top-1.5 p-0.5 rounded hover:bg-muted text-muted-foreground"
                           >
-                            {showFormKey ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                            {showFormKey ? (
+                              <EyeOff className="h-3 w-3" />
+                            ) : (
+                              <Eye className="h-3 w-3" />
+                            )}
                           </button>
                         </div>
                       </div>
@@ -399,7 +448,12 @@ function ProviderGallery({
                       </Button>
                       <Button
                         size="sm"
-                        disabled={isLoading || (activePreset === "custom" ? (!formCustomId || !formCustomName || !formBaseURL) : (activePreset.requiresApiKey && !formAPIKey))}
+                        disabled={
+                          isLoading ||
+                          (activePreset === 'custom'
+                            ? !formCustomId || !formCustomName || !formBaseURL
+                            : activePreset.requiresApiKey && !formAPIKey)
+                        }
                         onClick={handleSubmitForm}
                         className="h-8 text-xs bg-primary text-primary-foreground font-semibold"
                       >
@@ -434,7 +488,7 @@ function ProviderGallery({
                 setExpandedId(null);
               } else {
                 setExpandedId(provider.id);
-                setEditKey("");
+                setEditKey('');
                 setEditURL(provider.baseURL);
               }
             }}
@@ -444,19 +498,19 @@ function ProviderGallery({
               {provider.enabled ? (
                 <Wifi
                   className={`h-3.5 w-3.5 shrink-0 ${
-                    provider.id === "openai"
-                      ? "text-emerald-500"
-                      : provider.id === "deepseek"
-                      ? "text-blue-500"
-                      : provider.id === "anthropic"
-                      ? "text-orange-500"
-                      : provider.id === "google"
-                      ? "text-purple-500"
-                      : provider.id === "ollama"
-                      ? "text-neutral-500 dark:text-neutral-400"
-                      : provider.id === "groq"
-                      ? "text-amber-500"
-                      : "text-primary"
+                    provider.id === 'openai'
+                      ? 'text-emerald-500'
+                      : provider.id === 'deepseek'
+                        ? 'text-blue-500'
+                        : provider.id === 'anthropic'
+                          ? 'text-orange-500'
+                          : provider.id === 'google'
+                            ? 'text-purple-500'
+                            : provider.id === 'ollama'
+                              ? 'text-neutral-500 dark:text-neutral-400'
+                              : provider.id === 'groq'
+                                ? 'text-amber-500'
+                                : 'text-primary'
                   }`}
                 />
               ) : (
@@ -464,18 +518,21 @@ function ProviderGallery({
               )}
             </div>
             <p className="text-xs text-muted-foreground">
-              {provider.modelCount > 0 ? `${provider.modelCount} 模型` : "未配置模型"}
+              {provider.modelCount > 0 ? `${provider.modelCount} 模型` : '未配置模型'}
             </p>
             {expandedId === provider.id && (
-              <div className="mt-3.5 pt-3.5 border-t border-border/60 space-y-2.5" onClick={(e) => e.stopPropagation()}>
+              <div
+                className="mt-3.5 pt-3.5 border-t border-border/60 space-y-2.5"
+                onClick={(e) => e.stopPropagation()}
+              >
                 <div>
                   <label className="text-xs text-muted-foreground font-medium">API Key</label>
                   <div className="relative mt-0.5">
                     <input
-                      type={showEditKey ? "text" : "password"}
+                      type={showEditKey ? 'text' : 'password'}
                       value={editKey}
                       onChange={(e) => setEditKey(e.target.value)}
-                      placeholder={provider.apiKey ? "已配置 (留空保持不变)" : "输入 API Key"}
+                      placeholder={provider.apiKey ? '已配置 (留空保持不变)' : '输入 API Key'}
                       className="w-full pl-2.5 pr-8 py-1.5 text-xs bg-background border rounded-md"
                     />
                     <button
@@ -497,7 +554,12 @@ function ProviderGallery({
                   />
                 </div>
                 <div className="flex gap-1.5">
-                  <Button size="sm" onClick={() => handleSaveEdit(provider.id)} disabled={isLoading} className="flex-1 text-xs">
+                  <Button
+                    size="sm"
+                    onClick={() => handleSaveEdit(provider.id)}
+                    disabled={isLoading}
+                    className="flex-1 text-xs"
+                  >
                     保存
                   </Button>
                   <Button
@@ -543,11 +605,13 @@ function ProviderGallery({
                   const result = testResults[provider.id];
                   if (!result) return null;
                   return (
-                    <div className={`p-2 rounded-md border text-xs flex items-center gap-1.5 mt-2 ${
-                      result.success
-                        ? "bg-green-500/10 border-green-500/20 text-green-600 dark:text-green-400"
-                        : "bg-red-500/10 border-red-500/20 text-red-500 dark:text-red-400"
-                    }`}>
+                    <div
+                      className={`p-2 rounded-md border text-xs flex items-center gap-1.5 mt-2 ${
+                        result.success
+                          ? 'bg-green-500/10 border-green-500/20 text-green-600 dark:text-green-400'
+                          : 'bg-red-500/10 border-red-500/20 text-red-500 dark:text-red-400'
+                      }`}
+                    >
                       {result.success ? (
                         <>
                           <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
@@ -575,7 +639,9 @@ function ProviderGallery({
                       </p>
                       <div className="space-y-0.5">
                         {models.slice(0, 20).map((m) => (
-                          <p key={m.id} className="text-xs font-mono truncate">{m.id}</p>
+                          <p key={m.id} className="text-xs font-mono truncate">
+                            {m.id}
+                          </p>
                         ))}
                         {models.length > 20 && (
                           <p className="text-xs text-muted-foreground">
@@ -595,8 +661,6 @@ function ProviderGallery({
   );
 }
 
-
-
 // ---- Section 2: Model Marketplace ----
 
 function ModelMarketplace({
@@ -606,22 +670,34 @@ function ModelMarketplace({
   isLoading,
 }: {
   providers: ProviderEntry[];
-  profiles: { id: string; provider: string; modelName: string; displayName: string; capabilities: { toolCalling: boolean; vision: boolean; longContext: boolean; streaming: boolean }; limits: { contextWindow: number } }[];
+  profiles: {
+    id: string;
+    provider: string;
+    modelName: string;
+    displayName: string;
+    capabilities: {
+      toolCalling: boolean;
+      vision: boolean;
+      longContext: boolean;
+      streaming: boolean;
+    };
+    limits: { contextWindow: number };
+  }[];
   activeModelId: string | null;
   isLoading: boolean;
 }) {
   const { deleteProfile, setActiveModel, upsertProfile } = useModelStore();
-  const [search, setSearch] = useState("");
-  const [filterProvider, setFilterProvider] = useState<string>("all");
+  const [search, setSearch] = useState('');
+  const [filterProvider, setFilterProvider] = useState<string>('all');
   const [showAdd, setShowAdd] = useState(false);
-  const [newModel, setNewModel] = useState({ provider: "", modelName: "", displayName: "" });
+  const [newModel, setNewModel] = useState({ provider: '', modelName: '', displayName: '' });
 
   const filtered = profiles.filter((p) => {
     const matchesSearch =
       !search ||
       p.displayName.toLowerCase().includes(search.toLowerCase()) ||
       p.modelName.toLowerCase().includes(search.toLowerCase());
-    const matchesProvider = filterProvider === "all" || p.provider === filterProvider;
+    const matchesProvider = filterProvider === 'all' || p.provider === filterProvider;
     return matchesSearch && matchesProvider;
   });
 
@@ -632,7 +708,7 @@ function ModelMarketplace({
       modelName: newModel.modelName,
       displayName: newModel.displayName || undefined,
     });
-    setNewModel({ provider: "", modelName: "", displayName: "" });
+    setNewModel({ provider: '', modelName: '', displayName: '' });
     setShowAdd(false);
   };
 
@@ -671,7 +747,9 @@ function ModelMarketplace({
         >
           <option value="all">全部提供商</option>
           {providers.map((p) => (
-            <option key={p.id} value={p.id}>{p.name}</option>
+            <option key={p.id} value={p.id}>
+              {p.name}
+            </option>
           ))}
         </select>
       </div>
@@ -686,9 +764,13 @@ function ModelMarketplace({
               className="px-2.5 py-1.5 text-xs bg-background border rounded-md"
             >
               <option value="">选择提供商</option>
-              {providers.filter((p) => p.enabled).map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
+              {providers
+                .filter((p) => p.enabled)
+                .map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
             </select>
             <input
               type="text"
@@ -709,7 +791,11 @@ function ModelMarketplace({
             <Button variant="ghost" size="sm" onClick={() => setShowAdd(false)}>
               取消
             </Button>
-            <Button size="sm" onClick={handleAddModel} disabled={!newModel.provider || !newModel.modelName || isLoading}>
+            <Button
+              size="sm"
+              onClick={handleAddModel}
+              disabled={!newModel.provider || !newModel.modelName || isLoading}
+            >
               添加
             </Button>
           </div>
@@ -735,22 +821,26 @@ function ModelMarketplace({
             <div
               key={profile.id}
               className={`grid grid-cols-[auto_1fr_100px_80px_60px_40px] gap-2 items-center px-2 py-2 rounded-md transition-colors ${
-                isActive ? "bg-primary/5 border border-primary/20" : "hover:bg-muted/50"
+                isActive ? 'bg-primary/5 border border-primary/20' : 'hover:bg-muted/50'
               }`}
             >
               <button
                 onClick={() => setActiveModel(profile.id)}
                 className="w-6 flex justify-center"
-                title={isActive ? "当前模型" : "设为默认"}
+                title={isActive ? '当前模型' : '设为默认'}
               >
-                <Star className={`h-3.5 w-3.5 ${isActive ? "text-primary fill-primary" : "text-muted-foreground"}`} />
+                <Star
+                  className={`h-3.5 w-3.5 ${isActive ? 'text-primary fill-primary' : 'text-muted-foreground'}`}
+                />
               </button>
               <div className="min-w-0">
                 <p className="text-sm font-medium truncate">
                   {profile.displayName}
                   {isActive && <span className="ml-1.5 text-xs text-primary">当前</span>}
                 </p>
-                <p className="text-xs text-muted-foreground font-mono truncate">{profile.modelName}</p>
+                <p className="text-xs text-muted-foreground font-mono truncate">
+                  {profile.modelName}
+                </p>
               </div>
               <span className="text-xs text-muted-foreground truncate">
                 {provider?.name ?? profile.provider}
@@ -760,10 +850,14 @@ function ModelMarketplace({
               </span>
               <div className="flex gap-0.5">
                 {profile.capabilities.toolCalling && (
-                  <span className="text-[10px] px-1 py-0.5 rounded bg-blue-500/10 text-blue-600">工具</span>
+                  <span className="text-[10px] px-1 py-0.5 rounded bg-blue-500/10 text-blue-600">
+                    工具
+                  </span>
                 )}
                 {profile.capabilities.vision && (
-                  <span className="text-[10px] px-1 py-0.5 rounded bg-purple-500/10 text-purple-600">视觉</span>
+                  <span className="text-[10px] px-1 py-0.5 rounded bg-purple-500/10 text-purple-600">
+                    视觉
+                  </span>
                 )}
               </div>
               <Button
@@ -781,7 +875,7 @@ function ModelMarketplace({
 
         {filtered.length === 0 && (
           <p className="text-sm text-muted-foreground text-center py-6">
-            {search || filterProvider !== "all" ? "没有匹配的模型" : "暂无模型，点击上方添加"}
+            {search || filterProvider !== 'all' ? '没有匹配的模型' : '暂无模型，点击上方添加'}
           </p>
         )}
       </div>
@@ -822,7 +916,7 @@ function ActiveConfigSection({
   };
 
   const addRule = () => {
-    setLocalRules([...localRules, { taskType: "chat", modelId: profiles[0]?.id ?? "" }]);
+    setLocalRules([...localRules, { taskType: 'chat', modelId: profiles[0]?.id ?? '' }]);
     setDirty(true);
   };
 
@@ -844,7 +938,7 @@ function ActiveConfigSection({
       <div className="mb-4">
         <label className="text-xs text-muted-foreground mb-1 block">默认模型</label>
         <select
-          value={activeModelId ?? ""}
+          value={activeModelId ?? ''}
           onChange={(e) => setActiveModel(e.target.value)}
           disabled={isLoading}
           className="w-full px-3 py-2 text-sm bg-background border rounded-md"
@@ -862,7 +956,11 @@ function ActiveConfigSection({
         onClick={() => setShowRules(!showRules)}
         className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mb-2"
       >
-        {showRules ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+        {showRules ? (
+          <ChevronUp className="h-3.5 w-3.5" />
+        ) : (
+          <ChevronDown className="h-3.5 w-3.5" />
+        )}
         路由规则
         {isCustom && (
           <span className="text-xs px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600">自定义</span>
@@ -880,16 +978,18 @@ function ActiveConfigSection({
             <div key={i} className="grid grid-cols-[1fr_1fr_40px] gap-2 items-center">
               <select
                 value={rule.taskType}
-                onChange={(e) => updateRule(i, "taskType", e.target.value)}
+                onChange={(e) => updateRule(i, 'taskType', e.target.value)}
                 className="px-2.5 py-1.5 text-xs bg-background border rounded-md"
               >
                 {Object.entries(taskTypeLabels).map(([val, label]) => (
-                  <option key={val} value={val}>{label}</option>
+                  <option key={val} value={val}>
+                    {label}
+                  </option>
                 ))}
               </select>
               <select
                 value={rule.modelId}
-                onChange={(e) => updateRule(i, "modelId", e.target.value)}
+                onChange={(e) => updateRule(i, 'modelId', e.target.value)}
                 className="px-2.5 py-1.5 text-xs bg-background border rounded-md"
               >
                 {profiles.map((p) => (
@@ -915,7 +1015,12 @@ function ActiveConfigSection({
               添加规则
             </Button>
             {dirty && (
-              <Button size="sm" onClick={handleSave} disabled={isLoading} className="gap-1.5 text-xs">
+              <Button
+                size="sm"
+                onClick={handleSave}
+                disabled={isLoading}
+                className="gap-1.5 text-xs"
+              >
                 保存规则
               </Button>
             )}

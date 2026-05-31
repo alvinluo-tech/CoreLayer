@@ -1,6 +1,6 @@
-import type { AudioQueueManager } from "@/lib/audioQueue";
-import type { WebSpeechASR } from "@/lib/webSpeechASR";
-import { logger } from "@/lib/logger";
+import type { AudioQueueManager } from '@/lib/audioQueue';
+import type { WebSpeechASR } from '@/lib/webSpeechASR';
+import { logger } from '@/lib/logger';
 
 export interface VoiceConversationRefs {
   postListenTimerRef: React.MutableRefObject<ReturnType<typeof setTimeout> | null>;
@@ -50,7 +50,9 @@ export function createCleanup(refs: VoiceConversationRefs) {
     if (win._realtimeSocket) {
       try {
         (win._realtimeSocket as WebSocket).close();
-      } catch (e) { logger.debug("[VoiceConversation] realtime socket close ignored:", e); }
+      } catch (e) {
+        logger.debug('[VoiceConversation] realtime socket close ignored:', e);
+      }
       win._realtimeSocket = null;
     }
 
@@ -58,13 +60,17 @@ export function createCleanup(refs: VoiceConversationRefs) {
     if (refs.peerConnectionRef.current) {
       try {
         refs.peerConnectionRef.current.close();
-      } catch (e) { logger.debug("[VoiceConversation] peer connection close ignored:", e); }
+      } catch (e) {
+        logger.debug('[VoiceConversation] peer connection close ignored:', e);
+      }
       refs.peerConnectionRef.current = null;
     }
     if (refs.localStreamRef.current) {
       try {
         refs.localStreamRef.current.getTracks().forEach((track) => track.stop());
-      } catch (e) { logger.debug("[VoiceConversation] local stream stop ignored:", e); }
+      } catch (e) {
+        logger.debug('[VoiceConversation] local stream stop ignored:', e);
+      }
       refs.localStreamRef.current = null;
     }
     if (refs.remoteAudioRef.current) {
@@ -72,13 +78,17 @@ export function createCleanup(refs: VoiceConversationRefs) {
         refs.remoteAudioRef.current.pause();
         refs.remoteAudioRef.current.srcObject = null;
         refs.remoteAudioRef.current.remove();
-      } catch (e) { logger.debug("[VoiceConversation] remote audio cleanup ignored:", e); }
+      } catch (e) {
+        logger.debug('[VoiceConversation] remote audio cleanup ignored:', e);
+      }
       refs.remoteAudioRef.current = null;
     }
     if (refs.dataChannelRef.current) {
       try {
         refs.dataChannelRef.current.close();
-      } catch (e) { logger.debug("[VoiceConversation] data channel close ignored:", e); }
+      } catch (e) {
+        logger.debug('[VoiceConversation] data channel close ignored:', e);
+      }
       refs.dataChannelRef.current = null;
     }
 
@@ -86,13 +96,17 @@ export function createCleanup(refs: VoiceConversationRefs) {
     if (refs.greetingSourceRef.current) {
       try {
         refs.greetingSourceRef.current.stop();
-      } catch (e) { logger.debug("[VoiceConversation] greeting source stop ignored:", e); }
+      } catch (e) {
+        logger.debug('[VoiceConversation] greeting source stop ignored:', e);
+      }
       refs.greetingSourceRef.current = null;
     }
     if (refs.greetingAudioCtxRef.current) {
       try {
         refs.greetingAudioCtxRef.current.close();
-      } catch (e) { logger.debug("[VoiceConversation] greeting audio context close ignored:", e); }
+      } catch (e) {
+        logger.debug('[VoiceConversation] greeting audio context close ignored:', e);
+      }
       refs.greetingAudioCtxRef.current = null;
     }
   };

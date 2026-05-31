@@ -1,4 +1,4 @@
-import type { AuditLogEntry } from "@jarvis/types";
+import type { AuditLogEntry } from '@jarvis/types';
 
 export class AuditLog {
   private entries: AuditLogEntry[] = [];
@@ -8,7 +8,7 @@ export class AuditLog {
     this.maxEntries = maxEntries;
   }
 
-  log(entry: Omit<AuditLogEntry, "id" | "timestamp">): AuditLogEntry {
+  log(entry: Omit<AuditLogEntry, 'id' | 'timestamp'>): AuditLogEntry {
     const fullEntry: AuditLogEntry = {
       ...entry,
       id: crypto.randomUUID(),
@@ -40,7 +40,7 @@ export class AuditLog {
   }
 
   getDeniedEntries(limit?: number): AuditLogEntry[] {
-    const entries = this.entries.filter((e) => e.result === "denied").reverse();
+    const entries = this.entries.filter((e) => e.result === 'denied').reverse();
     return limit ? entries.slice(0, limit) : entries;
   }
 

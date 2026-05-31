@@ -1,8 +1,8 @@
-import { create } from "zustand";
-import * as tauri from "@/lib/tauri";
+import { create } from 'zustand';
+import * as tauri from '@/lib/tauri';
 
 interface SettingsState {
-  storageMode: "local" | "cloud" | "postgres";
+  storageMode: 'local' | 'cloud' | 'postgres';
   cloudConfigured: boolean;
   postgresConfigured: boolean;
   isLoading: boolean;
@@ -10,12 +10,12 @@ interface SettingsState {
   dbStats: tauri.DbStats | null;
   isLoadingDbStats: boolean;
   fetchSettings: () => Promise<void>;
-  setStorageMode: (mode: "local" | "cloud" | "postgres") => Promise<void>;
+  setStorageMode: (mode: 'local' | 'cloud' | 'postgres') => Promise<void>;
   fetchDbStats: () => Promise<void>;
 }
 
 export const useSettingsStore = create<SettingsState>((set) => ({
-  storageMode: "local",
+  storageMode: 'local',
   cloudConfigured: false,
   postgresConfigured: false,
   isLoading: false,
@@ -30,7 +30,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       // Cast getSettings result fields
       const res = result as any;
       set({
-        storageMode: res.storageMode as "local" | "cloud" | "postgres",
+        storageMode: res.storageMode as 'local' | 'cloud' | 'postgres',
         cloudConfigured: res.cloudConfigured as boolean,
         postgresConfigured: res.postgresConfigured as boolean,
         isLoading: false,
@@ -56,9 +56,8 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       const stats = await tauri.getDbStats();
       set({ dbStats: stats, isLoadingDbStats: false });
     } catch (error) {
-      console.error("Failed to fetch db stats:", error);
+      console.error('Failed to fetch db stats:', error);
       set({ error: String(error), isLoadingDbStats: false });
     }
   },
 }));
-

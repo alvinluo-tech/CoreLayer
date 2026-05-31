@@ -1,7 +1,7 @@
-import { useEffect, useState, useCallback } from "react";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { StatusBadge } from "./StatusBadge";
+import { useEffect, useState, useCallback } from 'react';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { StatusBadge } from './StatusBadge';
 import {
   Activity,
   RefreshCw,
@@ -12,13 +12,8 @@ import {
   CheckCircle2,
   Wifi,
   WifiOff,
-} from "lucide-react";
-import {
-  getDaemonStatus,
-  getHealth,
-  restartDaemon,
-  type DaemonStatus,
-} from "@/lib/tauri";
+} from 'lucide-react';
+import { getDaemonStatus, getHealth, restartDaemon, type DaemonStatus } from '@/lib/tauri';
 
 export function DaemonPage() {
   const [daemonStatus, setDaemonStatus] = useState<DaemonStatus | null>(null);
@@ -37,17 +32,14 @@ export function DaemonPage() {
     setIsLoading(true);
     setError(null);
     try {
-      const [status, health] = await Promise.allSettled([
-        getDaemonStatus(),
-        getHealth(),
-      ]);
-      if (status.status === "fulfilled") setDaemonStatus(status.value);
-      if (health.status === "fulfilled") setHealthInfo(health.value);
-      if (status.status === "rejected" && health.status === "rejected") {
-        setError("无法连接到守护进程");
+      const [status, health] = await Promise.allSettled([getDaemonStatus(), getHealth()]);
+      if (status.status === 'fulfilled') setDaemonStatus(status.value);
+      if (health.status === 'fulfilled') setHealthInfo(health.value);
+      if (status.status === 'rejected' && health.status === 'rejected') {
+        setError('无法连接到守护进程');
       }
     } catch {
-      setError("获取状态失败");
+      setError('获取状态失败');
     } finally {
       setIsLoading(false);
     }
@@ -67,7 +59,7 @@ export function DaemonPage() {
       setDaemonStatus(result);
       setTimeout(fetchAll, 2000);
     } catch {
-      setError("重启失败");
+      setError('重启失败');
     } finally {
       setIsRestarting(false);
     }
@@ -88,7 +80,7 @@ export function DaemonPage() {
             disabled={isLoading}
             className="gap-1.5"
           >
-            <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`} />
+            <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? 'animate-spin' : ''}`} />
             刷新
           </Button>
           <Button
@@ -98,7 +90,7 @@ export function DaemonPage() {
             disabled={isRestarting}
             className="gap-1.5"
           >
-            <RotateCcw className={`h-3.5 w-3.5 ${isRestarting ? "animate-spin" : ""}`} />
+            <RotateCcw className={`h-3.5 w-3.5 ${isRestarting ? 'animate-spin' : ''}`} />
             重启
           </Button>
         </div>
@@ -128,8 +120,8 @@ export function DaemonPage() {
               <span className="text-xs text-muted-foreground">运行状态</span>
             </div>
             <StatusBadge
-              status={daemonStatus?.running ? "healthy" : "error"}
-              label={daemonStatus?.running ? "运行中" : "已停止"}
+              status={daemonStatus?.running ? 'healthy' : 'error'}
+              label={daemonStatus?.running ? '运行中' : '已停止'}
             />
           </div>
           <div className="p-3 rounded-lg border">
@@ -142,8 +134,8 @@ export function DaemonPage() {
               <span className="text-xs text-muted-foreground">健康状态</span>
             </div>
             <StatusBadge
-              status={daemonStatus?.healthy ? "healthy" : "warning"}
-              label={daemonStatus?.healthy ? "健康" : "异常"}
+              status={daemonStatus?.healthy ? 'healthy' : 'warning'}
+              label={daemonStatus?.healthy ? '健康' : '异常'}
             />
           </div>
           <div className="p-3 rounded-lg border">
@@ -160,12 +152,12 @@ export function DaemonPage() {
             </div>
             <p className="text-xs font-mono">
               {daemonStatus?.lastHealthCheck
-                ? new Date(daemonStatus.lastHealthCheck).toLocaleString("zh-CN", {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                    second: "2-digit",
+                ? new Date(daemonStatus.lastHealthCheck).toLocaleString('zh-CN', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
                   })
-                : "—"}
+                : '—'}
             </p>
           </div>
         </div>
@@ -181,7 +173,7 @@ export function DaemonPage() {
           <div className="flex items-center justify-between py-2 px-3 rounded-md bg-muted/50">
             <span className="text-sm">Daemon URL</span>
             <span className="text-sm font-mono text-muted-foreground">
-              {daemonStatus?.url ?? "—"}
+              {daemonStatus?.url ?? '—'}
             </span>
           </div>
           {healthInfo && (
@@ -189,7 +181,7 @@ export function DaemonPage() {
               <div className="flex items-center justify-between py-2 px-3 rounded-md bg-muted/50">
                 <span className="text-sm">API 状态</span>
                 <StatusBadge
-                  status={healthInfo.status === "ok" ? "healthy" : "error"}
+                  status={healthInfo.status === 'ok' ? 'healthy' : 'error'}
                   label={healthInfo.status}
                 />
               </div>

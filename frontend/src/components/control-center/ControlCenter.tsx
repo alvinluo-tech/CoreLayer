@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
+import { useState } from 'react';
+import { Button } from '@/components/ui/button';
 import {
   ArrowLeft,
   LayoutDashboard,
@@ -11,27 +11,27 @@ import {
   Mic,
   Activity,
   Database,
-} from "lucide-react";
-import { OverviewPage } from "./OverviewPage";
-import { SystemPage } from "./SystemPage";
-import { ModelsPage } from "./ModelsPage";
-import { AppsPage } from "./AppsPage";
-import { ToolsPage } from "./ToolsPage";
-import { PermissionPage } from "./PermissionPage";
-import { VoicePage } from "./VoicePage";
-import { DaemonPage } from "./DaemonPage";
-import { DbPage } from "./DbPage";
+} from 'lucide-react';
+import { OverviewPage } from './OverviewPage';
+import { SystemPage } from './SystemPage';
+import { ModelsPage } from './ModelsPage';
+import { AppsPage } from './AppsPage';
+import { ToolsPage } from './ToolsPage';
+import { PermissionPage } from './PermissionPage';
+import { VoicePage } from './VoicePage';
+import { DaemonPage } from './DaemonPage';
+import { DbPage } from './DbPage';
 
 export type ControlPage =
-  | "overview"
-  | "system"
-  | "models"
-  | "apps"
-  | "tools"
-  | "permission"
-  | "voice"
-  | "daemon"
-  | "db";
+  | 'overview'
+  | 'system'
+  | 'models'
+  | 'apps'
+  | 'tools'
+  | 'permission'
+  | 'voice'
+  | 'daemon'
+  | 'db';
 
 interface ControlCenterProps {
   onBack: () => void;
@@ -39,15 +39,15 @@ interface ControlCenterProps {
 }
 
 const navItems: { id: ControlPage; label: string; icon: typeof LayoutDashboard }[] = [
-  { id: "overview", label: "总览", icon: LayoutDashboard },
-  { id: "system", label: "系统", icon: Server },
-  { id: "models", label: "模型", icon: Brain },
-  { id: "apps", label: "应用 & MCP", icon: Plug },
-  { id: "tools", label: "工具", icon: Wrench },
-  { id: "permission", label: "权限", icon: Shield },
-  { id: "voice", label: "语音", icon: Mic },
-  { id: "daemon", label: "守护进程", icon: Activity },
-  { id: "db", label: "数据管理", icon: Database },
+  { id: 'overview', label: '总览', icon: LayoutDashboard },
+  { id: 'system', label: '系统', icon: Server },
+  { id: 'models', label: '模型', icon: Brain },
+  { id: 'apps', label: '应用 & MCP', icon: Plug },
+  { id: 'tools', label: '工具', icon: Wrench },
+  { id: 'permission', label: '权限', icon: Shield },
+  { id: 'voice', label: '语音', icon: Mic },
+  { id: 'daemon', label: '守护进程', icon: Activity },
+  { id: 'db', label: '数据管理', icon: Database },
 ];
 
 const pages: Record<ControlPage, React.ComponentType> = {
@@ -63,7 +63,7 @@ const pages: Record<ControlPage, React.ComponentType> = {
 };
 
 export function ControlCenter({ onBack, initialPage }: ControlCenterProps) {
-  const [activePage, setActivePage] = useState<ControlPage>(initialPage ?? "overview");
+  const [activePage, setActivePage] = useState<ControlPage>(initialPage ?? 'overview');
   const PageComponent = pages[activePage];
 
   return (
@@ -94,8 +94,8 @@ export function ControlCenter({ onBack, initialPage }: ControlCenterProps) {
                 onClick={() => setActivePage(item.id)}
                 className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors ${
                   isActive
-                    ? "bg-accent text-accent-foreground font-medium"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    ? 'bg-accent text-accent-foreground font-medium'
+                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                 }`}
               >
                 <Icon className="h-4 w-4" />

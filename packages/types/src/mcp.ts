@@ -1,6 +1,6 @@
-export type MCPTransportType = "http" | "stdio" | "sse";
+export type MCPTransportType = 'http' | 'stdio' | 'sse';
 
-export type MCPServerStatus = "disconnected" | "connecting" | "connected" | "error";
+export type MCPServerStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 
 export interface MCPServerConfig {
   id: string;
@@ -17,7 +17,7 @@ export interface MCPServerConfig {
 }
 
 export interface MCPAuthConfig {
-  type: "none" | "bearer" | "basic" | "oauth";
+  type: 'none' | 'bearer' | 'basic' | 'oauth';
   tokenRef?: string;
   username?: string;
   passwordRef?: string;
@@ -31,10 +31,10 @@ export interface MCPPermissions {
 }
 
 export interface RiskPolicy {
-  low: "auto" | "notify" | "confirm";
-  medium: "auto" | "notify" | "confirm";
-  high: "auto" | "notify" | "confirm";
-  critical: "auto" | "notify" | "confirm" | "deny";
+  low: 'auto' | 'notify' | 'confirm';
+  medium: 'auto' | 'notify' | 'confirm';
+  high: 'auto' | 'notify' | 'confirm';
+  critical: 'auto' | 'notify' | 'confirm' | 'deny';
 }
 
 export interface MCPToolDefinition {
@@ -72,7 +72,7 @@ export interface MCPServerInfo {
 
 export interface MCPToolCallResult {
   content: Array<{
-    type: "text" | "image" | "resource";
+    type: 'text' | 'image' | 'resource';
     text?: string;
     data?: string;
     mimeType?: string;

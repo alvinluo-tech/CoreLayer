@@ -7,7 +7,7 @@ import type {
   ToolDisplayMode,
   MCPToolDefinition,
   MCPToolCallResult,
-} from "@jarvis/types";
+} from '@jarvis/types';
 
 export class ToolRegistry {
   private tools: Map<string, JarvisTool> = new Map();
@@ -82,37 +82,42 @@ export class ToolRegistry {
   static fromMCPTools(
     serverId: string,
     mcpTools: MCPToolDefinition[],
-    callTool: (serverId: string, toolName: string, args: Record<string, unknown>) => Promise<MCPToolCallResult>,
+    callTool: (
+      serverId: string,
+      toolName: string,
+      args: Record<string, unknown>
+    ) => Promise<MCPToolCallResult>
   ): JarvisTool[] {
     return mcpTools.map((t) => ({
       id: `mcp:${serverId}:${t.name}`,
       appId: serverId,
-      source: "mcp" as const,
+      source: 'mcp' as const,
       name: t.name,
       title: t.name,
-      description: t.description ?? "",
-      inputSchema: (t.inputSchema ?? { type: "object" }) as JarvisTool["inputSchema"],
-      risk: "medium" as RiskLevel,
+      description: t.description ?? '',
+      inputSchema: (t.inputSchema ?? { type: 'object' }) as JarvisTool['inputSchema'],
+      risk: 'medium' as RiskLevel,
       permissions: [],
       requiresConfirmation: false,
       timeoutMs: 30000,
       idempotent: false,
       cancellable: false,
-      category: "other" as ToolCategory,
-      displayMode: "card" as ToolDisplayMode,
+      category: 'other' as ToolCategory,
+      displayMode: 'card' as ToolDisplayMode,
       execute: async (args: unknown) => {
         const result = await callTool(serverId, t.name, args as Record<string, unknown>);
         if (result.isError) {
           return {
             success: false,
-            error: result.content.map((c) => c.text ?? "").join("\n"),
+            error: result.content.map((c) => c.text ?? '').join('\n'),
           };
         }
         return {
           success: true,
-          data: result.content.length === 1 && result.content[0].type === "text"
-            ? result.content[0].text
-            : result.content,
+          data:
+            result.content.length === 1 && result.content[0].type === 'text'
+              ? result.content[0].text
+              : result.content,
         };
       },
     }));

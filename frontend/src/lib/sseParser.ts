@@ -13,8 +13,8 @@ export interface SSEParserCallbacks {
  * Parses the SSE protocol (event: / data: lines) and calls back per complete event.
  */
 export function createSSEParser(callbacks: SSEParserCallbacks) {
-  let buffer = "";
-  let currentEvent = "token";
+  let buffer = '';
+  let currentEvent = 'token';
 
   return {
     /**
@@ -23,14 +23,14 @@ export function createSSEParser(callbacks: SSEParserCallbacks) {
      */
     feed(chunk: string): void {
       buffer += chunk;
-      const lines = buffer.split("\n");
+      const lines = buffer.split('\n');
       // Last element may be incomplete — buffer it
-      buffer = lines.pop() ?? "";
+      buffer = lines.pop() ?? '';
 
       for (const line of lines) {
-        if (line.startsWith("event: ")) {
+        if (line.startsWith('event: ')) {
           currentEvent = line.slice(7).trim();
-        } else if (line.startsWith("data: ")) {
+        } else if (line.startsWith('data: ')) {
           const data = line.slice(6);
           if (!data) continue;
           callbacks.onEvent({ event: currentEvent, data });
@@ -43,19 +43,19 @@ export function createSSEParser(callbacks: SSEParserCallbacks) {
      */
     flush(): void {
       if (buffer.length > 0) {
-        if (buffer.startsWith("data: ")) {
+        if (buffer.startsWith('data: ')) {
           const data = buffer.slice(6);
           if (data) {
             callbacks.onEvent({ event: currentEvent, data });
           }
         }
-        buffer = "";
+        buffer = '';
       }
     },
 
     reset(): void {
-      buffer = "";
-      currentEvent = "token";
+      buffer = '';
+      currentEvent = 'token';
     },
   };
 }

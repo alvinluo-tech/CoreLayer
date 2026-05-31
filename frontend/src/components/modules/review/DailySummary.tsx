@@ -1,7 +1,7 @@
-import { useEffect } from "react";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { TrendingUp, CheckCircle2, BookOpen, Target } from "lucide-react";
-import { useReviewStore } from "@/stores/reviewStore";
+import { useEffect } from 'react';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { TrendingUp, CheckCircle2, BookOpen, Target } from 'lucide-react';
+import { useReviewStore } from '@/stores/reviewStore';
 
 export function DailySummary() {
   const { dailySummary, isLoading, error, fetchDailySummary } = useReviewStore();

@@ -9,10 +9,10 @@ export function encodeWav(chunks: Float32Array[], sampleRate: number): Blob {
   const buffer = new ArrayBuffer(44 + length * 2);
   const view = new DataView(buffer);
 
-  writeString(view, 0, "RIFF");
+  writeString(view, 0, 'RIFF');
   view.setUint32(4, 36 + length * 2, true);
-  writeString(view, 8, "WAVE");
-  writeString(view, 12, "fmt ");
+  writeString(view, 8, 'WAVE');
+  writeString(view, 12, 'fmt ');
   view.setUint32(16, 16, true);
   view.setUint16(20, 1, true);
   view.setUint16(22, 1, true);
@@ -20,7 +20,7 @@ export function encodeWav(chunks: Float32Array[], sampleRate: number): Blob {
   view.setUint32(28, sampleRate * 2, true);
   view.setUint16(32, 2, true);
   view.setUint16(34, 16, true);
-  writeString(view, 36, "data");
+  writeString(view, 36, 'data');
   view.setUint32(40, length * 2, true);
 
   let offset = 44;
@@ -32,7 +32,7 @@ export function encodeWav(chunks: Float32Array[], sampleRate: number): Blob {
     }
   }
 
-  return new Blob([buffer], { type: "audio/wav" });
+  return new Blob([buffer], { type: 'audio/wav' });
 }
 
 export interface AudioCapture {

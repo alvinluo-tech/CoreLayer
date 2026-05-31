@@ -3,7 +3,7 @@ export interface VoiceProfile {
   name: string;
   language: string;
   model: string;
-  gender: "male" | "female" | "neutral";
+  gender: 'male' | 'female' | 'neutral';
   style: string;
 }
 
@@ -13,16 +13,16 @@ interface VoiceConfig {
 }
 
 const DEFAULT_VOICE_PROFILE: VoiceProfile = {
-  id: "moli",
-  name: "茉莉",
-  language: "zh-CN",
-  model: "mimo-v2.5-tts",
-  gender: "female",
-  style: "warm",
+  id: 'moli',
+  name: '茉莉',
+  language: 'zh-CN',
+  model: 'mimo-v2.5-tts',
+  gender: 'female',
+  style: 'warm',
 };
 
 const DEFAULT_CONFIG: VoiceConfig = {
-  defaultProfileId: "moli",
+  defaultProfileId: 'moli',
   profiles: {
     moli: DEFAULT_VOICE_PROFILE,
   },
@@ -34,7 +34,8 @@ class VoiceProfileManager {
 
   constructor(config?: Partial<VoiceConfig>) {
     this.config = { ...DEFAULT_CONFIG, ...config };
-    this.activeProfile = this.config.profiles[this.config.defaultProfileId] ?? DEFAULT_VOICE_PROFILE;
+    this.activeProfile =
+      this.config.profiles[this.config.defaultProfileId] ?? DEFAULT_VOICE_PROFILE;
   }
 
   getActiveProfile(): VoiceProfile {

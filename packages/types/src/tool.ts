@@ -12,20 +12,20 @@ export interface JSONSchema {
   [key: string]: unknown;
 }
 
-export type ToolSource = "mcp" | "native" | "skill" | "rest";
+export type ToolSource = 'mcp' | 'native' | 'skill' | 'rest';
 
-export type RiskLevel = "low" | "medium" | "high" | "critical";
+export type RiskLevel = 'low' | 'medium' | 'high' | 'critical';
 
 export type ToolCategory =
-  | "productivity"
-  | "communication"
-  | "system"
-  | "data"
-  | "media"
-  | "automation"
-  | "other";
+  | 'productivity'
+  | 'communication'
+  | 'system'
+  | 'data'
+  | 'media'
+  | 'automation'
+  | 'other';
 
-export type ToolDisplayMode = "inline" | "card" | "silent" | "confirm";
+export type ToolDisplayMode = 'inline' | 'card' | 'silent' | 'confirm';
 
 export interface ToolResult {
   success: boolean;

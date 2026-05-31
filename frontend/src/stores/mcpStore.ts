@@ -1,4 +1,4 @@
-import { create } from "zustand";
+import { create } from 'zustand';
 import {
   listMCPServers,
   connectMCPServer as tauriConnectMCPServer,
@@ -6,7 +6,7 @@ import {
   listAllTools,
   type MCPServerInfo,
   type ToolInfo,
-} from "@/lib/tauri";
+} from '@/lib/tauri';
 
 interface MCPState {
   servers: MCPServerInfo[];
@@ -20,7 +20,7 @@ interface MCPState {
   connectServer: (config: {
     id: string;
     name: string;
-    transport: "http" | "stdio" | "sse";
+    transport: 'http' | 'stdio' | 'sse';
     url?: string;
   }) => Promise<void>;
   disconnectServer: (serverId: string) => Promise<void>;

@@ -1,12 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { MessageSquarePlus, ArrowDown, Loader2 } from "lucide-react";
-import { Streamdown } from "streamdown";
-import { MessageBubble } from "./MessageBubble";
-import { ChatInput } from "./ChatInput";
-import { Button } from "@/components/ui/button";
-import type { Message } from "@/hooks/useChat";
-import { useConversationStore } from "@/stores/conversationStore";
-
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { MessageSquarePlus, ArrowDown, Loader2 } from 'lucide-react';
+import { Streamdown } from 'streamdown';
+import { MessageBubble } from './MessageBubble';
+import { ChatInput } from './ChatInput';
+import { Button } from '@/components/ui/button';
+import type { Message } from '@/hooks/useChat';
+import { useConversationStore } from '@/stores/conversationStore';
 
 interface ChatPanelProps {
   messages: Message[];
@@ -21,7 +20,17 @@ interface ChatPanelProps {
   isVoiceStreaming?: boolean;
 }
 
-export function ChatPanel({ messages, onSend, isLoading, hasActiveConversation, error, conversationId, voiceUserText, voiceAssistantText, isVoiceStreaming }: ChatPanelProps) {
+export function ChatPanel({
+  messages,
+  onSend,
+  isLoading,
+  hasActiveConversation,
+  error,
+  conversationId,
+  voiceUserText,
+  voiceAssistantText,
+  isVoiceStreaming,
+}: ChatPanelProps) {
   const createConversation = useConversationStore((s) => s.createConversation);
   const scrollRef = useRef<HTMLDivElement>(null);
   const isNearBottomRef = useRef(true);
@@ -29,10 +38,10 @@ export function ChatPanel({ messages, onSend, isLoading, hasActiveConversation, 
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [hasNewMessage, setHasNewMessage] = useState(false);
 
-  const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
     const el = scrollRef.current;
     if (!el) return;
-    
+
     isNearBottomRef.current = true;
     setShowScrollButton(false);
     el.scrollTo({ top: el.scrollHeight, behavior });
@@ -47,19 +56,19 @@ export function ChatPanel({ messages, onSend, isLoading, hasActiveConversation, 
       const threshold = 100;
       const distanceToBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
       const nearBottom = distanceToBottom < threshold;
-      
+
       isNearBottomRef.current = nearBottom;
-      
+
       const isScrollable = el.scrollHeight > el.clientHeight;
       setShowScrollButton(!nearBottom && isScrollable);
-      
+
       if (nearBottom) {
         setHasNewMessage(false);
       }
     };
 
-    el.addEventListener("scroll", handleScroll, { passive: true });
-    return () => el.removeEventListener("scroll", handleScroll);
+    el.addEventListener('scroll', handleScroll, { passive: true });
+    return () => el.removeEventListener('scroll', handleScroll);
   }, []);
 
   // Snap to bottom when switching conversations
@@ -67,11 +76,11 @@ export function ChatPanel({ messages, onSend, isLoading, hasActiveConversation, 
     if (conversationId !== prevConversationIdRef.current) {
       prevConversationIdRef.current = conversationId;
       setHasNewMessage(false);
-      
+
       // Perform initial snap and double-run after DOM rendering paints to ensure 100% bottom lock
-      scrollToBottom("instant");
+      scrollToBottom('instant');
       const timer = setTimeout(() => {
-        scrollToBottom("instant");
+        scrollToBottom('instant');
       }, 80);
       return () => clearTimeout(timer);
     }
@@ -80,11 +89,11 @@ export function ChatPanel({ messages, onSend, isLoading, hasActiveConversation, 
   // Auto-scroll on new messages / streaming when user is at bottom
   useEffect(() => {
     const lastMessage = messages[messages.length - 1];
-    const isUserMessage = lastMessage && lastMessage.role === "user";
+    const isUserMessage = lastMessage && lastMessage.role === 'user';
 
     if (isNearBottomRef.current || isUserMessage) {
-      const behavior = (isLoading || isVoiceStreaming) ? "instant" : "smooth";
-      
+      const behavior = isLoading || isVoiceStreaming ? 'instant' : 'smooth';
+
       // Immediate scroll, followed by a layout-paint delay retry to capture new browser size mutations
       scrollToBottom(behavior);
       const timer = setTimeout(() => {
@@ -133,7 +142,7 @@ export function ChatPanel({ messages, onSend, isLoading, hasActiveConversation, 
             <div className="flex justify-start my-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
               <div className="bg-card/60 backdrop-blur-md text-card-foreground border border-border/60 rounded-2xl rounded-tl-sm px-4 py-3.5 text-sm max-w-[80%] hover:shadow-[0_4px_20px_rgba(0,0,0,0.03)] dark:hover:shadow-[0_4px_20px_rgba(0,0,0,0.15)]">
                 <Streamdown
-                  mode={isVoiceStreaming ? "streaming" : "static"}
+                  mode={isVoiceStreaming ? 'streaming' : 'static'}
                   parseIncompleteMarkdown
                   className="prose prose-sm dark:prose-invert max-w-none text-foreground/90"
                 >
@@ -161,9 +170,18 @@ export function ChatPanel({ messages, onSend, isLoading, hasActiveConversation, 
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5 pl-5.5">
-                  <span className="h-1.5 w-1.5 rounded-full bg-cyan-400 animate-bounce" style={{ animationDelay: "0ms" }} />
-                  <span className="h-1.5 w-1.5 rounded-full bg-cyan-400 animate-bounce" style={{ animationDelay: "150ms" }} />
-                  <span className="h-1.5 w-1.5 rounded-full bg-cyan-400 animate-bounce" style={{ animationDelay: "300ms" }} />
+                  <span
+                    className="h-1.5 w-1.5 rounded-full bg-cyan-400 animate-bounce"
+                    style={{ animationDelay: '0ms' }}
+                  />
+                  <span
+                    className="h-1.5 w-1.5 rounded-full bg-cyan-400 animate-bounce"
+                    style={{ animationDelay: '150ms' }}
+                  />
+                  <span
+                    className="h-1.5 w-1.5 rounded-full bg-cyan-400 animate-bounce"
+                    style={{ animationDelay: '300ms' }}
+                  />
                 </div>
               </div>
             </div>
@@ -181,7 +199,7 @@ export function ChatPanel({ messages, onSend, isLoading, hasActiveConversation, 
         {showScrollButton && (
           <button
             onClick={() => {
-              scrollToBottom("smooth");
+              scrollToBottom('smooth');
               setHasNewMessage(false);
             }}
             className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 px-4 py-2 rounded-full bg-background/80 backdrop-blur-md border border-border/60 hover:bg-background/95 hover:border-border shadow-lg hover:shadow-xl text-[11px] font-mono font-bold tracking-wider text-muted-foreground hover:text-foreground transition-all duration-300 transform scale-100 hover:scale-105 active:scale-95 animate-in fade-in slide-in-from-bottom-3 cursor-pointer group"

@@ -1,5 +1,5 @@
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import type {
   MCPServerConfig,
   MCPServerInfo,
@@ -8,7 +8,7 @@ import type {
   MCPResourceDefinition,
   MCPPromptDefinition,
   MCPToolCallResult,
-} from "@jarvis/types";
+} from '@jarvis/types';
 
 export interface MCPServerConnection {
   config: MCPServerConfig;
@@ -26,17 +26,14 @@ export class MCPClientManager {
 
   async connectServer(config: MCPServerConfig): Promise<MCPServerConnection> {
     const existing = this.connections.get(config.id);
-    if (existing?.status === "connected") {
+    if (existing?.status === 'connected') {
       return existing;
     }
 
     const connection: MCPServerConnection = {
       config,
-      client: new Client(
-        { name: "jarvis", version: "0.1.0" },
-        { capabilities: {} },
-      ),
-      status: "connecting",
+      client: new Client({ name: 'jarvis', version: '0.1.0' }, { capabilities: {} }),
+      status: 'connecting',
       tools: [],
       resources: [],
       prompts: [],
@@ -45,23 +42,23 @@ export class MCPClientManager {
     this.connections.set(config.id, connection);
 
     try {
-      if (config.transport === "http" || config.transport === "sse") {
+      if (config.transport === 'http' || config.transport === 'sse') {
         if (!config.url) {
           throw new Error(`MCP server ${config.id}: URL required for HTTP/SSE transport`);
         }
         const url = new URL(config.url);
         const transport = new SSEClientTransport(url);
         await connection.client.connect(transport);
-      } else if (config.transport === "stdio") {
-        throw new Error("stdio transport not yet implemented in browser context");
+      } else if (config.transport === 'stdio') {
+        throw new Error('stdio transport not yet implemented in browser context');
       }
 
-      connection.status = "connected";
+      connection.status = 'connected';
       connection.lastConnected = new Date();
 
       await this.discoverCapabilities(connection);
     } catch (error) {
-      connection.status = "error";
+      connection.status = 'error';
       connection.lastError = error instanceof Error ? error.message : String(error);
       throw error;
     }
@@ -79,7 +76,7 @@ export class MCPClientManager {
       // ignore close errors
     }
 
-    connection.status = "disconnected";
+    connection.status = 'disconnected';
     this.connections.delete(serverId);
   }
 
@@ -97,7 +94,7 @@ export class MCPClientManager {
   }
 
   getConnectedServers(): MCPServerConnection[] {
-    return Array.from(this.connections.values()).filter((c) => c.status === "connected");
+    return Array.from(this.connections.values()).filter((c) => c.status === 'connected');
   }
 
   getAllTools(): MCPToolDefinition[] {
@@ -115,10 +112,10 @@ export class MCPClientManager {
   async callTool(
     serverId: string,
     toolName: string,
-    args: Record<string, unknown>,
+    args: Record<string, unknown>
   ): Promise<MCPToolCallResult> {
     const connection = this.connections.get(serverId);
-    if (!connection || connection.status !== "connected") {
+    if (!connection || connection.status !== 'connected') {
       throw new Error(`MCP server ${serverId} not connected`);
     }
 
@@ -132,7 +129,7 @@ export class MCPClientManager {
 
   async readResource(serverId: string, uri: string): Promise<unknown> {
     const connection = this.connections.get(serverId);
-    if (!connection || connection.status !== "connected") {
+    if (!connection || connection.status !== 'connected') {
       throw new Error(`MCP server ${serverId} not connected`);
     }
 
@@ -143,10 +140,10 @@ export class MCPClientManager {
   async getPrompt(
     serverId: string,
     promptName: string,
-    args?: Record<string, string>,
+    args?: Record<string, string>
   ): Promise<unknown> {
     const connection = this.connections.get(serverId);
-    if (!connection || connection.status !== "connected") {
+    if (!connection || connection.status !== 'connected') {
       throw new Error(`MCP server ${serverId} not connected`);
     }
 

@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
-import { useMCPStore } from "@/stores/mcpStore";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { StatusBadge } from "./StatusBadge";
+import { useEffect, useState } from 'react';
+import { useMCPStore } from '@/stores/mcpStore';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { StatusBadge } from './StatusBadge';
 import {
   PlugZap,
   Unplug,
@@ -12,7 +12,7 @@ import {
   Server,
   AlertCircle,
   Loader2,
-} from "lucide-react";
+} from 'lucide-react';
 
 export function AppsPage() {
   const {
@@ -28,10 +28,10 @@ export function AppsPage() {
 
   const [showAddForm, setShowAddForm] = useState(false);
   const [newServer, setNewServer] = useState({
-    id: "",
-    name: "",
-    transport: "http" as "http" | "stdio" | "sse",
-    url: "",
+    id: '',
+    name: '',
+    transport: 'http' as 'http' | 'stdio' | 'sse',
+    url: '',
   });
 
   useEffect(() => {
@@ -42,7 +42,7 @@ export function AppsPage() {
   const handleConnect = async () => {
     if (!newServer.id || !newServer.name) return;
     await connectServer(newServer);
-    setNewServer({ id: "", name: "", transport: "http", url: "" });
+    setNewServer({ id: '', name: '', transport: 'http', url: '' });
     setShowAddForm(false);
   };
 
@@ -65,14 +65,10 @@ export function AppsPage() {
             }}
             className="gap-1.5"
           >
-            <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`} />
+            <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? 'animate-spin' : ''}`} />
             刷新
           </Button>
-          <Button
-            size="sm"
-            onClick={() => setShowAddForm(!showAddForm)}
-            className="gap-1.5"
-          >
+          <Button size="sm" onClick={() => setShowAddForm(!showAddForm)} className="gap-1.5">
             <Plus className="h-3.5 w-3.5" />
             添加服务器
           </Button>
@@ -118,7 +114,7 @@ export function AppsPage() {
                 onChange={(e) =>
                   setNewServer({
                     ...newServer,
-                    transport: e.target.value as "http" | "stdio" | "sse",
+                    transport: e.target.value as 'http' | 'stdio' | 'sse',
                   })
                 }
                 className="w-full mt-1 px-3 py-1.5 text-sm bg-background border rounded-md"
@@ -162,9 +158,7 @@ export function AppsPage() {
           <Card className="p-8 text-center">
             <Server className="h-8 w-8 mx-auto mb-2 text-muted-foreground opacity-50" />
             <p className="text-sm text-muted-foreground">暂无 MCP 服务器连接</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              点击"添加服务器"开始连接
-            </p>
+            <p className="text-xs text-muted-foreground mt-1">点击"添加服务器"开始连接</p>
           </Card>
         )}
 
@@ -172,16 +166,16 @@ export function AppsPage() {
           <Card key={server.config.id} className="p-4">
             <div className="flex items-start justify-between">
               <div className="flex items-start gap-3">
-                {server.status === "connecting" ? (
+                {server.status === 'connecting' ? (
                   <Loader2 className="h-4 w-4 text-yellow-500 animate-spin mt-0.5" />
                 ) : (
                   <StatusBadge
                     status={
-                      server.status === "connected"
-                        ? "healthy"
-                        : server.status === "error"
-                          ? "error"
-                          : "idle"
+                      server.status === 'connected'
+                        ? 'healthy'
+                        : server.status === 'error'
+                          ? 'error'
+                          : 'idle'
                     }
                     label=""
                   />
@@ -194,11 +188,11 @@ export function AppsPage() {
                     </span>
                     <span
                       className={`text-xs px-1.5 py-0.5 rounded ${
-                        server.status === "connected"
-                          ? "bg-green-500/10 text-green-600"
-                          : server.status === "error"
-                            ? "bg-red-500/10 text-red-600"
-                            : "bg-muted text-muted-foreground"
+                        server.status === 'connected'
+                          ? 'bg-green-500/10 text-green-600'
+                          : server.status === 'error'
+                            ? 'bg-red-500/10 text-red-600'
+                            : 'bg-muted text-muted-foreground'
                       }`}
                     >
                       {server.status}
@@ -248,10 +242,10 @@ export function AppsPage() {
         </h3>
         <div className="grid grid-cols-4 gap-3">
           {[
-            { label: "原生工具", count: toolCounts.native },
-            { label: "MCP 工具", count: toolCounts.mcp },
-            { label: "技能工具", count: toolCounts.skill },
-            { label: "REST 工具", count: toolCounts.rest },
+            { label: '原生工具', count: toolCounts.native },
+            { label: 'MCP 工具', count: toolCounts.mcp },
+            { label: '技能工具', count: toolCounts.skill },
+            { label: 'REST 工具', count: toolCounts.rest },
           ].map((item) => (
             <div key={item.label} className="p-3 rounded-lg border text-center">
               <p className="text-2xl font-bold">{item.count}</p>
@@ -259,9 +253,7 @@ export function AppsPage() {
             </div>
           ))}
         </div>
-        <p className="text-xs text-muted-foreground mt-3">
-          共 {totalTools} 个已注册工具
-        </p>
+        <p className="text-xs text-muted-foreground mt-3">共 {totalTools} 个已注册工具</p>
       </Card>
     </div>
   );

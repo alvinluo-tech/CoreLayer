@@ -1,6 +1,15 @@
-import { useEffect, useRef, useCallback } from "react";
-import { usePaletteStore } from "@/stores/paletteStore";
-import { Search, MessageSquare, ListTodo, BookOpen, BarChart3, Mic, Settings, HelpCircle } from "lucide-react";
+import { useEffect, useRef, useCallback } from 'react';
+import { usePaletteStore } from '@/stores/paletteStore';
+import {
+  Search,
+  MessageSquare,
+  ListTodo,
+  BookOpen,
+  BarChart3,
+  Mic,
+  Settings,
+  HelpCircle,
+} from 'lucide-react';
 
 interface CommandItem {
   id: string;
@@ -18,65 +27,87 @@ interface CommandPaletteProps {
 }
 
 export function CommandPalette({ onChat, onNavigate, onVoiceToggle }: CommandPaletteProps) {
-  const { isOpen, query, selectedIndex, close, setQuery, setSelectedIndex, moveUp, moveDown } = usePaletteStore();
+  const { isOpen, query, selectedIndex, close, setQuery, setSelectedIndex, moveUp, moveDown } =
+    usePaletteStore();
   const inputRef = useRef<HTMLInputElement>(null);
 
   const commands: CommandItem[] = [
     {
-      id: "chat-today",
-      label: "今日任务",
-      description: "查看今天的待办任务",
+      id: 'chat-today',
+      label: '今日任务',
+      description: '查看今天的待办任务',
       icon: <ListTodo className="h-4 w-4" />,
-      action: () => { onChat("今天有什么任务？"); close(); },
-      keywords: ["任务", "today", "todo", "待办"],
+      action: () => {
+        onChat('今天有什么任务？');
+        close();
+      },
+      keywords: ['任务', 'today', 'todo', '待办'],
     },
     {
-      id: "chat-reading",
-      label: "阅读清单",
-      description: "查看阅读列表",
+      id: 'chat-reading',
+      label: '阅读清单',
+      description: '查看阅读列表',
       icon: <BookOpen className="h-4 w-4" />,
-      action: () => { onChat("阅读清单有什么？"); close(); },
-      keywords: ["阅读", "reading", "文章", "book"],
+      action: () => {
+        onChat('阅读清单有什么？');
+        close();
+      },
+      keywords: ['阅读', 'reading', '文章', 'book'],
     },
     {
-      id: "chat-summary",
-      label: "今日总结",
-      description: "查看今日任务完成情况",
+      id: 'chat-summary',
+      label: '今日总结',
+      description: '查看今日任务完成情况',
       icon: <BarChart3 className="h-4 w-4" />,
-      action: () => { onChat("今日总结"); close(); },
-      keywords: ["总结", "summary", "复盘", "统计"],
+      action: () => {
+        onChat('今日总结');
+        close();
+      },
+      keywords: ['总结', 'summary', '复盘', '统计'],
     },
     {
-      id: "new-chat",
-      label: "新建对话",
-      description: "开始一个新的对话",
+      id: 'new-chat',
+      label: '新建对话',
+      description: '开始一个新的对话',
       icon: <MessageSquare className="h-4 w-4" />,
-      action: () => { onNavigate("new-chat"); close(); },
-      keywords: ["新建", "new", "chat", "对话"],
+      action: () => {
+        onNavigate('new-chat');
+        close();
+      },
+      keywords: ['新建', 'new', 'chat', '对话'],
     },
     {
-      id: "voice",
-      label: "语音输入",
-      description: "切换语音输入模式",
+      id: 'voice',
+      label: '语音输入',
+      description: '切换语音输入模式',
       icon: <Mic className="h-4 w-4" />,
-      action: () => { onVoiceToggle(); close(); },
-      keywords: ["语音", "voice", "mic", "说话"],
+      action: () => {
+        onVoiceToggle();
+        close();
+      },
+      keywords: ['语音', 'voice', 'mic', '说话'],
     },
     {
-      id: "settings",
-      label: "控制中心",
-      description: "打开系统控制中心",
+      id: 'settings',
+      label: '控制中心',
+      description: '打开系统控制中心',
       icon: <Settings className="h-4 w-4" />,
-      action: () => { onNavigate("control-center"); close(); },
-      keywords: ["设置", "settings", "配置", "控制", "control"],
+      action: () => {
+        onNavigate('control-center');
+        close();
+      },
+      keywords: ['设置', 'settings', '配置', '控制', 'control'],
     },
     {
-      id: "help",
-      label: "帮助",
-      description: "查看 Jarvis 可以做什么",
+      id: 'help',
+      label: '帮助',
+      description: '查看 Jarvis 可以做什么',
       icon: <HelpCircle className="h-4 w-4" />,
-      action: () => { onChat("帮助"); close(); },
-      keywords: ["帮助", "help", "能做什么"],
+      action: () => {
+        onChat('帮助');
+        close();
+      },
+      keywords: ['帮助', 'help', '能做什么'],
     },
   ];
 
@@ -85,7 +116,7 @@ export function CommandPalette({ onChat, onNavigate, onVoiceToggle }: CommandPal
         (cmd) =>
           cmd.label.toLowerCase().includes(query.toLowerCase()) ||
           cmd.description.toLowerCase().includes(query.toLowerCase()) ||
-          cmd.keywords.some((k) => k.includes(query.toLowerCase())),
+          cmd.keywords.some((k) => k.includes(query.toLowerCase()))
       )
     : commands;
 
@@ -111,24 +142,24 @@ export function CommandPalette({ onChat, onNavigate, onVoiceToggle }: CommandPal
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       switch (e.key) {
-        case "Escape":
+        case 'Escape':
           close();
           break;
-        case "ArrowUp":
+        case 'ArrowUp':
           e.preventDefault();
           moveUp();
           break;
-        case "ArrowDown":
+        case 'ArrowDown':
           e.preventDefault();
           moveDown();
           break;
-        case "Enter":
+        case 'Enter':
           e.preventDefault();
           executeSelected();
           break;
       }
     },
-    [close, moveUp, moveDown, executeSelected],
+    [close, moveUp, moveDown, executeSelected]
   );
 
   if (!isOpen) return null;
@@ -169,12 +200,14 @@ export function CommandPalette({ onChat, onNavigate, onVoiceToggle }: CommandPal
               <button
                 key={item.id}
                 className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
-                  index === selectedIndex ? "bg-primary/10 text-primary" : "hover:bg-accent"
+                  index === selectedIndex ? 'bg-primary/10 text-primary' : 'hover:bg-accent'
                 }`}
                 onClick={() => item.action()}
                 onMouseEnter={() => setSelectedIndex(index)}
               >
-                <div className={`shrink-0 ${index === selectedIndex ? "text-primary" : "text-muted-foreground"}`}>
+                <div
+                  className={`shrink-0 ${index === selectedIndex ? 'text-primary' : 'text-muted-foreground'}`}
+                >
                   {item.icon}
                 </div>
                 <div className="flex-1 min-w-0">

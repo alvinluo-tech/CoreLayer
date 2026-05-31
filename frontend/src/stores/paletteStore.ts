@@ -1,4 +1,4 @@
-import { create } from "zustand";
+import { create } from 'zustand';
 
 interface PaletteState {
   isOpen: boolean;
@@ -16,17 +16,17 @@ interface PaletteState {
 
 export const usePaletteStore = create<PaletteState>((set, get) => ({
   isOpen: false,
-  query: "",
+  query: '',
   selectedIndex: 0,
 
-  open: () => set({ isOpen: true, query: "", selectedIndex: 0 }),
-  close: () => set({ isOpen: false, query: "", selectedIndex: 0 }),
+  open: () => set({ isOpen: true, query: '', selectedIndex: 0 }),
+  close: () => set({ isOpen: false, query: '', selectedIndex: 0 }),
   toggle: () => {
     const { isOpen } = get();
     if (isOpen) {
-      set({ isOpen: false, query: "", selectedIndex: 0 });
+      set({ isOpen: false, query: '', selectedIndex: 0 });
     } else {
-      set({ isOpen: true, query: "", selectedIndex: 0 });
+      set({ isOpen: true, query: '', selectedIndex: 0 });
     }
   },
   setQuery: (query: string) => set({ query, selectedIndex: 0 }),

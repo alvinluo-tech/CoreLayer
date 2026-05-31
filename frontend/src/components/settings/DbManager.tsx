@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import * as tauri from "@/lib/tauri";
+import { useEffect, useState } from 'react';
+import * as tauri from '@/lib/tauri';
 import {
   Database,
   Trash2,
@@ -10,7 +10,7 @@ import {
   FileJson,
   X,
   Layers,
-} from "lucide-react";
+} from 'lucide-react';
 
 interface DbManagerProps {
   className?: string;
@@ -18,19 +18,19 @@ interface DbManagerProps {
 
 export function DbManager({ className }: DbManagerProps) {
   const [tables, setTables] = useState<tauri.DbTableInfo[]>([]);
-  const [selectedTable, setSelectedTable] = useState<string>("conversations");
+  const [selectedTable, setSelectedTable] = useState<string>('conversations');
   const [rows, setRows] = useState<any[]>([]);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingRows, setIsLoadingRows] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   // Row Detail Viewer
   const [activeRowDetail, setActiveRowDetail] = useState<any | null>(null);
-  
+
   // Purging Table confirmation state
   const [purgingTable, setPurgingTable] = useState<string | null>(null);
-  const [purgeInput, setPurgeInput] = useState("");
+  const [purgeInput, setPurgeInput] = useState('');
 
   const loadTables = async () => {
     setIsLoading(true);
@@ -47,7 +47,7 @@ export function DbManager({ className }: DbManagerProps) {
           }
         }
       } else {
-        setError("获取数据表信息失败");
+        setError('获取数据表信息失败');
       }
     } catch (err) {
       setError(`加载错误: ${String(err)}`);
@@ -65,7 +65,7 @@ export function DbManager({ className }: DbManagerProps) {
         setRows(res.rows);
       }
     } catch (err) {
-      console.error("加载数据行错误:", err);
+      console.error('加载数据行错误:', err);
       setError(`加载数据行失败: ${String(err)}`);
     } finally {
       setIsLoadingRows(false);
@@ -98,7 +98,7 @@ export function DbManager({ className }: DbManagerProps) {
         }
       }
     } catch (err) {
-      console.error("删除数据行错误:", err);
+      console.error('删除数据行错误:', err);
       setError(`删除失败: ${String(err)}`);
     }
   };
@@ -110,15 +110,13 @@ export function DbManager({ className }: DbManagerProps) {
       const res = await tauri.dbManagerClearTable(selectedTable);
       if (res.success) {
         setRows([]);
-        setTables((prev) =>
-          prev.map((t) => (t.id === selectedTable ? { ...t, count: 0 } : t))
-        );
+        setTables((prev) => prev.map((t) => (t.id === selectedTable ? { ...t, count: 0 } : t)));
         setActiveRowDetail(null);
         setPurgingTable(null);
-        setPurgeInput("");
+        setPurgeInput('');
       }
     } catch (err) {
-      console.error("清空数据表错误:", err);
+      console.error('清空数据表错误:', err);
       setError(`清空失败: ${String(err)}`);
     } finally {
       setIsLoadingRows(false);
@@ -128,66 +126,101 @@ export function DbManager({ className }: DbManagerProps) {
   // Dynamic Column Mapping for premium display
   const getColumns = (tableId: string) => {
     switch (tableId) {
-      case "conversations":
+      case 'conversations':
         return [
-          { key: "id", label: "ID", render: (r: any) => r.id.substring(0, 8) + "..." },
-          { key: "title", label: "会话标题", render: (r: any) => r.title || "未命名会话" },
-          { key: "createdAt", label: "创建时间", render: (r: any) => new Date(r.createdAt).toLocaleString("zh-CN") },
-        ];
-      case "tasks":
-        return [
-          { key: "title", label: "任务名称", render: (r: any) => r.title },
+          { key: 'id', label: 'ID', render: (r: any) => r.id.substring(0, 8) + '...' },
+          { key: 'title', label: '会话标题', render: (r: any) => r.title || '未命名会话' },
           {
-            key: "priority",
-            label: "优先级",
+            key: 'createdAt',
+            label: '创建时间',
+            render: (r: any) => new Date(r.createdAt).toLocaleString('zh-CN'),
+          },
+        ];
+      case 'tasks':
+        return [
+          { key: 'title', label: '任务名称', render: (r: any) => r.title },
+          {
+            key: 'priority',
+            label: '优先级',
             render: (r: any) => (
-              <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                r.priority >= 4 ? "bg-red-500/10 text-red-500" : r.priority === 3 ? "bg-amber-500/10 text-amber-500" : "bg-blue-500/10 text-blue-500"
-              }`}>
+              <span
+                className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                  r.priority >= 4
+                    ? 'bg-red-500/10 text-red-500'
+                    : r.priority === 3
+                      ? 'bg-amber-500/10 text-amber-500'
+                      : 'bg-blue-500/10 text-blue-500'
+                }`}
+              >
                 P{r.priority}
               </span>
             ),
           },
           {
-            key: "status",
-            label: "状态",
+            key: 'status',
+            label: '状态',
             render: (r: any) => (
-              <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                r.status === "done" ? "bg-green-500/10 text-green-500" : r.status === "in_progress" ? "bg-amber-500/10 text-amber-500" : "bg-muted text-muted-foreground"
-              }`}>
+              <span
+                className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                  r.status === 'done'
+                    ? 'bg-green-500/10 text-green-500'
+                    : r.status === 'in_progress'
+                      ? 'bg-amber-500/10 text-amber-500'
+                      : 'bg-muted text-muted-foreground'
+                }`}
+              >
                 {r.status}
               </span>
             ),
           },
-          { key: "createdAt", label: "时间", render: (r: any) => new Date(r.createdAt).toLocaleDateString("zh-CN") },
-        ];
-      case "articles":
-        return [
-          { key: "title", label: "文章标题", render: (r: any) => r.title },
-          { key: "category", label: "分类", render: (r: any) => r.category || "未分类" },
           {
-            key: "status",
-            label: "状态",
+            key: 'createdAt',
+            label: '时间',
+            render: (r: any) => new Date(r.createdAt).toLocaleDateString('zh-CN'),
+          },
+        ];
+      case 'articles':
+        return [
+          { key: 'title', label: '文章标题', render: (r: any) => r.title },
+          { key: 'category', label: '分类', render: (r: any) => r.category || '未分类' },
+          {
+            key: 'status',
+            label: '状态',
             render: (r: any) => (
-              <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                r.status === "finished" ? "bg-green-500/10 text-green-500" : r.status === "reading" ? "bg-blue-500/10 text-blue-500" : "bg-muted text-muted-foreground"
-              }`}>
+              <span
+                className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                  r.status === 'finished'
+                    ? 'bg-green-500/10 text-green-500'
+                    : r.status === 'reading'
+                      ? 'bg-blue-500/10 text-blue-500'
+                      : 'bg-muted text-muted-foreground'
+                }`}
+              >
                 {r.status}
               </span>
             ),
           },
-          { key: "rating", label: "评分", render: (r: any) => (r.rating ? `⭐ ${r.rating}` : "-") },
+          { key: 'rating', label: '评分', render: (r: any) => (r.rating ? `⭐ ${r.rating}` : '-') },
         ];
-      case "memories":
+      case 'memories':
         return [
-          { key: "type", label: "类型", render: (r: any) => r.type },
-          { key: "key", label: "健值", render: (r: any) => <code className="text-xs bg-muted px-1 py-0.5 rounded font-mono">{r.key}</code> },
-          { key: "content", label: "记忆内容", render: (r: any) => r.content.length > 30 ? r.content.substring(0, 30) + "..." : r.content },
+          { key: 'type', label: '类型', render: (r: any) => r.type },
+          {
+            key: 'key',
+            label: '健值',
+            render: (r: any) => (
+              <code className="text-xs bg-muted px-1 py-0.5 rounded font-mono">{r.key}</code>
+            ),
+          },
+          {
+            key: 'content',
+            label: '记忆内容',
+            render: (r: any) =>
+              r.content.length > 30 ? r.content.substring(0, 30) + '...' : r.content,
+          },
         ];
       default:
-        return [
-          { key: "id", label: "ID", render: (r: any) => r.id },
-        ];
+        return [{ key: 'id', label: 'ID', render: (r: any) => r.id }];
     }
   };
 
@@ -195,7 +228,7 @@ export function DbManager({ className }: DbManagerProps) {
   const filteredRows = rows.filter((row) => {
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
-    
+
     // Check main fields
     if (row.id && String(row.id).toLowerCase().includes(q)) return true;
     if (row.title && String(row.title).toLowerCase().includes(q)) return true;
@@ -228,7 +261,9 @@ export function DbManager({ className }: DbManagerProps) {
           disabled={isLoading || isLoadingRows}
           className="p-1.5 rounded-md hover:bg-muted border border-border/60 transition-colors flex items-center gap-1.5 text-xs font-medium"
         >
-          <RefreshCw className={`h-3.5 w-3.5 ${isLoading || isLoadingRows ? "animate-spin" : ""}`} />
+          <RefreshCw
+            className={`h-3.5 w-3.5 ${isLoading || isLoadingRows ? 'animate-spin' : ''}`}
+          />
           刷新数据
         </button>
       </div>
@@ -242,7 +277,6 @@ export function DbManager({ className }: DbManagerProps) {
 
       {/* Main Grid Splitter */}
       <div className="flex-1 grid grid-cols-12 gap-4 min-h-0">
-        
         {/* Left Side: Table Selector */}
         <div className="col-span-3 border border-border/85 rounded-xl bg-muted/10 p-2.5 flex flex-col space-y-2 overflow-y-auto">
           <span className="text-[10px] font-bold text-muted-foreground tracking-wider uppercase px-2 mb-1 block">
@@ -254,17 +288,21 @@ export function DbManager({ className }: DbManagerProps) {
               onClick={() => setSelectedTable(t.id)}
               className={`w-full flex items-center justify-between p-2.5 rounded-lg text-left text-xs transition-all ${
                 selectedTable === t.id
-                  ? "bg-primary text-primary-foreground font-semibold shadow-sm"
-                  : "hover:bg-muted/70 text-foreground"
+                  ? 'bg-primary text-primary-foreground font-semibold shadow-sm'
+                  : 'hover:bg-muted/70 text-foreground'
               }`}
             >
               <div className="flex items-center gap-2 truncate">
                 <Layers className="h-3.5 w-3.5 shrink-0" />
-                <span className="truncate">{t.name.split(" ")[0]}</span>
+                <span className="truncate">{t.name.split(' ')[0]}</span>
               </div>
-              <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full ${
-                selectedTable === t.id ? "bg-primary-foreground/20 text-primary-foreground" : "bg-muted text-muted-foreground"
-              }`}>
+              <span
+                className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full ${
+                  selectedTable === t.id
+                    ? 'bg-primary-foreground/20 text-primary-foreground'
+                    : 'bg-muted text-muted-foreground'
+                }`}
+              >
                 {t.count}
               </span>
             </button>
@@ -277,7 +315,7 @@ export function DbManager({ className }: DbManagerProps) {
                 <span className="text-[10px] font-bold text-red-500 flex items-center gap-1">
                   <AlertTriangle className="h-3 w-3" /> 危险区域
                 </span>
-                
+
                 {purgingTable !== selectedTable ? (
                   <button
                     onClick={() => setPurgingTable(selectedTable)}
@@ -288,7 +326,11 @@ export function DbManager({ className }: DbManagerProps) {
                 ) : (
                   <div className="space-y-1.5">
                     <span className="text-[9px] text-muted-foreground block">
-                      请输入 <code className="font-mono text-red-500 bg-red-500/10 px-1 rounded">CLEAR</code> 以确认:
+                      请输入{' '}
+                      <code className="font-mono text-red-500 bg-red-500/10 px-1 rounded">
+                        CLEAR
+                      </code>{' '}
+                      以确认:
                     </span>
                     <input
                       type="text"
@@ -301,7 +343,7 @@ export function DbManager({ className }: DbManagerProps) {
                       <button
                         onClick={() => {
                           setPurgingTable(null);
-                          setPurgeInput("");
+                          setPurgeInput('');
                         }}
                         className="flex-1 py-1 text-[10px] border rounded hover:bg-muted text-foreground transition-all"
                       >
@@ -309,7 +351,7 @@ export function DbManager({ className }: DbManagerProps) {
                       </button>
                       <button
                         onClick={handleClearTable}
-                        disabled={purgeInput !== "CLEAR"}
+                        disabled={purgeInput !== 'CLEAR'}
                         className="flex-1 py-1 text-[10px] bg-red-600 hover:bg-red-700 text-white rounded font-bold transition-all disabled:opacity-40"
                       >
                         确认清空
@@ -324,7 +366,6 @@ export function DbManager({ className }: DbManagerProps) {
 
         {/* Right Side: Data Browser Grid */}
         <div className="col-span-9 flex flex-col border border-border/85 rounded-xl bg-card overflow-hidden min-h-0">
-          
           {/* Header Filtering Search Bar */}
           <div className="p-2.5 border-b border-border/60 bg-muted/5 flex items-center gap-2">
             <div className="relative flex-1">
@@ -339,7 +380,7 @@ export function DbManager({ className }: DbManagerProps) {
             </div>
             {searchQuery && (
               <button
-                onClick={() => setSearchQuery("")}
+                onClick={() => setSearchQuery('')}
                 className="p-1.5 text-xs hover:bg-muted rounded-md text-muted-foreground hover:text-foreground transition-all"
               >
                 清除
@@ -368,11 +409,16 @@ export function DbManager({ className }: DbManagerProps) {
                 <thead className="bg-muted/30 border-b border-border/50 sticky top-0 z-20 backdrop-blur">
                   <tr>
                     {columns.map((col) => (
-                      <th key={col.key} className="p-3 font-semibold text-muted-foreground border-r border-border/30">
+                      <th
+                        key={col.key}
+                        className="p-3 font-semibold text-muted-foreground border-r border-border/30"
+                      >
                         {col.label}
                       </th>
                     ))}
-                    <th className="p-3 font-semibold text-muted-foreground text-center">数据操作</th>
+                    <th className="p-3 font-semibold text-muted-foreground text-center">
+                      数据操作
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/40">
@@ -380,11 +426,14 @@ export function DbManager({ className }: DbManagerProps) {
                     <tr
                       key={row.id}
                       className={`hover:bg-accent/40 transition-colors ${
-                        activeRowDetail?.id === row.id ? "bg-accent/60" : ""
+                        activeRowDetail?.id === row.id ? 'bg-accent/60' : ''
                       }`}
                     >
                       {columns.map((col) => (
-                        <td key={col.key} className="p-3 align-middle max-w-[200px] truncate border-r border-border/30">
+                        <td
+                          key={col.key}
+                          className="p-3 align-middle max-w-[200px] truncate border-r border-border/30"
+                        >
                           {col.render(row)}
                         </td>
                       ))}
@@ -398,7 +447,7 @@ export function DbManager({ className }: DbManagerProps) {
                         </button>
                         <button
                           onClick={() => {
-                            if (confirm("确定要永久删除此条记录吗？此操作无法撤销。")) {
+                            if (confirm('确定要永久删除此条记录吗？此操作无法撤销。')) {
                               handleDeleteRow(row.id);
                             }
                           }}
@@ -414,27 +463,23 @@ export function DbManager({ className }: DbManagerProps) {
               </table>
             )}
           </div>
-          
+
           {/* Table Footer Stats */}
           <div className="p-2 border-t border-border/50 bg-muted/10 flex justify-between items-center text-[10px] text-muted-foreground font-mono">
             <span>总计行数: {rows.length} 条</span>
             {searchQuery && <span>过滤后: {filteredRows.length} 条</span>}
           </div>
         </div>
-
       </div>
 
       {/* Row detail Side Sheet Overlay */}
       {activeRowDetail && (
         <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex justify-end z-40 transition-all">
           <div className="w-[60%] bg-card border-l border-border h-full flex flex-col shadow-2xl p-4 animate-in slide-in-from-right duration-200">
-            
             <div className="flex items-center justify-between pb-3 border-b mb-3">
               <div className="flex items-center gap-2">
                 <FileJson className="h-4.5 w-4.5 text-primary" />
-                <h4 className="text-sm font-semibold truncate max-w-[240px]">
-                  数据记录详情
-                </h4>
+                <h4 className="text-sm font-semibold truncate max-w-[240px]">数据记录详情</h4>
               </div>
               <button
                 onClick={() => setActiveRowDetail(null)}
@@ -447,8 +492,12 @@ export function DbManager({ className }: DbManagerProps) {
             {/* Fields list */}
             <div className="flex-1 overflow-y-auto space-y-3 font-mono text-[11px] leading-relaxed">
               <div className="p-2 rounded bg-muted/40 border border-border/60">
-                <span className="text-[10px] text-muted-foreground font-bold uppercase block mb-1">主键 ID</span>
-                <span className="font-semibold text-foreground select-all">{activeRowDetail.id}</span>
+                <span className="text-[10px] text-muted-foreground font-bold uppercase block mb-1">
+                  主键 ID
+                </span>
+                <span className="font-semibold text-foreground select-all">
+                  {activeRowDetail.id}
+                </span>
               </div>
 
               <div className="flex flex-col h-[38vh] border rounded-lg overflow-hidden">
@@ -469,7 +518,6 @@ export function DbManager({ className }: DbManagerProps) {
                 关闭面板
               </button>
             </div>
-
           </div>
         </div>
       )}

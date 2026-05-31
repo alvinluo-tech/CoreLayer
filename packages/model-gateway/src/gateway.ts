@@ -1,14 +1,14 @@
-import { createOpenAI } from "@ai-sdk/openai";
-import type { LanguageModelV3 } from "@ai-sdk/provider";
+import { createOpenAI } from '@ai-sdk/openai';
+import type { LanguageModelV3 } from '@ai-sdk/provider';
 import type {
   ModelGatewayConfig,
   ModelProfile,
   ModelProviderName,
   ModelRoutingRule,
   ProviderConfig,
-} from "@jarvis/types";
-import { DEFAULT_PROFILES, DEFAULT_ROUTING_RULES } from "./profiles.js";
-import { selectModelForTask } from "./router.js";
+} from '@jarvis/types';
+import { DEFAULT_PROFILES, DEFAULT_ROUTING_RULES } from './profiles.js';
+import { selectModelForTask } from './router.js';
 
 export class ModelGateway {
   private config: ModelGatewayConfig;
@@ -21,7 +21,7 @@ export class ModelGateway {
     profiles?: ModelProfile[];
   }) {
     this.config = {
-      defaultModelId: config.defaultModelId ?? "mimo-2.5-pro",
+      defaultModelId: config.defaultModelId ?? 'mimo-2.5-pro',
       routingRules: config.routingRules ?? DEFAULT_ROUTING_RULES,
       providers: config.providers,
     };
@@ -61,8 +61,8 @@ export class ModelGateway {
   }
 
   selectModel(taskContext: {
-    mode?: "text" | "voice";
-    expectedAnswerLength?: "short" | "medium" | "long";
+    mode?: 'text' | 'voice';
+    expectedAnswerLength?: 'short' | 'medium' | 'long';
     requiresToolCalling?: boolean;
     requiresLongContext?: boolean;
     requiresPrivacy?: boolean;
@@ -72,8 +72,8 @@ export class ModelGateway {
   }
 
   resolveModel(taskContext: {
-    mode?: "text" | "voice";
-    expectedAnswerLength?: "short" | "medium" | "long";
+    mode?: 'text' | 'voice';
+    expectedAnswerLength?: 'short' | 'medium' | 'long';
     requiresToolCalling?: boolean;
     requiresLongContext?: boolean;
     requiresPrivacy?: boolean;

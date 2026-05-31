@@ -1,12 +1,12 @@
-import { useCallback, useRef, useState } from "react";
-import { useConversationStore } from "@/stores/conversationStore";
-import type { ConversationMessage } from "@/lib/tauri";
-import * as tauri from "@/lib/tauri";
-import { jarvisClient } from "@/lib/jarvisClient";
+import { useCallback, useRef, useState } from 'react';
+import { useConversationStore } from '@/stores/conversationStore';
+import type { ConversationMessage } from '@/lib/tauri';
+import * as tauri from '@/lib/tauri';
+import { jarvisClient } from '@/lib/jarvisClient';
 
 export interface Message {
   id: string;
-  role: "user" | "assistant";
+  role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
   toolCalls?: { name: string; args: unknown; result: unknown }[];
@@ -16,11 +16,11 @@ export interface Message {
 function convertMessage(msg: ConversationMessage): Message {
   return {
     id: msg.id,
-    role: msg.role as "user" | "assistant",
+    role: msg.role as 'user' | 'assistant',
     content: msg.content,
     timestamp: new Date(msg.createdAt),
     toolCalls: msg.toolCalls ? JSON.parse(msg.toolCalls) : undefined,
-    isStreaming: msg.id.startsWith("temp-assistant-"),
+    isStreaming: msg.id.startsWith('temp-assistant-'),
   };
 }
 
@@ -37,7 +37,7 @@ export function useChat() {
     setConversations,
   } = useConversationStore();
 
-  const [streamingContent, setStreamingContent] = useState<string>("");
+  const [streamingContent, setStreamingContent] = useState<string>('');
   const [isStreaming, setIsStreaming] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -52,14 +52,14 @@ export function useChat() {
           const conversation = await getOrCreateDefaultConversation();
           conversationId = conversation.id;
         } catch (err) {
-          console.error("Failed to get or create default conversation:", err);
+          console.error('Failed to get or create default conversation:', err);
           return;
         }
       }
 
       setIsStreaming(true);
       setIsSending(true);
-      setStreamingContent("");
+      setStreamingContent('');
 
       const abortController = new AbortController();
       abortControllerRef.current = abortController;
@@ -70,7 +70,7 @@ export function useChat() {
       const optimisticUserMsg: ConversationMessage = {
         id: userTempId,
         conversationId: conversationId!,
-        role: "user",
+        role: 'user',
         content: text,
         toolCalls: null,
         toolCallId: null,
@@ -80,8 +80,8 @@ export function useChat() {
       const optimisticAssistantMsg: ConversationMessage = {
         id: assistantTempId,
         conversationId: conversationId!,
-        role: "assistant",
-        content: "",
+        role: 'assistant',
+        content: '',
         toolCalls: null,
         toolCallId: null,
         createdAt: new Date().toISOString(),
@@ -91,17 +91,17 @@ export function useChat() {
       setMessages(currentMessages);
 
       try {
-        let fullText = "";
+        let fullText = '';
         const toolCallsMap = new Map<string, { name: string; args: unknown; result: unknown }>();
         let messageListUpdated = false;
 
         await jarvisClient.streamSSE({
           path: `/api/conversations/${conversationId}/messages/stream`,
-          method: "POST",
+          method: 'POST',
           body: { content: text },
           signal: abortController.signal,
           onEvent({ event, data }) {
-            if (event === "token") {
+            if (event === 'token') {
               try {
                 const payload = JSON.parse(data) as { text: string };
                 fullText += payload.text;
@@ -110,22 +110,38 @@ export function useChat() {
               }
               setStreamingContent(fullText);
               messageListUpdated = true;
-            } else if (event === "tool-call") {
+            } else if (event === 'tool-call') {
               try {
-                const payload = JSON.parse(data) as { name: string; toolCallId: string; args: unknown };
-                toolCallsMap.set(payload.toolCallId, { name: payload.name, args: payload.args, result: null });
+                const payload = JSON.parse(data) as {
+                  name: string;
+                  toolCallId: string;
+                  args: unknown;
+                };
+                toolCallsMap.set(payload.toolCallId, {
+                  name: payload.name,
+                  args: payload.args,
+                  result: null,
+                });
                 messageListUpdated = true;
-              } catch (e) { console.warn("[useChat] Failed to parse tool-call event:", e); }
-            } else if (event === "tool-result") {
+              } catch (e) {
+                console.warn('[useChat] Failed to parse tool-call event:', e);
+              }
+            } else if (event === 'tool-result') {
               try {
-                const payload = JSON.parse(data) as { name: string; toolCallId: string; result: unknown };
+                const payload = JSON.parse(data) as {
+                  name: string;
+                  toolCallId: string;
+                  result: unknown;
+                };
                 const existing = toolCallsMap.get(payload.toolCallId);
                 if (existing) {
                   existing.result = payload.result;
                   messageListUpdated = true;
                 }
-              } catch (e) { console.warn("[useChat] Failed to parse tool-result event:", e); }
-            } else if (event === "done") {
+              } catch (e) {
+                console.warn('[useChat] Failed to parse tool-result event:', e);
+              }
+            } else if (event === 'done') {
               try {
                 const payload = JSON.parse(data) as {
                   userMessage: ConversationMessage;
@@ -137,26 +153,32 @@ export function useChat() {
                   return m;
                 });
                 setMessages(updatedFromDb);
-                tauri.listConversations().then(setConversations).catch(() => {});
+                tauri
+                  .listConversations()
+                  .then(setConversations)
+                  .catch(() => {});
                 messageListUpdated = false;
-              } catch (e) { console.warn("[useChat] Failed to parse done event:", e); }
+              } catch (e) {
+                console.warn('[useChat] Failed to parse done event:', e);
+              }
             }
 
             if (messageListUpdated) {
               const updatedAssistant: ConversationMessage = {
                 ...optimisticAssistantMsg,
                 content: fullText,
-                toolCalls: toolCallsMap.size > 0 ? JSON.stringify(Array.from(toolCallsMap.values())) : null,
+                toolCalls:
+                  toolCallsMap.size > 0 ? JSON.stringify(Array.from(toolCallsMap.values())) : null,
               };
               setMessages(
-                currentMessages.map((m) => (m.id === assistantTempId ? updatedAssistant : m)),
+                currentMessages.map((m) => (m.id === assistantTempId ? updatedAssistant : m))
               );
             }
           },
         });
       } catch (err) {
-        if ((err as Error).name !== "AbortError") {
-          console.error("Streaming error, falling back to non-streaming send:", err);
+        if ((err as Error).name !== 'AbortError') {
+          console.error('Streaming error, falling back to non-streaming send:', err);
           try {
             // Fallback to Rust-based non-streaming message send (always works, bypasses loopback/CORS restrictions)
             const result = await tauri.sendConversationMessage(conversationId!, text);
@@ -167,7 +189,7 @@ export function useChat() {
                 return m;
               });
               setMessages(updatedFromDb);
-              
+
               try {
                 const convs = await tauri.listConversations();
                 setConversations(convs);
@@ -177,7 +199,7 @@ export function useChat() {
               return;
             }
           } catch (fallbackErr) {
-            console.error("Fallback non-streaming send failed as well:", fallbackErr);
+            console.error('Fallback non-streaming send failed as well:', fallbackErr);
             useConversationStore.setState({
               error: fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr),
             });
@@ -188,10 +210,17 @@ export function useChat() {
         setIsStreaming(false);
         setIsSending(false);
         abortControllerRef.current = null;
-        setStreamingContent("");
+        setStreamingContent('');
       }
     },
-    [activeConversationId, createConversation, rawMessages, setMessages, setIsSending, setConversations],
+    [
+      activeConversationId,
+      createConversation,
+      rawMessages,
+      setMessages,
+      setIsSending,
+      setConversations,
+    ]
   );
 
   const stopStreaming = useCallback(() => {

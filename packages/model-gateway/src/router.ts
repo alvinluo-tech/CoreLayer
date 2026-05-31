@@ -5,11 +5,11 @@ import type {
   CapabilityRequirements,
   ModelScore,
   ModelCapability,
-} from "@jarvis/types";
+} from '@jarvis/types';
 
 interface TaskContext {
-  mode?: "text" | "voice";
-  expectedAnswerLength?: "short" | "medium" | "long";
+  mode?: 'text' | 'voice';
+  expectedAnswerLength?: 'short' | 'medium' | 'long';
   requiresToolCalling?: boolean;
   requiresLongContext?: boolean;
   requiresPrivacy?: boolean;
@@ -19,7 +19,7 @@ interface TaskContext {
 export function selectModelForTask(
   task: TaskContext,
   routingRules: ModelRoutingRule[],
-  defaultModelId: string,
+  defaultModelId: string
 ): string {
   for (const rule of routingRules) {
     if (matchesRule(task, rule)) {
@@ -33,19 +33,34 @@ function matchesRule(task: TaskContext, rule: ModelRoutingRule): boolean {
   const conditions = rule.conditions;
   if (!conditions) return true;
 
-  if (conditions.expectedAnswerLength && task.expectedAnswerLength !== conditions.expectedAnswerLength) {
+  if (
+    conditions.expectedAnswerLength &&
+    task.expectedAnswerLength !== conditions.expectedAnswerLength
+  ) {
     return false;
   }
-  if (conditions.requiresToolCalling !== undefined && task.requiresToolCalling !== conditions.requiresToolCalling) {
+  if (
+    conditions.requiresToolCalling !== undefined &&
+    task.requiresToolCalling !== conditions.requiresToolCalling
+  ) {
     return false;
   }
-  if (conditions.requiresLongContext !== undefined && task.requiresLongContext !== conditions.requiresLongContext) {
+  if (
+    conditions.requiresLongContext !== undefined &&
+    task.requiresLongContext !== conditions.requiresLongContext
+  ) {
     return false;
   }
-  if (conditions.requiresPrivacy !== undefined && task.requiresPrivacy !== conditions.requiresPrivacy) {
+  if (
+    conditions.requiresPrivacy !== undefined &&
+    task.requiresPrivacy !== conditions.requiresPrivacy
+  ) {
     return false;
   }
-  if (conditions.requiresVision !== undefined && task.requiresVision !== conditions.requiresVision) {
+  if (
+    conditions.requiresVision !== undefined &&
+    task.requiresVision !== conditions.requiresVision
+  ) {
     return false;
   }
 
@@ -53,23 +68,26 @@ function matchesRule(task: TaskContext, rule: ModelRoutingRule): boolean {
 }
 
 export function inferTaskType(task: TaskContext): ModelTaskType {
-  if (task.mode === "voice" && task.expectedAnswerLength === "short") return "fast";
-  if (task.requiresToolCalling) return "toolAgent";
-  if (task.requiresLongContext) return "reasoning";
-  if (task.requiresPrivacy) return "private";
-  return "chat";
+  if (task.mode === 'voice' && task.expectedAnswerLength === 'short') return 'fast';
+  if (task.requiresToolCalling) return 'toolAgent';
+  if (task.requiresLongContext) return 'reasoning';
+  if (task.requiresPrivacy) return 'private';
+  return 'chat';
 }
 
 export function selectModelByCapabilities(
   requirements: CapabilityRequirements,
   profiles: ModelProfile[],
-  options?: { preferLowerCost?: boolean },
+  options?: { preferLowerCost?: boolean }
 ): ModelScore | null {
   let bestScore: ModelScore | null = null;
 
   for (const profile of profiles) {
     // Skip models that don't meet minimum context window
-    if (requirements.minContextWindow && profile.limits.contextWindow < requirements.minContextWindow) {
+    if (
+      requirements.minContextWindow &&
+      profile.limits.contextWindow < requirements.minContextWindow
+    ) {
       continue;
     }
 
@@ -122,7 +140,7 @@ export function selectModelForTaskWithFallback(
   routingRules: ModelRoutingRule[],
   defaultModelId: string,
   profiles?: ModelProfile[],
-  requirements?: CapabilityRequirements,
+  requirements?: CapabilityRequirements
 ): string {
   // Primary: rule-based routing
   const ruleResult = selectModelForTask(task, routingRules, defaultModelId);

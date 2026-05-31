@@ -1,6 +1,6 @@
-import type { RiskLevel, ToolResult } from "./tool.js";
+import type { RiskLevel, ToolResult } from './tool.js';
 
-export type PermissionAction = "read" | "write" | "delete" | "bulkWrite" | "execute";
+export type PermissionAction = 'read' | 'write' | 'delete' | 'bulkWrite' | 'execute';
 
 export interface Permission {
   appId: string;
@@ -32,7 +32,7 @@ export interface AuditLogEntry {
   toolName: string;
   appId: string;
   args: unknown;
-  result: "success" | "failure" | "denied" | "cancelled";
+  result: 'success' | 'failure' | 'denied' | 'cancelled';
   riskLevel: RiskLevel;
   confirmedByUser: boolean;
   userId?: string;
@@ -41,10 +41,10 @@ export interface AuditLogEntry {
 
 export interface PermissionGuardConfig {
   defaultPolicy: {
-    low: "auto" | "notify" | "confirm";
-    medium: "auto" | "notify" | "confirm";
-    high: "auto" | "notify" | "confirm";
-    critical: "auto" | "notify" | "confirm" | "deny";
+    low: 'auto' | 'notify' | 'confirm';
+    medium: 'auto' | 'notify' | 'confirm';
+    high: 'auto' | 'notify' | 'confirm';
+    critical: 'auto' | 'notify' | 'confirm' | 'deny';
   };
   appPermissions: Record<string, PermissionSet>;
 }

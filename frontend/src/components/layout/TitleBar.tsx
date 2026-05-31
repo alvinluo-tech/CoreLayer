@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from "react";
-import { Minus, Square, X, Copy } from "lucide-react";
+import React, { useEffect, useState } from 'react';
+import { Minus, Square, X, Copy } from 'lucide-react';
 
 export function TitleBar() {
   const [isMaximized, setIsMaximized] = useState(false);
@@ -9,12 +9,12 @@ export function TitleBar() {
     let unlisten: (() => void) | null = null;
 
     // Check if running inside Tauri
-    if (typeof window !== "undefined" && (window as any).__TAURI_INTERNALS__) {
+    if (typeof window !== 'undefined' && (window as any).__TAURI_INTERNALS__) {
       const initWindow = async () => {
         try {
-          const { getCurrentWindow } = await import("@tauri-apps/api/window");
+          const { getCurrentWindow } = await import('@tauri-apps/api/window');
           const appWindow = getCurrentWindow();
-          
+
           // Set initial maximized state
           const maximized = await appWindow.isMaximized();
           if (!active) return;
@@ -27,19 +27,21 @@ export function TitleBar() {
               const max = await appWindow.isMaximized();
               setIsMaximized(max);
             } catch (err) {
-              console.warn("Failed to check maximized state in resize listener:", err);
+              console.warn('Failed to check maximized state in resize listener:', err);
             }
           });
 
           if (!active) {
-            try { unsub(); } catch {
+            try {
+              unsub();
+            } catch {
               // Cleanup during teardown is best-effort
             }
             return;
           }
           unlisten = unsub;
         } catch (err) {
-          console.error("Failed to initialize Tauri window listeners:", err);
+          console.error('Failed to initialize Tauri window listeners:', err);
         }
       };
 
@@ -49,7 +51,9 @@ export function TitleBar() {
     return () => {
       active = false;
       if (unlisten) {
-        try { unlisten(); } catch (err) {}
+        try {
+          unlisten();
+        } catch (err) {}
       }
     };
   }, []);
@@ -57,38 +61,36 @@ export function TitleBar() {
   const handleMinimize = async (e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      const { getCurrentWindow } = await import("@tauri-apps/api/window");
+      const { getCurrentWindow } = await import('@tauri-apps/api/window');
       await getCurrentWindow().minimize();
     } catch (err) {
-      console.warn("Tauri minimize failed:", err);
+      console.warn('Tauri minimize failed:', err);
     }
   };
 
   const handleMaximize = async (e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      const { getCurrentWindow } = await import("@tauri-apps/api/window");
+      const { getCurrentWindow } = await import('@tauri-apps/api/window');
       const appWindow = getCurrentWindow();
       await appWindow.toggleMaximize();
     } catch (err) {
-      console.warn("Tauri toggleMaximize failed:", err);
+      console.warn('Tauri toggleMaximize failed:', err);
     }
   };
 
   const handleClose = async (e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      const { getCurrentWindow } = await import("@tauri-apps/api/window");
+      const { getCurrentWindow } = await import('@tauri-apps/api/window');
       await getCurrentWindow().close();
     } catch (err) {
-      console.warn("Tauri close failed:", err);
+      console.warn('Tauri close failed:', err);
     }
   };
 
   return (
-    <div
-      className="flex items-center justify-between h-10 w-full bg-card/60 backdrop-blur-md border-b border-border select-none relative z-50 text-foreground transition-all duration-300"
-    >
+    <div className="flex items-center justify-between h-10 w-full bg-card/60 backdrop-blur-md border-b border-border select-none relative z-50 text-foreground transition-all duration-300">
       {/* Left: Premium Sci-Fi Logo & App Details */}
       <div
         data-tauri-drag-region
@@ -136,7 +138,7 @@ export function TitleBar() {
         <button
           onClick={handleMaximize}
           className="flex items-center justify-center w-11 h-full hover:bg-muted/80 text-muted-foreground hover:text-foreground transition-colors duration-150 focus:outline-none"
-          title={isMaximized ? "Restore Down" : "Maximize"}
+          title={isMaximized ? 'Restore Down' : 'Maximize'}
         >
           {isMaximized ? (
             <Copy className="w-3 h-3 stroke-[1.5]" />

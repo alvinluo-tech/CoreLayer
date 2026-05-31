@@ -1,4 +1,4 @@
-import { voiceProfileManager } from "./voiceProfile.js";
+import { voiceProfileManager } from './voiceProfile.js';
 
 export class AudioQueueManager {
   private audioCtx: AudioContext;
@@ -53,19 +53,19 @@ export class AudioQueueManager {
     // Replace non-standard English word "luo" (case-insensitive) with Chinese character "骆" so TTS pronounces it naturally instead of spelling out L-U-O.
     // We use positive lookahead/lookbehind assertions to ensure perfect boundary matching on mixed Chinese/English/punctuation text.
     const cleanedText = text
-      .replace(/alvin\s+luo/gi, "alvin 骆")
-      .replace(/(?<![a-zA-Z])luo(?![a-zA-Z])/gi, "骆");
+      .replace(/alvin\s+luo/gi, 'alvin 骆')
+      .replace(/(?<![a-zA-Z])luo(?![a-zA-Z])/gi, '骆');
 
     const response = await fetch(this.ttsUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text: cleanedText, model: this.model, voice: this.voice }),
     });
     if (!response.ok) {
       throw new Error(`TTS error ${response.status}`);
     }
     const arrayBuffer = await response.arrayBuffer();
-    if (this.audioCtx.state === "suspended") {
+    if (this.audioCtx.state === 'suspended') {
       await this.audioCtx.resume().catch(() => {});
     }
     return this.audioCtx.decodeAudioData(arrayBuffer);
@@ -82,9 +82,9 @@ export class AudioQueueManager {
     this.nextPlayIndex++;
 
     // Proactively resume AudioContext if it was suspended due to window focus loss or browser policies
-    if (this.audioCtx.state === "suspended") {
+    if (this.audioCtx.state === 'suspended') {
       this.audioCtx.resume().catch((err) => {
-        console.warn("[AudioQueue] Proactive AudioContext resume failed:", err);
+        console.warn('[AudioQueue] Proactive AudioContext resume failed:', err);
       });
     }
 
@@ -164,7 +164,9 @@ export class AudioQueueManager {
   dispose() {
     this.stop();
     if (this.analyser) {
-      try { this.analyser.disconnect(); } catch {
+      try {
+        this.analyser.disconnect();
+      } catch {
         // Already disconnected
       }
       this.analyser = null;

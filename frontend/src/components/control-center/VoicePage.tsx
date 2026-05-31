@@ -1,24 +1,26 @@
-import { useEffect, useState } from "react";
-import { Card } from "@/components/ui/card";
-import { StatusBadge } from "./StatusBadge";
-import { Mic, Volume2, Radio, User, Sparkles } from "lucide-react";
-import { voiceProfileManager } from "@/lib/voiceProfile";
-import { getVoiceStatus, type VoiceStatus } from "@/lib/tauri";
+import { useEffect, useState } from 'react';
+import { Card } from '@/components/ui/card';
+import { StatusBadge } from './StatusBadge';
+import { Mic, Volume2, Radio, User, Sparkles } from 'lucide-react';
+import { voiceProfileManager } from '@/lib/voiceProfile';
+import { getVoiceStatus, type VoiceStatus } from '@/lib/tauri';
 
 export function VoicePage() {
   const profile = voiceProfileManager.getActiveProfile();
   const [voiceStatus, setVoiceStatus] = useState<VoiceStatus | null>(null);
-  const [voiceMode, setVoiceMode] = useState<"pipeline" | "realtime">(
-    () => (localStorage.getItem("jarvis_voice_mode") as "pipeline" | "realtime") || "pipeline"
+  const [voiceMode, setVoiceMode] = useState<'pipeline' | 'realtime'>(
+    () => (localStorage.getItem('jarvis_voice_mode') as 'pipeline' | 'realtime') || 'pipeline'
   );
 
   useEffect(() => {
-    getVoiceStatus().then(setVoiceStatus).catch(() => {});
+    getVoiceStatus()
+      .then(setVoiceStatus)
+      .catch(() => {});
   }, []);
 
-  const handleVoiceModeChange = (mode: "pipeline" | "realtime") => {
+  const handleVoiceModeChange = (mode: 'pipeline' | 'realtime') => {
     setVoiceMode(mode);
-    localStorage.setItem("jarvis_voice_mode", mode);
+    localStorage.setItem('jarvis_voice_mode', mode);
   };
 
   return (
@@ -39,11 +41,11 @@ export function VoicePage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Pipeline Card */}
           <button
-            onClick={() => handleVoiceModeChange("pipeline")}
+            onClick={() => handleVoiceModeChange('pipeline')}
             className={`p-4 rounded-xl border-2 text-left transition-all ${
-              voiceMode === "pipeline"
-                ? "border-primary bg-primary/[0.03] font-semibold"
-                : "border-border/60 bg-background/50 hover:border-primary/30"
+              voiceMode === 'pipeline'
+                ? 'border-primary bg-primary/[0.03] font-semibold'
+                : 'border-border/60 bg-background/50 hover:border-primary/30'
             }`}
           >
             <div className="flex items-center gap-2 mb-1.5">
@@ -51,17 +53,18 @@ export function VoicePage() {
               <span className="text-xs font-semibold">标准串联协议 (Standard ASR + TTS)</span>
             </div>
             <p className="text-[11px] text-muted-foreground leading-relaxed">
-              分步式处理：本地/网页 ASR 录音识别 $\rightarrow$ REST 大模型 $\rightarrow$ 语音合成播放。支持所有提供商（如 DeepSeek，Kimi 等），适合常规对话，延迟 1.5s - 2.5s。
+              分步式处理：本地/网页 ASR 录音识别 $\rightarrow$ REST 大模型 $\rightarrow$
+              语音合成播放。支持所有提供商（如 DeepSeek，Kimi 等），适合常规对话，延迟 1.5s - 2.5s。
             </p>
           </button>
 
           {/* Realtime Card */}
           <button
-            onClick={() => handleVoiceModeChange("realtime")}
+            onClick={() => handleVoiceModeChange('realtime')}
             className={`p-4 rounded-xl border-2 text-left transition-all ${
-              voiceMode === "realtime"
-                ? "border-primary bg-primary/[0.03] font-semibold"
-                : "border-border/60 bg-background/50 hover:border-primary/30"
+              voiceMode === 'realtime'
+                ? 'border-primary bg-primary/[0.03] font-semibold'
+                : 'border-border/60 bg-background/50 hover:border-primary/30'
             }`}
           >
             <div className="flex items-center gap-2 mb-1.5">
@@ -69,7 +72,9 @@ export function VoicePage() {
               <span className="text-xs font-semibold">ChatGPT Realtime 极速双向流</span>
             </div>
             <p className="text-[11px] text-muted-foreground leading-relaxed">
-              极速直连：基于 WebRTC/WebSocket 建立双向持续音频流，零碎文本拆分与 TTS 延迟消失，支持随时人声打断，延迟 0.2s - 0.5s（仅限已接入 OpenAI Realtime 兼容大模型）。
+              极速直连：基于 WebRTC/WebSocket 建立双向持续音频流，零碎文本拆分与 TTS
+              延迟消失，支持随时人声打断，延迟 0.2s - 0.5s（仅限已接入 OpenAI Realtime
+              兼容大模型）。
             </p>
           </button>
         </div>
@@ -97,7 +102,7 @@ export function VoicePage() {
           <div>
             <p className="text-xs text-muted-foreground">性别</p>
             <p className="text-sm mt-0.5">
-              {profile.gender === "female" ? "女" : profile.gender === "male" ? "男" : "中性"}
+              {profile.gender === 'female' ? '女' : profile.gender === 'male' ? '男' : '中性'}
             </p>
           </div>
           <div>
@@ -120,8 +125,8 @@ export function VoicePage() {
               <span className="text-sm">ASR (语音识别)</span>
             </div>
             <StatusBadge
-              status={voiceStatus?.asr ? "healthy" : "error"}
-              label={voiceStatus?.asr ? "可用" : "不可用"}
+              status={voiceStatus?.asr ? 'healthy' : 'error'}
+              label={voiceStatus?.asr ? '可用' : '不可用'}
             />
           </div>
           <div className="flex items-center justify-between py-2 px-3 rounded-md bg-muted/50">
@@ -130,12 +135,8 @@ export function VoicePage() {
               <span className="text-sm">TTS (语音合成)</span>
             </div>
             <StatusBadge
-              status={voiceStatus?.tts?.available ? "healthy" : "error"}
-              label={
-                voiceStatus?.tts?.available
-                  ? `${voiceStatus.tts.provider}`
-                  : "不可用"
-              }
+              status={voiceStatus?.tts?.available ? 'healthy' : 'error'}
+              label={voiceStatus?.tts?.available ? `${voiceStatus.tts.provider}` : '不可用'}
             />
           </div>
           <div className="flex items-center justify-between py-2 px-3 rounded-md bg-muted/50">
@@ -144,8 +145,8 @@ export function VoicePage() {
               <span className="text-sm">VAD (语音活动检测)</span>
             </div>
             <StatusBadge
-              status={voiceStatus?.vad?.available ? "healthy" : "warning"}
-              label={voiceStatus?.vad?.available ? "可用" : voiceStatus?.vad?.note ?? "未知"}
+              status={voiceStatus?.vad?.available ? 'healthy' : 'warning'}
+              label={voiceStatus?.vad?.available ? '可用' : (voiceStatus?.vad?.note ?? '未知')}
             />
           </div>
         </div>

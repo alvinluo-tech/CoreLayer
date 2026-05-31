@@ -1,17 +1,16 @@
-import { useState, useCallback, useRef, useEffect } from "react";
-import { getDaemonUrl } from "@/lib/tauri";
-import { voiceProfileManager } from "@/lib/voiceProfile";
-import { jarvisClient } from "@/lib/jarvisClient";
-import { useWakeWord } from "./useWakeWord";
-import { logger } from "@/lib/logger";
-import { encodeWav } from "@/lib/audioCapture";
+import { useState, useCallback, useRef, useEffect } from 'react';
+import { getDaemonUrl } from '@/lib/tauri';
+import { voiceProfileManager } from '@/lib/voiceProfile';
+import { jarvisClient } from '@/lib/jarvisClient';
+import { useWakeWord } from './useWakeWord';
+import { logger } from '@/lib/logger';
+import { encodeWav } from '@/lib/audioCapture';
 
-
-export type VoiceState = "idle" | "recording" | "transcribing" | "processing" | "speaking";
+export type VoiceState = 'idle' | 'recording' | 'transcribing' | 'processing' | 'speaking';
 
 export function useVoice(onCommand: (text: string) => void, onWake?: () => void) {
-  const [state, setState] = useState<VoiceState>("idle");
-  const [transcript, setTranscript] = useState("");
+  const [state, setState] = useState<VoiceState>('idle');
+  const [transcript, setTranscript] = useState('');
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [isSupported, setIsSupported] = useState(false);
 
@@ -20,7 +19,7 @@ export function useVoice(onCommand: (text: string) => void, onWake?: () => void)
   const isRecordingRef = useRef(false);
   const onCommandRef = useRef(onCommand);
   const streamRef = useRef<MediaStream | null>(null);
-  const daemonUrlRef = useRef<string>("http://127.0.0.1:3001");
+  const daemonUrlRef = useRef<string>('http://127.0.0.1:3001');
   const vadAudioCtxRef = useRef<AudioContext | null>(null);
   const vadFrameRef = useRef<number>(0);
   const wantsContinuousRef = useRef(false);
@@ -29,7 +28,7 @@ export function useVoice(onCommand: (text: string) => void, onWake?: () => void)
 
   // Wake word detection
   const handleWake = useCallback(() => {
-    logger.debug("[Voice] Wake word triggered, stopping wake word engine");
+    logger.debug('[Voice] Wake word triggered, stopping wake word engine');
     wakeWord.stop();
     if (onWake) {
       // Add a 300ms delay to allow the browser to fully release the microphone from wake word SpeechRecognition
@@ -56,10 +55,10 @@ export function useVoice(onCommand: (text: string) => void, onWake?: () => void)
     getDaemonUrl()
       .then((url) => {
         daemonUrlRef.current = url;
-        logger.debug("[Voice] Daemon URL:", url);
+        logger.debug('[Voice] Daemon URL:', url);
       })
       .catch(() => {
-        console.warn("[Voice] Could not get daemon URL, using default");
+        console.warn('[Voice] Could not get daemon URL, using default');
       });
   }, []);
 
@@ -72,7 +71,9 @@ export function useVoice(onCommand: (text: string) => void, onWake?: () => void)
     if (vadAudioCtxRef.current) {
       try {
         vadAudioCtxRef.current.close();
-      } catch (e) { logger.debug("[Voice] VAD audio context close ignored:", e); }
+      } catch (e) {
+        logger.debug('[Voice] VAD audio context close ignored:', e);
+      }
       vadAudioCtxRef.current = null;
     }
   }, []);
@@ -82,10 +83,12 @@ export function useVoice(onCommand: (text: string) => void, onWake?: () => void)
     if (sourceNodeRef.current) {
       try {
         sourceNodeRef.current.stop();
-      } catch (e) { logger.debug("[Voice] source node stop ignored:", e); }
+      } catch (e) {
+        logger.debug('[Voice] source node stop ignored:', e);
+      }
       sourceNodeRef.current = null;
     }
-    if ("speechSynthesis" in window) {
+    if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
     }
   }, []);
@@ -96,10 +99,14 @@ export function useVoice(onCommand: (text: string) => void, onWake?: () => void)
       if (!text.trim()) return;
 
       stopTTS();
-      setState("speaking");
+      setState('speaking');
 
       try {
-        const audioBuffer = await jarvisClient.synthesize(text, undefined, voiceProfileManager.getTTSModel());
+        const audioBuffer = await jarvisClient.synthesize(
+          text,
+          undefined,
+          voiceProfileManager.getTTSModel()
+        );
         await playAudioBuffer(audioBuffer);
 
         if (wantsContinuousRef.current) {
@@ -107,20 +114,20 @@ export function useVoice(onCommand: (text: string) => void, onWake?: () => void)
           setTimeout(() => {
             if (wantsContinuousRef.current) {
               wakeWord.start();
-              setState("idle");
+              setState('idle');
             } else {
-              setState("idle");
+              setState('idle');
             }
           }, 300);
         } else {
-          setState("idle");
+          setState('idle');
         }
       } catch (err) {
-        console.warn("[Voice] TTS error:", err);
+        console.warn('[Voice] TTS error:', err);
         speakWithBrowserTTS(text);
       }
     },
-    [stopTTS],
+    [stopTTS]
   );
 
   const playAudioBuffer = useCallback(async (buffer: ArrayBuffer): Promise<void> => {
@@ -147,25 +154,25 @@ export function useVoice(onCommand: (text: string) => void, onWake?: () => void)
         },
         () => {
           resolve();
-        },
+        }
       );
     });
   }, []);
 
   const speakWithBrowserTTS = useCallback((text: string) => {
-    if (!("speechSynthesis" in window)) {
-      setState("idle");
+    if (!('speechSynthesis' in window)) {
+      setState('idle');
       return;
     }
 
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = "zh-CN";
+    utterance.lang = 'zh-CN';
     utterance.rate = 1.0;
     utterance.pitch = 1.0;
 
     const voices = window.speechSynthesis.getVoices();
-    const zhVoice = voices.find((v) => v.lang.startsWith("zh"));
+    const zhVoice = voices.find((v) => v.lang.startsWith('zh'));
     if (zhVoice) utterance.voice = zhVoice;
 
     utterance.onend = () => {
@@ -173,16 +180,16 @@ export function useVoice(onCommand: (text: string) => void, onWake?: () => void)
         setTimeout(() => {
           if (wantsContinuousRef.current) {
             wakeWord.start();
-            setState("idle");
+            setState('idle');
           } else {
-            setState("idle");
+            setState('idle');
           }
         }, 300);
       } else {
-        setState("idle");
+        setState('idle');
       }
     };
-    utterance.onerror = () => setState("idle");
+    utterance.onerror = () => setState('idle');
 
     window.speechSynthesis.speak(utterance);
   }, []);
@@ -213,7 +220,7 @@ export function useVoice(onCommand: (text: string) => void, onWake?: () => void)
       processor.connect(recordCtx.destination);
 
       isRecordingRef.current = true;
-      setState("recording");
+      setState('recording');
 
       // VAD using AnalyserNode on the same context
       const analyser = recordCtx.createAnalyser();
@@ -243,49 +250,70 @@ export function useVoice(onCommand: (text: string) => void, onWake?: () => void)
         // If cancelled, skip processing
         if (cancelledRef.current) {
           cancelledRef.current = false;
-          try { await recordCtx.close(); } catch (e) { logger.debug("[Voice] record context close ignored:", e); }
-          setState("idle");
+          try {
+            await recordCtx.close();
+          } catch (e) {
+            logger.debug('[Voice] record context close ignored:', e);
+          }
+          setState('idle');
           return;
         }
 
         // Encode PCM as WAV
         const wavBlob = encodeWav(pcmChunks, recordCtx.sampleRate);
-        try { await recordCtx.close(); } catch (e) { logger.debug("[Voice] record context close ignored:", e); }
+        try {
+          await recordCtx.close();
+        } catch (e) {
+          logger.debug('[Voice] record context close ignored:', e);
+        }
 
         if (wavBlob.size < 2000) {
-          logger.debug("[Voice] Audio too small, skipping");
+          logger.debug('[Voice] Audio too small, skipping');
           if (wantsContinuousRef.current) {
             wakeWord.start();
-            setState("idle");
+            setState('idle');
           } else {
-            setState("idle");
+            setState('idle');
           }
           return;
         }
 
-        logger.debug("[Voice] Audio recorded:", wavBlob.size, "bytes");
-        setState("transcribing");
+        logger.debug('[Voice] Audio recorded:', wavBlob.size, 'bytes');
+        setState('transcribing');
 
         const text = await transcribeAudio(wavBlob);
-        logger.debug("[Voice] Transcription:", text);
+        logger.debug('[Voice] Transcription:', text);
 
         const HALLUCINATION_PATTERNS = [
-          "请不吝点赞", "订阅", "转发", "打赏", "支持", "栏目",
-          "字幕", "谢谢观看", "谢谢收看", "感谢观看", "下集",
-          "拜拜", "再见", "字幕由", "制作", "敬请关注",
+          '请不吝点赞',
+          '订阅',
+          '转发',
+          '打赏',
+          '支持',
+          '栏目',
+          '字幕',
+          '谢谢观看',
+          '谢谢收看',
+          '感谢观看',
+          '下集',
+          '拜拜',
+          '再见',
+          '字幕由',
+          '制作',
+          '敬请关注',
         ];
         const isHallucination = text && HALLUCINATION_PATTERNS.some((p) => text.includes(p));
 
         if (text && text.trim() && !isHallucination) {
           setTranscript(text);
-          setState("processing");
+          setState('processing');
           onCommandRef.current(text.trim());
         } else {
           if (wantsContinuousRef.current) {
             wakeWord.start();
-            setState("idle");
+            setState('idle');
           } else {
-            setState("idle");
+            setState('idle');
           }
         }
       };
@@ -302,13 +330,13 @@ export function useVoice(onCommand: (text: string) => void, onWake?: () => void)
         if (avg > SILENCE_THRESHOLD) {
           silenceStart = Date.now();
         } else if (Date.now() - silenceStart > SILENCE_DURATION) {
-          logger.debug("[Voice] Silence detected, stopping recording");
+          logger.debug('[Voice] Silence detected, stopping recording');
           stopAndProcess();
           return;
         }
 
         if (Date.now() - recordingStart > MAX_RECORDING) {
-          logger.debug("[Voice] Max recording duration reached");
+          logger.debug('[Voice] Max recording duration reached');
           stopAndProcess();
           return;
         }
@@ -318,20 +346,20 @@ export function useVoice(onCommand: (text: string) => void, onWake?: () => void)
 
       vadFrameRef.current = requestAnimationFrame(checkVAD);
     } catch (err) {
-      console.error("[Voice] Microphone error:", err);
+      console.error('[Voice] Microphone error:', err);
       setVoiceError(err instanceof Error ? err.message : String(err));
-      setState("idle");
+      setState('idle');
     }
   }, [stopTTS, cleanupVAD]);
 
   // Send audio to daemon for transcription
   const transcribeAudio = useCallback(async (audioBlob: Blob): Promise<string> => {
     try {
-      return await jarvisClient.transcribe(audioBlob, "zh");
+      return await jarvisClient.transcribe(audioBlob, 'zh');
     } catch (err) {
-      console.error("[Voice] Transcription error:", err);
+      console.error('[Voice] Transcription error:', err);
       setVoiceError(err instanceof Error ? err.message : String(err));
-      return "";
+      return '';
     }
   }, []);
 
@@ -352,18 +380,18 @@ export function useVoice(onCommand: (text: string) => void, onWake?: () => void)
   const stopListening = useCallback(() => {
     stopRecording();
     stopTTS();
-    setState("idle");
-    setTranscript("");
+    setState('idle');
+    setTranscript('');
   }, [stopRecording, stopTTS]);
 
   const toggleListening = useCallback(() => {
-    if (isRecordingRef.current || state === "speaking") {
+    if (isRecordingRef.current || state === 'speaking') {
       stopListening();
       wakeWord.stop();
     } else if (wakeWord.isListening) {
       wakeWord.stop();
       wantsContinuousRef.current = false;
-      setState("idle");
+      setState('idle');
     } else {
       wantsContinuousRef.current = true;
       wakeWord.start();
@@ -382,7 +410,9 @@ export function useVoice(onCommand: (text: string) => void, onWake?: () => void)
       if (sourceNodeRef.current) {
         try {
           sourceNodeRef.current.stop();
-        } catch (e) { logger.debug("[Voice] source node stop ignored:", e); }
+        } catch (e) {
+          logger.debug('[Voice] source node stop ignored:', e);
+        }
       }
     };
   }, [cleanupVAD]);

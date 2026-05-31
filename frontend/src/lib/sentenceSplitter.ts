@@ -12,7 +12,7 @@ export interface SplitResult {
  */
 export function splitSentences(text: string, chunkIndex = 0): SplitResult {
   const complete: string[] = [];
-  let currentChunk = "";
+  let currentChunk = '';
   let i = 0;
 
   // Multi-tier configuration based on chunkIndex:
@@ -38,26 +38,30 @@ export function splitSentences(text: string, chunkIndex = 0): SplitResult {
       ((tier === 1 || tier === 2) && currentMinLength < 35 && /[，,、]/.test(char));
 
     if (isTerminator) {
-      if (currentChunk.trim().length >= currentMinLength || char === "\n") {
+      if (currentChunk.trim().length >= currentMinLength || char === '\n') {
         complete.push(currentChunk.trim());
-        currentChunk = "";
+        currentChunk = '';
         currentMinLength = 35; // Reset subsequent splits inside the same loop iteration to Tier 3
       }
     }
-    
+
     // Force-split rule for low latency tiers to jumpstart audio
-    if ((tier === 1 || tier === 2) && currentMinLength < 35 && currentChunk.trim().length >= forceLimit) {
+    if (
+      (tier === 1 || tier === 2) &&
+      currentMinLength < 35 &&
+      currentChunk.trim().length >= forceLimit
+    ) {
       const containsEnglish = /[a-zA-Z]/.test(currentChunk);
       if (!containsEnglish) {
         complete.push(currentChunk.trim());
-        currentChunk = "";
+        currentChunk = '';
         currentMinLength = 35;
       }
     }
 
     // Force-split rule for Tier 3 long sentences to prevent overflow
     if (currentChunk.length >= 150) {
-      const commaIndex = currentChunk.lastIndexOf("，");
+      const commaIndex = currentChunk.lastIndexOf('，');
       if (commaIndex !== -1 && commaIndex > 20) {
         complete.push(currentChunk.slice(0, commaIndex + 1).trim());
         currentChunk = currentChunk.slice(commaIndex + 1);

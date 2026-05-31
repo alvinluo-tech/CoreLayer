@@ -1,6 +1,6 @@
-import { create } from "zustand";
-import type { Article, AddArticleInput, UpdateReadingStatusInput } from "@/types/article";
-import * as tauri from "@/lib/tauri";
+import { create } from 'zustand';
+import type { Article, AddArticleInput, UpdateReadingStatusInput } from '@/types/article';
+import * as tauri from '@/lib/tauri';
 
 interface ArticleState {
   articles: Article[];

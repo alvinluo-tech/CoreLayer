@@ -1,65 +1,67 @@
-import { useState, useCallback, useRef, useEffect } from "react";
-import type { PhysicalSize, PhysicalPosition } from "@tauri-apps/api/window";
-import { getDaemonUrl } from "@/lib/tauri";
-import { splitSentences } from "@/lib/sentenceSplitter";
-import { AudioQueueManager } from "@/lib/audioQueue";
-import { voiceProfileManager } from "@/lib/voiceProfile";
-import { logger } from "@/lib/logger";
-import { jarvisClient } from "@/lib/jarvisClient";
-import { startAudioCapture, encodeWav } from "@/lib/audioCapture";
+import { useState, useCallback, useRef, useEffect } from 'react';
+import type { PhysicalSize, PhysicalPosition } from '@tauri-apps/api/window';
+import { getDaemonUrl } from '@/lib/tauri';
+import { splitSentences } from '@/lib/sentenceSplitter';
+import { AudioQueueManager } from '@/lib/audioQueue';
+import { voiceProfileManager } from '@/lib/voiceProfile';
+import { logger } from '@/lib/logger';
+import { jarvisClient } from '@/lib/jarvisClient';
+import { startAudioCapture, encodeWav } from '@/lib/audioCapture';
 import {
   createWebSpeechASR,
   isWebSpeechASRAvailable,
   type WebSpeechASR,
   type WebSpeechASROptions,
-} from "@/lib/webSpeechASR";
-import { HALLUCINATION_PATTERNS, getSpokenText, playSciFiChime } from "@/lib/voiceUtils";
-import { createCleanup, createCleanupStreaming } from "./voiceConversationCleanup";
-import { createConnectRealtimeSession } from "./voiceRealtimeSession";
+} from '@/lib/webSpeechASR';
+import { HALLUCINATION_PATTERNS, getSpokenText, playSciFiChime } from '@/lib/voiceUtils';
+import { createCleanup, createCleanupStreaming } from './voiceConversationCleanup';
+import { createConnectRealtimeSession } from './voiceRealtimeSession';
 
 function createAudioContext(): AudioContext {
-  const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+  const Ctor =
+    window.AudioContext ??
+    (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
   return new Ctor();
 }
 
 export type VoiceConversationState =
-  | "idle"
-  | "listening"
-  | "transcribing"
-  | "streaming"
-  | "speaking"
-  | "error";
+  | 'idle'
+  | 'listening'
+  | 'transcribing'
+  | 'streaming'
+  | 'speaking'
+  | 'error';
 
 export function useVoiceConversation(
   conversationId: string | null,
   onIdle?: () => void,
-  createConversation?: () => Promise<{ id: string }>,
+  createConversation?: () => Promise<{ id: string }>
 ) {
-  const [state, setState] = useState<VoiceConversationState>("idle");
-  const [interimTranscript, setInterimTranscript] = useState("");
-  const [finalTranscript, setFinalTranscript] = useState("");
-  const [assistantText, setAssistantText] = useState("");
+  const [state, setState] = useState<VoiceConversationState>('idle');
+  const [interimTranscript, setInterimTranscript] = useState('');
+  const [finalTranscript, setFinalTranscript] = useState('');
+  const [assistantText, setAssistantText] = useState('');
   const [lastError, setLastError] = useState<string | null>(null);
   const [isSupported, setIsSupported] = useState(false);
-  const [layoutMode, setLayoutMode] = useState<"centered" | "bottom-right">("centered");
+  const [layoutMode, setLayoutMode] = useState<'centered' | 'bottom-right'>('centered');
   const isAppFocusedRef = useRef(true);
   const originalBoundsRef = useRef<{
     size: PhysicalSize | null;
     position: PhysicalPosition | null;
   } | null>(null);
 
-  const daemonUrlRef = useRef<string>("http://127.0.0.1:3001");
+  const daemonUrlRef = useRef<string>('http://127.0.0.1:3001');
   const audioQueueRef = useRef<AudioQueueManager | null>(null);
   const webAsrRef = useRef<WebSpeechASR | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const isActiveRef = useRef(false);
   const onIdleRef = useRef(onIdle);
-  const prevStateRef = useRef<VoiceConversationState>("idle");
-  const lastStreamedTextRef = useRef("");
+  const prevStateRef = useRef<VoiceConversationState>('idle');
+  const lastStreamedTextRef = useRef('');
   const postListenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const breathingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startConversationRef = useRef<(text: string) => void>(() => {});
-  const lastUserTextRef = useRef("");
+  const lastUserTextRef = useRef('');
   const bargeInMonitorRef = useRef<{ stop: () => void } | null>(null);
   const bargeInRef = useRef<() => void>(() => {});
   const isFarewellPlayingRef = useRef(false);
@@ -72,7 +74,7 @@ export function useVoiceConversation(
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
   const listeningSafetyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const accumulatedFinalTextRef = useRef<string>("");
+  const accumulatedFinalTextRef = useRef<string>('');
 
   // Lazily get or create ASR instance, or update options if it already exists
   const getOrCreateASR = useCallback((options: WebSpeechASROptions) => {
@@ -92,26 +94,28 @@ export function useVoiceConversation(
 
   // Start post-conversation listening window (5s to speak, then wake word)
   const startPostConversationListen = useCallback(() => {
-    logger.debug(`[VoiceConversation] startPostConversationListen called, isActive: ${isActiveRef.current}`);
+    logger.debug(
+      `[VoiceConversation] startPostConversationListen called, isActive: ${isActiveRef.current}`
+    );
     if (isActiveRef.current) return;
-    logger.debug("[VoiceConversation] Starting post-conversation listen (5s window)");
-    
+    logger.debug('[VoiceConversation] Starting post-conversation listen (5s window)');
+
     if (postListenTimerRef.current) {
       clearTimeout(postListenTimerRef.current);
       postListenTimerRef.current = null;
     }
 
     isActiveRef.current = true;
-    setState("listening");
-    setInterimTranscript("");
-    setFinalTranscript("");
+    setState('listening');
+    setInterimTranscript('');
+    setFinalTranscript('');
 
     if (isWebSpeechASRAvailable()) {
-      let latestInterimText = "";
-      accumulatedFinalTextRef.current = "";
+      let latestInterimText = '';
+      accumulatedFinalTextRef.current = '';
 
       const asr = getOrCreateASR({
-        lang: "zh-CN",
+        lang: 'zh-CN',
         onInterim: (text: string) => {
           setInterimTranscript(text);
           latestInterimText = text;
@@ -119,27 +123,30 @@ export function useVoiceConversation(
         onFinal: (text: string) => {
           accumulatedFinalTextRef.current += text;
           setFinalTranscript(accumulatedFinalTextRef.current);
-          setInterimTranscript("");
-          latestInterimText = "";
+          setInterimTranscript('');
+          latestInterimText = '';
         },
         onError: (err: string) => {
-          console.warn("[VoiceConversation] Post-listen ASR error:", err);
+          console.warn('[VoiceConversation] Post-listen ASR error:', err);
         },
         onEnd: () => {
-          logger.debug("[VoiceConversation] Post-listen ASR ended");
+          logger.debug('[VoiceConversation] Post-listen ASR ended');
           if (postListenTimerRef.current) {
             clearTimeout(postListenTimerRef.current);
             postListenTimerRef.current = null;
           }
-          
+
           const textToSubmit = (accumulatedFinalTextRef.current + latestInterimText).trim();
-          
+
           isActiveRef.current = false;
           if (textToSubmit) {
-            logger.debug("[VoiceConversation] Post-listen submitting accumulated text:", textToSubmit);
+            logger.debug(
+              '[VoiceConversation] Post-listen submitting accumulated text:',
+              textToSubmit
+            );
             startConversationRef.current(textToSubmit);
           } else {
-            logger.debug("[VoiceConversation] Post-listen no speech detected, exiting...");
+            logger.debug('[VoiceConversation] Post-listen no speech detected, exiting...');
             playFarewellAndExitRef.current();
           }
         },
@@ -148,7 +155,7 @@ export function useVoiceConversation(
       asr.start();
     } else {
       // No Web Speech API — fall back to immediate wake word
-      console.warn("[VoiceConversation] Web Speech API not available, falling back to wake word");
+      console.warn('[VoiceConversation] Web Speech API not available, falling back to wake word');
       isActiveRef.current = false;
       playFarewellAndExitRef.current();
     }
@@ -156,13 +163,15 @@ export function useVoiceConversation(
 
   // When transitioning to idle state, return to wake word mode
   useEffect(() => {
-    if (state === "idle" && prevStateRef.current !== "idle") {
-      logger.debug(`[VoiceConversation] Transition: ${prevStateRef.current} → idle, isActive: ${isActiveRef.current}`);
+    if (state === 'idle' && prevStateRef.current !== 'idle') {
+      logger.debug(
+        `[VoiceConversation] Transition: ${prevStateRef.current} → idle, isActive: ${isActiveRef.current}`
+      );
       if (isFarewellPlayingRef.current) {
         isFarewellPlayingRef.current = false;
-        logger.debug("[VoiceConversation] Farewell completed. Back to wake word mode.");
+        logger.debug('[VoiceConversation] Farewell completed. Back to wake word mode.');
       } else {
-        logger.debug("[VoiceConversation] Stopped or timed out. Back to wake word mode.");
+        logger.debug('[VoiceConversation] Stopped or timed out. Back to wake word mode.');
       }
       onIdleRef.current?.();
     }
@@ -170,13 +179,13 @@ export function useVoiceConversation(
   }, [state]);
 
   const restoreWindow = useCallback(async () => {
-    if (typeof window === "undefined" || !originalBoundsRef.current) return;
+    if (typeof window === 'undefined' || !originalBoundsRef.current) return;
     try {
-      const { getCurrentWindow } = await import("@tauri-apps/api/window");
+      const { getCurrentWindow } = await import('@tauri-apps/api/window');
       const appWindow = getCurrentWindow();
       const { size, position } = originalBoundsRef.current;
-      
-      logger.debug("[Tauri Window] Restoring original window bounds...", originalBoundsRef.current);
+
+      logger.debug('[Tauri Window] Restoring original window bounds...', originalBoundsRef.current);
       await appWindow.setAlwaysOnTop(false).catch(() => {});
       await appWindow.setDecorations(false).catch(() => {});
       if (size) {
@@ -186,7 +195,7 @@ export function useVoiceConversation(
         await appWindow.setPosition(position).catch(() => {});
       }
     } catch (e) {
-      console.warn("Failed to restore window bounds:", e);
+      console.warn('Failed to restore window bounds:', e);
     } finally {
       originalBoundsRef.current = null;
     }
@@ -197,80 +206,83 @@ export function useVoiceConversation(
     // We no longer manipulate the main window size/focus here to prevent focus-stealing
     // and allow normal multitasking. Let the main window behave normally.
     return;
-    
-    const isAssistant = typeof window !== "undefined" && window.location.search.includes("assistant=true");
+
+    const isAssistant =
+      typeof window !== 'undefined' && window.location.search.includes('assistant=true');
     if (isAssistant) return;
 
-    const isActive = state !== "idle";
+    const isActive = state !== 'idle';
     const syncWindow = async () => {
       try {
-        const { getCurrentWindow } = await import("@tauri-apps/api/window");
+        const { getCurrentWindow } = await import('@tauri-apps/api/window');
         const appWindow = getCurrentWindow();
-        
+
         if (isActive) {
           // If the app was not focused when triggered, shrink it and place in bottom-right
           if (!isAppFocusedRef.current) {
-            logger.debug("[Tauri Window] App not focused. Entering system-level bottom-right overlay mode...");
-            
+            logger.debug(
+              '[Tauri Window] App not focused. Entering system-level bottom-right overlay mode...'
+            );
+
             // Only capture original bounds if we haven't already
             if (!originalBoundsRef.current) {
               const size = await appWindow.outerSize().catch(() => null);
               const position = await appWindow.outerPosition().catch(() => null);
               originalBoundsRef.current = { size, position };
-              logger.debug("[Tauri Window] Saved original bounds:", originalBoundsRef.current);
+              logger.debug('[Tauri Window] Saved original bounds:', originalBoundsRef.current);
             }
-            
+
             // Apply borderless, shrunken dimensions, always-on-top
             await appWindow.setDecorations(false).catch(() => {});
             await appWindow.setAlwaysOnTop(true).catch(() => {});
-            
-            const { LogicalSize, LogicalPosition } = await import("@tauri-apps/api/dpi");
+
+            const { LogicalSize, LogicalPosition } = await import('@tauri-apps/api/dpi');
             await appWindow.setSize(new LogicalSize(360, 440)).catch(() => {});
-            
-            const { currentMonitor } = await import("@tauri-apps/api/window");
+
+            const { currentMonitor } = await import('@tauri-apps/api/window');
             const monitor = await currentMonitor().catch(() => null);
             if (monitor) {
               const workArea = monitor.workArea || { position: { x: 0, y: 0 }, size: monitor.size };
               const scaleFactor = monitor.scaleFactor || 1;
-              
+
               const workWidthLogical = workArea.size.width / scaleFactor;
               const workHeightLogical = workArea.size.height / scaleFactor;
               const workXLogical = workArea.position.x / scaleFactor;
               const workYLogical = workArea.position.y / scaleFactor;
-              
+
               const winWidth = 360;
               const winHeight = 440;
               const margin = 20;
-              
+
               const targetX = workXLogical + workWidthLogical - winWidth - margin;
               const targetY = workYLogical + workHeightLogical - winHeight - margin;
-              
+
               await appWindow.setPosition(new LogicalPosition(targetX, targetY)).catch(() => {});
             }
           } else {
-            logger.debug("[Tauri Window] App is already focused. Showing centered overlay inside application.");
+            logger.debug(
+              '[Tauri Window] App is already focused. Showing centered overlay inside application.'
+            );
             // Just ensure always on top without shrinking
             await appWindow.setAlwaysOnTop(true).catch(() => {});
           }
-          
+
           await appWindow.show().catch(() => {});
           await appWindow.unminimize().catch(() => {});
           await appWindow.setFocus().catch(() => {});
         } else {
-          logger.debug("[Tauri Window] Voice state is idle. Restoring window...");
+          logger.debug('[Tauri Window] Voice state is idle. Restoring window...');
           await restoreWindow();
         }
       } catch (e) {
-        console.warn("[Tauri Window] Window manipulation failed:", e);
+        console.warn('[Tauri Window] Window manipulation failed:', e);
       }
     };
     syncWindow();
   }, [state, restoreWindow]);
 
   useEffect(() => {
-    setIsSupported(
-      Boolean(navigator.mediaDevices?.getUserMedia) || isWebSpeechASRAvailable(),
-    );
+    setIsSupported(Boolean(navigator.mediaDevices?.getUserMedia) || isWebSpeechASRAvailable());
     getDaemonUrl()
       .then((url) => {
         daemonUrlRef.current = url;
@@ -280,9 +292,18 @@ export function useVoiceConversation(
 
   // Cleanup refs object for extracted cleanup factories
   const cleanupRefs = {
-    postListenTimerRef, breathingTimerRef, webAsrRef, listeningSafetyTimerRef,
-    audioQueueRef, abortControllerRef, peerConnectionRef, localStreamRef,
-    remoteAudioRef, dataChannelRef, greetingSourceRef, greetingAudioCtxRef,
+    postListenTimerRef,
+    breathingTimerRef,
+    webAsrRef,
+    listeningSafetyTimerRef,
+    audioQueueRef,
+    abortControllerRef,
+    peerConnectionRef,
+    localStreamRef,
+    remoteAudioRef,
+    dataChannelRef,
+    greetingSourceRef,
+    greetingAudioCtxRef,
     bargeInMonitorRef,
   };
 
@@ -301,7 +322,11 @@ export function useVoiceConversation(
 
   const connectRealtimeSession = useCallback(async () => {
     const realtimeRefs = {
-      peerConnectionRef, localStreamRef, remoteAudioRef, dataChannelRef, isActiveRef,
+      peerConnectionRef,
+      localStreamRef,
+      remoteAudioRef,
+      dataChannelRef,
+      isActiveRef,
     };
     const realtimeCallbacks = { setState, setAssistantText, setFinalTranscript, setLastError };
     await createConnectRealtimeSession(realtimeRefs, realtimeCallbacks)();
@@ -322,7 +347,7 @@ export function useVoiceConversation(
       const checkVAD = () => {
         if (!isActiveRef.current) {
           capture.stop();
-          resolve("");
+          resolve('');
           return;
         }
 
@@ -349,20 +374,18 @@ export function useVoiceConversation(
       const processAudio = async () => {
         const wavBlob = encodeWav(capture.pcmChunks, 16000);
         if (wavBlob.size < 2000) {
-          resolve("");
+          resolve('');
           return;
         }
 
         try {
-          const text = await jarvisClient.transcribe(wavBlob, "zh");
-          const trimmed = text?.trim() || "";
-          const isHallucination = HALLUCINATION_PATTERNS.some((p) =>
-            trimmed.includes(p),
-          );
-          resolve(isHallucination ? "" : trimmed);
+          const text = await jarvisClient.transcribe(wavBlob, 'zh');
+          const trimmed = text?.trim() || '';
+          const isHallucination = HALLUCINATION_PATTERNS.some((p) => trimmed.includes(p));
+          resolve(isHallucination ? '' : trimmed);
         } catch (err) {
-          console.warn("[VoiceConversation] transcribeWithWhisper failed:", err);
-          resolve("");
+          console.warn('[VoiceConversation] transcribeWithWhisper failed:', err);
+          resolve('');
         }
       };
 
@@ -371,74 +394,70 @@ export function useVoiceConversation(
   }, []);
 
   // --- LLM Streaming ---
-  const streamLLMResponse = useCallback(
-    async function* (message: string, convId?: string | null) {
-      const abortController = new AbortController();
-      abortControllerRef.current = abortController;
+  const streamLLMResponse = useCallback(async function* (message: string, convId?: string | null) {
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
 
-      const response = await fetch(
-        `${daemonUrlRef.current}/api/voice/converse-stream`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            message,
-            conversationId: convId || undefined,
-          }),
-          signal: abortController.signal,
-        },
-      );
+    const response = await fetch(`${daemonUrlRef.current}/api/voice/converse-stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message,
+        conversationId: convId || undefined,
+      }),
+      signal: abortController.signal,
+    });
 
-      if (!response.ok) {
-        throw new Error(`Stream error ${response.status}`);
-      }
+    if (!response.ok) {
+      throw new Error(`Stream error ${response.status}`);
+    }
 
-      const reader = response.body?.getReader();
-      if (!reader) throw new Error("No reader");
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error('No reader');
 
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let currentEvent = "token";
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let currentEvent = 'token';
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
 
-        for (const line of lines) {
-          if (line.startsWith("event: ")) {
-            currentEvent = line.slice(7).trim();
-          } else if (line.startsWith("data: ")) {
-            const data = line.slice(6);
-            if (!data) continue;
+      for (const line of lines) {
+        if (line.startsWith('event: ')) {
+          currentEvent = line.slice(7).trim();
+        } else if (line.startsWith('data: ')) {
+          const data = line.slice(6);
+          if (!data) continue;
 
-            if (currentEvent === "token") {
-              yield data;
-            } else if (currentEvent === "error") {
-              try {
-                const parsed = JSON.parse(data) as { error: string };
-                throw new Error(parsed.error);
-              } catch (e) {
-                if (e instanceof Error && e.message !== "error") throw e;
-              }
+          if (currentEvent === 'token') {
+            yield data;
+          } else if (currentEvent === 'error') {
+            try {
+              const parsed = JSON.parse(data) as { error: string };
+              throw new Error(parsed.error);
+            } catch (e) {
+              if (e instanceof Error && e.message !== 'error') throw e;
             }
-            currentEvent = "token"; // reset for next event
           }
+          currentEvent = 'token'; // reset for next event
         }
       }
-    },
-    [],
-  );
+    }
+  }, []);
 
   const startBargeInMonitor = useCallback(() => {
     // Only monitor for voice barge-in if the main window is actively focused!
     // If the main window is in the background (blurred), we disable active microphone VAD barge-in
     // to prevent hardware speaker loopback/feedback and eliminate background mic locks.
     if (!document.hasFocus()) {
-      logger.debug("[VoiceConversation] Main window is in background. Skipping VAD barge-in monitor.");
+      logger.debug(
+        '[VoiceConversation] Main window is in background. Skipping VAD barge-in monitor.'
+      );
       return;
     }
 
@@ -499,12 +518,15 @@ export function useVoiceConversation(
 
             if (avg > BARGE_IN_THRESHOLD) {
               sustainedVoiceDuration += CHECK_INTERVAL;
-              if (sustainedVoiceDuration >= 750) { // Raised from 450ms to 750ms to verify intentional, continuous spoken words instead of transient clicks or echo spikes
+              if (sustainedVoiceDuration >= 750) {
+                // Raised from 450ms to 750ms to verify intentional, continuous spoken words instead of transient clicks or echo spikes
                 // Only barge-in if the AI is actively playing synthesized voice audio.
                 // If the AI is still "thinking" (generating text) or silent, we ignore environmental noises.
                 const isTtsPlaying = audioQueueRef.current && audioQueueRef.current.isPlaying;
                 if (isTtsPlaying) {
-                  logger.debug("[VoiceConversation:BargeIn] Voice activity detected! Interrupting AI...");
+                  logger.debug(
+                    '[VoiceConversation:BargeIn] Voice activity detected! Interrupting AI...'
+                  );
                   stop();
                   bargeInRef.current(); // Call barge-in via ref
                   return;
@@ -523,30 +545,34 @@ export function useVoiceConversation(
         checkFrame();
       })
       .catch((err) => {
-        console.warn("[VoiceConversation:BargeIn] Failed to start barge-in mic monitor:", err);
+        console.warn('[VoiceConversation:BargeIn] Failed to start barge-in mic monitor:', err);
       });
   }, []);
 
   // Monitor window focus/blur to dynamically enable/disable the VAD barge-in microphone capture
   useEffect(() => {
     const handleBlur = () => {
-      logger.debug("[VoiceConversation] Main window blurred. Stopping barge-in monitor to prevent loopback.");
+      logger.debug(
+        '[VoiceConversation] Main window blurred. Stopping barge-in monitor to prevent loopback.'
+      );
       if (bargeInMonitorRef.current) {
         bargeInMonitorRef.current.stop();
         bargeInMonitorRef.current = null;
       }
     };
     const handleFocus = () => {
-      if (isActiveRef.current && (state === "speaking" || state === "streaming")) {
-        logger.debug("[VoiceConversation] Main window focused while AI is responding. Restarting barge-in monitor.");
+      if (isActiveRef.current && (state === 'speaking' || state === 'streaming')) {
+        logger.debug(
+          '[VoiceConversation] Main window focused while AI is responding. Restarting barge-in monitor.'
+        );
         startBargeInMonitor();
       }
     };
-    window.addEventListener("blur", handleBlur);
-    window.addEventListener("focus", handleFocus);
+    window.addEventListener('blur', handleBlur);
+    window.addEventListener('focus', handleFocus);
     return () => {
-      window.removeEventListener("blur", handleBlur);
-      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener('blur', handleBlur);
+      window.removeEventListener('focus', handleFocus);
     };
   }, [state, startBargeInMonitor]);
 
@@ -556,17 +582,19 @@ export function useVoiceConversation(
       if (!userText.trim()) return;
 
       // 1. State Isolation: Block any duplicate triggers if the AI is already streaming or speaking
-      if (isActiveRef.current && (state === "streaming" || state === "speaking")) {
-        console.warn("[VoiceConversation] Conversation already in progress, ignoring duplicate trigger");
+      if (isActiveRef.current && (state === 'streaming' || state === 'speaking')) {
+        console.warn(
+          '[VoiceConversation] Conversation already in progress, ignoring duplicate trigger'
+        );
         return;
       }
 
       if (!isActiveRef.current) {
-        lastStreamedTextRef.current = "";
-        lastUserTextRef.current = "";
+        lastStreamedTextRef.current = '';
+        lastUserTextRef.current = '';
         const isFocused = document.hasFocus();
         isAppFocusedRef.current = isFocused;
-        setLayoutMode(isFocused ? "centered" : "bottom-right");
+        setLayoutMode(isFocused ? 'centered' : 'bottom-right');
       }
 
       // Ensure a conversation exists
@@ -577,9 +605,9 @@ export function useVoiceConversation(
           convId = conv.id;
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
-          console.error("[VoiceConversation] Failed to create conversation:", err);
+          console.error('[VoiceConversation] Failed to create conversation:', err);
           setLastError(message);
-          setState("error");
+          setState('error');
           setAssistantText(`无法创建对话: ${message}`);
           isActiveRef.current = false;
           return;
@@ -588,32 +616,38 @@ export function useVoiceConversation(
 
       // 2. Failsafe Cleanup: Force stop and dispose any lingering audio queues or streams before creating new ones
       if (audioQueueRef.current) {
-        try { audioQueueRef.current.dispose(); } catch (e) { logger.debug("[VoiceConversation] audio queue dispose ignored:", e); }
+        try {
+          audioQueueRef.current.dispose();
+        } catch (e) {
+          logger.debug('[VoiceConversation] audio queue dispose ignored:', e);
+        }
         audioQueueRef.current = null;
       }
       if (abortControllerRef.current) {
-        try { abortControllerRef.current.abort(); } catch (e) { logger.debug("[VoiceConversation] abort controller abort ignored:", e); }
+        try {
+          abortControllerRef.current.abort();
+        } catch (e) {
+          logger.debug('[VoiceConversation] abort controller abort ignored:', e);
+        }
         abortControllerRef.current = null;
       }
 
       isActiveRef.current = true;
-      setState("streaming");
-      setAssistantText("");
+      setState('streaming');
+      setAssistantText('');
       setFinalTranscript(userText);
       lastUserTextRef.current = userText;
-      setInterimTranscript("");
+      setInterimTranscript('');
 
-      const queue = new AudioQueueManager(
-        `${daemonUrlRef.current}/api/voice/synthesize`,
-      );
+      const queue = new AudioQueueManager(`${daemonUrlRef.current}/api/voice/synthesize`);
       audioQueueRef.current = queue;
 
       startBargeInMonitor(); // Start background VAD voice barge-in monitor!
 
       try {
-        let fullText = "";
+        let fullText = '';
         let processedSpokenLength = 0;
-        let ttsBuffer = "";
+        let ttsBuffer = '';
         let sentenceIndex = 0;
 
         for await (const token of streamLLMResponse(userText, convId)) {
@@ -624,7 +658,7 @@ export function useVoiceConversation(
 
           // Get the total clean spoken text generated so far
           const spokenText = getSpokenText(fullText);
-          
+
           // Get the newly generated clean spoken text since last loop
           if (spokenText.length > processedSpokenLength) {
             const newSpokenChars = spokenText.slice(processedSpokenLength);
@@ -648,15 +682,15 @@ export function useVoiceConversation(
 
         // Transition to speaking when first audio starts playing
         if (sentenceIndex > 0) {
-          setState("speaking");
+          setState('speaking');
           await queue.waitForCompletion();
         }
 
         // Done — keep assistantText visible until persisted messages load
         if (isActiveRef.current) {
           lastStreamedTextRef.current = fullText;
-          logger.debug("[VoiceConversation] Audio done, waiting 800ms breathing delay...");
-          
+          logger.debug('[VoiceConversation] Audio done, waiting 800ms breathing delay...');
+
           await new Promise<void>((resolve) => {
             if (breathingTimerRef.current) {
               clearTimeout(breathingTimerRef.current);
@@ -666,181 +700,191 @@ export function useVoiceConversation(
               resolve();
             }, 800);
           });
-          
+
           if (isActiveRef.current) {
-            logger.debug("[VoiceConversation] Breathing pause done, starting post-conversation listen...");
+            logger.debug(
+              '[VoiceConversation] Breathing pause done, starting post-conversation listen...'
+            );
             isActiveRef.current = false;
             startPostConversationListen();
           }
         }
       } catch (error) {
-        if ((error as Error).name !== "AbortError") {
+        if ((error as Error).name !== 'AbortError') {
           const message = error instanceof Error ? error.message : String(error);
-          console.error("[VoiceConversation] Error:", error);
+          console.error('[VoiceConversation] Error:', error);
           setLastError(message);
-          setState("error");
+          setState('error');
           setTimeout(() => {
-            if (isActiveRef.current) setState("idle");
+            if (isActiveRef.current) setState('idle');
           }, 2000);
         }
       } finally {
         cleanupStreaming();
       }
     },
-    [streamLLMResponse, cleanupStreaming, conversationId, createConversation],
+    [streamLLMResponse, cleanupStreaming, conversationId, createConversation]
   );
 
   // Keep ref in sync for post-conversation listen
   startConversationRef.current = startConversation;
 
   // --- Start listening (Web Speech API or batch fallback) ---
-  const startListening = useCallback((keepAssistantText = false, force = false) => {
-    if (isActiveRef.current && !force) return;
+  const startListening = useCallback(
+    (keepAssistantText = false, force = false) => {
+      if (isActiveRef.current && !force) return;
 
-    const voiceMode = localStorage.getItem("jarvis_voice_mode") || "pipeline";
-    if (voiceMode === "realtime") {
-      isActiveRef.current = true;
-      connectRealtimeSession();
-      return;
-    }
-    
-    lastStreamedTextRef.current = "";
-    if (!keepAssistantText) {
-      lastUserTextRef.current = "";
-    }
-    
-    const isFocused = document.hasFocus();
-    isAppFocusedRef.current = isFocused;
-    setLayoutMode(isFocused ? "centered" : "bottom-right");
-    
-    isActiveRef.current = true;
-    setState("listening");
-    setInterimTranscript("");
-    setFinalTranscript("");
-    if (!keepAssistantText) {
-      setAssistantText("");
-    }
-
-    // Safety timeout: if ASR never produces a result, recover to idle
-    if (listeningSafetyTimerRef.current) {
-      clearTimeout(listeningSafetyTimerRef.current);
-    }
-    listeningSafetyTimerRef.current = setTimeout(() => {
-      if (!isActiveRef.current) return;
-      console.warn("[VoiceConversation] Listening safety timeout — ASR may have failed to start");
-      if (webAsrRef.current) {
-        webAsrRef.current.stop();
+      const voiceMode = localStorage.getItem('jarvis_voice_mode') || 'pipeline';
+      if (voiceMode === 'realtime') {
+        isActiveRef.current = true;
+        connectRealtimeSession();
+        return;
       }
-      isActiveRef.current = false;
-      listeningSafetyTimerRef.current = null;
-      setState("idle");
-    }, 5000);
 
-    if (isWebSpeechASRAvailable()) {
-      let latestInterimText = "";
-      accumulatedFinalTextRef.current = "";
+      lastStreamedTextRef.current = '';
+      if (!keepAssistantText) {
+        lastUserTextRef.current = '';
+      }
 
-      const asr = getOrCreateASR({
-        lang: "zh-CN",
-        onInterim: (text: string) => {
-          if (listeningSafetyTimerRef.current) {
-            clearTimeout(listeningSafetyTimerRef.current);
-            listeningSafetyTimerRef.current = null;
-          }
-          setInterimTranscript(text);
-          latestInterimText = text;
-        },
-        onFinal: (text: string) => {
-          if (listeningSafetyTimerRef.current) {
-            clearTimeout(listeningSafetyTimerRef.current);
-            listeningSafetyTimerRef.current = null;
-          }
-          accumulatedFinalTextRef.current += text;
-          setFinalTranscript(accumulatedFinalTextRef.current);
-          setInterimTranscript("");
-          latestInterimText = "";
-        },
-        onError: (err: string) => {
-          console.warn("[VoiceConversation] ASR error:", err);
-        },
-        onEnd: () => {
-          logger.debug("[VoiceConversation] ASR onEnd called");
-          if (listeningSafetyTimerRef.current) {
-            clearTimeout(listeningSafetyTimerRef.current);
-            listeningSafetyTimerRef.current = null;
-          }
-          
-          const textToSubmit = (accumulatedFinalTextRef.current + latestInterimText).trim();
-          logger.debug("[VoiceConversation] ASR finished. Text to submit:", textToSubmit);
-          
-          isActiveRef.current = false;
-          if (textToSubmit) {
-            startConversation(textToSubmit);
+      const isFocused = document.hasFocus();
+      isAppFocusedRef.current = isFocused;
+      setLayoutMode(isFocused ? 'centered' : 'bottom-right');
+
+      isActiveRef.current = true;
+      setState('listening');
+      setInterimTranscript('');
+      setFinalTranscript('');
+      if (!keepAssistantText) {
+        setAssistantText('');
+      }
+
+      // Safety timeout: if ASR never produces a result, recover to idle
+      if (listeningSafetyTimerRef.current) {
+        clearTimeout(listeningSafetyTimerRef.current);
+      }
+      listeningSafetyTimerRef.current = setTimeout(() => {
+        if (!isActiveRef.current) return;
+        console.warn('[VoiceConversation] Listening safety timeout — ASR may have failed to start');
+        if (webAsrRef.current) {
+          webAsrRef.current.stop();
+        }
+        isActiveRef.current = false;
+        listeningSafetyTimerRef.current = null;
+        setState('idle');
+      }, 5000);
+
+      if (isWebSpeechASRAvailable()) {
+        let latestInterimText = '';
+        accumulatedFinalTextRef.current = '';
+
+        const asr = getOrCreateASR({
+          lang: 'zh-CN',
+          onInterim: (text: string) => {
+            if (listeningSafetyTimerRef.current) {
+              clearTimeout(listeningSafetyTimerRef.current);
+              listeningSafetyTimerRef.current = null;
+            }
+            setInterimTranscript(text);
+            latestInterimText = text;
+          },
+          onFinal: (text: string) => {
+            if (listeningSafetyTimerRef.current) {
+              clearTimeout(listeningSafetyTimerRef.current);
+              listeningSafetyTimerRef.current = null;
+            }
+            accumulatedFinalTextRef.current += text;
+            setFinalTranscript(accumulatedFinalTextRef.current);
+            setInterimTranscript('');
+            latestInterimText = '';
+          },
+          onError: (err: string) => {
+            console.warn('[VoiceConversation] ASR error:', err);
+          },
+          onEnd: () => {
+            logger.debug('[VoiceConversation] ASR onEnd called');
+            if (listeningSafetyTimerRef.current) {
+              clearTimeout(listeningSafetyTimerRef.current);
+              listeningSafetyTimerRef.current = null;
+            }
+
+            const textToSubmit = (accumulatedFinalTextRef.current + latestInterimText).trim();
+            logger.debug('[VoiceConversation] ASR finished. Text to submit:', textToSubmit);
+
+            isActiveRef.current = false;
+            if (textToSubmit) {
+              startConversation(textToSubmit);
+            } else {
+              playFarewellAndExitRef.current();
+            }
+          },
+          silenceTimeout: 4000,
+        });
+        asr.start();
+      } else {
+        // Batch ASR fallback
+        setState('transcribing');
+        transcribeWithWhisper().then((text) => {
+          if (!isActiveRef.current) return;
+          if (text) {
+            startConversation(text);
           } else {
+            isActiveRef.current = false;
             playFarewellAndExitRef.current();
           }
-        },
-        silenceTimeout: 4000,
-      });
-      asr.start();
-    } else {
-      // Batch ASR fallback
-      setState("transcribing");
-      transcribeWithWhisper().then((text) => {
-        if (!isActiveRef.current) return;
-        if (text) {
-          startConversation(text);
-        } else {
-          isActiveRef.current = false;
-          playFarewellAndExitRef.current();
-        }
-      });
-    }
-  }, [transcribeWithWhisper, startConversation, connectRealtimeSession]);
+        });
+      }
+    },
+    [transcribeWithWhisper, startConversation, connectRealtimeSession]
+  );
 
   // --- Play Sci-Fi greeting and then start listening ---
   const playGreetingAndListen = useCallback(async () => {
     if (isActiveRef.current) return;
 
-    const voiceMode = localStorage.getItem("jarvis_voice_mode") || "pipeline";
-    if (voiceMode === "realtime") {
+    const voiceMode = localStorage.getItem('jarvis_voice_mode') || 'pipeline';
+    if (voiceMode === 'realtime') {
       isActiveRef.current = true;
       connectRealtimeSession();
       return;
     }
-    
-    lastStreamedTextRef.current = "";
-    lastUserTextRef.current = "";
-    
+
+    lastStreamedTextRef.current = '';
+    lastUserTextRef.current = '';
+
     const isFocused = document.hasFocus();
     isAppFocusedRef.current = isFocused;
-    setLayoutMode(isFocused ? "centered" : "bottom-right");
-    
+    setLayoutMode(isFocused ? 'centered' : 'bottom-right');
+
     isActiveRef.current = true;
-    setState("speaking");
-    setAssistantText("我在的，主人。");
-    
+    setState('speaking');
+    setAssistantText('我在的，主人。');
+
     try {
       // 1. Play chime sound
       playSciFiChime();
-      
+
       // 2. Fetch spoken response
-      const buffer = await jarvisClient.synthesize("我在的，主人。", voiceProfileManager.getVoiceName());
+      const buffer = await jarvisClient.synthesize(
+        '我在的，主人。',
+        voiceProfileManager.getVoiceName()
+      );
       if (!isActiveRef.current) {
-        logger.debug("[VoiceConversation] Greeting fetch completed but conversation was already stopped. Aborting playback.");
+        logger.debug(
+          '[VoiceConversation] Greeting fetch completed but conversation was already stopped. Aborting playback.'
+        );
         return;
       }
       const ctx = createAudioContext();
-      if (ctx.state === "suspended") {
+      if (ctx.state === 'suspended') {
         await ctx.resume().catch(() => {});
       }
       greetingAudioCtxRef.current = ctx;
-      
+
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 32;
       analyser.connect(ctx.destination);
       localSpeakingAnalyserRef.current = analyser;
-      
+
       ctx.decodeAudioData(
         buffer,
         (decoded) => {
@@ -853,7 +897,7 @@ export function useVoiceConversation(
           source.buffer = decoded;
           source.connect(analyser); // Connect to analyser
           greetingSourceRef.current = source;
-          
+
           source.onended = () => {
             greetingSourceRef.current = null;
             localSpeakingAnalyserRef.current = null;
@@ -861,11 +905,11 @@ export function useVoiceConversation(
               greetingAudioCtxRef.current = null;
             }
             ctx.close().catch(() => {});
-            
+
             if (breathingTimerRef.current) {
               clearTimeout(breathingTimerRef.current);
             }
-            
+
             breathingTimerRef.current = setTimeout(() => {
               breathingTimerRef.current = null;
               if (isActiveRef.current) {
@@ -874,7 +918,7 @@ export function useVoiceConversation(
               }
             }, 800);
           };
-          
+
           source.start(0);
         },
         () => {
@@ -886,7 +930,10 @@ export function useVoiceConversation(
         }
       );
     } catch (err) {
-      console.warn("[VoiceConversation] Greeting playback failed, falling back to direct listening:", err);
+      console.warn(
+        '[VoiceConversation] Greeting playback failed, falling back to direct listening:',
+        err
+      );
       isActiveRef.current = false;
       startListening();
     }
@@ -897,12 +944,12 @@ export function useVoiceConversation(
     isActiveRef.current = false;
     cleanup();
     isFarewellPlayingRef.current = false;
-    lastStreamedTextRef.current = "";
-    setState("idle");
-    setInterimTranscript("");
-    setFinalTranscript("");
-    accumulatedFinalTextRef.current = "";
-    setAssistantText("");
+    lastStreamedTextRef.current = '';
+    setState('idle');
+    setInterimTranscript('');
+    setFinalTranscript('');
+    accumulatedFinalTextRef.current = '';
+    setAssistantText('');
     setLastError(null);
   }, [cleanup]);
 
@@ -919,17 +966,17 @@ export function useVoiceConversation(
     }
     // Go back to listening
     isActiveRef.current = true;
-    setState("listening");
-    setAssistantText("");
-    setInterimTranscript("");
-    setFinalTranscript("");
+    setState('listening');
+    setAssistantText('');
+    setInterimTranscript('');
+    setFinalTranscript('');
 
     if (isWebSpeechASRAvailable()) {
-      let latestInterimText = "";
-      accumulatedFinalTextRef.current = "";
+      let latestInterimText = '';
+      accumulatedFinalTextRef.current = '';
 
       const asr = getOrCreateASR({
-        lang: "zh-CN",
+        lang: 'zh-CN',
         onInterim: (text: string) => {
           setInterimTranscript(text);
           latestInterimText = text;
@@ -937,14 +984,14 @@ export function useVoiceConversation(
         onFinal: (text: string) => {
           accumulatedFinalTextRef.current += text;
           setFinalTranscript(accumulatedFinalTextRef.current);
-          setInterimTranscript("");
-          latestInterimText = "";
+          setInterimTranscript('');
+          latestInterimText = '';
         },
         onEnd: () => {
-          logger.debug("[VoiceConversation:BargeIn] ASR onEnd called");
+          logger.debug('[VoiceConversation:BargeIn] ASR onEnd called');
           const textToSubmit = (accumulatedFinalTextRef.current + latestInterimText).trim();
-          logger.debug("[VoiceConversation:BargeIn] Text to submit:", textToSubmit);
-          
+          logger.debug('[VoiceConversation:BargeIn] Text to submit:', textToSubmit);
+
           isActiveRef.current = false;
           if (textToSubmit) {
             startConversation(textToSubmit);
@@ -959,11 +1006,13 @@ export function useVoiceConversation(
   }, [startConversation, getOrCreateASR]);
 
   const finishListening = useCallback(() => {
-    if (state !== "listening") return;
-    logger.debug("[VoiceConversation] finishListening called, stopping ASR and submitting current transcripts...");
-    
+    if (state !== 'listening') return;
+    logger.debug(
+      '[VoiceConversation] finishListening called, stopping ASR and submitting current transcripts...'
+    );
+
     const textToSubmit = (accumulatedFinalTextRef.current + interimTranscript).trim();
-    
+
     if (webAsrRef.current) {
       webAsrRef.current.stop();
     }
@@ -975,9 +1024,9 @@ export function useVoiceConversation(
       clearTimeout(postListenTimerRef.current);
       postListenTimerRef.current = null;
     }
-    
+
     isActiveRef.current = false;
-    
+
     if (textToSubmit) {
       startConversation(textToSubmit);
     } else {
@@ -986,81 +1035,86 @@ export function useVoiceConversation(
   }, [state, interimTranscript, startConversation]);
 
   const handleWindowBlur = useCallback(() => {
-    logger.debug("[VoiceConversation] handleWindowBlur called. Stopping physical WebSpeech ASR...");
+    logger.debug('[VoiceConversation] handleWindowBlur called. Stopping physical WebSpeech ASR...');
     if (webAsrRef.current) {
       webAsrRef.current.stop();
     }
   }, []);
 
   const handleWindowFocus = useCallback(() => {
-    logger.debug("[VoiceConversation] handleWindowFocus called. Resuming physical WebSpeech ASR if state is listening...");
-    if (state === "listening") {
+    logger.debug(
+      '[VoiceConversation] handleWindowFocus called. Resuming physical WebSpeech ASR if state is listening...'
+    );
+    if (state === 'listening') {
       startListening(true, true);
     }
   }, [state, startListening]);
 
   const playFarewellAndExit = useCallback(async () => {
-    logger.debug("[VoiceConversation] Silence detected, playing farewell and exiting...");
+    logger.debug('[VoiceConversation] Silence detected, playing farewell and exiting...');
     cleanup();
-    
+
     isActiveRef.current = true;
-    setState("speaking");
-    setAssistantText("如果没啥事我就先退下咯，如果有需要随时喊我哦！");
+    setState('speaking');
+    setAssistantText('如果没啥事我就先退下咯，如果有需要随时喊我哦！');
     isFarewellPlayingRef.current = true;
-    
+
     try {
-      const buffer = await jarvisClient.synthesize("如果没啥事我就先退下咯，如果有需要随时喊我哦！", voiceProfileManager.getVoiceName());
+      const buffer = await jarvisClient.synthesize(
+        '如果没啥事我就先退下咯，如果有需要随时喊我哦！',
+        voiceProfileManager.getVoiceName()
+      );
       const ctx = createAudioContext();
-      
-      if (ctx.state === "suspended") {
+
+      if (ctx.state === 'suspended') {
         await ctx.resume().catch(() => {});
       }
-      
+
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 32;
       analyser.connect(ctx.destination);
       localSpeakingAnalyserRef.current = analyser;
-      
+
       ctx.decodeAudioData(
         buffer,
         (decoded) => {
           const source = ctx.createBufferSource();
           source.buffer = decoded;
           source.connect(analyser); // Connect to analyser
-          
+
           source.onended = () => {
             localSpeakingAnalyserRef.current = null;
             ctx.close().catch(() => {});
-            
+
             if (breathingTimerRef.current) {
               clearTimeout(breathingTimerRef.current);
             }
-            
+
             breathingTimerRef.current = setTimeout(() => {
               breathingTimerRef.current = null;
               if (isActiveRef.current) {
                 isActiveRef.current = false;
-                setState("idle");
-                setAssistantText("");
+                setState('idle');
+                setAssistantText('');
               }
             }, 800);
           };
-          
+
           source.start(0);
         },
         () => {
           localSpeakingAnalyserRef.current = null;
           ctx.close().catch(() => {});
           isActiveRef.current = false;
-          setState("idle");
-          setAssistantText("");
+          setState('idle');
+          setAssistantText('');
         }
       );
     } catch (err) {
-      console.warn("[VoiceConversation] Farewell playback failed:", err);
+      console.warn('[VoiceConversation] Farewell playback failed:', err);
       isActiveRef.current = false;
-      setState("idle");
-      setAssistantText("");
+      setState('idle');
+      setAssistantText('');
     }
   }, [cleanup]);
 
@@ -1084,9 +1138,11 @@ export function useVoiceConversation(
 
     const initEvent = async () => {
       try {
-        const { emit } = await import("@tauri-apps/api/event");
+        const { emit } = await import('@tauri-apps/api/event');
         emitFn = emit;
-      } catch (e) { logger.debug("[VoiceConversation] event init ignored:", e); }
+      } catch (e) {
+        logger.debug('[VoiceConversation] event init ignored:', e);
+      }
     };
     initEvent();
 
@@ -1094,7 +1150,7 @@ export function useVoiceConversation(
       if (!active) return;
 
       let vol = 0;
-      if (state === "speaking") {
+      if (state === 'speaking') {
         if (audioQueueRef.current && audioQueueRef.current.isPlaying) {
           vol = audioQueueRef.current.getVolume();
         } else if (localSpeakingAnalyserRef.current) {
@@ -1102,23 +1158,24 @@ export function useVoiceConversation(
           localSpeakingAnalyserRef.current.getByteFrequencyData(dataArray);
           vol = dataArray.reduce((a: number, b: number) => a + b, 0) / dataArray.length;
         }
-      } else if (state === "listening" && micAnalyser && micDataArray) {
+      } else if (state === 'listening' && micAnalyser && micDataArray) {
         micAnalyser.getByteFrequencyData(micDataArray);
         vol = micDataArray.reduce((a: number, b: number) => a + b, 0) / micDataArray.length;
       }
 
       if (emitFn) {
-        emitFn("voice-volume-tick", { volume: vol }).catch(() => {});
+        emitFn('voice-volume-tick', { volume: vol }).catch(() => {});
       }
 
       animationId = requestAnimationFrame(runVolumeLoop);
     };
 
-    if (state === "speaking") {
+    if (state === 'speaking') {
       runVolumeLoop();
-    } else if (state === "listening") {
-      if (typeof navigator !== "undefined" && navigator.mediaDevices) {
-        navigator.mediaDevices.getUserMedia({ audio: true })
+    } else if (state === 'listening') {
+      if (typeof navigator !== 'undefined' && navigator.mediaDevices) {
+        navigator.mediaDevices
+          .getUserMedia({ audio: true })
           .then((stream) => {
             if (!active) {
               stream.getTracks().forEach((t) => t.stop());
@@ -1131,11 +1188,11 @@ export function useVoiceConversation(
             micAnalyser.fftSize = 32;
             source.connect(micAnalyser);
             micDataArray = new Uint8Array(micAnalyser.frequencyBinCount);
-            
+
             runVolumeLoop();
           })
           .catch((err) => {
-            console.warn("[VoiceConversation] Failed to start mic volume tracker:", err);
+            console.warn('[VoiceConversation] Failed to start mic volume tracker:', err);
             runVolumeLoop();
           });
       } else {
@@ -1156,13 +1213,12 @@ export function useVoiceConversation(
       }
       // Emit a final 0 tick to reset visualizers
       if (emitFn) {
-        emitFn("voice-volume-tick", { volume: 0 }).catch(() => {});
+        emitFn('voice-volume-tick', { volume: 0 }).catch(() => {});
       }
     };
   }, [state]);
 
   // Cleanup on unmount
-
 
   useEffect(() => {
     return () => {
@@ -1173,45 +1229,48 @@ export function useVoiceConversation(
   }, [cleanup, restoreWindow]);
 
   // Restore a specific state (e.g. from the closing assistant bubble)
-  const restoreState = useCallback((
-    newState: VoiceConversationState,
-    interim: string,
-    final: string,
-    assistant: string
-  ) => {
-    logger.debug("[VoiceConversation] restoreState called with:", { newState, interim, final, assistant });
-    
-    cleanup();
-    
-    isActiveRef.current = newState !== "idle" && newState !== "error";
-    setState(newState);
-    setInterimTranscript(interim);
-    setFinalTranscript(final);
-    setAssistantText(assistant);
-    
-    // If the restored state is listening, start physical microphone capture
-    if (newState === "listening") {
-      isActiveRef.current = false; // startListening will set it back to true
-      startListening(true);
-    }
-  }, [cleanup, startListening]);
+  const restoreState = useCallback(
+    (newState: VoiceConversationState, interim: string, final: string, assistant: string) => {
+      logger.debug('[VoiceConversation] restoreState called with:', {
+        newState,
+        interim,
+        final,
+        assistant,
+      });
+
+      cleanup();
+
+      isActiveRef.current = newState !== 'idle' && newState !== 'error';
+      setState(newState);
+      setInterimTranscript(interim);
+      setFinalTranscript(final);
+      setAssistantText(assistant);
+
+      // If the restored state is listening, start physical microphone capture
+      if (newState === 'listening') {
+        isActiveRef.current = false; // startListening will set it back to true
+        startListening(true);
+      }
+    },
+    [cleanup, startListening]
+  );
 
   // Clear persisted text when new messages arrive from server
   const clearLastStreamedText = useCallback(() => {
-    lastStreamedTextRef.current = "";
-    lastUserTextRef.current = "";
+    lastStreamedTextRef.current = '';
+    lastUserTextRef.current = '';
   }, []);
 
   // Display logic: show live text during streaming, keep ref text after
   const displayAssistantText =
-    state === "streaming" || state === "speaking"
+    state === 'streaming' || state === 'speaking'
       ? getSpokenText(assistantText)
-      : getSpokenText(lastStreamedTextRef.current || "");
+      : getSpokenText(lastStreamedTextRef.current || '');
 
   const displayUserText =
-    state === "streaming" || state === "speaking" || state === "listening"
+    state === 'streaming' || state === 'speaking' || state === 'listening'
       ? finalTranscript
-      : lastUserTextRef.current || "";
+      : lastUserTextRef.current || '';
 
   return {
     state,

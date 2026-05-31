@@ -1,23 +1,23 @@
 export type ModelProviderName = string;
 
 export type ModelCapability =
-  | "text"
-  | "streaming"
-  | "toolCalling"
-  | "vision"
-  | "audioInput"
-  | "tts"
-  | "jsonMode"
-  | "longContext";
+  | 'text'
+  | 'streaming'
+  | 'toolCalling'
+  | 'vision'
+  | 'audioInput'
+  | 'tts'
+  | 'jsonMode'
+  | 'longContext';
 
 export type ModelTaskType =
-  | "chat"
-  | "fast"
-  | "reasoning"
-  | "toolAgent"
-  | "coding"
-  | "voice"
-  | "private";
+  | 'chat'
+  | 'fast'
+  | 'reasoning'
+  | 'toolAgent'
+  | 'coding'
+  | 'voice'
+  | 'private';
 
 export interface ModelCapabilities {
   text: boolean;
@@ -67,7 +67,7 @@ export interface ModelRoutingRule {
   taskType: ModelTaskType;
   modelId: string;
   conditions?: {
-    expectedAnswerLength?: "short" | "medium" | "long";
+    expectedAnswerLength?: 'short' | 'medium' | 'long';
     requiresToolCalling?: boolean;
     requiresLongContext?: boolean;
     requiresPrivacy?: boolean;

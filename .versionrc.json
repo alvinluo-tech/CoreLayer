@@ -1,0 +1,16 @@
+{
+  "types": [
+    { "type": "feat", "section": "Features" },
+    { "type": "fix", "section": "Bug Fixes" },
+    { "type": "perf", "section": "Performance" },
+    { "type": "refactor", "section": "Refactoring" },
+    { "type": "docs", "section": "Documentation" },
+    { "type": "test", "section": "Tests" },
+    { "type": "ci", "section": "CI/CD" },
+    { "type": "chore", "hidden": true },
+    { "type": "style", "hidden": true },
+    { "type": "build", "hidden": true }
+  ],
+  "commitUrlFormat": "https://github.com/alvinluo-tech/CoreLayer/commit/{{hash}}",
+  "compareUrlFormat": "https://github.com/alvinluo-tech/CoreLayer/compare/{{previousTag}}...{{currentTag}}"
+}

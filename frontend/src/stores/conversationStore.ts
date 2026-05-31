@@ -1,6 +1,6 @@
-import { create } from "zustand";
-import type { Conversation, ConversationMessage, SendMessageResponse } from "@/lib/tauri";
-import * as tauri from "@/lib/tauri";
+import { create } from 'zustand';
+import type { Conversation, ConversationMessage, SendMessageResponse } from '@/lib/tauri';
+import * as tauri from '@/lib/tauri';
 
 interface ConversationState {
   conversations: Conversation[];
@@ -23,7 +23,6 @@ interface ConversationState {
   setIsSending: (sending: boolean) => void;
   setConversations: (conversations: Conversation[]) => void;
 }
-
 
 export const useConversationStore = create<ConversationState>((set, get) => ({
   conversations: [],
@@ -70,7 +69,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
 
   getOrCreateDefaultConversation: async () => {
     const { conversations } = get();
-    const defaultConv = conversations.find((c) => c.title === "默认对话");
+    const defaultConv = conversations.find((c) => c.title === '默认对话');
     if (defaultConv) {
       set({ activeConversationId: defaultConv.id });
       try {
@@ -83,7 +82,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     }
 
     try {
-      const conversation = await tauri.createConversation("默认对话");
+      const conversation = await tauri.createConversation('默认对话');
       set((state) => ({
         conversations: [conversation, ...state.conversations],
         activeConversationId: conversation.id,
@@ -154,7 +153,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     const optimisticMessage: ConversationMessage = {
       id: tempId,
       conversationId: conversationId!,
-      role: "user",
+      role: 'user',
       content,
       toolCalls: null,
       toolCallId: null,
@@ -177,7 +176,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
         ],
         isSending: false,
         conversations: state.conversations.map((c) =>
-          c.id === result.conversation.id ? result.conversation : c,
+          c.id === result.conversation.id ? result.conversation : c
         ),
       }));
 
@@ -204,7 +203,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
       const { messages } = await tauri.getConversation(activeConversationId);
       set({ messages, error: null });
     } catch (error) {
-      console.error("[ConversationStore] Failed to refresh messages:", error);
+      console.error('[ConversationStore] Failed to refresh messages:', error);
       set({ error: String(error) });
     }
   },
