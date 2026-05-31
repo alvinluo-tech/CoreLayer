@@ -27,11 +27,7 @@ import { TitleBar } from '@/components/layout/TitleBar';
 const isAssistantWindow =
   typeof window !== 'undefined' && window.location.search.includes('assistant=true');
 
-function App() {
-  if (isAssistantWindow) {
-    return <AssistantMirror />;
-  }
-
+function MainApp() {
   const { messages, sendMessage, isLoading, activeConversationId, error } = useChat();
   const [isMainWindowFocused, setIsMainWindowFocused] = useState(true);
   const [currentView, setCurrentView] = useState<'main' | 'control-center'>('main');
@@ -166,7 +162,9 @@ function App() {
         try {
           const { primaryMonitor } = await import('@tauri-apps/api/window');
           monitor = await primaryMonitor();
-        } catch {}
+        } catch {
+          /* fallback to null */
+        }
       }
 
       if (monitor) {
@@ -231,7 +229,7 @@ function App() {
 
       // 2. Restore size and position (using captured original bounds, with startupBounds fallbacks)
       let targetSize = originalBoundsRef.current?.size;
-      let targetPosition = originalBoundsRef.current?.position;
+      const targetPosition = originalBoundsRef.current?.position;
 
       if (!targetSize) {
         if (startupBoundsRef.current?.size) {
@@ -490,7 +488,9 @@ function App() {
               if (monitor) {
                 activeMonitorRef.current = monitor;
               }
-            } catch {}
+            } catch {
+              /* ignore */
+            }
 
             // Only exit mirror mode if we are actually in mirror mode
             if (isMirrorModeRef.current) {
@@ -515,7 +515,9 @@ function App() {
         if (!active) {
           try {
             unsub();
-          } catch {}
+          } catch {
+            /* ignore */
+          }
           return;
         }
         unlisten = unsub;
@@ -530,7 +532,9 @@ function App() {
       if (unlisten) {
         try {
           unlisten();
-        } catch (err) {}
+        } catch {
+          /* ignore */
+        }
       }
     };
   }, [enterMirrorMode, exitMirrorMode, refreshMessages]);
@@ -671,6 +675,13 @@ function App() {
       )}
     </div>
   );
+}
+
+function App() {
+  if (isAssistantWindow) {
+    return <AssistantMirror />;
+  }
+  return <MainApp />;
 }
 
 export default App;

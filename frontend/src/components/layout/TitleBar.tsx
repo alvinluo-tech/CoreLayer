@@ -53,7 +53,9 @@ export function TitleBar() {
       if (unlisten) {
         try {
           unlisten();
-        } catch (err) {}
+        } catch {
+          /* ignore */
+        }
       }
     };
   }, []);

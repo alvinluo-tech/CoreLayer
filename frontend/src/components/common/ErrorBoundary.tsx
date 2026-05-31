@@ -59,7 +59,7 @@ export class ErrorBoundary extends Component<Props, State> {
   };
 
   private handleUnhandledRejection = (event: PromiseRejectionEvent) => {
-    let rawReason = event.reason;
+    const rawReason = event.reason;
     let message = '未捕获的后台异步操作错误';
 
     if (rawReason) {

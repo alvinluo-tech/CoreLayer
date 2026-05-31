@@ -206,7 +206,7 @@ export function useWakeWord(onWake: () => void, daemonUrl?: string) {
       logger.debug('[WakeWord] Starting...');
 
       // Try Porcupine first (accessKey must be provided directly, never fetched from server)
-      let key = accessKey;
+      const key = accessKey;
 
       if (key) {
         const ok = await startPorcupine(key);
