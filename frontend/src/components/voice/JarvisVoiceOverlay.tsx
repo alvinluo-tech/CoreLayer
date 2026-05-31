@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { X, Mic, Square, Loader2, Settings2, XCircle } from "lucide-react";
+import { X, Mic, Square, Loader2, Settings2, XCircle, Maximize2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { VoiceConversationState } from "@/hooks/useVoiceConversation";
@@ -12,6 +12,7 @@ interface JarvisVoiceOverlayProps {
   onClose: () => void;
   onStop: () => void;
   onOpenSettings?: () => void;
+  onRestore?: () => void;
   layoutMode?: "centered" | "bottom-right";
 }
 
@@ -23,6 +24,7 @@ export function JarvisVoiceOverlay({
   onClose,
   onStop,
   onOpenSettings,
+  onRestore,
   layoutMode = "centered",
 }: JarvisVoiceOverlayProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -37,12 +39,11 @@ export function JarvisVoiceOverlay({
 
     const setupVolumeListener = async () => {
       try {
-        const { getCurrentWindow } = await import("@tauri-apps/api/window");
-        const appWindow = getCurrentWindow();
+        const { listen } = await import("@tauri-apps/api/event");
         
         if (!active) return;
 
-        const unsub = await appWindow.listen<{ volume: number }>("voice-volume-tick", (event) => {
+        const unsub = await listen<{ volume: number }>("voice-volume-tick", (event) => {
           if (!active) return;
           volumeRef.current = event.payload.volume;
         });
@@ -327,18 +328,31 @@ export function JarvisVoiceOverlay({
               {state === "error" ? "SYSTEM ERROR DETECTED" : (isCentered ? "JARVIS HUD v2.5" : "JARVIS HUD")}
             </span>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             {/* Timer stopwatch */}
             {(state === "listening" || state === "speaking" || state === "streaming") && (
               <span className="font-mono text-[10px] tracking-wider bg-white/5 border border-white/10 rounded px-1.5 py-0.5 text-cyan-400 font-bold animate-pulse">
                 ⏱️ {formatTime(timer)}
               </span>
             )}
+            {/* Expand / Restore Button in bottom-right mode */}
+            {layoutMode === "bottom-right" && onRestore && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onRestore}
+                className="h-5 w-5 text-white/50 hover:text-white hover:bg-white/10 rounded-full transition-all"
+                title="Restore to Main Window"
+              >
+                <Maximize2 className="h-3.5 w-3.5 text-cyan-400" />
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="icon"
               onClick={onClose}
               className="h-5 w-5 text-white/50 hover:text-white hover:bg-white/10 rounded-full transition-all"
+              title="Close Assistant"
             >
               <X className="h-3.5 w-3.5" />
             </Button>

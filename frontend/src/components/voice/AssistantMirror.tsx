@@ -24,12 +24,11 @@ export function AssistantMirror() {
 
     const setupAssistantMirror = async () => {
       try {
-        const { getCurrentWindow } = await import("@tauri-apps/api/window");
-        const appWindow = getCurrentWindow();
+        const { listen, emit } = await import("@tauri-apps/api/event");
 
         if (!active) return;
 
-        const unsub = await appWindow.listen<{
+        const unsub = await listen<{
           state: VoiceConversationState;
           interimTranscript: string;
           finalTranscript: string;
@@ -53,7 +52,7 @@ export function AssistantMirror() {
         unlistenMirror = unsub;
         logger.debug("[Assistant Window] Mirror listener registered. Notifying main window...");
 
-        await appWindow.emit("assistant-ready").catch(() => {});
+        await emit("assistant-ready").catch(() => {});
       } catch (e) {
         logger.warn("Failed to set up assistant window mirroring:", e);
       }
@@ -73,10 +72,11 @@ export function AssistantMirror() {
 
   const handleStopMirror = useCallback(async () => {
     try {
+      const { emit } = await import("@tauri-apps/api/event");
+      await emit("stop-voice-from-assistant").catch(() => {});
       const { getCurrentWindow } = await import("@tauri-apps/api/window");
       const appWindow = getCurrentWindow();
-      await appWindow.emit("stop-voice-from-assistant").catch(() => {});
-      await appWindow.close().catch(() => {});
+      await appWindow.hide().catch(() => {});
     } catch (e) {
       logger.warn("Failed to emit stop from assistant:", e);
     }
@@ -84,9 +84,8 @@ export function AssistantMirror() {
 
   const handleFinishMirror = useCallback(async () => {
     try {
-      const { getCurrentWindow } = await import("@tauri-apps/api/window");
-      const appWindow = getCurrentWindow();
-      await appWindow.emit("finish-voice-from-assistant").catch(() => {});
+      const { emit } = await import("@tauri-apps/api/event");
+      await emit("finish-voice-from-assistant").catch(() => {});
     } catch (e) {
       logger.warn("Failed to emit finish from assistant:", e);
     }
@@ -101,10 +100,11 @@ export function AssistantMirror() {
         await mainWin.unminimize().catch(() => {});
         await mainWin.setFocus().catch(() => {});
       }
+      const { emit } = await import("@tauri-apps/api/event");
+      await emit("open-settings-from-assistant").catch(() => {});
       const { getCurrentWindow } = await import("@tauri-apps/api/window");
       const appWindow = getCurrentWindow();
-      await appWindow.emit("open-settings-from-assistant").catch(() => {});
-      await appWindow.close().catch(() => {});
+      await appWindow.hide().catch(() => {});
     } catch (e) {
       logger.warn("Failed to open settings from assistant:", e);
     }

@@ -65,6 +65,9 @@ export class AudioQueueManager {
       throw new Error(`TTS error ${response.status}`);
     }
     const arrayBuffer = await response.arrayBuffer();
+    if (this.audioCtx.state === "suspended") {
+      await this.audioCtx.resume().catch(() => {});
+    }
     return this.audioCtx.decodeAudioData(arrayBuffer);
   }
 

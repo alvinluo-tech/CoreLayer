@@ -178,7 +178,7 @@ export function useVoiceConversation(
       
       logger.debug("[Tauri Window] Restoring original window bounds...", originalBoundsRef.current);
       await appWindow.setAlwaysOnTop(false).catch(() => {});
-      await appWindow.setDecorations(true).catch(() => {});
+      await appWindow.setDecorations(false).catch(() => {});
       if (size) {
         await appWindow.setSize(size).catch(() => {});
       }
@@ -831,6 +831,9 @@ export function useVoiceConversation(
         return;
       }
       const ctx = createAudioContext();
+      if (ctx.state === "suspended") {
+        await ctx.resume().catch(() => {});
+      }
       greetingAudioCtxRef.current = ctx;
       
       const analyser = ctx.createAnalyser();
@@ -1010,7 +1013,7 @@ export function useVoiceConversation(
       const ctx = createAudioContext();
       
       if (ctx.state === "suspended") {
-        ctx.resume().catch(() => {});
+        await ctx.resume().catch(() => {});
       }
       
       const analyser = ctx.createAnalyser();
@@ -1077,15 +1080,15 @@ export function useVoiceConversation(
     let micAudioCtx: AudioContext | null = null;
     let micAnalyser: AnalyserNode | null = null;
     let micDataArray: Uint8Array<ArrayBuffer> | null = null;
-    let appWindowInstance: Awaited<ReturnType<typeof import("@tauri-apps/api/window").getCurrentWindow>> | null = null;
+    let emitFn: ((event: string, payload: any) => Promise<void>) | null = null;
 
-    const initWindow = async () => {
+    const initEvent = async () => {
       try {
-        const { getCurrentWindow } = await import("@tauri-apps/api/window");
-        appWindowInstance = getCurrentWindow();
-      } catch (e) { logger.debug("[VoiceConversation] window init ignored:", e); }
+        const { emit } = await import("@tauri-apps/api/event");
+        emitFn = emit;
+      } catch (e) { logger.debug("[VoiceConversation] event init ignored:", e); }
     };
-    initWindow();
+    initEvent();
 
     const runVolumeLoop = () => {
       if (!active) return;
@@ -1104,8 +1107,8 @@ export function useVoiceConversation(
         vol = micDataArray.reduce((a: number, b: number) => a + b, 0) / micDataArray.length;
       }
 
-      if (appWindowInstance) {
-        appWindowInstance.emit("voice-volume-tick", { volume: vol }).catch(() => {});
+      if (emitFn) {
+        emitFn("voice-volume-tick", { volume: vol }).catch(() => {});
       }
 
       animationId = requestAnimationFrame(runVolumeLoop);
@@ -1152,8 +1155,8 @@ export function useVoiceConversation(
         micAudioCtx.close().catch(() => {});
       }
       // Emit a final 0 tick to reset visualizers
-      if (appWindowInstance) {
-        appWindowInstance.emit("voice-volume-tick", { volume: 0 }).catch(() => {});
+      if (emitFn) {
+        emitFn("voice-volume-tick", { volume: 0 }).catch(() => {});
       }
     };
   }, [state]);

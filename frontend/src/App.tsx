@@ -82,139 +82,212 @@ function App() {
     voiceConvRef.current = voiceConv;
   }, [voiceConv]);
 
-  const showAssistantWindow = useCallback(async () => {
+  // Keep active monitor and startup normal bounds cached
+  const activeMonitorRef = useRef<any>(null);
+  const startupBoundsRef = useRef<{ size: any; position: any } | null>(null);
+
+  useEffect(() => {
+    const captureStartupMonitorAndBounds = async () => {
+      try {
+        const { currentMonitor, getCurrentWindow } = await import("@tauri-apps/api/window");
+        const monitor = await currentMonitor();
+        if (monitor) {
+          activeMonitorRef.current = monitor;
+          logger.debug("[App] Successfully captured startup monitor:", monitor.name);
+        }
+        
+        const appWindow = getCurrentWindow();
+        const size = await appWindow.outerSize().catch(() => null);
+        const position = await appWindow.outerPosition().catch(() => null);
+        if (size && position && size.width > 100 && size.height > 100) {
+          startupBoundsRef.current = { size, position };
+          logger.debug("[App] Successfully captured startup window bounds:", startupBoundsRef.current);
+        }
+      } catch (e) {
+        console.warn("Failed to capture startup monitor and bounds:", e);
+      }
+    };
+    captureStartupMonitorAndBounds();
+  }, []);
+
+  const [isMirrorMode, setIsMirrorMode] = useState(false);
+  const isMirrorModeRef = useRef(false);
+  useEffect(() => {
+    isMirrorModeRef.current = isMirrorMode;
+  }, [isMirrorMode]);
+  const originalBoundsRef = useRef<{ size: any; position: any } | null>(null);
+  const isProgrammaticFocusRef = useRef(false);
+
+  const enterMirrorMode = useCallback(async () => {
     try {
-      const { WebviewWindow } = await import("@tauri-apps/api/webviewWindow");
-      const { currentMonitor, LogicalSize, LogicalPosition } = await import("@tauri-apps/api/window");
+      const { getCurrentWindow, currentMonitor } = await import("@tauri-apps/api/window");
+      const { PhysicalSize, PhysicalPosition } = await import("@tauri-apps/api/dpi");
       
-      let assistant = await WebviewWindow.getByLabel("assistant");
+      const appWindow = getCurrentWindow();
+      
+      // Set programmatic focus flag to prevent onFocusChanged from exiting mirror mode immediately
+      isProgrammaticFocusRef.current = true;
+      setTimeout(() => {
+        isProgrammaticFocusRef.current = false;
+      }, 1000); // 1000ms safety window for OS window manager animations
+      
+      // 1. Capture original bounds if window is not minimized and we haven't already
+      const isMinimized = await appWindow.isMinimized().catch(() => false);
+      if (!isMinimized && !originalBoundsRef.current) {
+        const size = await appWindow.outerSize().catch(() => null);
+        const position = await appWindow.outerPosition().catch(() => null);
+        if (size && position && size.width > 100 && size.height > 100) {
+          originalBoundsRef.current = { size, position };
+          logger.debug("[App] Saved original main window bounds:", originalBoundsRef.current);
+        }
+      }
+      
+      // 1.5 Unminimize and show first to ensure the window is active and visible
+      await appWindow.show().catch(() => {});
+      await appWindow.unminimize().catch(() => {});
       
       const ASSISTANT_WIDTH = 360;
       const ASSISTANT_HEIGHT = 440;
       const MARGIN_RIGHT = 24;
       const MARGIN_BOTTOM = 24;
       
-      if (!assistant) {
-        logger.debug("[App] Assistant window not found, creating dynamically...");
-        
-        let unlistenReady: (() => void) | null = null;
-        
-        const { getCurrentWindow } = await import("@tauri-apps/api/window");
-        const appWindow = getCurrentWindow();
-        unlistenReady = await appWindow.listen("assistant-ready", async () => {
-          logger.debug("[App] Main window received assistant-ready! Syncing voice state mirror...");
-          if (unlistenReady) {
-            unlistenReady();
-            unlistenReady = null;
-          }
-          const createdAssistant = await WebviewWindow.getByLabel("assistant");
-          if (createdAssistant) {
-            // 1. Show and unminimize non-blockingly
-            createdAssistant.show().catch(() => {});
-            createdAssistant.unminimize().catch(() => {});
-            
-            // 2. Position non-blockingly
-            const monitor = await currentMonitor().catch(() => null);
-            if (monitor) {
-              const workArea = monitor.workArea || { position: { x: 0, y: 0 }, size: monitor.size };
-              const scaleFactor = monitor.scaleFactor || 1;
-              const workWidthLogical = workArea.size.width / scaleFactor;
-              const workHeightLogical = workArea.size.height / scaleFactor;
-              const workXLogical = workArea.position.x / scaleFactor;
-              const workYLogical = workArea.position.y / scaleFactor;
-              const x = Math.max(workXLogical, workXLogical + workWidthLogical - ASSISTANT_WIDTH - MARGIN_RIGHT);
-              const y = Math.max(workYLogical, workYLogical + workHeightLogical - ASSISTANT_HEIGHT - MARGIN_BOTTOM);
-              createdAssistant.setSize(new LogicalSize(ASSISTANT_WIDTH, ASSISTANT_HEIGHT)).catch(() => {});
-              createdAssistant.setPosition(new LogicalPosition(x, y)).catch(() => {});
-            }
-            
-            // 3. Focus and AlwaysOnTop non-blockingly
-            createdAssistant.setAlwaysOnTop(true).catch(() => {});
-            createdAssistant.setFocus().catch(() => {});
-            
-            // 4. Immediately emit state mirror so bubble is synced upon mount
-            appWindow.emit("voice-state-mirror", {
-              state: voiceConvRef.current.state,
-              interimTranscript: voiceConvRef.current.interimTranscript,
-              finalTranscript: voiceConvRef.current.finalTranscript,
-              assistantText: voiceConvRef.current.assistantText,
-              layoutMode: voiceConvRef.current.layoutMode,
-            }).catch(() => {});
-          }
-        });
-        
-        assistant = new WebviewWindow("assistant", {
-          url: "index.html?assistant=true",
-          title: "Jarvis Assistant",
-          width: ASSISTANT_WIDTH,
-          height: ASSISTANT_HEIGHT,
-          visible: false,
-          decorations: false,
-          resizable: false,
-          alwaysOnTop: true,
-          skipTaskbar: true,
-          transparent: true,
-          shadow: true,
-        });
-        
-        await new Promise<void>((resolve, reject) => {
-          assistant!.once("tauri://created", () => resolve());
-          assistant!.once("tauri://error", (e) => {
-            if (unlistenReady) unlistenReady();
-            reject(e);
-          });
-        });
-      } else {
-        // If it already exists, just show, position, focus, and sync non-blockingly!
-        assistant.show().catch(() => {});
-        assistant.unminimize().catch(() => {});
-        
-        const monitor = await currentMonitor().catch(() => null);
-        if (monitor) {
-          const workArea = monitor.workArea || { position: { x: 0, y: 0 }, size: monitor.size };
-          const scaleFactor = monitor.scaleFactor || 1;
-          const workWidthLogical = workArea.size.width / scaleFactor;
-          const workHeightLogical = workArea.size.height / scaleFactor;
-          const workXLogical = workArea.position.x / scaleFactor;
-          const workYLogical = workArea.position.y / scaleFactor;
-          const x = Math.max(workXLogical, workXLogical + workWidthLogical - ASSISTANT_WIDTH - MARGIN_RIGHT);
-          const y = Math.max(workYLogical, workYLogical + workHeightLogical - ASSISTANT_HEIGHT - MARGIN_BOTTOM);
-          assistant.setSize(new LogicalSize(ASSISTANT_WIDTH, ASSISTANT_HEIGHT)).catch(() => {});
-          assistant.setPosition(new LogicalPosition(x, y)).catch(() => {});
-        }
-        
-        assistant.setAlwaysOnTop(true).catch(() => {});
-        assistant.setFocus().catch(() => {});
-        
-        const { getCurrentWindow } = await import("@tauri-apps/api/window");
-        const appWindow = getCurrentWindow();
-        appWindow.emit("voice-state-mirror", {
-          state: voiceConvRef.current.state,
-          interimTranscript: voiceConvRef.current.interimTranscript,
-          finalTranscript: voiceConvRef.current.finalTranscript,
-          assistantText: voiceConvRef.current.assistantText,
-          layoutMode: voiceConvRef.current.layoutMode,
-        }).catch(() => {});
+      // 2. Query active monitor
+      let monitor = await currentMonitor().catch(() => null);
+      if (!monitor) {
+        monitor = activeMonitorRef.current;
       }
+      if (!monitor) {
+        try {
+          const { primaryMonitor } = await import("@tauri-apps/api/window");
+          monitor = await primaryMonitor();
+        } catch {}
+      }
+      
+      if (monitor) {
+        const workArea = monitor.workArea || { position: { x: 0, y: 0 }, size: monitor.size };
+        const scaleFactor = monitor.scaleFactor || 1;
+        
+        const workWidthPhysical = workArea.size?.width ?? (workArea as any).width ?? monitor.size.width;
+        const workHeightPhysical = workArea.size?.height ?? (workArea as any).height ?? monitor.size.height;
+        const workXPhysical = workArea.position?.x ?? (workArea as any).x ?? monitor.position.x;
+        const workYPhysical = workArea.position?.y ?? (workArea as any).y ?? monitor.position.y;
+        
+        const assistantWidthPhysical = Math.round(ASSISTANT_WIDTH * scaleFactor);
+        const assistantHeightPhysical = Math.round(ASSISTANT_HEIGHT * scaleFactor);
+        const marginRightPhysical = Math.round(MARGIN_RIGHT * scaleFactor);
+        const marginBottomPhysical = Math.round(MARGIN_BOTTOM * scaleFactor);
+        
+        const x = Math.max(workXPhysical, workXPhysical + workWidthPhysical - assistantWidthPhysical - marginRightPhysical);
+        const y = Math.max(workYPhysical, workYPhysical + workHeightPhysical - assistantHeightPhysical - marginBottomPhysical);
+        
+        // 3. Remove decorations and set always-on-top first
+        await appWindow.setDecorations(false).catch(() => {});
+        await appWindow.setAlwaysOnTop(true).catch(() => {});
+        
+        // 4. Set size and position in physical pixels
+        await appWindow.setSize(new PhysicalSize(assistantWidthPhysical, assistantHeightPhysical)).catch(() => {});
+        await appWindow.setPosition(new PhysicalPosition(x, y)).catch(() => {});
+        
+        // Double-apply after 100ms to bypass OS asynchronous DWM transitions
+        setTimeout(async () => {
+          await appWindow.setSize(new PhysicalSize(assistantWidthPhysical, assistantHeightPhysical)).catch(() => {});
+          await appWindow.setPosition(new PhysicalPosition(x, y)).catch(() => {});
+        }, 100);
+      }
+      
+      setIsMirrorMode(true);
+      logger.debug("[App] Main window morphed into bottom-right mirror overlay.");
     } catch (err) {
-      console.error("Failed to show assistant window:", err);
+      console.warn("Failed to enter mirror mode:", err);
+    }
+  }, []);
+
+  const exitMirrorMode = useCallback(async (shouldMinimize = false) => {
+    try {
+      const { getCurrentWindow } = await import("@tauri-apps/api/window");
+      const appWindow = getCurrentWindow();
+      
+      // 1. Unconditionally restore decorations (keep borderless) and always-on-top
+      await appWindow.setDecorations(false).catch(() => {});
+      await appWindow.setAlwaysOnTop(false).catch(() => {});
+      
+      // 2. Restore size and position (using captured original bounds, with startupBounds fallbacks)
+      let targetSize = originalBoundsRef.current?.size;
+      let targetPosition = originalBoundsRef.current?.position;
+      
+      if (!targetSize) {
+        if (startupBoundsRef.current?.size) {
+          targetSize = startupBoundsRef.current.size;
+        } else {
+          const { LogicalSize } = await import("@tauri-apps/api/dpi");
+          targetSize = new LogicalSize(1200, 800);
+        }
+      }
+      
+      if (targetSize) {
+        await appWindow.setSize(targetSize).catch(() => {});
+      }
+      
+      if (targetPosition) {
+        await appWindow.setPosition(targetPosition).catch(() => {});
+      } else {
+        // If no position captured, center the window
+        await appWindow.center().catch(() => {});
+      }
+      
+      originalBoundsRef.current = null;
+      logger.debug("[App] Restored main window dimensions and decorations.");
+      
+      // 3. Cleanly minimize or unminimize/show based on the trigger
+      if (shouldMinimize) {
+        logger.debug("[App] Minimizing window to taskbar for clean background hide.");
+        setIsMainWindowFocused(false);
+        await appWindow.minimize().catch(() => {});
+      } else {
+        // If expanding, ensure it's unminimized, shown, and focused
+        await appWindow.unminimize().catch(() => {});
+        await appWindow.show().catch(() => {});
+        await appWindow.setFocus().catch(() => {});
+      }
+      
+      setIsMirrorMode(false);
+    } catch (err) {
+      console.warn("Failed to exit mirror mode:", err);
     }
   }, []);
 
   // Wake word detection (from useVoice)
-  const handleWake = useCallback(() => {
+  const handleWake = useCallback(async () => {
     logger.debug("[App] Wake-word detected. Starting voice session on core engine...");
     // 1. Play greeting and start listening on core engine
     voiceConv.playGreetingAndListen();
     
-    // 2. Only open assistant mirror window if main window is in background
-    if (!document.hasFocus()) {
-      logger.debug("[App] Background wake-word: opening assistant mirror bubble...");
-      showAssistantWindow();
-    } else {
-      logger.debug("[App] Foreground wake-word: keeping centered overlay inside main window.");
+    // 2. Only enter mirror mode if main window is in background (minimized or not focused)
+    try {
+      const { getCurrentWindow } = await import("@tauri-apps/api/window");
+      const appWindow = getCurrentWindow();
+      const isMinimized = await appWindow.isMinimized().catch(() => false);
+      const isFocused = await appWindow.isFocused().catch(() => false);
+      
+      logger.debug("[App] Wake-word state detection:", { isMinimized, isFocused, isMainWindowFocused });
+      
+      if (isMinimized || !isFocused) {
+        logger.debug("[App] Background wake-word: shrinking main window to mirror overlay...");
+        setIsMainWindowFocused(false);
+        enterMirrorMode();
+      } else {
+        logger.debug("[App] Foreground wake-word: keeping centered overlay inside main window.");
+      }
+    } catch (err) {
+      console.warn("Failed to dynamically check window state on wake-word:", err);
+      // Fallback to React state
+      if (!isMainWindowFocused) {
+        enterMirrorMode();
+      } else {
+        logger.debug("[App] Foreground wake-word (fallback): keeping centered overlay inside main window.");
+      }
     }
-  }, [voiceConv, showAssistantWindow]);
+  }, [voiceConv, enterMirrorMode, isMainWindowFocused]);
 
   // When batch ASR transcription completes, start streaming conversation
   const handleVoiceCommand = useCallback(
@@ -297,90 +370,52 @@ function App() {
     }
   }, [messages, voiceConv.clearLastStreamedText]);
 
-  // Emit voice state changes to the assistant window to mirror the overlay
+  // Dynamically toggle body transparency and overflow when mirror mode starts/ends
   useEffect(() => {
-    const emitState = async () => {
-      try {
-        const { getCurrentWindow } = await import("@tauri-apps/api/window");
-        const appWindow = getCurrentWindow();
-        await appWindow.emit("voice-state-mirror", {
-          state: voiceConv.state,
-          interimTranscript: voiceConv.interimTranscript,
-          finalTranscript: voiceConv.finalTranscript,
-          assistantText: voiceConv.assistantText,
-          layoutMode: voiceConv.layoutMode,
-        }).catch(() => {});
-      } catch (e) {
-        console.warn("Failed to emit voice state mirror:", e);
+    if (typeof document !== "undefined") {
+      if (isMirrorMode) {
+        document.body.style.backgroundColor = "transparent";
+        document.documentElement.style.backgroundColor = "transparent";
+        document.body.style.overflow = "hidden";
+        document.documentElement.style.overflow = "hidden";
+      } else {
+        document.body.style.backgroundColor = "";
+        document.documentElement.style.backgroundColor = "";
+        document.body.style.overflow = "";
+        document.documentElement.style.overflow = "";
       }
-    };
-    emitState();
-  }, [voiceConv.state, voiceConv.interimTranscript, voiceConv.finalTranscript, voiceConv.assistantText, voiceConv.layoutMode]);
+    }
+  }, [isMirrorMode]);
 
-  // Listen to events from the assistant window
+  // Programmatic focus grabber when transitioning to listening state in mirror mode
   useEffect(() => {
-    let active = true;
-    let unlisteners: (() => void)[] = [];
-    
-    const setupListeners = async () => {
-      try {
-        const { getCurrentWindow } = await import("@tauri-apps/api/window");
-        const appWindow = getCurrentWindow();
-        
-        const stop = await appWindow.listen("stop-voice-from-assistant", () => {
-          logger.debug("[Main Window] Received stop command from assistant window. Stopping conversation...");
-          voiceConvRef.current.stopConversation();
-        });
-        if (!active) { stop(); return; }
-        unlisteners.push(stop);
-        
-        const finish = await appWindow.listen("finish-voice-from-assistant", () => {
-          logger.debug("[Main Window] Received finish command from assistant window. Submitting current text...");
-          voiceConvRef.current.finishListening();
-        });
-        if (!active) { finish(); return; }
-        unlisteners.push(finish);
-
-        const settings = await appWindow.listen("open-settings-from-assistant", () => {
-          logger.debug("[Main Window] Received open-settings command from assistant window.");
-          setInitialControlPage("models");
-          setCurrentView("control-center");
-        });
-        if (!active) { settings(); return; }
-        unlisteners.push(settings);
-      } catch (e) {
-        console.warn("Failed to set up assistant event listeners in main window:", e);
-      }
-    };
-    
-    setupListeners();
-    return () => {
-      active = false;
-      unlisteners.forEach((unsub) => {
-        try { unsub(); } catch (err) {}
-      });
-    };
-  }, []);
-
-  // Automatically close assistant window if voice state goes idle
-  useEffect(() => {
-    if (voiceConv.state === "idle") {
-      const closeAssistant = async () => {
+    if (isMirrorMode && voiceConv.state === "listening") {
+      const grabFocus = async () => {
         try {
-          const { WebviewWindow } = await import("@tauri-apps/api/webviewWindow");
-          const assistant = await WebviewWindow.getByLabel("assistant");
-          if (assistant) {
-            await assistant.close().catch(() => {});
-          }
-        } catch {
-          // Assistant window may not exist yet
+          const { getCurrentWindow } = await import("@tauri-apps/api/window");
+          const appWindow = getCurrentWindow();
+          logger.debug("[App] Entering listening state in mirror mode: programmatically grabbing OS focus to unblock Chromium ASR.");
+          isProgrammaticFocusRef.current = true;
+          await appWindow.setFocus().catch(() => {});
+          setTimeout(() => {
+            isProgrammaticFocusRef.current = false;
+          }, 300);
+        } catch (e) {
+          console.warn("Failed to programmatically focus shrunken window:", e);
         }
       };
-      closeAssistant();
+      grabFocus();
     }
-  }, [voiceConv.state]);
+  }, [isMirrorMode, voiceConv.state]);
 
-  // Listen to main window focus changes to manage assistant window overlay mirroring
+  // Automatically exit mirror mode if voice state goes idle or error, but only if we are in mirror mode
+  useEffect(() => {
+    if ((voiceConv.state === "idle" || voiceConv.state === "error") && isMirrorMode) {
+      exitMirrorMode(true);
+    }
+  }, [voiceConv.state, isMirrorMode, exitMirrorMode]);
+
+  // Listen to main window focus changes to manage mirror overlay morphing
   useEffect(() => {
     let active = true;
     let unlisten: (() => void) | null = null;
@@ -392,51 +427,56 @@ function App() {
         
         if (!active) return;
         
+        // Dynamically query and update the initial OS-level focus state
+        const initialFocused = await appWindow.isFocused().catch(() => true);
+        if (active) {
+          setIsMainWindowFocused(initialFocused);
+        }
+        
         const unsub = await appWindow.onFocusChanged(async ({ payload: focused }) => {
           if (!active) return;
           const v = voiceRef.current;
           
           if (!focused) {
             logger.debug("[App] Main window lost focus (blurred).");
-            
-            // Update focused state to hide centered overlay
             setIsMainWindowFocused(false);
             
-            // Cleanly pause physical ASR to prevent OS/browser mic lock-ups or premature farewells
+            // Check if conversation is active and we are NOT already in mirror mode
             const vc = voiceConvRef.current;
-            vc.handleWindowBlur();
-            
-            // If conversation is active, open the assistant window as a mirror
             const isConversationActive = vc.state !== "idle" && vc.state !== "error";
-            if (isConversationActive) {
-              logger.debug("[App] Blur during active conversation: showing assistant window to mirror state.");
-              showAssistantWindow();
+            if (isConversationActive && !isMirrorModeRef.current) {
+              logger.debug("[App] Blur during active conversation: entering mirror mode.");
+              enterMirrorMode();
             }
           } else {
-            logger.debug("[App] Main window gained focus (focused). Closing assistant window...");
-            
-            // Restore focused state to show centered overlay
+            logger.debug("[App] Main window gained focus (focused).");
             setIsMainWindowFocused(true);
             
-            // Close the assistant window if it is open
+            if (isProgrammaticFocusRef.current) {
+              logger.debug("[App] Focus gained programmatically. Ignoring mirror mode exit.");
+              return;
+            }
+            
+            // Re-capture active monitor since the window might have been dragged to another screen
             try {
-              const { WebviewWindow } = await import("@tauri-apps/api/webviewWindow");
-              const assistant = await WebviewWindow.getByLabel("assistant");
-              if (assistant) {
-                await assistant.close().catch(() => {});
+              const { currentMonitor } = await import("@tauri-apps/api/window");
+              const monitor = await currentMonitor();
+              if (monitor) {
+                activeMonitorRef.current = monitor;
               }
-            } catch (e) {
-              console.warn("Failed to close assistant window:", e);
+            } catch {}
+            
+            // Only exit mirror mode if we are actually in mirror mode
+            if (isMirrorModeRef.current) {
+              logger.debug("[App] Gained focus via user interaction: exiting mirror mode.");
+              exitMirrorMode(false);
             }
             
             // Refresh conversation messages to merge any background dialogue logs
             refreshMessages();
             
-            // Cleanly resume physical ASR if we were actively listening
-            const vc = voiceConvRef.current;
-            vc.handleWindowFocus();
-            
             // Restart wake-word engine in the foreground if no conversation is active
+            const vc = voiceConvRef.current;
             const isConversationActive = vc.state !== "idle" && vc.state !== "error";
             if (!isConversationActive) {
               if (v && !v.isWakeWordListening) {
@@ -447,9 +487,7 @@ function App() {
         });
         
         if (!active) {
-          try { unsub(); } catch {
-            // Cleanup during teardown is best-effort
-          }
+          try { unsub(); } catch {}
           return;
         }
         unlisten = unsub;
@@ -465,7 +503,28 @@ function App() {
         try { unlisten(); } catch (err) {}
       }
     };
-  }, [showAssistantWindow, refreshMessages]);
+  }, [enterMirrorMode, exitMirrorMode, refreshMessages]);
+
+  // If in mirror mode, render only the bottom-right floating overlay in a standalone minimalist setup
+  if (isMirrorMode) {
+    return (
+      <JarvisVoiceOverlay
+        state={voiceConv.state}
+        interimTranscript={voiceConv.interimTranscript}
+        finalTranscript={voiceConv.finalTranscript}
+        assistantText={voiceConv.assistantText}
+        onClose={handleVoiceToggle}
+        onStop={voiceConv.state === "listening" ? voiceConv.finishListening : voiceConv.stopConversation}
+        onOpenSettings={() => {
+          exitMirrorMode(false);
+          setInitialControlPage("models");
+          setCurrentView("control-center");
+        }}
+        onRestore={() => exitMirrorMode(false)}
+        layoutMode="bottom-right"
+      />
+    );
+  }
 
   // Determine which state to show in VoicePanel
   const panelState = voiceConv.state !== "idle" ? voiceConv.state : voice.state;

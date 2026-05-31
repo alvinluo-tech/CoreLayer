@@ -11,7 +11,7 @@
     "lint": "pnpm -r lint",
     "test": "pnpm -r test",
     "clean": "pnpm -r clean",
-    "clean:app": "taskkill /f /im app.exe 2>nul || exit 0",
+    "clean:app": "taskkill /f /im jarvis-app.exe /im Jarvis.exe 2>nul || exit 0",
     "clean:daemon": "for /f \"tokens=5\" %a in ('netstat -aon ^| findstr 3001') do taskkill /f /pid %a 2>nul || exit 0",
     "clean:all": "pnpm clean:app && pnpm clean:daemon"
   },

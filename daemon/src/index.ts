@@ -33,7 +33,22 @@ registerAllAdapters();
 
 const app = new Hono();
 
-app.use("/*", cors({ origin: ["http://localhost:*", "http://127.0.0.1:*"] }));
+app.use(
+  "/*",
+  cors({
+    origin: (origin) => {
+      if (!origin) return "http://localhost:1420";
+      if (
+        /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin) ||
+        origin === "http://tauri.localhost" ||
+        origin === "tauri://localhost"
+      ) {
+        return origin;
+      }
+      return "http://localhost:1420";
+    },
+  })
+);
 
 // ─── Global error handler (safety net for any unhandled route exception) ─────
 app.onError((err, c) => {
