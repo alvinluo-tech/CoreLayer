@@ -35,6 +35,9 @@ jobs:
       - name: Run Prettier check
         run: pnpm exec prettier --check "frontend/src/**/*.{ts,tsx}" "packages/**/*.{ts,tsx}"
 
+      - name: Run TypeScript type check
+        run: pnpm typecheck
+
   test:
     name: Unit Tests
     runs-on: ubuntu-latest

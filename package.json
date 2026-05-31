@@ -14,6 +14,7 @@
     "format": "prettier --write \"frontend/src/**/*.{ts,tsx}\" \"packages/**/*.{ts,tsx}\"",
     "format:check": "prettier --check \"frontend/src/**/*.{ts,tsx}\" \"packages/**/*.{ts,tsx}\"",
     "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
     "clean": "pnpm -r clean",
     "clean:app": "taskkill /f /im jarvis-app.exe /im Jarvis.exe 2>nul || exit 0",
     "clean:daemon": "for /f \"tokens=5\" %a in ('netstat -aon ^| findstr 3001') do taskkill /f /pid %a 2>nul || exit 0",
