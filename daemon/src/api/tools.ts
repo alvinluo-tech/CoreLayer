@@ -37,15 +37,22 @@ app.get("/", (c) => {
     inputSchema: t.inputSchema,
   }));
 
+  // Derive bySource from the same tools array to guarantee consistency
+  const bySource = {
+    native: tools.filter((t) => t.source === "native").length,
+    mcp: tools.filter((t) => t.source === "mcp").length,
+    skill: tools.filter((t) => t.source === "skill").length,
+    rest: tools.filter((t) => t.source === "rest").length,
+  };
+  const accounted = bySource.native + bySource.mcp + bySource.skill + bySource.rest;
+  if (accounted !== tools.length) {
+    console.warn(`[Tools] bySource sum (${accounted}) !== total (${tools.length}). Unaccounted tools may have unexpected source values.`);
+  }
+
   return c.json({
     tools,
     count: tools.length,
-    bySource: {
-      native: registry.getToolsBySource("native").length,
-      mcp: registry.getToolsBySource("mcp").length,
-      skill: registry.getToolsBySource("skill").length,
-      rest: registry.getToolsBySource("rest").length,
-    },
+    bySource,
   });
 });
 

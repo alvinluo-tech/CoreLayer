@@ -1,5 +1,6 @@
 import Groq from "groq-sdk";
 import { env } from "../config/env.js";
+import { configManager } from "../config/config-manager.js";
 import { writeFile, unlink } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
@@ -15,7 +16,8 @@ let groqClient: Groq | null = null;
 
 function getGroqClient(): Groq {
   if (!groqClient) {
-    groqClient = new Groq({ apiKey: env.GROQ_API_KEY });
+    const apiKey = configManager.getCredentials()["groq"] || env.GROQ_API_KEY;
+    groqClient = new Groq({ apiKey });
   }
   return groqClient;
 }
@@ -31,7 +33,8 @@ export async function transcribeWithGroq(
   filename: string = "audio.webm",
   language?: string,
 ): Promise<TranscriptionResult> {
-  if (!env.GROQ_API_KEY) {
+  const groqApiKey = configManager.getCredentials()["groq"] || env.GROQ_API_KEY;
+  if (!groqApiKey) {
     throw new Error("GROQ_API_KEY not configured");
   }
 
@@ -65,5 +68,5 @@ export async function transcribeWithGroq(
  * Check if ASR is available (Groq key configured).
  */
 export function isAsrAvailable(): boolean {
-  return Boolean(env.GROQ_API_KEY);
+  return Boolean(configManager.getCredentials()["groq"] || env.GROQ_API_KEY);
 }

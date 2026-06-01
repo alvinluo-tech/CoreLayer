@@ -1,0 +1,37 @@
+import { configManager } from "./config-manager.js";
+
+// Canonical legacy provider defaults — single source of truth
+export const LEGACY_DEFAULTS: Record<string, { baseURL: string; envKey?: string }> = {
+  mimo: { baseURL: "https://token-plan-ams.xiaomimimo.com/v1", envKey: "MIMO_API_KEY" },
+  groq: { baseURL: "https://api.groq.com/openai/v1", envKey: "GROQ_API_KEY" },
+  openrouter: { baseURL: "https://openrouter.ai/api/v1", envKey: "OPENROUTER_API_KEY" },
+  local: { baseURL: "http://localhost:11434/v1" },
+  ollama: { baseURL: "http://localhost:11434/v1" },
+};
+
+export interface ResolvedProvider {
+  baseURL: string;
+  apiKey: string;
+}
+
+export function resolveProvider(name: string): ResolvedProvider {
+  // 1. Check configManager (user-level ~/.jarvis/config.json + credentials.json)
+  try {
+    return configManager.getProviderConfig(name);
+  } catch {
+    // Provider not in config, fall through to env fallback
+  }
+
+  // 2. Check legacy env vars
+  const legacy = LEGACY_DEFAULTS[name];
+  if (legacy) {
+    return {
+      baseURL: legacy.baseURL,
+      apiKey: legacy.envKey ? (process.env[legacy.envKey] ?? "") : "",
+    };
+  }
+
+  throw new Error(
+    `Provider not configured: ${name}. Add it in Settings → Models.`,
+  );
+}

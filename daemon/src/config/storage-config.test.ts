@@ -27,15 +27,6 @@ import { env } from "./env.js";
 import {
   getStorageMode,
   setStorageMode,
-  getProviders,
-  setProvider,
-  removeProvider,
-  setProviderCredential,
-  getProviderCredentials,
-  getRoutingRules,
-  setRoutingRules,
-  getActiveModelId,
-  setActiveModelId,
   isCloudConfigured,
   isPostgresConfigured,
   getDbConfig,
@@ -59,7 +50,6 @@ function mockConfigFile(data: Record<string, unknown> | null) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  // Reset env defaults
   mockedEnv.STORAGE_MODE = "local";
   mockedEnv.SUPABASE_URL = "";
   mockedEnv.SUPABASE_SERVICE_ROLE_KEY = "";
@@ -115,140 +105,6 @@ describe("setStorageMode", () => {
     setStorageMode("postgres");
 
     expect(mockedMkdirSync).toHaveBeenCalled();
-  });
-});
-
-describe("getProviders / setProvider / removeProvider", () => {
-  it("returns empty array when no providers in config", () => {
-    mockConfigFile({});
-    expect(getProviders()).toEqual([]);
-  });
-
-  it("returns providers from config", () => {
-    const providers = [{ id: "p1", name: "Provider 1", type: "openai_compatible" as const, baseURL: "http://a", enabled: true }];
-    mockConfigFile({ providers });
-    expect(getProviders()).toEqual(providers);
-  });
-
-  it("adds a new provider", () => {
-    mockConfigFile({ providers: [] });
-    setProvider("p1", { name: "New", type: "openai_compatible", baseURL: "http://b", enabled: true });
-
-    expect(mockedWriteFileSync).toHaveBeenCalled();
-    const written = JSON.parse(mockedWriteFileSync.mock.calls[0][1] as string);
-    expect(written.providers).toHaveLength(1);
-    expect(written.providers[0].id).toBe("p1");
-    expect(written.providers[0].name).toBe("New");
-  });
-
-  it("updates an existing provider by id", () => {
-    const providers = [{ id: "p1", name: "Old", type: "openai_compatible" as const, baseURL: "http://a", enabled: true }];
-    mockConfigFile({ providers });
-    setProvider("p1", { name: "Updated", type: "ollama", baseURL: "http://c", enabled: false });
-
-    const written = JSON.parse(mockedWriteFileSync.mock.calls[0][1] as string);
-    expect(written.providers).toHaveLength(1);
-    expect(written.providers[0].name).toBe("Updated");
-    expect(written.providers[0].type).toBe("ollama");
-  });
-
-  it("removes a provider by id", () => {
-    const providers = [
-      { id: "p1", name: "A", type: "openai_compatible" as const, baseURL: "http://a", enabled: true },
-      { id: "p2", name: "B", type: "ollama" as const, baseURL: "http://b", enabled: true },
-    ];
-    mockConfigFile({ providers });
-    removeProvider("p1");
-
-    const written = JSON.parse(mockedWriteFileSync.mock.calls[0][1] as string);
-    expect(written.providers).toHaveLength(1);
-    expect(written.providers[0].id).toBe("p2");
-  });
-
-  it("removeProvider is a no-op when id not found", () => {
-    const providers = [{ id: "p1", name: "A", type: "openai_compatible" as const, baseURL: "http://a", enabled: true }];
-    mockConfigFile({ providers });
-    removeProvider("nonexistent");
-
-    const written = JSON.parse(mockedWriteFileSync.mock.calls[0][1] as string);
-    expect(written.providers).toHaveLength(1);
-  });
-});
-
-describe("setProviderCredential", () => {
-  it("sets a new credential", () => {
-    mockConfigFile({});
-    setProviderCredential("openai", { apiKey: "sk-123" });
-
-    const written = JSON.parse(mockedWriteFileSync.mock.calls[0][1] as string);
-    expect(written.providerCredentials.openai.apiKey).toBe("sk-123");
-  });
-
-  it("merges with existing credential, preserving unset fields", () => {
-    mockConfigFile({ providerCredentials: { openai: { apiKey: "sk-old", baseURL: "http://old" } } });
-    setProviderCredential("openai", { apiKey: "sk-new" });
-
-    const written = JSON.parse(mockedWriteFileSync.mock.calls[0][1] as string);
-    expect(written.providerCredentials.openai.apiKey).toBe("sk-new");
-    expect(written.providerCredentials.openai.baseURL).toBe("http://old");
-  });
-
-  it("preserves existing apiKey when only baseURL is updated", () => {
-    mockConfigFile({ providerCredentials: { openai: { apiKey: "sk-keep" } } });
-    setProviderCredential("openai", { baseURL: "http://new" });
-
-    const written = JSON.parse(mockedWriteFileSync.mock.calls[0][1] as string);
-    expect(written.providerCredentials.openai.apiKey).toBe("sk-keep");
-    expect(written.providerCredentials.openai.baseURL).toBe("http://new");
-  });
-});
-
-describe("getProviderCredentials", () => {
-  it("returns empty object when no credentials", () => {
-    mockConfigFile({});
-    expect(getProviderCredentials()).toEqual({});
-  });
-});
-
-describe("getRoutingRules / setRoutingRules", () => {
-  it("returns undefined when no rules in config", () => {
-    mockConfigFile({});
-    expect(getRoutingRules()).toBeUndefined();
-  });
-
-  it("returns rules from config", () => {
-    const rules = [{ taskType: "chat", modelId: "m1" }];
-    mockConfigFile({ routingRules: rules });
-    expect(getRoutingRules()).toEqual(rules);
-  });
-
-  it("writes rules to config", () => {
-    mockConfigFile({});
-    const rules = [{ taskType: "fast", modelId: "m2", conditions: { expectedAnswerLength: "short" } }];
-    setRoutingRules(rules);
-
-    const written = JSON.parse(mockedWriteFileSync.mock.calls[0][1] as string);
-    expect(written.routingRules).toEqual(rules);
-  });
-});
-
-describe("getActiveModelId / setActiveModelId", () => {
-  it("returns undefined when no active model", () => {
-    mockConfigFile({});
-    expect(getActiveModelId()).toBeUndefined();
-  });
-
-  it("returns active model id from config", () => {
-    mockConfigFile({ activeModelId: "mimo-2.5-pro" });
-    expect(getActiveModelId()).toBe("mimo-2.5-pro");
-  });
-
-  it("writes active model id to config", () => {
-    mockConfigFile({});
-    setActiveModelId("groq-llama");
-
-    const written = JSON.parse(mockedWriteFileSync.mock.calls[0][1] as string);
-    expect(written.activeModelId).toBe("groq-llama");
   });
 });
 
@@ -314,26 +170,5 @@ describe("getDbConfig / setDbConfig", () => {
 
     const written = JSON.parse(mockedWriteFileSync.mock.calls[0][1] as string);
     expect(written.dbConfig).toEqual(dbConfig);
-  });
-});
-
-describe("lenient parsing", () => {
-  it("returns valid fields from partial JSON", () => {
-    mockConfigFile({ providers: [{ id: "p1", name: "P1", type: "ollama", baseURL: "http://a", enabled: true }] });
-    expect(getProviders()).toEqual([{ id: "p1", name: "P1", type: "ollama", baseURL: "http://a", enabled: true }]);
-    expect(getStorageMode()).toBe("local"); // missing storageMode defaults to local
-  });
-
-  it("returns valid activeModelId even when other fields are missing", () => {
-    mockConfigFile({ activeModelId: "custom-model" });
-    expect(getActiveModelId()).toBe("custom-model");
-    expect(getStorageMode()).toBe("local");
-  });
-
-  it("ignores invalid types for known fields", () => {
-    mockConfigFile({ storageMode: "cloud", providers: "not-an-array", activeModelId: 123 });
-    expect(getStorageMode()).toBe("cloud");
-    expect(getProviders()).toEqual([]);
-    expect(getActiveModelId()).toBeUndefined();
   });
 });

@@ -1,10 +1,5 @@
 import { Hono } from "hono";
-import {
-  getRoutingRules,
-  setRoutingRules,
-  getActiveModelId,
-  setActiveModelId,
-} from "../config/storage-config.js";
+import { configManager } from "../config/config-manager.js";
 import { getRepositories } from "../db/factory.js";
 import { resetGateway, getModelGateway } from "../model/gateway.js";
 import { DEFAULT_ROUTING_RULES } from "@jarvis/model-gateway";
@@ -16,10 +11,10 @@ const app = new Hono();
 
 app.get("/routing-rules", (c) => {
   try {
-    const custom = getRoutingRules();
+    const custom = configManager.getRoutingRules();
     return c.json({
-      rules: custom ?? DEFAULT_ROUTING_RULES,
-      isCustom: custom !== undefined,
+      rules: custom.length > 0 ? custom : DEFAULT_ROUTING_RULES,
+      isCustom: custom.length > 0,
     });
   } catch (err) {
     logError("settings/routing-rules/get", err);
@@ -41,7 +36,7 @@ app.put("/routing-rules", async (c) => {
       }
     }
 
-    setRoutingRules(body.rules);
+    configManager.setRoutingRules(body.rules);
     resetGateway();
 
     return c.json({ success: true, message: "Routing rules updated." });
@@ -55,12 +50,12 @@ app.put("/routing-rules", async (c) => {
 
 app.get("/active-model", (c) => {
   try {
-    const activeId = getActiveModelId();
+    const activeId = configManager.getActiveModel();
     const gateway = getModelGateway();
-    const profile = activeId ? gateway.getProfile(activeId) : null;
+    const profile = gateway.getProfile(activeId);
 
     return c.json({
-      modelId: activeId ?? "mimo-2.5-pro",
+      modelId: activeId,
       profile: profile ?? null,
     });
   } catch (err) {
@@ -88,7 +83,7 @@ app.put("/active-model", async (c) => {
       }
     }
 
-    setActiveModelId(body.modelId);
+    configManager.setActiveModel(body.modelId);
     resetGateway();
 
     return c.json({ success: true, message: `Active model set to "${body.modelId}".` });

@@ -4,6 +4,8 @@ import { cors } from "hono/cors";
 import { env } from "./config/env.js";
 import { initializeRepositories, getCurrentMode } from "./db/factory.js";
 import { getStorageMode } from "./config/storage-config.js";
+import { runMigration } from "./config/migration.js";
+import { configManager } from "./config/config-manager.js";
 import { registerTodoTools } from "./tools/todo/connector.js";
 import { registerReadingTools } from "./tools/reading/connector.js";
 import { registerReviewTools } from "./tools/review/connector.js";
@@ -19,6 +21,9 @@ import chatRoutes from "./api/chat.js";
 import voiceRoutes from "./api/voice.js";
 import mcpRoutes from "./api/mcp.js";
 import toolRoutes from "./api/tools.js";
+
+// Run config migration from old locations to ~/.jarvis/
+runMigration();
 
 // Initialize storage mode and repositories
 const storageMode = getStorageMode();
@@ -128,8 +133,11 @@ function startServer(port: number) {
 }
 
 // Show configuration on startup
-const aiConfigured = Boolean(env.MIMO_API_KEY || env.GROQ_API_KEY || env.OPENROUTER_API_KEY);
-const aiMode = aiConfigured ? `AI 模式 (${env.AI_PROVIDER}/${env.AI_MODEL})` : "本地模式 (无 API Key)";
+const activeProvider = configManager.getActiveProvider();
+const activeModel = configManager.getActiveModel();
+const creds = configManager.getCredentials();
+const aiConfigured = Boolean(Object.values(creds).some((v) => v) || env.MIMO_API_KEY || env.GROQ_API_KEY);
+const aiMode = aiConfigured ? `AI 模式 (${activeProvider}/${activeModel})` : "本地模式 (无 API Key)";
 console.log(`[Jarvis] AI: ${aiMode}`);
 console.log(`[Jarvis] 存储: ${getCurrentMode()}`);
 console.log(`[Jarvis] 数据库: ${env.SQLITE_DB_PATH}`);

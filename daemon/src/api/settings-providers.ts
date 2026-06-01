@@ -1,12 +1,6 @@
 import { Hono } from "hono";
-import {
-  getProviderCredentials,
-  setProviderCredential,
-  getProviders,
-  setProvider,
-  removeProvider,
-  type StoredProvider,
-} from "../config/storage-config.js";
+import { configManager, type StoredProvider } from "../config/config-manager.js";
+import { LEGACY_DEFAULTS } from "../config/provider-resolver.js";
 import { resetGateway } from "../model/gateway.js";
 import { PROVIDER_PRESETS } from "@jarvis/model-gateway";
 import { apiError, logError } from "../utils/errors.js";
@@ -24,23 +18,18 @@ app.get("/providers/presets", (c) => {
 
 app.get("/providers", (c) => {
   try {
-    const stored = getProviders();
-    const creds = getProviderCredentials();
+    const stored = configManager.getProviders();
 
     if (stored.length === 0) {
+      // Synthesize legacy view from credentials
+      const creds = configManager.getCredentials();
       const providers: Record<string, { apiKey: string; baseURL: string; enabled: boolean }> = {};
-      const defaults: Record<string, { baseURL: string }> = {
-        mimo: { baseURL: "https://token-plan-ams.xiaomimimo.com/v1" },
-        groq: { baseURL: "https://api.groq.com/openai/v1" },
-        openrouter: { baseURL: "https://openrouter.ai/api/v1" },
-        local: { baseURL: "http://localhost:11434/v1" },
-      };
 
-      for (const [name, def] of Object.entries(defaults)) {
-        const ui = creds[name];
+      for (const [name, def] of Object.entries(LEGACY_DEFAULTS)) {
+        if (name === "ollama") continue; // Skip alias
         providers[name] = {
-          apiKey: maskApiKey(ui?.apiKey),
-          baseURL: ui?.baseURL ?? def.baseURL,
+          apiKey: maskApiKey(creds[name]),
+          baseURL: def.baseURL,
           enabled: true,
         };
       }
@@ -50,7 +39,7 @@ app.get("/providers", (c) => {
 
     const providers = stored.map((p) => ({
       ...p,
-      apiKey: maskApiKey(p.apiKey),
+      apiKey: maskApiKey(configManager.getCredentials()[p.id]),
     }));
 
     return c.json({ providers, isLegacy: false });
@@ -79,11 +68,15 @@ app.post("/providers", async (c) => {
       name: body.name,
       type: (body.type as StoredProvider["type"]) ?? "openai_compatible",
       baseURL: body.baseURL,
-      apiKey: body.apiKey,
       enabled: body.enabled ?? true,
     };
 
-    setProvider(body.id, provider);
+    configManager.setProvider(body.id, provider);
+
+    if (body.apiKey) {
+      configManager.setCredential(body.id, body.apiKey);
+    }
+
     resetGateway();
 
     return c.json({ success: true, message: `Provider "${body.name}" added.` });
@@ -103,25 +96,36 @@ app.put("/providers/:id", async (c) => {
       enabled?: boolean;
     }>();
 
-    const existing = getProviders().find((p) => p.id === id);
+    const existing = configManager.getProviders().find((p) => p.id === id);
     if (existing) {
       const updated: Omit<StoredProvider, "id"> = {
         name: body.name ?? existing.name,
         type: existing.type,
         baseURL: body.baseURL ?? existing.baseURL,
-        apiKey: body.apiKey !== undefined && !isMaskedKey(body.apiKey) ? body.apiKey : existing.apiKey,
         enabled: body.enabled ?? existing.enabled,
       };
-      setProvider(id, updated);
-    } else {
-      const cred: { apiKey?: string; baseURL?: string } = {};
+      configManager.setProvider(id, updated);
+
+      // Update credential separately
       if (body.apiKey !== undefined && !isMaskedKey(body.apiKey)) {
-        cred.apiKey = body.apiKey;
+        configManager.setCredential(id, body.apiKey);
       }
-      if (body.baseURL !== undefined) {
-        cred.baseURL = body.baseURL;
+    } else {
+      // Legacy provider — create as new stored provider using preset defaults
+      const preset = PROVIDER_PRESETS.find((p) => p.id === id);
+      if (preset) {
+        const provider: Omit<StoredProvider, "id"> = {
+          name: preset.name,
+          type: preset.type as StoredProvider["type"],
+          baseURL: body.baseURL ?? preset.defaultBaseURL,
+          enabled: body.enabled ?? true,
+        };
+        configManager.setProvider(id, provider);
       }
-      setProviderCredential(id, cred);
+
+      if (body.apiKey !== undefined && !isMaskedKey(body.apiKey)) {
+        configManager.setCredential(id, body.apiKey);
+      }
     }
 
     resetGateway();
@@ -135,7 +139,7 @@ app.put("/providers/:id", async (c) => {
 app.delete("/providers/:id", async (c) => {
   try {
     const id = c.req.param("id");
-    removeProvider(id);
+    configManager.removeProvider(id);
     resetGateway();
     return c.json({ success: true });
   } catch (err) {
@@ -148,14 +152,14 @@ app.delete("/providers/:id", async (c) => {
 
 app.post("/providers/:id/discover", async (c) => {
   const id = c.req.param("id");
-  const stored = getProviders().find((p) => p.id === id);
+  const stored = configManager.getProviders().find((p) => p.id === id);
 
   let baseURL: string;
   let apiKey: string;
 
   if (stored) {
     baseURL = stored.baseURL;
-    apiKey = stored.apiKey ?? "";
+    apiKey = configManager.getCredentials()[id] ?? "";
   } else {
     return apiError(c, `Provider "${id}" not found. Add it first.`, 404);
   }
@@ -189,7 +193,7 @@ app.post("/providers/:id/discover", async (c) => {
 
 app.post("/providers/:id/test", async (c) => {
   const id = c.req.param("id");
-  const stored = getProviders().find((p) => p.id === id);
+  const stored = configManager.getProviders().find((p) => p.id === id);
 
   if (!stored) {
     return apiError(c, `Provider "${id}" not found.`, 404);
@@ -197,15 +201,26 @@ app.post("/providers/:id/test", async (c) => {
 
   const startTime = Date.now();
   try {
+    const apiKey = configManager.getCredentials()[id] ?? "";
+    const keyConfigured = Boolean(apiKey && apiKey !== "ollama" && !isMaskedKey(apiKey));
     const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (stored.apiKey && stored.apiKey !== "ollama" && !isMaskedKey(stored.apiKey)) {
-      headers["Authorization"] = `Bearer ${stored.apiKey}`;
+    if (keyConfigured) {
+      headers["Authorization"] = `Bearer ${apiKey}`;
     }
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 6000);
 
-    const resp = await fetch(`${stored.baseURL}/models`, {
+    // Some providers (e.g. OpenRouter) have public /models endpoints that
+    // return 200 even without a valid key. For those, hit an auth-requiring
+    // endpoint to actually verify the key.
+    let testURL = `${stored.baseURL}/models`;
+    if (keyConfigured && stored.baseURL.includes("openrouter.ai")) {
+      const origin = new URL(stored.baseURL).origin;
+      testURL = `${origin}/api/v1/auth/key`;
+    }
+
+    const resp = await fetch(testURL, {
       headers,
       signal: controller.signal,
     });
@@ -214,14 +229,26 @@ app.post("/providers/:id/test", async (c) => {
     const latencyMs = Date.now() - startTime;
 
     if (resp.status === 401 || resp.status === 403) {
-      return c.json({ success: false, error: "API Key 校验失败 (401 Unauthorized)", latencyMs });
+      return c.json({
+        success: false,
+        error: keyConfigured
+          ? "API Key 无效 (401 Unauthorized)"
+          : "需要配置 API Key 才能使用此供应商",
+        latencyMs,
+        keyConfigured,
+      });
     }
 
     if (!resp.ok) {
-      return c.json({ success: false, error: `服务器返回异常: ${resp.status} ${resp.statusText}`, latencyMs });
+      return c.json({
+        success: false,
+        error: `服务器返回异常: ${resp.status} ${resp.statusText}`,
+        latencyMs,
+        keyConfigured,
+      });
     }
 
-    return c.json({ success: true, latencyMs });
+    return c.json({ success: true, latencyMs, keyConfigured });
   } catch (e) {
     const latencyMs = Date.now() - startTime;
     logError("settings/providers/test", e);
@@ -232,21 +259,14 @@ app.post("/providers/:id/test", async (c) => {
 // ---- Legacy Provider Credentials (backward compat) ----
 
 app.get("/providers/legacy", (c) => {
-  const creds = getProviderCredentials();
+  const creds = configManager.getCredentials();
   const providers: Record<string, { apiKey: string; baseURL: string }> = {};
 
-  const defaults: Record<string, { baseURL: string }> = {
-    mimo: { baseURL: "https://token-plan-ams.xiaomimimo.com/v1" },
-    groq: { baseURL: "https://api.groq.com/openai/v1" },
-    openrouter: { baseURL: "https://openrouter.ai/api/v1" },
-    local: { baseURL: "http://localhost:11434/v1" },
-  };
-
-  for (const [name, def] of Object.entries(defaults)) {
-    const ui = creds[name];
+  for (const [name, def] of Object.entries(LEGACY_DEFAULTS)) {
+    if (name === "ollama") continue;
     providers[name] = {
-      apiKey: maskApiKey(ui?.apiKey),
-      baseURL: ui?.baseURL ?? def.baseURL,
+      apiKey: maskApiKey(creds[name]),
+      baseURL: def.baseURL,
     };
   }
 

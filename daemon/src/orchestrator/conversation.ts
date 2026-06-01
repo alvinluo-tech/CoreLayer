@@ -4,6 +4,7 @@ import { buildSystemPrompt } from "./prompt-builder.js";
 import { getModel } from "../ai/provider.js";
 import { getAllTools } from "../tools/registry.js";
 import { env } from "../config/env.js";
+import { configManager } from "../config/config-manager.js";
 import { getRepositories } from "../db/factory.js";
 import type { MessageRow, ConversationRow } from "../db/repository.js";
 import { classifyError, extractErrorMessage, logError } from "../utils/errors.js";
@@ -11,11 +12,14 @@ import { classifyError, extractErrorMessage, logError } from "../utils/errors.js
 const MAX_HISTORY_MESSAGES = 20;
 
 export function isAiConfigured(): boolean {
-  // Accept any configured provider key — not just MIMO
+  // Check ~/.jarvis/credentials.json first
+  const creds = configManager.getCredentials();
+  if (Object.values(creds).some((v) => v)) return true;
+
+  // Fallback: check env vars
   return Boolean(
-    env.AI_PROVIDER &&
-    (env.MIMO_API_KEY || env.GROQ_API_KEY || env.OPENROUTER_API_KEY ||
-     process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY)
+    env.MIMO_API_KEY || env.GROQ_API_KEY || env.OPENROUTER_API_KEY ||
+    process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY
   );
 }
 

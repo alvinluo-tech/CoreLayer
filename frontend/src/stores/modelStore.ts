@@ -49,12 +49,15 @@ interface ModelState {
     baseURL: string;
     apiKey?: string;
   }) => Promise<void>;
-  updateProvider: (id: string, config: { apiKey?: string; baseURL?: string }) => Promise<void>;
+  updateProvider: (
+    id: string,
+    config: { apiKey?: string; baseURL?: string; enabled?: boolean; name?: string }
+  ) => Promise<void>;
   removeProvider: (id: string) => Promise<void>;
   discoverModels: (providerId: string) => Promise<{ id: string; name: string }[]>;
   testProvider: (
     providerId: string
-  ) => Promise<{ success: boolean; latencyMs?: number; error?: string }>;
+  ) => Promise<{ success: boolean; latencyMs?: number; error?: string; keyConfigured?: boolean }>;
   updateRoutingRules: (rules: RoutingRule[]) => Promise<void>;
   setActiveModel: (modelId: string) => Promise<void>;
   upsertProfile: (profile: {
