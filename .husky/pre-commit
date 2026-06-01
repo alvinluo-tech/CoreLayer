@@ -1,2 +1,9 @@
 pnpm typecheck
+
+echo "Checking Rust formatting..."
+cargo fmt --manifest-path frontend/src-tauri/Cargo.toml -- --check || {
+  echo "Rust files not formatted. Run: cargo fmt --manifest-path frontend/src-tauri/Cargo.toml"
+  exit 1
+}
+
 npx lint-staged
