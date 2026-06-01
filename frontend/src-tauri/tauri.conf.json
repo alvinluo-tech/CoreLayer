@@ -46,10 +46,6 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "updater": {
-      "active": true,
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDlDQ0RGRUQ2MEMwMTgyOEIKUldTTGdnRU0xdjdObkdCTnAvSUtUT09FNW9GZXdCRHFSY296UVVLdExKN3c1dW1mUm96L2JPUTMK"
-    },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
