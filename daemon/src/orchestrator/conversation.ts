@@ -3,6 +3,7 @@ import type { ModelMessage } from "ai";
 import { buildSystemPrompt } from "./prompt-builder.js";
 import { getModel } from "../ai/provider.js";
 import { getAllTools } from "../tools/registry.js";
+import { wrapToolsForAI } from "../runtime/ai-tool-wrapper.js";
 import { env } from "../config/env.js";
 import { configManager } from "../config/config-manager.js";
 import { getRepositories } from "../db/factory.js";
@@ -16,7 +17,8 @@ export function isAiConfigured(): boolean {
   const creds = configManager.getCredentials();
   if (Object.values(creds).some((v) => v)) return true;
 
-  // Fallback: check env vars
+  // Fallback: check env vars — provider and key must both be present
+  if (!env.AI_PROVIDER) return false;
   return Boolean(
     env.MIMO_API_KEY || env.GROQ_API_KEY || env.OPENROUTER_API_KEY ||
     process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY
@@ -230,7 +232,7 @@ export async function handleMessageInConversation(
       const result = await generateText({
         model: getModel(),
         messages,
-        tools: getAllTools(),
+        tools: wrapToolsForAI(getAllTools(), conversationId),
         stopWhen: stepCountIs(5),
       });
 
@@ -329,7 +331,7 @@ export async function streamMessageInConversation(
       const result = streamText({
         model: getModel(),
         messages,
-        tools: getAllTools(),
+        tools: wrapToolsForAI(getAllTools(), conversationId),
         stopWhen: stepCountIs(5),
       });
 
@@ -362,7 +364,7 @@ export function streamChat(messages: ModelMessage[], mode: "text" | "voice" = "t
       model: getModel(),
       system: buildSystemPrompt(mode, conversationId),
       messages,
-      tools: getAllTools(),
+      tools: wrapToolsForAI(getAllTools(), conversationId),
       stopWhen: stepCountIs(5),
     });
   } catch (err) {
@@ -388,7 +390,7 @@ export async function handleMessage(userMessage: string): Promise<{
     model: getModel(),
     system: buildSystemPrompt(),
     messages: [{ role: "user", content: userMessage }],
-    tools: getAllTools(),
+    tools: wrapToolsForAI(getAllTools()),
     stopWhen: stepCountIs(5),
   });
 

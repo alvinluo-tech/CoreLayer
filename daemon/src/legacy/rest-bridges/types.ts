@@ -1,5 +1,10 @@
 /**
- * External app adapter — wraps a REST API as Jarvis tools.
+ * @deprecated REST adapter types. Kept for backward compatibility.
+ * New tools should be registered as native tools or MCP servers.
+ */
+
+/**
+ * @deprecated External app adapter — wraps a REST API as Jarvis tools.
  */
 
 export interface AppConfig {

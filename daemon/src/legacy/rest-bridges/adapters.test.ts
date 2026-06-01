@@ -17,7 +17,7 @@ vi.mock("../../db/factory.js", () => ({
 }));
 
 // Import after mocks
-const { registerTaskFlowAdapter } = await import("./taskflow.js");
+const { registerTaskFlowAdapter } = await import("../../mcp/adapters/taskflow.js");
 const { registerVeridiaAdapter } = await import("./veridia.js");
 const { registerFlexiLogAdapter } = await import("./flexilog.js");
 
@@ -68,17 +68,17 @@ describe("TaskFlow Adapter — Repository Pattern", () => {
     mockQuery.mockResolvedValue(mockTasks);
 
     // Import the adapter and get the tools
-    const { registerTaskFlowAdapter: register } = await import("./taskflow.js");
+    const { registerTaskFlowAdapter: register } = await import("../../mcp/adapters/taskflow.js");
     const { getRegistry } = await import("../../tools/registry.js");
     register();
 
     const registry = getRegistry();
-    const tool = registry.getTool("rest:taskflow:list_tasks");
+    const tool = registry.getTool("native:taskflow_list_tasks");
     expect(tool).toBeDefined();
 
     const result = await tool!.execute({ status: "pending", priority: 3 });
     expect(result.success).toBe(true);
-    expect(result.data).toEqual(mockTasks);
+    expect(result.data).toEqual({ tasks: mockTasks, count: 1 });
     expect(mockQuery).toHaveBeenCalledWith({ status: "pending", priority: 3 });
   });
 
@@ -86,12 +86,12 @@ describe("TaskFlow Adapter — Repository Pattern", () => {
     const mockTask = { id: "new-1", title: "New Task" };
     mockCreate.mockResolvedValue(mockTask);
 
-    const { registerTaskFlowAdapter: register } = await import("./taskflow.js");
+    const { registerTaskFlowAdapter: register } = await import("../../mcp/adapters/taskflow.js");
     const { getRegistry } = await import("../../tools/registry.js");
     register();
 
     const registry = getRegistry();
-    const tool = registry.getTool("rest:taskflow:create_task");
+    const tool = registry.getTool("native:taskflow_create_task");
     expect(tool).toBeDefined();
 
     const result = await tool!.execute({
@@ -102,7 +102,7 @@ describe("TaskFlow Adapter — Repository Pattern", () => {
     });
 
     expect(result.success).toBe(true);
-    expect(result.data).toEqual(mockTask);
+    expect(result.data).toEqual({ task: mockTask });
     expect(mockCreate).toHaveBeenCalledWith({
       title: "New Task",
       priority: 5,
@@ -115,12 +115,12 @@ describe("TaskFlow Adapter — Repository Pattern", () => {
   it("create_task uses defaults for optional fields", async () => {
     mockCreate.mockResolvedValue({ id: "1", title: "Minimal" });
 
-    const { registerTaskFlowAdapter: register } = await import("./taskflow.js");
+    const { registerTaskFlowAdapter: register } = await import("../../mcp/adapters/taskflow.js");
     const { getRegistry } = await import("../../tools/registry.js");
     register();
 
     const registry = getRegistry();
-    const tool = registry.getTool("rest:taskflow:create_task");
+    const tool = registry.getTool("native:taskflow_create_task");
     expect(tool).toBeDefined();
 
     await tool!.execute({ title: "Minimal" });
@@ -137,12 +137,12 @@ describe("TaskFlow Adapter — Repository Pattern", () => {
   it("returns error when repo throws", async () => {
     mockQuery.mockRejectedValue(new Error("DB connection failed"));
 
-    const { registerTaskFlowAdapter: register } = await import("./taskflow.js");
+    const { registerTaskFlowAdapter: register } = await import("../../mcp/adapters/taskflow.js");
     const { getRegistry } = await import("../../tools/registry.js");
     register();
 
     const registry = getRegistry();
-    const tool = registry.getTool("rest:taskflow:list_tasks");
+    const tool = registry.getTool("native:taskflow_list_tasks");
     expect(tool).toBeDefined();
 
     const result = await tool!.execute({});

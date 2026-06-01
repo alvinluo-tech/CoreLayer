@@ -26,8 +26,12 @@ export function registerTool(name: string, toolDef: Tool): void {
     requiresConfirmation: false,
     execute: async (args: unknown) => {
       if ("execute" in toolDef && typeof toolDef.execute === "function") {
-        const result = await (toolDef.execute as (args: unknown) => Promise<unknown>)(args);
-        return { success: true, data: result } as ToolResult;
+        try {
+          const result = await (toolDef.execute as (args: unknown) => Promise<unknown>)(args);
+          return { success: true, data: result } as ToolResult;
+        } catch (err) {
+          return { success: false, error: err instanceof Error ? err.message : String(err) } as ToolResult;
+        }
       }
       return { success: false, error: "Tool has no execute function" } as ToolResult;
     },

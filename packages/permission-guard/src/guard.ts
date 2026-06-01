@@ -306,6 +306,18 @@ export class PermissionGuard {
     return true;
   }
 
+  /**
+   * Resolve a pending confirmation by ID. Used by API endpoints to confirm or deny
+   * tool executions that were deferred by the AI orchestrator.
+   */
+  resolvePendingConfirmation(confirmationId: string, approved: boolean): boolean {
+    const pending = this.pendingConfirmations.get(confirmationId);
+    if (!pending) return false;
+    pending.resolve(approved);
+    this.pendingConfirmations.delete(confirmationId);
+    return true;
+  }
+
   cancelAllPending(): number {
     const count = this.pendingConfirmations.size;
     for (const [, pending] of this.pendingConfirmations) {

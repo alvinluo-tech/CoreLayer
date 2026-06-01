@@ -37,10 +37,26 @@ export interface RiskPolicy {
   critical: 'auto' | 'notify' | 'confirm' | 'deny';
 }
 
+export interface MCPToolAnnotations {
+  /** MCP standard: tool is read-only */
+  readOnlyHint?: boolean;
+  /** MCP standard: tool is destructive */
+  destructiveHint?: boolean;
+  /** MCP standard: tool is idempotent */
+  idempotentHint?: boolean;
+  /** CoreLayer extension: risk level override */
+  risk?: 'low' | 'medium' | 'high' | 'critical';
+  /** CoreLayer extension: category override */
+  category?: string;
+  /** CoreLayer extension: display mode override */
+  displayMode?: string;
+}
+
 export interface MCPToolDefinition {
   name: string;
   description?: string;
   inputSchema?: Record<string, unknown>;
+  annotations?: MCPToolAnnotations;
 }
 
 export interface MCPResourceDefinition {

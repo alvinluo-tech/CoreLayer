@@ -7,6 +7,14 @@ vi.mock("../config/env.js", () => ({
   },
 }));
 
+vi.mock("../config/config-manager.js", () => ({
+  configManager: {
+    getCredentials: vi.fn(() => ({})),
+    getConfig: vi.fn(() => ({ providers: [] })),
+    getProviderConfig: vi.fn(() => ({ baseURL: "", apiKey: "" })),
+  },
+}));
+
 import { isTtsAvailable, synthesizeSpeech } from "./tts.js";
 import { env } from "../config/env.js";
 

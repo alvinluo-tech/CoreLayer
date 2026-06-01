@@ -182,6 +182,7 @@ export class MCPClientManager {
         name: t.name,
         description: t.description,
         inputSchema: t.inputSchema as Record<string, unknown> | undefined,
+        annotations: t.annotations as import('@jarvis/types').MCPToolAnnotations | undefined,
       }));
     } catch {
       // Server may not support tools

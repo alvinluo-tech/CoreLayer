@@ -2,9 +2,7 @@ import { Hono } from "hono";
 import type { ToolSource, RiskLevel } from "@jarvis/types";
 import { getRegistry } from "../tools/registry.js";
 import { getRepositories } from "../db/factory.js";
-import { PermissionGuard } from "@jarvis/permission-guard";
-
-const permissionGuard = new PermissionGuard();
+import { toolRuntime } from "../runtime/index.js";
 
 const app = new Hono();
 
@@ -120,7 +118,7 @@ app.post("/:id/execute", async (c) => {
   }
 
   try {
-    const { result } = await permissionGuard.executeWithGuard(tool, args);
+    const { result } = await toolRuntime.execute(toolId, args, { caller: "rest-api" });
     return c.json(result);
   } catch (error) {
     return c.json({
@@ -128,6 +126,28 @@ app.post("/:id/execute", async (c) => {
       error: "Tool execution failed",
     }, 500);
   }
+});
+
+// List pending confirmations (for high-risk tools deferred by AI)
+app.get("/pending-confirmations", (c) => {
+  const guard = toolRuntime.getPermissionGuard();
+  return c.json({ confirmations: guard.getPendingConfirmations() });
+});
+
+// Resolve a pending confirmation (confirm or deny)
+app.post("/confirm/:id", async (c) => {
+  const confirmationId = c.req.param("id");
+  const body = await c.req.json<{ approved?: boolean }>();
+  const approved = body.approved ?? true;
+
+  const guard = toolRuntime.getPermissionGuard();
+  const resolved = guard.resolvePendingConfirmation(confirmationId, approved);
+
+  if (!resolved) {
+    return c.json({ error: "Confirmation not found or already resolved" }, 404);
+  }
+
+  return c.json({ success: true, confirmationId, approved });
 });
 
 export default app;

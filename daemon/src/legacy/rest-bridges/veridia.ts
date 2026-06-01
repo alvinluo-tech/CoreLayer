@@ -1,3 +1,9 @@
+/**
+ * @deprecated REST adapter for Veridia. Kept for backward compatibility.
+ * New tools should be registered as native tools or MCP servers.
+ * See skills/corelayer-mcp-adapter/SKILL.md for migration guidance.
+ */
+
 import { registerAdapterTools } from "./base.js";
 import type { AppConfig, AdapterToolDef } from "./types.js";
 

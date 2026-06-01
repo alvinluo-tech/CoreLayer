@@ -1,8 +1,15 @@
+/**
+ * @deprecated REST adapter base. Kept for backward compatibility.
+ * New tools should be registered as native tools or MCP servers.
+ * See skills/corelayer-mcp-adapter/SKILL.md for migration guidance.
+ */
+
 import type { JarvisTool, ToolResult } from "@jarvis/types";
 import { registerJarvisTool } from "../../tools/registry.js";
 import type { AppConfig, AdapterToolDef } from "./types.js";
 
 /**
+ * @deprecated Use native tools or MCP servers instead.
  * Register a set of REST API tools from an external app.
  */
 export function registerAdapterTools(

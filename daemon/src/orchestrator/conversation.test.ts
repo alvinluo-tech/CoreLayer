@@ -10,6 +10,14 @@ vi.mock("../config/env.js", () => ({
   },
 }));
 
+vi.mock("../config/config-manager.js", () => ({
+  configManager: {
+    getCredentials: vi.fn(() => ({})),
+    getConfig: vi.fn(() => ({ providers: [] })),
+    getProviderConfig: vi.fn(() => ({ baseURL: "", apiKey: "" })),
+  },
+}));
+
 // Mock heavy dependencies so the module can be imported without side effects
 vi.mock("ai", () => ({
   generateText: vi.fn(),

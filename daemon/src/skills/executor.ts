@@ -4,7 +4,7 @@ import type {
   StepResult,
 } from "./types.js";
 import { getSkill } from "./loader.js";
-import { getJarvisTool } from "../tools/registry.js";
+import { toolRuntime } from "../runtime/index.js";
 
 /**
  * Execute a skill by name with optional input parameters.
@@ -31,7 +31,7 @@ export async function executeSkill(
 
   try {
     for (const step of loaded.manifest.steps) {
-      const stepResult = await executeStep(step, context);
+      const stepResult = await executeStep(step, context, skillName);
       steps.push(stepResult);
       context[step.id] = stepResult.output;
 
@@ -73,12 +73,13 @@ export async function executeSkill(
 async function executeStep(
   step: SkillStep,
   context: Record<string, unknown>,
+  skillName: string,
 ): Promise<StepResult> {
   const startTime = Date.now();
 
   switch (step.type) {
     case "tool_call":
-      return executeToolStep(step, context, startTime);
+      return executeToolStep(step, context, startTime, skillName);
     case "condition":
       return executeConditionStep(step, context, startTime);
     case "transform":
@@ -101,6 +102,7 @@ async function executeToolStep(
   step: SkillStep,
   context: Record<string, unknown>,
   startTime: number,
+  skillName: string,
 ): Promise<StepResult> {
   if (!step.tool) {
     return {
@@ -113,21 +115,12 @@ async function executeToolStep(
     };
   }
 
-  const tool = getJarvisTool(step.tool);
-  if (!tool) {
-    return {
-      stepId: step.id,
-      type: "tool_call",
-      success: false,
-      output: null,
-      durationMs: Date.now() - startTime,
-      error: `Tool not found: ${step.tool}`,
-    };
-  }
-
   try {
     const args = resolveTemplate(step.args ?? {}, context);
-    const result = await tool.execute(args);
+    const { result } = await toolRuntime.execute(step.tool, args, {
+      caller: "skill",
+      skillName,
+    });
     return {
       stepId: step.id,
       type: "tool_call",
