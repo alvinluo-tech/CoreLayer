@@ -81,6 +81,7 @@ jobs:
         uses: swatinem/rust-cache@v2
         with:
           workspaces: 'frontend/src-tauri -> target'
+          key: ${{ matrix.os }}
 
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
@@ -132,6 +133,7 @@ jobs:
         uses: swatinem/rust-cache@v2
         with:
           workspaces: 'frontend/src-tauri -> target'
+          key: ${{ matrix.os }}
 
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
