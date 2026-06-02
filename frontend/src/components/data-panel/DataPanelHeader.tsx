@@ -4,10 +4,17 @@ interface DataPanelHeaderProps {
   title: string;
   icon?: string;
   meta?: string;
+  toolName?: string;
   onClose: () => void;
 }
 
-export function DataPanelHeader({ title, icon, meta, onClose }: DataPanelHeaderProps) {
+export function DataPanelHeader({
+  title,
+  icon,
+  meta,
+  toolName: _toolName,
+  onClose,
+}: DataPanelHeaderProps) {
   return (
     <div className="dp-header">
       <div className="dp-header-title">
