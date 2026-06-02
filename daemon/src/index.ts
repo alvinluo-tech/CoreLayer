@@ -143,3 +143,8 @@ console.log(`[Jarvis] 存储: ${getCurrentMode()}`);
 console.log(`[Jarvis] 数据库: ${env.SQLITE_DB_PATH}`);
 
 startServer(env.DAEMON_PORT);
+
+// Auto-connect saved MCP servers after server starts
+import("./mcp/client.js")
+  .then(({ autoConnectMCPServers }) => autoConnectMCPServers())
+  .catch((err) => console.error("[Jarvis] MCP auto-connect failed:", err));

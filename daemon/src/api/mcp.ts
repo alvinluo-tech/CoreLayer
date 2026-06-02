@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { getMCPManager, connectMCPServer, disconnectMCPServer } from "../mcp/client.js";
+import { addMCPServer, removeMCPServer } from "../config/mcp-config.js";
 import type { MCPServerConfig } from "@jarvis/types";
 
 const app = new Hono();
@@ -33,6 +34,7 @@ app.post("/servers", async (c) => {
 
   try {
     await connectMCPServer(body);
+    addMCPServer(body);
     const manager = getMCPManager();
     const info = manager.getServerInfo(body.id);
     return c.json({ success: true, server: info });
@@ -49,6 +51,7 @@ app.delete("/servers/:id", async (c) => {
   const serverId = c.req.param("id");
   try {
     await disconnectMCPServer(serverId);
+    removeMCPServer(serverId);
     return c.json({ success: true });
   } catch (error) {
     return c.json({

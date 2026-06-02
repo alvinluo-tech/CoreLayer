@@ -2,6 +2,7 @@ import { MCPClientManager } from "@jarvis/mcp-client";
 import { ToolRegistry } from "@jarvis/tool-registry";
 import type { MCPServerConfig } from "@jarvis/types";
 import { getRegistry } from "../tools/registry.js";
+import { loadMCPServers } from "../config/mcp-config.js";
 
 let mcpManager: MCPClientManager | null = null;
 
@@ -52,5 +53,19 @@ export async function disconnectAllMCPServers(): Promise<void> {
     await manager.disconnectAll();
   } catch (err) {
     console.error("[Jarvis][mcp/disconnectAll]", err instanceof Error ? err.message : err);
+  }
+}
+
+export async function autoConnectMCPServers(): Promise<void> {
+  const servers = loadMCPServers().filter((s) => s.enabled !== false);
+  if (servers.length === 0) return;
+
+  console.log(`[MCP] Auto-connecting ${servers.length} saved server(s)...`);
+  for (const config of servers) {
+    try {
+      await connectMCPServer(config);
+    } catch (err) {
+      console.error(`[MCP] Failed to auto-connect ${config.id}:`, err instanceof Error ? err.message : err);
+    }
   }
 }
