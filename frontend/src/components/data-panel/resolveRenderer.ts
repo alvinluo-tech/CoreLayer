@@ -15,7 +15,7 @@ interface ResolveInput {
 }
 
 export function resolveRenderer(input: ResolveInput): ResolvedRenderer {
-  // Layer 3: LLM renderHint (highest priority)
+  // LLM renderHint (highest priority)
   if (input.renderHint) {
     return {
       type: input.renderHint.type,
@@ -25,7 +25,7 @@ export function resolveRenderer(input: ResolveInput): ResolvedRenderer {
     };
   }
 
-  // Layer 1: Tool dataView schema
+  // Tool dataView schema
   if (input.schema) {
     return {
       type: input.schema.type,

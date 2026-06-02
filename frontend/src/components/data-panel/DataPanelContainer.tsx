@@ -91,7 +91,9 @@ function DataPanelFloat({ entry, isVisible, onDismiss }: DataPanelFloatProps) {
   );
 }
 
-function getIcon(type: string): string {
+import type { DataViewType } from '@/types/dataView';
+
+function getIcon(type: DataViewType | 'generic'): string {
   switch (type) {
     case 'list':
       return '≡';
@@ -109,7 +111,7 @@ function getIcon(type: string): string {
 }
 
 function renderContent(
-  type: string,
+  type: DataViewType | 'generic',
   data: unknown,
   schema?: DataPanelEntry['schema'],
   renderHint?: DataPanelEntry['renderHint']

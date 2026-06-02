@@ -22,7 +22,7 @@ function extractStatsData(
       if (typeof val === 'number') {
         return { label: formatLabel(key), value: val, unit: guessUnit(key) };
       }
-      if (typeof val === 'string' && !isNaN(Number(val))) {
+      if (typeof val === 'string' && val.trim() !== '' && !isNaN(Number(val))) {
         return { label: formatLabel(key), value: Number(val) };
       }
       return null;

@@ -14,7 +14,7 @@ export function DataPanelHeader({ title, icon, meta, onClose }: DataPanelHeaderP
         {icon && <span className="dp-header-icon">{icon}</span>}
         <span>{title}</span>
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div className="flex items-center gap-2">
         {meta && <span className="dp-header-meta">{meta}</span>}
         <button className="dp-close-btn" onClick={onClose} aria-label="Close panel">
           <X size={12} />
