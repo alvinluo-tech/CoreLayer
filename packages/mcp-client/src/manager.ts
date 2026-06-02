@@ -1,5 +1,6 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type {
   MCPServerConfig,
   MCPServerInfo,
@@ -47,8 +48,21 @@ export class MCPClientManager {
           throw new Error(`MCP server ${config.id}: URL required for HTTP/SSE transport`);
         }
         const url = new URL(config.url);
-        const transport = new SSEClientTransport(url);
-        await connection.client.connect(transport);
+        const headers: Record<string, string> = {};
+        if (config.auth?.type === 'bearer' && config.auth.tokenRef) {
+          headers['Authorization'] = `Bearer ${config.auth.tokenRef}`;
+        }
+        const requestInit = Object.keys(headers).length > 0 ? { headers } : undefined;
+        try {
+          const transport = new StreamableHTTPClientTransport(url, { requestInit });
+          await connection.client.connect(transport);
+        } catch {
+          // Fallback to legacy SSE transport for older servers
+          const sseClient = new Client({ name: 'jarvis', version: '0.1.0' }, { capabilities: {} });
+          const sseTransport = new SSEClientTransport(url, { requestInit });
+          await sseClient.connect(sseTransport);
+          connection.client = sseClient;
+        }
       } else if (config.transport === 'stdio') {
         throw new Error('stdio transport not yet implemented in browser context');
       }
