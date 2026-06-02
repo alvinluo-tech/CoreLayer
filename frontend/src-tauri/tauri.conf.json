@@ -37,6 +37,21 @@
         "transparent": true,
         "shadow": true,
         "additionalBrowserArgs": "--autoplay-policy=no-user-gesture-required"
+      },
+      {
+        "label": "data-panel",
+        "title": "Jarvis Data Panel",
+        "url": "index.html?data-panel=true",
+        "width": 500,
+        "height": 600,
+        "visible": false,
+        "decorations": false,
+        "resizable": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "transparent": true,
+        "center": true,
+        "shadow": true
       }
     ],
     "security": {

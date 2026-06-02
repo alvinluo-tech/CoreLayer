@@ -26,11 +26,28 @@ interface DataPanelState {
   activeId: string | null;
   isVisible: boolean;
   dismissedAt: number | null;
+  isMirrorMode: boolean;
 
   addEntry: (input: AddEntryInput) => void;
   dismiss: () => void;
   show: () => void;
   clearAll: () => void;
+  setMirrorMode: (value: boolean) => void;
+}
+
+async function emitToDataPanelWindow(entry: DataPanelEntry) {
+  try {
+    const { emit } = await import('@tauri-apps/api/event');
+    const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow');
+    await emit('data-panel-entry', entry);
+    const win = await WebviewWindow.getByLabel('data-panel');
+    if (win) {
+      await win.show().catch(() => {});
+      await win.setFocus().catch(() => {});
+    }
+  } catch {
+    // Not in Tauri environment or window not available
+  }
 }
 
 export const useDataPanelStore = create<DataPanelState>((set, get) => ({
@@ -38,6 +55,7 @@ export const useDataPanelStore = create<DataPanelState>((set, get) => ({
   activeId: null,
   isVisible: false,
   dismissedAt: null,
+  isMirrorMode: false,
 
   addEntry: (input) => {
     const id = input.toolCallId;
@@ -61,6 +79,11 @@ export const useDataPanelStore = create<DataPanelState>((set, get) => ({
 
       return { entries, activeId: id, isVisible: true, dismissedAt: null };
     });
+
+    // In mirror mode, also pop up the data-panel window
+    if (get().isMirrorMode) {
+      emitToDataPanelWindow(entry);
+    }
   },
 
   dismiss: () => {
@@ -80,5 +103,9 @@ export const useDataPanelStore = create<DataPanelState>((set, get) => ({
 
   clearAll: () => {
     set({ entries: [], activeId: null, isVisible: false, dismissedAt: null });
+  },
+
+  setMirrorMode: (value) => {
+    set({ isMirrorMode: value });
   },
 }));

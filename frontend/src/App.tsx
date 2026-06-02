@@ -7,6 +7,8 @@ import { DailySummary } from '@/components/modules/review/DailySummary';
 import { VoicePanel } from '@/components/voice/VoicePanel';
 import { JarvisVoiceOverlay } from '@/components/voice/JarvisVoiceOverlay';
 import { DataPanelContainer } from '@/components/data-panel/DataPanelContainer';
+import { DataPanelWindow } from '@/components/data-panel/DataPanelWindow';
+import { useDataPanelStore } from '@/stores/dataPanelStore';
 import { AssistantMirror } from '@/components/voice/AssistantMirror';
 import { ControlCenter } from '@/components/control-center/ControlCenter';
 import type { ControlPage } from '@/components/control-center/ControlCenter';
@@ -27,6 +29,9 @@ import { TitleBar } from '@/components/layout/TitleBar';
 
 const isAssistantWindow =
   typeof window !== 'undefined' && window.location.search.includes('assistant=true');
+
+const isDataPanelWindow =
+  typeof window !== 'undefined' && window.location.search.includes('data-panel=true');
 
 function MainApp() {
   const { messages, sendMessage, isLoading, activeConversationId, error } = useChat();
@@ -213,6 +218,7 @@ function MainApp() {
       }
 
       setIsMirrorMode(true);
+      useDataPanelStore.getState().setMirrorMode(true);
       logger.debug('[App] Main window morphed into bottom-right mirror overlay.');
     } catch (err) {
       console.warn('Failed to enter mirror mode:', err);
@@ -268,6 +274,7 @@ function MainApp() {
       }
 
       setIsMirrorMode(false);
+      useDataPanelStore.getState().setMirrorMode(false);
     } catch (err) {
       console.warn('Failed to exit mirror mode:', err);
     }
@@ -684,6 +691,9 @@ function MainApp() {
 function App() {
   if (isAssistantWindow) {
     return <AssistantMirror />;
+  }
+  if (isDataPanelWindow) {
+    return <DataPanelWindow />;
   }
   return <MainApp />;
 }

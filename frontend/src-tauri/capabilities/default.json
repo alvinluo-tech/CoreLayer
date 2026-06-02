@@ -4,7 +4,8 @@
   "description": "enables the default permissions",
   "windows": [
     "main",
-    "assistant"
+    "assistant",
+    "data-panel"
   ],
   "permissions": [
     "core:default",
