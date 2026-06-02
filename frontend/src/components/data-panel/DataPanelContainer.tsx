@@ -70,7 +70,8 @@ function DataPanelFloat({ entry, isVisible, onDismiss }: DataPanelFloatProps) {
     renderHint: entry.renderHint,
   });
 
-  const itemCount = Array.isArray(entry.data) ? entry.data.length : undefined;
+  const renderData = resolved.data ?? entry.data;
+  const itemCount = Array.isArray(renderData) ? renderData.length : undefined;
 
   return (
     <div className={`dp-container${isDismissing ? ' dp-dismissed' : ''}`}>
@@ -81,7 +82,7 @@ function DataPanelFloat({ entry, isVisible, onDismiss }: DataPanelFloatProps) {
         onClose={handleClose}
       />
       <div className="dp-content">
-        {renderContent(resolved.type, entry.data, entry.schema, entry.renderHint)}
+        {renderContent(resolved.type, renderData, entry.schema, entry.renderHint)}
       </div>
       <div className="dp-footer">
         <span>auto-dismiss</span>
@@ -93,7 +94,7 @@ function DataPanelFloat({ entry, isVisible, onDismiss }: DataPanelFloatProps) {
 
 import type { DataViewType } from '@/types/dataView';
 
-function getIcon(type: DataViewType | 'generic'): string {
+function getIcon(type: DataViewType | 'generic' | 'detail' | 'adaptive'): string {
   switch (type) {
     case 'list':
       return '≡';
@@ -111,7 +112,7 @@ function getIcon(type: DataViewType | 'generic'): string {
 }
 
 function renderContent(
-  type: DataViewType | 'generic',
+  type: DataViewType | 'generic' | 'detail' | 'adaptive',
   data: unknown,
   schema?: DataPanelEntry['schema'],
   renderHint?: DataPanelEntry['renderHint']

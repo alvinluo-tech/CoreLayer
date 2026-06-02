@@ -41,6 +41,20 @@ describe('resolveRenderer', () => {
     expect(result.source).toBe('heuristic');
   });
 
+  it('should use ViewModel kind when provided', () => {
+    const result = resolveRenderer({
+      data: { foo: 'bar' },
+      viewModel: {
+        id: 'test',
+        source: { toolName: 'test', timestamp: '' },
+        title: 'Test',
+        kind: 'adaptive',
+        density: 'detailed',
+      },
+    });
+    expect(result.type).toBe('adaptive');
+  });
+
   it('should fall back to generic for plain data', () => {
     const result = resolveRenderer({ data: { foo: 'bar' } });
     expect(result.type).toBe('generic');
