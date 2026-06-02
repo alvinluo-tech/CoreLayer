@@ -35,34 +35,62 @@ interface DataPanelState {
   setMirrorMode: (value: boolean) => void;
 }
 
+let dataPanelWindowReady = false;
+
 async function emitToDataPanelWindow(entry: DataPanelEntry) {
   try {
-    const { emit } = await import('@tauri-apps/api/event');
+    const { emit, listen } = await import('@tauri-apps/api/event');
     const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow');
 
-    const win = await WebviewWindow.getByLabel('data-panel');
-    if (!win) return;
+    let win = await WebviewWindow.getByLabel('data-panel');
 
-    // Show window first so the webview loads and registers its listener
+    if (!win) {
+      // Dynamically create the window — webview will load and emit 'data-panel-ready'
+      win = new WebviewWindow('data-panel', {
+        url: 'index.html?data-panel=true',
+        width: 500,
+        height: 600,
+        visible: false,
+        decorations: false,
+        resizable: false,
+        alwaysOnTop: true,
+        skipTaskbar: true,
+        transparent: true,
+        center: true,
+      });
+
+      // Wait for the webview to mount and register its listener
+      const unlistenReady = await listen('data-panel-ready', () => {
+        dataPanelWindowReady = true;
+      });
+      // Give the webview time to load and emit ready
+      await new Promise<void>((resolve) => {
+        const check = () => {
+          if (dataPanelWindowReady) {
+            resolve();
+          } else {
+            setTimeout(check, 100);
+          }
+        };
+        check();
+        // Fallback: proceed after 2s regardless
+        setTimeout(resolve, 2000);
+      });
+      unlistenReady();
+
+      // Now show and emit
+      await win.show().catch(() => {});
+      await win.setFocus().catch(() => {});
+      await emit('data-panel-entry', entry);
+      return;
+    }
+
+    // Window already exists — listener is registered, just show and emit
     await win.show().catch(() => {});
     await win.setFocus().catch(() => {});
-
-    // Wait for the webview to signal it's ready, then emit data
-    const { listen } = await import('@tauri-apps/api/event');
-    const unlisten = await listen('data-panel-ready', async () => {
-      unlisten();
-      await emit('data-panel-entry', entry);
-    });
-
-    // If the window was already loaded (second call), emit immediately after a short delay
-    // The ready event from an already-loaded window fires very fast
-    // As a fallback, also emit after 500ms in case ready event was missed
-    setTimeout(async () => {
-      unlisten();
-      await emit('data-panel-entry', entry);
-    }, 500);
-  } catch {
-    // Not in Tauri environment or window not available
+    await emit('data-panel-entry', entry);
+  } catch (e) {
+    console.warn('[DataPanelStore] Failed to emit to data-panel window:', e);
   }
 }
 
