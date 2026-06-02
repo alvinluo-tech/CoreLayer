@@ -114,34 +114,29 @@ app.post("/:id/messages/stream", async (c) => {
 
   try {
     const toolCallsLog: { name: string; args: unknown; result: unknown }[] = [];
-
     const toolCallIndexByCallId = new Map<string, number>();
 
-    const streamResult = await streamMessageInConversation(id, body.content, (event) => {
-      if (event.type === 'tool-call') {
-        const index = toolCallsLog.length;
-        toolCallsLog.push({ name: event.name, args: event.args ?? null, result: null });
-        toolCallIndexByCallId.set(event.toolCallId, index);
-        sseStreamRef?.writeSSE({
-          event: 'tool-call',
-          data: JSON.stringify({ name: event.name, toolCallId: event.toolCallId, args: event.args }),
-        }).catch(() => {});
-      } else if (event.type === 'tool-result') {
-        const index = toolCallIndexByCallId.get(event.toolCallId);
-        if (index !== undefined && toolCallsLog[index]) {
-          toolCallsLog[index].result = event.result;
-        }
-        sseStreamRef?.writeSSE({
-          event: 'tool-result',
-          data: JSON.stringify({ name: event.name, toolCallId: event.toolCallId, result: event.result }),
-        }).catch(() => {});
-      }
-    });
-
-    let sseStreamRef: any = null;
-
     return streamSSE(c, async (sseStream) => {
-      sseStreamRef = sseStream;
+      const streamResult = await streamMessageInConversation(id, body.content, async (event) => {
+        if (event.type === 'tool-call') {
+          const index = toolCallsLog.length;
+          toolCallsLog.push({ name: event.name, args: event.args ?? null, result: null });
+          toolCallIndexByCallId.set(event.toolCallId, index);
+          await sseStream.writeSSE({
+            event: 'tool-call',
+            data: JSON.stringify({ name: event.name, toolCallId: event.toolCallId, args: event.args }),
+          });
+        } else if (event.type === 'tool-result') {
+          const index = toolCallIndexByCallId.get(event.toolCallId);
+          if (index !== undefined && toolCallsLog[index]) {
+            toolCallsLog[index].result = event.result;
+          }
+          await sseStream.writeSSE({
+            event: 'tool-result',
+            data: JSON.stringify({ name: event.name, toolCallId: event.toolCallId, result: event.result }),
+          });
+        }
+      });
 
       // If it's AI-enabled, stream the LLM response
       if (streamResult.isAi && streamResult.result) {
