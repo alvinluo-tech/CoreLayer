@@ -25,12 +25,15 @@ export function DataPanelWindow() {
   const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Set transparent background
+  // Set transparent background and signal readiness
   useEffect(() => {
     document.body.style.backgroundColor = 'transparent';
     document.documentElement.style.backgroundColor = 'transparent';
     document.body.style.overflow = 'hidden';
     document.documentElement.style.overflow = 'hidden';
+
+    // Notify main window that this window is ready to receive data
+    import('@tauri-apps/api/event').then(({ emit }) => emit('data-panel-ready')).catch(() => {});
   }, []);
 
   // Listen for data-panel-entry events
