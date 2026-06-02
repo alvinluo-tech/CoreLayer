@@ -56,11 +56,12 @@ export function resolveRenderer(input: ResolveInput): ResolvedRenderer {
   if (input.viewModel) {
     const vm = input.viewModel;
     const mapped = mapKindToRendererType(vm.kind);
+    const extracted = mapped === 'list' ? extractArray(input.data) : input.data;
     return {
       type: mapped,
       source: 'heuristic',
       title: vm.title,
-      data: input.data,
+      data: extracted ?? input.data,
       viewModel: vm,
     };
   }
@@ -159,4 +160,43 @@ function extractNumericRatio(obj: Record<string, unknown>): number {
     (v) => typeof v === 'number' || (typeof v === 'string' && v.trim() !== '' && !isNaN(Number(v)))
   );
   return numeric.length / values.length;
+}
+
+function extractArray(data: unknown): unknown[] | undefined {
+  if (Array.isArray(data)) return data;
+  if (!data || typeof data !== 'object') return undefined;
+  const obj = data as Record<string, unknown>;
+  const keys = Object.keys(obj);
+
+  // Single-key wrapper: unwrap
+  if (keys.length === 1) {
+    const val = obj[keys[0]!];
+    if (Array.isArray(val)) return val;
+  }
+
+  // Find array-of-objects inside
+  const PREFERRED = [
+    'tasks',
+    'articles',
+    'items',
+    'results',
+    'list',
+    'reviews',
+    'conversations',
+    'entries',
+    'records',
+    'data',
+  ];
+  const sorted = [
+    ...PREFERRED.filter((k) => keys.includes(k)),
+    ...keys.filter((k) => !PREFERRED.includes(k)),
+  ];
+  for (const key of sorted) {
+    const val = obj[key];
+    if (Array.isArray(val) && val.length > 0 && typeof val[0] === 'object') {
+      return val;
+    }
+  }
+
+  return undefined;
 }
