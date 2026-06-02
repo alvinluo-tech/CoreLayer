@@ -47,7 +47,7 @@ export function registerJarvisTool(tool: JarvisTool): void {
 }
 
 export function getTool(name: string): Tool | undefined {
-  const tool = registry.getTool(name) ?? registry.getTool(`native:${name}`);
+  const tool = registry.resolveTool(name) ?? registry.getTool(`native:${name}`);
   if (!tool) return undefined;
 
   // Return in Vercel AI SDK format for backward compatibility
@@ -59,7 +59,7 @@ export function getTool(name: string): Tool | undefined {
 }
 
 export function getJarvisTool(name: string): JarvisTool | undefined {
-  return registry.getTool(name) ?? registry.getTool(`native:${name}`);
+  return registry.resolveTool(name) ?? registry.getTool(`native:${name}`);
 }
 
 export function getAllTools(): Record<string, Tool> {

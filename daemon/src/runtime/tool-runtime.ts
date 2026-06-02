@@ -34,7 +34,7 @@ export class ToolRuntime {
     context: ToolExecutionContext,
   ): Promise<ToolExecutionResult> {
     const registry = getRegistry();
-    const tool = registry.getTool(toolId) ?? registry.getTool(`native:${toolId}`);
+    const tool = registry.resolveTool(toolId) ?? registry.getTool(`native:${toolId}`);
     if (!tool) {
       return {
         result: { success: false, error: `Tool not found: ${toolId}` },

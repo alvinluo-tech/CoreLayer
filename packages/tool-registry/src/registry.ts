@@ -42,6 +42,17 @@ export class ToolRegistry {
     return this.tools.get(toolId);
   }
 
+  getToolByName(name: string): JarvisTool | undefined {
+    for (const tool of this.tools.values()) {
+      if (tool.name === name) return tool;
+    }
+    return undefined;
+  }
+
+  resolveTool(identifier: string): JarvisTool | undefined {
+    return this.getTool(identifier) ?? this.getToolByName(identifier);
+  }
+
   getAllTools(): JarvisTool[] {
     return Array.from(this.tools.values());
   }

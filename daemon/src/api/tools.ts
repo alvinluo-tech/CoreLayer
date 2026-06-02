@@ -58,7 +58,7 @@ app.get("/", (c) => {
 app.get("/:id", (c) => {
   const registry = getRegistry();
   const toolId = c.req.param("id");
-  const tool = registry.getTool(toolId);
+  const tool = registry.resolveTool(toolId);
 
   if (!tool) {
     return c.json({ error: "Tool not found" }, 404);
@@ -112,7 +112,7 @@ app.post("/:id/execute", async (c) => {
   const toolId = c.req.param("id");
   const args = await c.req.json<unknown>();
 
-  const tool = registry.getTool(toolId);
+  const tool = registry.resolveTool(toolId);
   if (!tool) {
     return c.json({ error: "Tool not found" }, 404);
   }
