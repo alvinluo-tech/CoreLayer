@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 // Mock fetch globally
 const mockFetch = vi.fn();
@@ -18,14 +18,11 @@ vi.mock("../../db/factory.js", () => ({
 
 // Import after mocks
 const { registerTaskFlowAdapter } = await import("../../mcp/adapters/taskflow.js");
-const { registerVeridiaAdapter } = await import("./veridia.js");
 const { registerFlexiLogAdapter } = await import("./flexilog.js");
 
 describe("Adapter Registration", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    delete process.env["VERIDIA_BASE_URL"];
-    delete process.env["VERIDIA_AUTH_TOKEN"];
     delete process.env["FLEXILOG_BASE_URL"];
     delete process.env["FLEXILOG_AUTH_TOKEN"];
   });
@@ -35,20 +32,9 @@ describe("Adapter Registration", () => {
     expect(count).toBe(2);
   });
 
-  it("skips Veridia when VERIDIA_BASE_URL not set", () => {
-    const count = registerVeridiaAdapter();
-    expect(count).toBe(0);
-  });
-
   it("skips FlexiLog when FLEXILOG_BASE_URL not set", () => {
     const count = registerFlexiLogAdapter();
     expect(count).toBe(0);
-  });
-
-  it("registers Veridia tools when env is set", () => {
-    process.env["VERIDIA_BASE_URL"] = "http://localhost:3000";
-    const count = registerVeridiaAdapter();
-    expect(count).toBe(6);
   });
 
   it("registers FlexiLog tools when env is set", () => {
@@ -67,7 +53,6 @@ describe("TaskFlow Adapter — Repository Pattern", () => {
     const mockTasks = [{ id: "1", title: "Test" }];
     mockQuery.mockResolvedValue(mockTasks);
 
-    // Import the adapter and get the tools
     const { registerTaskFlowAdapter: register } = await import("../../mcp/adapters/taskflow.js");
     const { getRegistry } = await import("../../tools/registry.js");
     register();
@@ -151,143 +136,6 @@ describe("TaskFlow Adapter — Repository Pattern", () => {
   });
 });
 
-describe("REST Adapter — Fetch Pattern (Veridia)", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    process.env["VERIDIA_BASE_URL"] = "http://veridia.local";
-  });
-
-  afterEach(() => {
-    delete process.env["VERIDIA_BASE_URL"];
-  });
-
-  it("search_media sends GET with query params", async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ results: [] }),
-    });
-
-    // Simulate the REST API call that the adapter would make
-    const url = "http://veridia.local/api/jarvis/search";
-    const params = new URLSearchParams({ q: "test", type: "book" });
-    await fetch(`${url}?${params}`, { method: "GET" });
-
-    expect(mockFetch).toHaveBeenCalledWith(
-      "http://veridia.local/api/jarvis/search?q=test&type=book",
-      expect.objectContaining({ method: "GET" }),
-    );
-  });
-
-  it("add_media sends POST with body", async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ id: "123" }),
-    });
-
-    await fetch("http://veridia.local/api/jarvis/media", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: "Book", type: "book" }),
-    });
-
-    expect(mockFetch).toHaveBeenCalledWith(
-      "http://veridia.local/api/jarvis/media",
-      expect.objectContaining({
-        method: "POST",
-        body: JSON.stringify({ title: "Book", type: "book" }),
-      }),
-    );
-  });
-
-  it("update_media replaces :id path param", async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ success: true }),
-    });
-
-    const url = "http://veridia.local/api/jarvis/media/abc-123";
-    await fetch(url, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "completed" }),
-    });
-
-    expect(mockFetch).toHaveBeenCalledWith(
-      "http://veridia.local/api/jarvis/media/abc-123",
-      expect.objectContaining({
-        method: "PATCH",
-        body: JSON.stringify({ status: "completed" }),
-      }),
-    );
-  });
-
-  it("includes auth token in header when set", async () => {
-    process.env["VERIDIA_AUTH_TOKEN"] = "my-token";
-
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({}),
-    });
-
-    await fetch("http://veridia.local/api/jarvis/insights", {
-      method: "GET",
-      headers: {
-        Authorization: "Bearer my-token",
-      },
-    });
-
-    expect(mockFetch).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.objectContaining({
-        headers: expect.objectContaining({
-          Authorization: "Bearer my-token",
-        }),
-      }),
-    );
-  });
-
-  it("returns error on non-OK response", async () => {
-    mockFetch.mockResolvedValue({
-      ok: false,
-      status: 500,
-      text: () => Promise.resolve("Internal Server Error"),
-    });
-
-    const response = await fetch("http://veridia.local/api/jarvis/search?q=test");
-    expect(response.ok).toBe(false);
-    expect(response.status).toBe(500);
-  });
-
-  // BUG-REGRESSION: baseUrl port was stripped by path param regex
-  // http://localhost:3000/api/jarvis/current → http://localhost/api/jarvis/current
-  // because :3000 matched /:(\w+)/g
-  it("preserves port number in baseUrl (BUG-port-strip regression)", async () => {
-    process.env["VERIDIA_BASE_URL"] = "http://localhost:3000";
-
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ success: true, data: [] }),
-    });
-
-    // Import and register to get the actual tool
-    const { registerVeridiaAdapter: register } = await import("./veridia.js");
-    const { getRegistry } = await import("../../tools/registry.js");
-    register();
-
-    const registry = getRegistry();
-    const tool = registry.getTool("rest:veridia:veridia_get_current");
-    expect(tool).toBeDefined();
-
-    await tool!.execute({});
-
-    // Verify fetch was called with port preserved
-    expect(mockFetch).toHaveBeenCalledWith(
-      "http://localhost:3000/api/jarvis/current",
-      expect.any(Object),
-    );
-  });
-});
-
 describe("REST Adapter — Fetch Pattern (FlexiLog)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -337,55 +185,5 @@ describe("REST Adapter — Fetch Pattern (FlexiLog)", () => {
       "http://flexilog.local/api/workouts?limit=5&offset=10",
       expect.objectContaining({ method: "GET" }),
     );
-  });
-});
-
-describe("Adapter Cross-Path Consistency", () => {
-  // AI regression: different adapter types (repo vs REST) should return
-  // consistent success/error shapes
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it("TaskFlow and REST adapters both return { success, data } on success", async () => {
-    mockQuery.mockResolvedValue([]);
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ results: [] }),
-    });
-
-    // TaskFlow (repo pattern) - test the underlying repo call
-    const repos = (await import("../../db/factory.js")).getRepositories();
-    const taskResult = await repos.tasks.query({});
-    expect(taskResult).toEqual([]);
-
-    // Veridia (REST pattern) - test the underlying fetch call
-    const response = await fetch("http://veridia.local/api/jarvis/search?q=test");
-    expect(response.ok).toBe(true);
-  });
-
-  it("TaskFlow and REST adapters both handle errors", async () => {
-    mockQuery.mockRejectedValue(new Error("repo error"));
-    mockFetch.mockResolvedValue({
-      ok: false,
-      status: 500,
-      text: () => Promise.resolve("Server Error"),
-    });
-
-    // TaskFlow error handling
-    const repos = (await import("../../db/factory.js")).getRepositories();
-    try {
-      await repos.tasks.query({});
-      expect.fail("Should have thrown");
-    } catch (err) {
-      expect(err).toBeInstanceOf(Error);
-      expect((err as Error).message).toBe("repo error");
-    }
-
-    // REST error handling
-    const response = await fetch("http://veridia.local/api/jarvis/search?q=test");
-    expect(response.ok).toBe(false);
-    expect(response.status).toBe(500);
   });
 });
