@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useMCPStore } from '@/stores/mcpStore';
+import type { MCPServerInfo } from '@/lib/tauri';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from './StatusBadge';
@@ -9,6 +10,7 @@ import {
   Wrench,
   RefreshCw,
   Plus,
+  Pencil,
   Server,
   AlertCircle,
   Loader2,
@@ -24,9 +26,12 @@ export function AppsPage() {
     fetchTools,
     connectServer,
     disconnectServer,
+    updateServer,
   } = useMCPStore();
 
   const [showAddForm, setShowAddForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
   const [newServer, setNewServer] = useState({
     id: '',
     name: '',
@@ -41,9 +46,42 @@ export function AppsPage() {
 
   const handleConnect = async () => {
     if (!newServer.id || !newServer.name) return;
-    await connectServer(newServer);
-    setNewServer({ id: '', name: '', transport: 'http', url: '' });
+    setFormError(null);
+    try {
+      if (editingId) {
+        await updateServer(editingId, {
+          name: newServer.name,
+          transport: newServer.transport,
+          url: newServer.url,
+        });
+      } else {
+        await connectServer(newServer);
+      }
+      setNewServer({ id: '', name: '', transport: 'http', url: '' });
+      setShowAddForm(false);
+      setEditingId(null);
+    } catch (e) {
+      setFormError(String(e));
+    }
+  };
+
+  const handleEdit = (server: MCPServerInfo) => {
+    setEditingId(server.config.id);
+    setNewServer({
+      id: server.config.id,
+      name: server.config.name,
+      transport: (server.config.transport as 'http' | 'stdio' | 'sse') ?? 'http',
+      url: server.config.url ?? '',
+    });
+    setShowAddForm(true);
+    setFormError(null);
+  };
+
+  const handleCancelForm = () => {
     setShowAddForm(false);
+    setEditingId(null);
+    setFormError(null);
+    setNewServer({ id: '', name: '', transport: 'http', url: '' });
   };
 
   const totalTools = toolCounts.native + toolCounts.mcp + toolCounts.skill + toolCounts.rest;
@@ -68,7 +106,20 @@ export function AppsPage() {
             <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? 'animate-spin' : ''}`} />
             刷新
           </Button>
-          <Button size="sm" onClick={() => setShowAddForm(!showAddForm)} className="gap-1.5">
+          <Button
+            size="sm"
+            onClick={() => {
+              if (showAddForm && !editingId) {
+                setShowAddForm(false);
+              } else {
+                setEditingId(null);
+                setFormError(null);
+                setNewServer({ id: '', name: '', transport: 'http', url: '' });
+                setShowAddForm(true);
+              }
+            }}
+            className="gap-1.5"
+          >
             <Plus className="h-3.5 w-3.5" />
             添加服务器
           </Button>
@@ -82,10 +133,16 @@ export function AppsPage() {
         </div>
       )}
 
-      {/* Add Server Form */}
+      {/* Add / Edit Server Form */}
       {showAddForm && (
         <Card className="p-4 space-y-3">
-          <h4 className="text-sm font-medium">添加 MCP 服务器</h4>
+          <h4 className="text-sm font-medium">{editingId ? '编辑服务器' : '添加 MCP 服务器'}</h4>
+          {formError && (
+            <div className="flex items-start gap-2 p-2 rounded-md bg-destructive/10 border border-destructive/20">
+              <AlertCircle className="h-3.5 w-3.5 text-destructive mt-0.5 shrink-0" />
+              <p className="text-xs text-destructive">{formError}</p>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-muted-foreground">ID</label>
@@ -94,7 +151,8 @@ export function AppsPage() {
                 value={newServer.id}
                 onChange={(e) => setNewServer({ ...newServer, id: e.target.value })}
                 placeholder="my-server"
-                className="w-full mt-1 px-3 py-1.5 text-sm bg-background border rounded-md"
+                disabled={!!editingId}
+                className="w-full mt-1 px-3 py-1.5 text-sm bg-background border rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
               />
             </div>
             <div>
@@ -136,7 +194,7 @@ export function AppsPage() {
             </div>
           </div>
           <div className="flex justify-end gap-2">
-            <Button variant="ghost" size="sm" onClick={() => setShowAddForm(false)}>
+            <Button variant="ghost" size="sm" onClick={handleCancelForm}>
               取消
             </Button>
             <Button
@@ -146,7 +204,7 @@ export function AppsPage() {
               className="gap-1.5"
             >
               <PlugZap className="h-3.5 w-3.5" />
-              连接
+              {editingId ? '保存' : '连接'}
             </Button>
           </div>
         </Card>
@@ -220,15 +278,26 @@ export function AppsPage() {
                   </div>
                 </div>
               </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => disconnectServer(server.config.id)}
-                className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                title="断开连接"
-              >
-                <Unplug className="h-4 w-4" />
-              </Button>
+              <div className="flex gap-1">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => handleEdit(server)}
+                  className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                  title="编辑"
+                >
+                  <Pencil className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => disconnectServer(server.config.id)}
+                  className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                  title="断开连接"
+                >
+                  <Unplug className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           </Card>
         ))}
