@@ -22,7 +22,8 @@ export function wrapToolsForAI(
             caller: "ai",
             conversationId,
           });
-          return result;
+          if (result.success) return result.data;
+          throw new Error(result.error ?? "Tool execution failed");
         },
       } as Tool;
     } else {

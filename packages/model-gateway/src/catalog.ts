@@ -111,7 +111,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     requiresApiKey: true,
     popularModels: [
       { id: 'mimo-v2.5-pro', name: 'MiMo v2.5 Pro' },
-      { id: 'mimo-v2.5-fast', name: 'MiMo v2.5 Fast' },
+      { id: 'mimo-2.5', name: 'MiMo 2.5' },
     ],
   },
   {

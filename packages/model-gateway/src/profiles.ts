@@ -20,10 +20,10 @@ export const DEFAULT_PROFILES: ModelProfile[] = [
     cost: { input: 0, output: 0 },
   },
   {
-    id: 'mimo-2.5-fast',
+    id: 'mimo-2.5',
     provider: 'mimo',
-    modelName: 'mimo-v2.5-fast',
-    displayName: 'MiMo 2.5 Fast',
+    modelName: 'mimo-2.5',
+    displayName: 'MiMo 2.5',
     capabilities: {
       text: true,
       streaming: true,
