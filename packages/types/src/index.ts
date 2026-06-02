@@ -4,3 +4,4 @@ export * from './mcp.js';
 export * from './permission.js';
 export * from './skill.js';
 export * from './voice.js';
+export * from './dataView.js';

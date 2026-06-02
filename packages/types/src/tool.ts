@@ -52,6 +52,7 @@ export interface JarvisTool {
   cancellable?: boolean;
   category?: ToolCategory;
   displayMode?: ToolDisplayMode;
+  dataView?: import('./dataView').DataViewSchema;
 }
 
 export interface ToolCallLog {
