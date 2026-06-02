@@ -16,18 +16,26 @@ function extractStatsData(
   const record = data as Record<string, unknown>;
   const keys = fields ?? Object.keys(record);
 
-  return keys
-    .map((key) => {
-      const val = record[key];
-      if (typeof val === 'number') {
-        return { label: formatLabel(key), value: val, unit: guessUnit(key) };
+  const stats: Array<{ label: string; value: number; unit?: string }> = [];
+
+  for (const key of keys) {
+    const val = record[key];
+    if (typeof val === 'number') {
+      stats.push({ label: formatLabel(key), value: val, unit: guessUnit(key) });
+    } else if (typeof val === 'string' && val.trim() !== '' && !isNaN(Number(val))) {
+      stats.push({ label: formatLabel(key), value: Number(val) });
+    } else if (val && typeof val === 'object' && !Array.isArray(val)) {
+      // Expand nested numeric objects (e.g. { byCategory: { tech: 5, science: 3 } })
+      const nested = val as Record<string, unknown>;
+      for (const [nKey, nVal] of Object.entries(nested)) {
+        if (typeof nVal === 'number') {
+          stats.push({ label: `${formatLabel(key)} · ${formatLabel(nKey)}`, value: nVal });
+        }
       }
-      if (typeof val === 'string' && val.trim() !== '' && !isNaN(Number(val))) {
-        return { label: formatLabel(key), value: Number(val) };
-      }
-      return null;
-    })
-    .filter(Boolean) as Array<{ label: string; value: number; unit?: string }>;
+    }
+  }
+
+  return stats;
 }
 
 function formatLabel(key: string): string {
