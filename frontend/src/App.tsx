@@ -6,6 +6,7 @@ import { ReadingList } from '@/components/modules/reading/ReadingList';
 import { DailySummary } from '@/components/modules/review/DailySummary';
 import { VoicePanel } from '@/components/voice/VoicePanel';
 import { JarvisVoiceOverlay } from '@/components/voice/JarvisVoiceOverlay';
+import { DataPanelContainer } from '@/components/data-panel/DataPanelContainer';
 import { AssistantMirror } from '@/components/voice/AssistantMirror';
 import { ControlCenter } from '@/components/control-center/ControlCenter';
 import type { ControlPage } from '@/components/control-center/ControlCenter';
@@ -656,6 +657,9 @@ function MainApp() {
         onNavigate={handlePaletteNavigate}
         onVoiceToggle={handleVoiceToggle}
       />
+
+      {/* Dynamic Data Panel */}
+      <DataPanelContainer />
 
       {/* Futuristic Sci-Fi Voice Overlay */}
       {isMainWindowFocused && (

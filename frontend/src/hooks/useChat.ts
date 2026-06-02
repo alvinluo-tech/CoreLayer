@@ -3,6 +3,7 @@ import { useConversationStore } from '@/stores/conversationStore';
 import type { ConversationMessage } from '@/lib/tauri';
 import * as tauri from '@/lib/tauri';
 import { jarvisClient } from '@/lib/jarvisClient';
+import { useDataPanelStore } from '@/stores/dataPanelStore';
 
 export interface Message {
   id: string;
@@ -137,6 +138,22 @@ export function useChat() {
                 if (existing) {
                   existing.result = payload.result;
                   messageListUpdated = true;
+                }
+
+                // Dispatch to data panel
+                const resultPayload = payload.result as Record<string, unknown> | undefined;
+                const panelData =
+                  resultPayload && typeof resultPayload === 'object' && 'data' in resultPayload
+                    ? resultPayload.data
+                    : payload.result;
+
+                if (panelData != null) {
+                  useDataPanelStore.getState().addEntry({
+                    toolCallId: payload.toolCallId,
+                    toolName: payload.name,
+                    title: payload.name.replace(/_/g, ' '),
+                    data: panelData,
+                  });
                 }
               } catch (e) {
                 console.warn('[useChat] Failed to parse tool-result event:', e);
