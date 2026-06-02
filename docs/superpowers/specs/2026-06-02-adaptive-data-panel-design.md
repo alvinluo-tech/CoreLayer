@@ -103,13 +103,33 @@ interface DataPanelObject {
 
 ## normalizeDataPanelPayload()
 
-Separates data analysis from UI rendering. This function:
+Separates data analysis from UI rendering. Pipeline order:
 
-1. Extracts metadata (toolName, timestamp)
-2. Detects data shape (array, object, primitive, null)
-3. Analyzes field types with **confidence scores**
-4. Selects density mode
-5. Builds the ViewModel
+```
+raw tool result
+  ↓
+sanitize / redact sensitive fields
+  ↓
+truncate oversized data (depth, array, string)
+  ↓
+field type analysis with confidence
+  ↓
+density selection
+  ↓
+ViewModel
+```
+
+**Principle**: Sanitize first, render second. Sensitive fields are redacted before they enter field analysis or ViewModel construction.
+
+Steps:
+
+1. Redact sensitive fields (token, apiKey, password, etc.)
+2. Enforce limits: `MAX_DEPTH = 3`, `MAX_ARRAY_ITEMS = 50`, `MAX_STRING_LENGTH = 500`
+3. Extract metadata (toolName, timestamp)
+4. Detect data shape (array, object, primitive, null)
+5. Analyze field types with **confidence scores**
+6. Select density mode
+7. Build the ViewModel
 
 ### Field Type Detection with Confidence
 
@@ -144,6 +164,22 @@ function selectDensity(data: unknown, context?: DensityContext): 'detailed' | 'c
 ```
 
 `context` parameter is reserved for future expansion (panel size, field count, user preference, etc.).
+
+### Data Truncation Limits
+
+To prevent UI from being overwhelmed by large payloads:
+
+```typescript
+const MAX_DEPTH = 3; // max nesting depth for objects
+const MAX_ARRAY_ITEMS = 50; // max items rendered in any array
+const MAX_STRING_LENGTH = 500; // max string value length displayed
+```
+
+Truncated data shows:
+
+```
+Nested data truncated • View raw payload in debug drawer
+```
 
 ### Sensitive Field Redaction
 
@@ -241,7 +277,7 @@ Renders `kind: "detail"` ViewModels (single objects).
 **resolveRenderer**:
 
 - Route based on ViewModel `kind` field
-- Keep GenericJSON only as absolute fallback for serialization failures
+- GenericJSON only appears in debug mode or when data is genuinely unparseable (circular refs, functions)
 
 ### 5. Debug Drawer
 
@@ -294,9 +330,18 @@ Monospace, cyan, with blinking cursor animation.
 
 ### 7. Panel State (MVP)
 
-MVP keeps simple `visible/dismissed` via existing Zustand store. Pin functionality deferred to future iteration.
+MVP keeps simple `visible/dismissed` via existing Zustand store, with extra fields for future expansion:
 
-Multi-tool result handling: new tool result replaces current panel (existing behavior). Stack/tabs deferred.
+```typescript
+type DataPanelState = {
+  visible: boolean;
+  activePanelId: string | null;
+  lastUpdatedAt: number;
+  dismissReason?: 'timeout' | 'user' | 'new-result';
+};
+```
+
+Pin, stack, tabs deferred to future iteration.
 
 ## File Changes
 
