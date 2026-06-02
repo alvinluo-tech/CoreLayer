@@ -95,12 +95,14 @@ export class ToolRegistry {
       const risk = resolveMcpRisk(annotations);
       const category = validateCategory(annotations?.category);
       const displayMode = validateDisplayMode(annotations?.displayMode);
+      // Sanitize tool name: dots are not valid in OpenAI-style function names
+      const safeName = t.name.replace(/\./g, '_');
 
       return {
         id: `mcp:${serverId}:${t.name}`,
         appId: serverId,
         source: 'mcp' as const,
-        name: t.name,
+        name: safeName,
         title: t.name,
         description: t.description ?? '',
         inputSchema: (t.inputSchema ?? { type: 'object' }) as JarvisTool['inputSchema'],
