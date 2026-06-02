@@ -691,6 +691,19 @@ async fn disconnect_mcp_server(server_id: String) -> Result<serde_json::Value, S
 }
 
 #[tauri::command]
+async fn update_mcp_server(
+    server_id: String,
+    config: serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    daemon_put(
+        get_daemon_client(),
+        &format!("/api/mcp/servers/{}", encode_path_segment(&server_id)),
+        config,
+    )
+    .await
+}
+
+#[tauri::command]
 async fn list_mcp_tools() -> Result<serde_json::Value, String> {
     daemon_get(get_daemon_client(), "/api/mcp/tools").await
 }
@@ -905,6 +918,7 @@ pub fn run() {
             list_mcp_servers,
             connect_mcp_server,
             disconnect_mcp_server,
+            update_mcp_server,
             list_mcp_tools,
             list_mcp_resources,
             list_mcp_prompts,

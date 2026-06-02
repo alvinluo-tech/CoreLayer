@@ -350,6 +350,19 @@ export async function disconnectMCPServer(
   return invoke('disconnect_mcp_server', { serverId });
 }
 
+export async function updateMCPServer(
+  serverId: string,
+  config: {
+    name: string;
+    transport: 'http' | 'stdio' | 'sse';
+    url?: string;
+    command?: string;
+    enabled: boolean;
+  }
+): Promise<{ success: boolean; server?: MCPServerInfo; error?: string }> {
+  return invoke('update_mcp_server', { serverId, config });
+}
+
 export async function listMCPTools(): Promise<{
   tools: { name: string; description?: string }[];
   count: number;

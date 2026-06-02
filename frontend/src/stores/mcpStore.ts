@@ -3,6 +3,7 @@ import {
   listMCPServers,
   connectMCPServer as tauriConnectMCPServer,
   disconnectMCPServer as tauriDisconnectMCPServer,
+  updateMCPServer as tauriUpdateMCPServer,
   listAllTools,
   type MCPServerInfo,
   type ToolInfo,
@@ -24,6 +25,10 @@ interface MCPState {
     url?: string;
   }) => Promise<void>;
   disconnectServer: (serverId: string) => Promise<void>;
+  updateServer: (
+    serverId: string,
+    config: { name: string; transport: 'http' | 'stdio' | 'sse'; url?: string }
+  ) => Promise<void>;
 }
 
 export const useMCPStore = create<MCPState>((set, get) => ({
@@ -67,7 +72,8 @@ export const useMCPStore = create<MCPState>((set, get) => ({
       await get().fetchServers();
       await get().fetchTools();
     } catch (e) {
-      set({ error: String(e), isLoading: false });
+      set({ isLoading: false });
+      throw e;
     }
   },
 
@@ -79,6 +85,18 @@ export const useMCPStore = create<MCPState>((set, get) => ({
       await get().fetchTools();
     } catch (e) {
       set({ error: String(e), isLoading: false });
+    }
+  },
+
+  updateServer: async (serverId, config) => {
+    set({ isLoading: true, error: null });
+    try {
+      await tauriUpdateMCPServer(serverId, { ...config, enabled: true });
+      await get().fetchServers();
+      await get().fetchTools();
+    } catch (e) {
+      set({ isLoading: false });
+      throw e;
     }
   },
 }));

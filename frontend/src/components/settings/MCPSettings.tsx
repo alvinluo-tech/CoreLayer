@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useMCPStore } from '@/stores/mcpStore';
 import { useModelStore } from '@/stores/modelStore';
+import type { MCPServerInfo } from '@/lib/tauri';
 import {
   Plug,
   PlugZap,
@@ -9,6 +10,7 @@ import {
   Brain,
   Server,
   Plus,
+  Pencil,
   RefreshCw,
   AlertCircle,
   CheckCircle2,
@@ -33,10 +35,13 @@ export function MCPSettings({ className }: MCPSettingsProps) {
     fetchTools,
     connectServer,
     disconnectServer,
+    updateServer,
   } = useMCPStore();
   const { modelProfiles, fetchAll: fetchModels } = useModelStore();
 
   const [showAddForm, setShowAddForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
   const [expandedServerId, setExpandedServerId] = useState<string | null>(null);
   const [newServer, setNewServer] = useState({
     id: '',
@@ -53,9 +58,42 @@ export function MCPSettings({ className }: MCPSettingsProps) {
 
   const handleConnect = async () => {
     if (!newServer.id || !newServer.name) return;
-    await connectServer(newServer);
-    setNewServer({ id: '', name: '', transport: 'http', url: '' });
+    setFormError(null);
+    try {
+      if (editingId) {
+        await updateServer(editingId, {
+          name: newServer.name,
+          transport: newServer.transport,
+          url: newServer.url,
+        });
+      } else {
+        await connectServer(newServer);
+      }
+      setNewServer({ id: '', name: '', transport: 'http', url: '' });
+      setShowAddForm(false);
+      setEditingId(null);
+    } catch (e) {
+      setFormError(String(e));
+    }
+  };
+
+  const handleEdit = (server: MCPServerInfo) => {
+    setEditingId(server.config.id);
+    setNewServer({
+      id: server.config.id,
+      name: server.config.name,
+      transport: (server.config.transport as 'http' | 'stdio' | 'sse') ?? 'http',
+      url: server.config.url ?? '',
+    });
+    setShowAddForm(true);
+    setFormError(null);
+  };
+
+  const handleCancelForm = () => {
     setShowAddForm(false);
+    setEditingId(null);
+    setFormError(null);
+    setNewServer({ id: '', name: '', transport: 'http', url: '' });
   };
 
   const handleDisconnect = async (serverId: string) => {
@@ -100,7 +138,16 @@ export function MCPSettings({ className }: MCPSettingsProps) {
               <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
             </button>
             <button
-              onClick={() => setShowAddForm(!showAddForm)}
+              onClick={() => {
+                if (showAddForm && !editingId) {
+                  setShowAddForm(false);
+                } else {
+                  setEditingId(null);
+                  setFormError(null);
+                  setNewServer({ id: '', name: '', transport: 'http', url: '' });
+                  setShowAddForm(true);
+                }
+              }}
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
             >
               <Plus className="h-4 w-4" />
@@ -117,10 +164,16 @@ export function MCPSettings({ className }: MCPSettingsProps) {
           </div>
         )}
 
-        {/* Add Server Form */}
+        {/* Add / Edit Server Form */}
         {showAddForm && (
           <div className="p-4 rounded-lg border bg-muted/50 space-y-3">
-            <h4 className="text-sm font-medium">添加 MCP 服务器</h4>
+            <h4 className="text-sm font-medium">{editingId ? '编辑服务器' : '添加 MCP 服务器'}</h4>
+            {formError && (
+              <div className="flex items-start gap-2 p-2 rounded-md bg-destructive/10 border border-destructive/20">
+                <AlertCircle className="h-3.5 w-3.5 text-destructive mt-0.5 shrink-0" />
+                <p className="text-xs text-destructive">{formError}</p>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs text-muted-foreground">ID</label>
@@ -129,7 +182,8 @@ export function MCPSettings({ className }: MCPSettingsProps) {
                   value={newServer.id}
                   onChange={(e) => setNewServer({ ...newServer, id: e.target.value })}
                   placeholder="my-server"
-                  className="w-full mt-1 px-3 py-1.5 text-sm bg-background border rounded-md"
+                  disabled={!!editingId}
+                  className="w-full mt-1 px-3 py-1.5 text-sm bg-background border rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
                 />
               </div>
               <div>
@@ -172,7 +226,7 @@ export function MCPSettings({ className }: MCPSettingsProps) {
             </div>
             <div className="flex justify-end gap-2">
               <button
-                onClick={() => setShowAddForm(false)}
+                onClick={handleCancelForm}
                 className="px-3 py-1.5 text-sm rounded-md hover:bg-muted transition-colors"
               >
                 取消
@@ -183,7 +237,7 @@ export function MCPSettings({ className }: MCPSettingsProps) {
                 className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors disabled:opacity-50"
               >
                 <PlugZap className="h-4 w-4" />
-                连接
+                {editingId ? '保存' : '连接'}
               </button>
             </div>
           </div>
@@ -269,13 +323,22 @@ export function MCPSettings({ className }: MCPSettingsProps) {
                     )}
                   </div>
                 </div>
-                <button
-                  onClick={() => handleDisconnect(server.config.id)}
-                  className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
-                  title="断开连接"
-                >
-                  <Unplug className="h-4 w-4" />
-                </button>
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => handleEdit(server)}
+                    className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                    title="编辑"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => handleDisconnect(server.config.id)}
+                    className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                    title="断开连接"
+                  >
+                    <Unplug className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
 
               {expandedServerId === server.config.id && server.status === 'connected' && (

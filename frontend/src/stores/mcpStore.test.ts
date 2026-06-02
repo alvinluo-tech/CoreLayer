@@ -121,16 +121,17 @@ describe('useMCPStore', () => {
       expect(state.tools).toEqual(mockTools.tools);
     });
 
-    it('sets error on failure without cascading', async () => {
+    it('throws on failure without cascading', async () => {
       mockConnectMCPServer.mockRejectedValueOnce(new Error('connect failed'));
 
-      await useMCPStore.getState().connectServer({
-        id: 'srv-1',
-        name: 'Test Server',
-        transport: 'http',
-      });
+      await expect(
+        useMCPStore.getState().connectServer({
+          id: 'srv-1',
+          name: 'Test Server',
+          transport: 'http',
+        })
+      ).rejects.toThrow('connect failed');
 
-      expect(useMCPStore.getState().error).toBe('Error: connect failed');
       expect(mockListMCPServers).not.toHaveBeenCalled();
       expect(mockListAllTools).not.toHaveBeenCalled();
     });

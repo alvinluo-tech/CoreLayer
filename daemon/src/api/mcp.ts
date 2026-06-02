@@ -46,6 +46,33 @@ app.post("/servers", async (c) => {
   }
 });
 
+// Update an MCP server (disconnect old, reconnect with new config)
+app.put("/servers/:id", async (c) => {
+  const serverId = c.req.param("id");
+  const body = await c.req.json<MCPServerConfig>();
+
+  try {
+    await disconnectMCPServer(serverId);
+    removeMCPServer(serverId);
+  } catch {
+    // Ignore disconnect errors — server may already be disconnected
+  }
+
+  try {
+    const config = { ...body, id: serverId };
+    await connectMCPServer(config);
+    addMCPServer(config);
+    const manager = getMCPManager();
+    const info = manager.getServerInfo(serverId);
+    return c.json({ success: true, server: info });
+  } catch (error) {
+    return c.json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    }, 500);
+  }
+});
+
 // Disconnect from an MCP server
 app.delete("/servers/:id", async (c) => {
   const serverId = c.req.param("id");
