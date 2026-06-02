@@ -1,0 +1,55 @@
+import { describe, it, expect } from 'vitest';
+import { resolveRenderer } from './resolveRenderer';
+
+describe('resolveRenderer', () => {
+  it('should return hint renderer when renderHint provided', () => {
+    const result = resolveRenderer({
+      data: [{ name: 'test' }],
+      renderHint: { type: 'stats', stats: ['count'] },
+    });
+    expect(result.type).toBe('stats');
+    expect(result.source).toBe('hint');
+  });
+
+  it('should return schema renderer when dataView schema provided', () => {
+    const result = resolveRenderer({
+      data: [{ name: 'test' }],
+      schema: { type: 'list', title: 'Items', itemShape: { primary: 'name' } },
+    });
+    expect(result.type).toBe('list');
+    expect(result.source).toBe('schema');
+  });
+
+  it('should prefer hint over schema', () => {
+    const result = resolveRenderer({
+      data: [{ name: 'test' }],
+      schema: { type: 'list', itemShape: { primary: 'name' } },
+      renderHint: { type: 'stats' },
+    });
+    expect(result.type).toBe('stats');
+    expect(result.source).toBe('hint');
+  });
+
+  it('should detect list from array of objects', () => {
+    const result = resolveRenderer({
+      data: [
+        { id: 1, name: 'a' },
+        { id: 2, name: 'b' },
+      ],
+    });
+    expect(result.type).toBe('list');
+    expect(result.source).toBe('heuristic');
+  });
+
+  it('should fall back to generic for plain data', () => {
+    const result = resolveRenderer({ data: { foo: 'bar' } });
+    expect(result.type).toBe('generic');
+    expect(result.source).toBe('fallback');
+  });
+
+  it('should fall back to generic for null data', () => {
+    const result = resolveRenderer({ data: null });
+    expect(result.type).toBe('generic');
+    expect(result.source).toBe('fallback');
+  });
+});
