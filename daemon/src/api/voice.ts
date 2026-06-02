@@ -135,10 +135,31 @@ voiceRoutes.post("/converse-stream", async (c) => {
     return c.json({ error: `Failed to initialize conversation: ${message}` }, 500);
   }
 
-  const result = streamChat(messages, "voice", conversationId);
-
   return streamSSE(c, async (sseStream) => {
     let fullText = "";
+    const toolCallsLog: { name: string; args: unknown; result: unknown }[] = [];
+    const toolCallIndexByCallId = new Map<string, number>();
+
+    const result = streamChat(messages, "voice", conversationId, async (event) => {
+      if (event.type === 'tool-call') {
+        const index = toolCallsLog.length;
+        toolCallsLog.push({ name: event.name, args: event.args ?? null, result: null });
+        toolCallIndexByCallId.set(event.toolCallId, index);
+        await sseStream.writeSSE({
+          event: 'tool-call',
+          data: JSON.stringify({ name: event.name, toolCallId: event.toolCallId, args: event.args }),
+        });
+      } else if (event.type === 'tool-result') {
+        const index = toolCallIndexByCallId.get(event.toolCallId);
+        if (index !== undefined && toolCallsLog[index]) {
+          toolCallsLog[index].result = event.result;
+        }
+        await sseStream.writeSSE({
+          event: 'tool-result',
+          data: JSON.stringify({ name: event.name, toolCallId: event.toolCallId, result: event.result }),
+        });
+      }
+    });
 
     try {
       for await (const chunk of result.textStream) {

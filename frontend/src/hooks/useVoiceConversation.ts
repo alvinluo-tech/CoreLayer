@@ -14,6 +14,7 @@ import {
   type WebSpeechASROptions,
 } from '@/lib/webSpeechASR';
 import { HALLUCINATION_PATTERNS, getSpokenText, playSciFiChime } from '@/lib/voiceUtils';
+import { useDataPanelStore } from '@/stores/dataPanelStore';
 import { createCleanup, createCleanupStreaming } from './voiceConversationCleanup';
 import { createConnectRealtimeSession } from './voiceRealtimeSession';
 
@@ -330,7 +331,7 @@ export function useVoiceConversation(
     };
     const realtimeCallbacks = { setState, setAssistantText, setFinalTranscript, setLastError };
     await createConnectRealtimeSession(realtimeRefs, realtimeCallbacks)();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   // --- Batch ASR fallback (P0) ---
   const transcribeWithWhisper = useCallback(async (): Promise<string> => {
@@ -436,6 +437,32 @@ export function useVoiceConversation(
 
           if (currentEvent === 'token') {
             yield data;
+          } else if (currentEvent === 'tool-call') {
+            // tool-call events are informational; no action needed on voice side
+          } else if (currentEvent === 'tool-result') {
+            try {
+              const payload = JSON.parse(data) as {
+                name: string;
+                toolCallId: string;
+                result: unknown;
+              };
+              const resultPayload = payload.result as Record<string, unknown> | undefined;
+              const panelData =
+                resultPayload && typeof resultPayload === 'object' && 'data' in resultPayload
+                  ? resultPayload.data
+                  : payload.result;
+
+              if (panelData != null) {
+                useDataPanelStore.getState().addEntry({
+                  toolCallId: payload.toolCallId,
+                  toolName: payload.name,
+                  title: payload.name.replace(/_/g, ' '),
+                  data: panelData,
+                });
+              }
+            } catch (e) {
+              logger.warn('[VoiceConversation] Failed to parse tool-result event:', e);
+            }
           } else if (currentEvent === 'error') {
             try {
               const parsed = JSON.parse(data) as { error: string };

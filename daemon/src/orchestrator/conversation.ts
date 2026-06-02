@@ -383,7 +383,12 @@ export async function streamMessageInConversation(
   }
 }
 
-export function streamChat(messages: ModelMessage[], mode: "text" | "voice" = "text", conversationId?: string): ReturnType<typeof streamText> {
+export function streamChat(
+  messages: ModelMessage[],
+  mode: "text" | "voice" = "text",
+  conversationId?: string,
+  onToolEvent?: (event: { type: 'tool-call' | 'tool-result'; name: string; toolCallId: string; args?: unknown; result?: unknown }) => void | Promise<void>,
+): ReturnType<typeof streamText> {
   try {
     return streamText({
       model: getModel(),
@@ -391,6 +396,30 @@ export function streamChat(messages: ModelMessage[], mode: "text" | "voice" = "t
       messages,
       tools: wrapToolsForAI(getAllTools(), conversationId),
       stopWhen: stepCountIs(5),
+      ...(onToolEvent
+        ? {
+            onStepFinish: async (step: any) => {
+              const toolCalls = step.toolCalls ?? [];
+              const toolResults = step.toolResults ?? [];
+              for (const tc of toolCalls) {
+                await onToolEvent({
+                  type: 'tool-call',
+                  name: tc.toolName,
+                  toolCallId: tc.toolCallId,
+                  args: tc.input ?? tc.args,
+                });
+              }
+              for (const tr of toolResults) {
+                await onToolEvent({
+                  type: 'tool-result',
+                  name: tr.toolName,
+                  toolCallId: tr.toolCallId,
+                  result: tr.output ?? tr.result,
+                });
+              }
+            },
+          }
+        : {}),
     });
   } catch (err) {
     logError("streamChat", err);
