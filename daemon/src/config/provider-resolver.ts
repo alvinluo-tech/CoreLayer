@@ -9,6 +9,28 @@ export const LEGACY_DEFAULTS: Record<string, { baseURL: string; envKey?: string 
   ollama: { baseURL: "http://localhost:11434/v1" },
 };
 
+// Known hostname → provider mappings for auto-detection
+const HOSTNAME_PROVIDER_MAP: Record<string, string> = {
+  "api.groq.com": "groq",
+  "openrouter.ai": "openrouter",
+  "api.anthropic.com": "anthropic",
+  "api.openai.com": "openai",
+  "generativelanguage.googleapis.com": "gemini",
+};
+
+/**
+ * Infer provider name from a URL hostname.
+ * Returns null if the hostname is not recognized.
+ */
+export function inferProviderFromUrl(url: string): string | null {
+  try {
+    const hostname = new URL(url).hostname;
+    return HOSTNAME_PROVIDER_MAP[hostname] ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export interface ResolvedProvider {
   baseURL: string;
   apiKey: string;
@@ -29,6 +51,12 @@ export function resolveProvider(name: string): ResolvedProvider {
       baseURL: legacy.baseURL,
       apiKey: legacy.envKey ? (process.env[legacy.envKey] ?? "") : "",
     };
+  }
+
+  // 3. Try hostname auto-detection — treat `name` as a potential URL
+  const inferred = inferProviderFromUrl(name);
+  if (inferred && inferred !== name) {
+    return resolveProvider(inferred);
   }
 
   throw new Error(
