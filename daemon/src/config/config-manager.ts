@@ -27,6 +27,8 @@ export interface JarvisConfig {
   defaults: {
     temperature: number;
     maxTokens: number;
+    maxSteps: number;
+    streamTimeout: number;
   };
   migrated?: boolean;
 }
@@ -93,6 +95,8 @@ const DEFAULT_CONFIG: JarvisConfig = {
   defaults: {
     temperature: 0.7,
     maxTokens: 4096,
+    maxSteps: 20,
+    streamTimeout: 120_000,
   },
 };
 
@@ -209,6 +213,14 @@ class ConfigManager {
 
   getRoutingRules(): RoutingRule[] {
     return this.getConfig().routingRules;
+  }
+
+  getMaxSteps(): number {
+    return this.getConfig().defaults.maxSteps ?? 20;
+  }
+
+  getStreamTimeout(): number {
+    return this.getConfig().defaults.streamTimeout ?? 120_000;
   }
 
   setRoutingRules(rules: RoutingRule[]): void {

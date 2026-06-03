@@ -18,7 +18,7 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
-  toolCalls?: { name: string; args: unknown; result: unknown }[];
+  toolCalls?: { name: string; input: unknown; output: unknown }[];
   isStreaming?: boolean;
 }
 
@@ -169,7 +169,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
             {message.toolCalls && message.toolCalls.length > 0 && (
               <div className="mt-3.5 pt-3.5 border-t border-border/30 space-y-2">
                 {message.toolCalls.map((tc, i) => {
-                  const isPending = message.isStreaming && tc.result === null;
+                  const isPending = message.isStreaming && tc.output === null;
                   return (
                     <div
                       key={i}
@@ -195,9 +195,9 @@ export function MessageBubble({ message }: MessageBubbleProps) {
                         <span className="truncate font-semibold text-foreground/80">{tc.name}</span>
                       </div>
 
-                      {Boolean(tc.args) && (
+                      {Boolean(tc.input) && (
                         <span className="text-[10px] opacity-60 truncate max-w-[40%] bg-background/50 dark:bg-zinc-800/50 px-1.5 py-0.5 rounded border border-border/20">
-                          {JSON.stringify(tc.args)}
+                          {JSON.stringify(tc.input)}
                         </span>
                       )}
                     </div>

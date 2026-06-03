@@ -3,6 +3,7 @@ import { voiceProfileManager } from './voiceProfile.js';
 export class AudioQueueManager {
   private audioCtx: AudioContext;
   private analyser: AnalyserNode | null = null;
+  private gainNode: GainNode | null = null;
   private ttsUrl: string;
   private voice: string;
   private model: string;
@@ -17,8 +18,10 @@ export class AudioQueueManager {
   constructor(ttsUrl: string, voice?: string) {
     this.audioCtx = new AudioContext();
     try {
+      this.gainNode = this.audioCtx.createGain();
       this.analyser = this.audioCtx.createAnalyser();
       this.analyser.fftSize = 32;
+      this.gainNode.connect(this.analyser);
       this.analyser.connect(this.audioCtx.destination);
     } catch {
       // Analyser creation may fail in some environments; TTS still works without it
@@ -26,6 +29,19 @@ export class AudioQueueManager {
     this.ttsUrl = ttsUrl;
     this.voice = voice ?? voiceProfileManager.getVoiceName();
     this.model = voiceProfileManager.getTTSModel();
+  }
+
+  /**
+   * Set playback volume (0.0 to 1.0).
+   * Used for ducking during barge-in Stage 1.
+   */
+  setVolume(volume: number): void {
+    if (this.gainNode) {
+      this.gainNode.gain.setValueAtTime(
+        Math.max(0, Math.min(1, volume)),
+        this.audioCtx.currentTime
+      );
+    }
   }
 
   setTotalExpected(count: number) {
@@ -90,7 +106,9 @@ export class AudioQueueManager {
 
     const source = this.audioCtx.createBufferSource();
     source.buffer = buffer;
-    if (this.analyser) {
+    if (this.gainNode) {
+      source.connect(this.gainNode);
+    } else if (this.analyser) {
       source.connect(this.analyser);
     } else {
       source.connect(this.audioCtx.destination);
@@ -163,6 +181,14 @@ export class AudioQueueManager {
 
   dispose() {
     this.stop();
+    if (this.gainNode) {
+      try {
+        this.gainNode.disconnect();
+      } catch {
+        // Already disconnected
+      }
+      this.gainNode = null;
+    }
     if (this.analyser) {
       try {
         this.analyser.disconnect();

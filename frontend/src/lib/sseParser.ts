@@ -14,7 +14,7 @@ export interface SSEParserCallbacks {
  */
 export function createSSEParser(callbacks: SSEParserCallbacks) {
   let buffer = '';
-  let currentEvent = 'token';
+  let currentEvent = 'delta';
 
   return {
     /**
@@ -55,7 +55,7 @@ export function createSSEParser(callbacks: SSEParserCallbacks) {
 
     reset(): void {
       buffer = '';
-      currentEvent = 'token';
+      currentEvent = 'delta';
     },
   };
 }

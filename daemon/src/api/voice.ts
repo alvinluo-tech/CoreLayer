@@ -6,6 +6,10 @@ import { streamChat } from "../orchestrator/conversation.js";
 import { getRepositories } from "../db/factory.js";
 import { env } from "../config/env.js";
 import { getProviderConfig } from "../ai/provider.js";
+import { configManager } from "../config/config-manager.js";
+import { extractErrorMessage, logError } from "../utils/errors.js";
+import { normalizeStream } from "./sse-normalizer.js";
+import { withStreamTimeout } from "./stream-timeout.js";
 import type { ModelMessage } from "ai";
 
 const voiceRoutes = new Hono();
@@ -137,37 +141,50 @@ voiceRoutes.post("/converse-stream", async (c) => {
 
   return streamSSE(c, async (sseStream) => {
     let fullText = "";
-    const toolCallsLog: { name: string; args: unknown; result: unknown }[] = [];
+    const toolCallsLog: { name: string; input: unknown; output: unknown }[] = [];
     const toolCallIndexByCallId = new Map<string, number>();
 
-    const result = streamChat(messages, "voice", conversationId, async (event) => {
+    const result = await streamChat(messages, "voice", conversationId, async (event) => {
       if (event.type === 'tool-call') {
         const index = toolCallsLog.length;
-        toolCallsLog.push({ name: event.name, args: event.args ?? null, result: null });
+        toolCallsLog.push({ name: event.name, input: event.args ?? null, output: null });
         toolCallIndexByCallId.set(event.toolCallId, index);
         await sseStream.writeSSE({
-          event: 'tool-call',
-          data: JSON.stringify({ name: event.name, toolCallId: event.toolCallId, args: event.args }),
+          event: 'tool_calls',
+          data: JSON.stringify({ name: event.name, toolCallId: event.toolCallId, input: event.args }),
         });
       } else if (event.type === 'tool-result') {
         const index = toolCallIndexByCallId.get(event.toolCallId);
         if (index !== undefined && toolCallsLog[index]) {
-          toolCallsLog[index].result = event.result;
+          toolCallsLog[index].output = event.result;
         }
         await sseStream.writeSSE({
-          event: 'tool-result',
-          data: JSON.stringify({ name: event.name, toolCallId: event.toolCallId, result: event.result }),
+          event: 'tool_result',
+          data: JSON.stringify({ name: event.name, toolCallId: event.toolCallId, output: event.result }),
         });
       }
     });
 
     try {
-      for await (const chunk of result.textStream) {
-        fullText += chunk;
-        await sseStream.writeSSE({
-          event: "token",
-          data: chunk,
-        });
+      const timeoutMs = configManager.getStreamTimeout();
+      const normalized = withStreamTimeout(
+        normalizeStream(result.fullStream),
+        timeoutMs,
+      );
+
+      for await (const event of normalized) {
+        if (event.type === "delta") {
+          fullText += event.text;
+          await sseStream.writeSSE({
+            event: "delta",
+            data: JSON.stringify({ text: event.text }),
+          });
+        } else if (event.type === "thinking") {
+          await sseStream.writeSSE({
+            event: "thinking",
+            data: JSON.stringify({ text: event.text }),
+          });
+        }
       }
 
       await repo.addMessage(conversationId!, {
@@ -180,7 +197,8 @@ voiceRoutes.post("/converse-stream", async (c) => {
         data: JSON.stringify({ fullText, conversationId }),
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      logError("voice/converse-stream", error);
+      const message = extractErrorMessage(error);
       await sseStream.writeSSE({
         event: "error",
         data: JSON.stringify({ error: message }),

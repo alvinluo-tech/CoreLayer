@@ -136,6 +136,7 @@ sqlite.exec(`
     value TEXT NOT NULL,
     source TEXT,
     confidence REAL,
+    uses INTEGER DEFAULT 0,
     expires_at TEXT,
     created_at TEXT DEFAULT 'CURRENT_TIMESTAMP',
     updated_at TEXT DEFAULT 'CURRENT_TIMESTAMP'
@@ -161,6 +162,13 @@ sqlite.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_agent_runs_conversation ON agent_runs(conversation_id);
 `);
+
+// Migration: add `uses` column to memories if it doesn't exist (Phase 4)
+try {
+  sqlite.exec(`ALTER TABLE memories ADD COLUMN uses INTEGER DEFAULT 0`);
+} catch {
+  // Column already exists — ignore
+}
 
 export const db = drizzle(sqlite, { schema });
 export { schema };

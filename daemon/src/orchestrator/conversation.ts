@@ -1,16 +1,182 @@
 import { generateText, streamText, stepCountIs } from "ai";
-import type { ModelMessage } from "ai";
-import { buildSystemPrompt } from "./prompt-builder.js";
+import type { ModelMessage, Tool } from "ai";
+import { ContextBuilder } from "./context-builder.js";
+import { compressConversation, createSummaryMessage } from "./compressor.js";
 import { getModel } from "../ai/provider.js";
 import { getAllTools } from "../tools/registry.js";
 import { wrapToolsForAI } from "../runtime/ai-tool-wrapper.js";
 import { env } from "../config/env.js";
 import { configManager } from "../config/config-manager.js";
 import { getRepositories } from "../db/factory.js";
-import type { MessageRow, ConversationRow } from "../db/repository.js";
+import type { MessageRow, ConversationRow, ScoredMemoryRow } from "../db/repository.js";
 import { classifyError, extractErrorMessage, logError } from "../utils/errors.js";
 
-const MAX_HISTORY_MESSAGES = 20;
+// ---- IterationBudget ----
+
+const BUDGET_WARNING_MSG = "[系统提示] 你已达到迭代次数上限，请整合已有信息并尽快结束回答。不要再调用工具。";
+
+/**
+ * Tracks agent loop step count and injects a pressure warning
+ * when the loop reaches 80% of the configured budget.
+ * The warning is injected exactly once into the next tool result.
+ */
+export class IterationBudget {
+  private readonly threshold: number;
+  private currentStep = 0;
+  private warned = false;
+
+  constructor(maxSteps: number) {
+    this.threshold = Math.floor(maxSteps * 0.8);
+  }
+
+  /**
+   * Record a completed step. Returns true if a warning should be injected.
+   */
+  advance(): boolean {
+    this.currentStep++;
+    if (!this.warned && this.currentStep >= this.threshold) {
+      this.warned = true;
+      return true;
+    }
+    return false;
+  }
+
+  get shouldWarn(): boolean {
+    return this.warned && this.currentStep >= this.threshold;
+  }
+
+  get step(): number {
+    return this.currentStep;
+  }
+}
+
+/**
+ * Inject a budget warning into the tool results of a step event.
+ * Returns a new array with the warning appended to the first tool result.
+ */
+interface ToolResultEntry {
+  toolName?: string;
+  toolCallId?: string;
+  output?: unknown;
+  result?: unknown;
+  [key: string]: unknown;
+}
+
+export function injectBudgetWarning(toolResults: ToolResultEntry[]): ToolResultEntry[] {
+  if (toolResults.length === 0) return toolResults;
+  const first = toolResults[0]!;
+  const warnedResult: ToolResultEntry = "output" in first
+    ? { ...first, output: `${BUDGET_WARNING_MSG}\n\n${String(first.output ?? "")}` }
+    : { ...first, result: `${BUDGET_WARNING_MSG}\n\n${String(first.result ?? "")}` };
+  return [warnedResult, ...toolResults.slice(1)];
+}
+
+// ---- Empty Response Guard ----
+
+/**
+ * If the model returns empty text but has reasoning content (thinking models),
+ * fall back to reasoning as the response text.
+ * Returns the original result if text is non-empty.
+ */
+export function guardEmptyResponse(result: { text: string; reasoning?: string | { text: string }[] }): string {
+  if (result.text && result.text.trim().length > 0) return result.text;
+
+  const reasoning = result.reasoning;
+  if (!reasoning) return result.text;
+
+  if (typeof reasoning === "string" && reasoning.trim().length > 0) return reasoning;
+  if (Array.isArray(reasoning)) {
+    const combined = reasoning.map((r) => r.text).filter(Boolean).join("\n");
+    if (combined.trim().length > 0) return combined;
+  }
+
+  return result.text;
+}
+
+// ---- Anthropic Prompt Caching Helpers ----
+
+export const CACHE_CONTROL = { type: "ephemeral" } as const;
+
+/**
+ * Apply cacheControl to the system message (first message) and the last tool.
+ * Returns a new messages array and a new tools object — immutable.
+ */
+export function applyCacheControl(
+  messages: ModelMessage[],
+  tools: Record<string, Tool>,
+): { messages: ModelMessage[]; tools: Record<string, Tool> } {
+  // Cache the system message
+  const cachedMessages = messages.map((msg, i) =>
+    i === 0 && msg.role === "system"
+      ? { ...msg, providerOptions: { anthropic: { cacheControl: CACHE_CONTROL } } }
+      : msg,
+  );
+
+  // Cache the last tool
+  const toolEntries = Object.entries(tools);
+  if (toolEntries.length === 0) return { messages: cachedMessages, tools };
+
+  const cachedTools: Record<string, Tool> = {};
+  for (let i = 0; i < toolEntries.length; i++) {
+    const [name, tool] = toolEntries[i]!;
+    cachedTools[name] =
+      i === toolEntries.length - 1
+        ? { ...tool, providerOptions: { anthropic: { cacheControl: CACHE_CONTROL } } }
+        : tool;
+  }
+
+  return { messages: cachedMessages, tools: cachedTools };
+}
+
+/**
+ * Extract and log Anthropic cache hit/miss stats from providerMetadata.
+ */
+export function logCacheStats(providerMetadata: Record<string, unknown> | undefined, context: string): void {
+  const anthropic = providerMetadata?.anthropic as Record<string, number> | undefined;
+  if (!anthropic) return;
+  const creation = anthropic.cacheCreationInputTokens ?? 0;
+  const read = anthropic.cacheReadInputTokens ?? 0;
+  if (creation === 0 && read === 0) return;
+  const hitRate = read > 0 ? "hit" : "miss";
+  console.info(`[Jarvis][Cache/${context}] creation=${creation} read=${read} status=${hitRate}`);
+}
+
+/**
+ * Fetch relevant memories for context injection.
+ * Uses scored search when a query is available for relevance-based retrieval.
+ */
+async function fetchRelevantMemories(query?: string, limit = 15): Promise<ScoredMemoryRow[]> {
+  try {
+    const repo = getRepositories().memories;
+    if (query) {
+      return await repo.searchScored(query, "default", limit);
+    }
+    // No query — fall back to all memories sorted by recency
+    const all = await repo.getAll();
+    return all
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+      .slice(0, limit)
+      .map((m) => ({ ...m, score: 0 }));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Extract the most recent conversation summary from history.
+ * Summary messages have role "system" and start with "[对话摘要".
+ */
+function extractSummaryFromHistory(history: MessageRow[]): string | undefined {
+  for (let i = history.length - 1; i >= 0; i--) {
+    const msg = history[i];
+    if (msg.role === "system" && msg.content.startsWith("[对话摘要")) {
+      // Strip the prefix header
+      const idx = msg.content.indexOf("\n\n");
+      return idx >= 0 ? msg.content.slice(idx + 2) : msg.content;
+    }
+  }
+  return undefined;
+}
 
 export function isAiConfigured(): boolean {
   // Check ~/.jarvis/credentials.json first
@@ -212,31 +378,42 @@ export async function handleMessageInConversation(
     await repo.update(conversationId, { title });
   }
 
-  // Load message history
+  // Load message history and assemble context
   const history = await repo.getMessages(conversationId);
-  const recentHistory = history.slice(-MAX_HISTORY_MESSAGES);
+  const memories = await fetchRelevantMemories(userMessage);
+  const summary = extractSummaryFromHistory(history);
+
+  const builder = new ContextBuilder({
+    mode: "text",
+    conversationId,
+    modelName: configManager.getActiveModel(),
+    userMessage,
+  });
+  if (summary) builder.withSummary(summary);
+
+  const context = await builder.build(memories, history);
 
   let reply: string;
   let toolCallsLog: { name: string; args: unknown; result: unknown }[] = [];
 
   if (isAiConfigured()) {
-    const messages: ModelMessage[] = [
-      { role: "system", content: buildSystemPrompt("text", conversationId) },
-      ...recentHistory.map((msg) => ({
-        role: msg.role as "user" | "assistant",
-        content: msg.content,
-      })),
-    ];
-
     try {
+      const rawTools = wrapToolsForAI(getAllTools(), conversationId);
+      const { messages: aiMessages, tools: aiTools } = context.cacheEnabled
+        ? applyCacheControl(context.messages, rawTools)
+        : { messages: context.messages, tools: rawTools };
+
+      const maxSteps = configManager.getMaxSteps();
       const result = await generateText({
         model: getModel(),
-        messages,
-        tools: wrapToolsForAI(getAllTools(), conversationId),
-        stopWhen: stepCountIs(5),
+        messages: aiMessages,
+        tools: aiTools,
+        stopWhen: stepCountIs(maxSteps),
       });
 
-      reply = result.text;
+      logCacheStats(result.providerMetadata as Record<string, unknown> | undefined, "handleMessage");
+
+      reply = guardEmptyResponse(result as { text: string; reasoning?: string | { text: string }[] });
 
       // Extract tool calls from steps
       for (const step of result.steps ?? []) {
@@ -268,6 +445,25 @@ export async function handleMessageInConversation(
   });
 
   const updatedConversation = (await repo.getById(conversationId))!;
+
+  // Trigger compression if needed (async, non-blocking, after assistant message saved)
+  if (context.shouldCompress && isAiConfigured()) {
+    repo.getMessages(conversationId)
+      .then((currentHistory) => compressConversation(currentHistory, conversationId))
+      .then(async (compaction) => {
+        if (compaction.summary && compaction.compressedMessages.length > 0) {
+          const summaryMsg = createSummaryMessage(
+            conversationId,
+            compaction.summary,
+            compaction.compressedMessages.length,
+          );
+          await repo.addMessage(conversationId, summaryMsg);
+        }
+      })
+      .catch((err) => {
+        logError("handleMessageInConversation/compress", err);
+      });
+  }
 
   return {
     userMessage: savedUserMsg,
@@ -307,38 +503,81 @@ export async function streamMessageInConversation(
     await repo.update(conversationId, { title });
   }
 
-  // Load message history
+  // Load message history and assemble context
   const history = await repo.getMessages(conversationId);
-  const recentHistory = history.slice(-MAX_HISTORY_MESSAGES);
+  const memories = await fetchRelevantMemories(userMessage);
+  const summary = extractSummaryFromHistory(history);
+
+  const builder = new ContextBuilder({
+    mode: "text",
+    conversationId,
+    modelName: configManager.getActiveModel(),
+    userMessage,
+  });
+  if (summary) builder.withSummary(summary);
+
+  const context = await builder.build(memories, history);
 
   const saveAssistantMessage = async (reply: string, toolCallsLog: any[]) => {
-    return repo.addMessage(conversationId, {
+    // Save assistant message
+    const msg = await repo.addMessage(conversationId, {
       role: "assistant",
       content: reply,
       toolCalls: toolCallsLog.length > 0 ? JSON.stringify(toolCallsLog) : undefined,
     });
+
+    // Trigger compression if needed after response is saved
+    // Re-fetch messages to include the latest assistant reply
+    if (context.shouldCompress && isAiConfigured()) {
+      repo.getMessages(conversationId)
+        .then((currentHistory) => compressConversation(currentHistory, conversationId))
+        .then(async (compaction) => {
+          if (compaction.summary && compaction.compressedMessages.length > 0) {
+            const summaryMsg = createSummaryMessage(
+              conversationId,
+              compaction.summary,
+              compaction.compressedMessages.length,
+            );
+            await repo.addMessage(conversationId, summaryMsg);
+          }
+        })
+        .catch((err) => {
+          logError("streamMessageInConversation/compress", err);
+        });
+    }
+
+    return msg;
   };
 
   if (isAiConfigured()) {
-    const messages: ModelMessage[] = [
-      { role: "system", content: buildSystemPrompt("text", conversationId) },
-      ...recentHistory.map((msg) => ({
-        role: msg.role as "user" | "assistant",
-        content: msg.content,
-      })),
-    ];
-
     try {
+      const rawTools = wrapToolsForAI(getAllTools(), conversationId);
+      const { messages: aiMessages, tools: aiTools } = context.cacheEnabled
+        ? applyCacheControl(context.messages, rawTools)
+        : { messages: context.messages, tools: rawTools };
+
+      const maxSteps = configManager.getMaxSteps();
+      const budget = new IterationBudget(maxSteps);
+
       const result = streamText({
         model: getModel(),
-        messages,
-        tools: wrapToolsForAI(getAllTools(), conversationId),
-        stopWhen: stepCountIs(5),
+        messages: aiMessages,
+        tools: aiTools,
+        stopWhen: stepCountIs(maxSteps),
+        onFinish: async (event: any) => {
+          logCacheStats(event.providerMetadata as Record<string, unknown> | undefined, "streamMessage");
+        },
         ...(onToolEvent
           ? {
               onStepFinish: async (step: any) => {
                 const toolCalls = step.toolCalls ?? [];
-                const toolResults = step.toolResults ?? [];
+                let toolResults = step.toolResults ?? [];
+
+                // Track iteration budget and inject warning if needed
+                if (budget.advance()) {
+                  toolResults = injectBudgetWarning(toolResults);
+                }
+
                 for (const tc of toolCalls) {
                   await onToolEvent({
                     type: 'tool-call',
@@ -383,24 +622,53 @@ export async function streamMessageInConversation(
   }
 }
 
-export function streamChat(
+export async function streamChat(
   messages: ModelMessage[],
   mode: "text" | "voice" = "text",
   conversationId?: string,
   onToolEvent?: (event: { type: 'tool-call' | 'tool-result'; name: string; toolCallId: string; args?: unknown; result?: unknown }) => void | Promise<void>,
-): ReturnType<typeof streamText> {
+): Promise<ReturnType<typeof streamText>> {
   try {
+    const builder = new ContextBuilder({
+      mode,
+      conversationId,
+      modelName: configManager.getActiveModel(),
+    });
+    // streamChat doesn't have history or memories — build minimal context
+    const context = await builder.build([], []);
+
+    const rawTools = wrapToolsForAI(getAllTools(), conversationId);
+    const aiTools = context.cacheEnabled
+      ? applyCacheControl([], rawTools).tools
+      : rawTools;
+
+    const systemMessage = context.cacheEnabled
+      ? { role: "system" as const, content: context.messages[0].content as string, providerOptions: { anthropic: { cacheControl: CACHE_CONTROL } } }
+      : context.messages[0].content as string;
+
+    const maxSteps = configManager.getMaxSteps();
+    const budget = new IterationBudget(maxSteps);
+
     return streamText({
       model: getModel(),
-      system: buildSystemPrompt(mode, conversationId),
+      system: systemMessage,
       messages,
-      tools: wrapToolsForAI(getAllTools(), conversationId),
-      stopWhen: stepCountIs(5),
+      tools: aiTools,
+      stopWhen: stepCountIs(maxSteps),
+      onFinish: async (event: any) => {
+        logCacheStats(event.providerMetadata as Record<string, unknown> | undefined, "streamChat");
+      },
       ...(onToolEvent
         ? {
             onStepFinish: async (step: any) => {
               const toolCalls = step.toolCalls ?? [];
-              const toolResults = step.toolResults ?? [];
+              let toolResults = step.toolResults ?? [];
+
+              // Track iteration budget and inject warning if needed
+              if (budget.advance()) {
+                toolResults = injectBudgetWarning(toolResults);
+              }
+
               for (const tc of toolCalls) {
                 await onToolEvent({
                   type: 'tool-call',
@@ -440,13 +708,32 @@ export async function handleMessage(userMessage: string): Promise<{
     return handleLocally(userMessage);
   }
 
+  const builder = new ContextBuilder({
+    mode: "text",
+    modelName: configManager.getActiveModel(),
+    userMessage,
+  });
+  const context = await builder.build([], []);
+
+  const rawTools = wrapToolsForAI(getAllTools());
+  const aiTools = context.cacheEnabled
+    ? applyCacheControl([], rawTools).tools
+    : rawTools;
+
+  const systemMessage = context.cacheEnabled
+    ? { role: "system" as const, content: context.messages[0].content as string, providerOptions: { anthropic: { cacheControl: CACHE_CONTROL } } }
+    : context.messages[0].content as string;
+
+  const maxSteps = configManager.getMaxSteps();
   const result = await generateText({
     model: getModel(),
-    system: buildSystemPrompt(),
+    system: systemMessage,
     messages: [{ role: "user", content: userMessage }],
-    tools: wrapToolsForAI(getAllTools()),
-    stopWhen: stepCountIs(5),
+    tools: aiTools,
+    stopWhen: stepCountIs(maxSteps),
   });
+
+  logCacheStats(result.providerMetadata as Record<string, unknown> | undefined, "handleMessage");
 
   const toolCallsLog: { name: string; args: unknown; result: unknown }[] = [];
   for (const step of result.steps ?? []) {
@@ -461,7 +748,7 @@ export async function handleMessage(userMessage: string): Promise<{
   }
 
   return {
-    reply: result.text,
+    reply: guardEmptyResponse(result as { text: string; reasoning?: string | { text: string }[] }),
     toolCalls: toolCallsLog,
   };
 }
