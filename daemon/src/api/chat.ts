@@ -5,6 +5,8 @@ import { ContextBuilder } from "../orchestrator/context-builder.js";
 import { getRepositories } from "../db/factory.js";
 import { configManager } from "../config/config-manager.js";
 import { apiError, extractErrorMessage, classifyError, logError } from "../utils/errors.js";
+import { normalizeStream } from "./sse-normalizer.js";
+import { withStreamTimeout } from "./stream-timeout.js";
 import type { ModelMessage } from "ai";
 
 const chatRoutes = new Hono();
@@ -50,13 +52,24 @@ chatRoutes.post("/stream", async (c) => {
       });
 
       try {
-        for await (const chunk of result.textStream) {
-          await streamWriter.write(chunk);
+        const timeoutMs = configManager.getStreamTimeout();
+        const normalized = withStreamTimeout(
+          normalizeStream(result.fullStream),
+          timeoutMs,
+        );
+
+        for await (const event of normalized) {
+          if (event.type === "delta") {
+            await streamWriter.write(`event: delta\ndata: ${JSON.stringify({ text: event.text })}\n\n`);
+          } else if (event.type === "thinking") {
+            await streamWriter.write(`event: thinking\ndata: ${JSON.stringify({ text: event.text })}\n\n`);
+          }
+          // tool_calls / tool_result not surfaced here — chat.ts has no onToolEvent
         }
       } catch (streamErr) {
         logError("chat/stream[mid-stream]", streamErr);
-        // Best-effort: write error marker to already-open stream
-        await streamWriter.write(`\n\n[ERROR: ${extractErrorMessage(streamErr)}]`).catch(() => {});
+        const message = extractErrorMessage(streamErr);
+        await streamWriter.write(`event: error\ndata: ${JSON.stringify({ error: message })}\n\n`).catch(() => {});
       }
     });
   } catch (err) {

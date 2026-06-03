@@ -429,7 +429,7 @@ export function useVoiceConversation(
 
     const decoder = new TextDecoder();
     let buffer = '';
-    let currentEvent = 'token';
+    let currentEvent = 'delta';
 
     while (true) {
       const { done, value } = await reader.read();
@@ -446,22 +446,29 @@ export function useVoiceConversation(
           const data = line.slice(6);
           if (!data) continue;
 
-          if (currentEvent === 'token') {
-            yield data;
-          } else if (currentEvent === 'tool-call') {
-            // tool-call events are informational; no action needed on voice side
-          } else if (currentEvent === 'tool-result') {
+          if (currentEvent === 'delta') {
+            try {
+              const payload = JSON.parse(data) as { text: string };
+              yield payload.text;
+            } catch {
+              yield data;
+            }
+          } else if (currentEvent === 'thinking') {
+            // Thinking tokens are not displayed in voice mode
+          } else if (currentEvent === 'tool_calls') {
+            // tool_calls events are informational; no action needed on voice side
+          } else if (currentEvent === 'tool_result') {
             try {
               const payload = JSON.parse(data) as {
                 name: string;
                 toolCallId: string;
-                result: unknown;
+                output: unknown;
               };
-              const resultPayload = payload.result as Record<string, unknown> | undefined;
+              const resultPayload = payload.output as Record<string, unknown> | undefined;
               const panelData =
                 resultPayload && typeof resultPayload === 'object' && 'data' in resultPayload
                   ? resultPayload.data
-                  : payload.result;
+                  : payload.output;
 
               if (panelData != null) {
                 useDataPanelStore.getState().addEntry({
@@ -472,7 +479,7 @@ export function useVoiceConversation(
                 });
               }
             } catch (e) {
-              logger.warn('[VoiceConversation] Failed to parse tool-result event:', e);
+              logger.warn('[VoiceConversation] Failed to parse tool_result event:', e);
             }
           } else if (currentEvent === 'error') {
             try {
@@ -482,7 +489,7 @@ export function useVoiceConversation(
               if (e instanceof Error && e.message !== 'error') throw e;
             }
           }
-          currentEvent = 'token'; // reset for next event
+          currentEvent = 'delta'; // reset for next event
         }
       }
     }

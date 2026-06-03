@@ -10,7 +10,7 @@ export interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
-  toolCalls?: { name: string; args: unknown; result: unknown }[];
+  toolCalls?: { name: string; input: unknown; output: unknown }[];
   isStreaming?: boolean;
 }
 
@@ -93,7 +93,7 @@ export function useChat() {
 
       try {
         let fullText = '';
-        const toolCallsMap = new Map<string, { name: string; args: unknown; result: unknown }>();
+        const toolCallsMap = new Map<string, { name: string; input: unknown; output: unknown }>();
         let messageListUpdated = false;
 
         await jarvisClient.streamSSE({
@@ -102,7 +102,7 @@ export function useChat() {
           body: { content: text },
           signal: abortController.signal,
           onEvent({ event, data }) {
-            if (event === 'token') {
+            if (event === 'delta') {
               try {
                 const payload = JSON.parse(data) as { text: string };
                 fullText += payload.text;
@@ -111,41 +111,44 @@ export function useChat() {
               }
               setStreamingContent(fullText);
               messageListUpdated = true;
-            } else if (event === 'tool-call') {
+            } else if (event === 'thinking') {
+              // Thinking tokens are not displayed in the main chat UI yet.
+              // The event is received and acknowledged for future use.
+            } else if (event === 'tool_calls') {
               try {
                 const payload = JSON.parse(data) as {
                   name: string;
                   toolCallId: string;
-                  args: unknown;
+                  input: unknown;
                 };
                 toolCallsMap.set(payload.toolCallId, {
                   name: payload.name,
-                  args: payload.args,
-                  result: null,
+                  input: payload.input,
+                  output: null,
                 });
                 messageListUpdated = true;
               } catch (e) {
-                console.warn('[useChat] Failed to parse tool-call event:', e);
+                console.warn('[useChat] Failed to parse tool_calls event:', e);
               }
-            } else if (event === 'tool-result') {
+            } else if (event === 'tool_result') {
               try {
                 const payload = JSON.parse(data) as {
                   name: string;
                   toolCallId: string;
-                  result: unknown;
+                  output: unknown;
                 };
                 const existing = toolCallsMap.get(payload.toolCallId);
                 if (existing) {
-                  existing.result = payload.result;
+                  existing.output = payload.output;
                   messageListUpdated = true;
                 }
 
                 // Dispatch to data panel
-                const resultPayload = payload.result as Record<string, unknown> | undefined;
+                const resultPayload = payload.output as Record<string, unknown> | undefined;
                 const panelData =
                   resultPayload && typeof resultPayload === 'object' && 'data' in resultPayload
                     ? resultPayload.data
-                    : payload.result;
+                    : payload.output;
 
                 if (panelData != null) {
                   useDataPanelStore.getState().addEntry({
@@ -156,7 +159,7 @@ export function useChat() {
                   });
                 }
               } catch (e) {
-                console.warn('[useChat] Failed to parse tool-result event:', e);
+                console.warn('[useChat] Failed to parse tool_result event:', e);
               }
             } else if (event === 'done') {
               try {

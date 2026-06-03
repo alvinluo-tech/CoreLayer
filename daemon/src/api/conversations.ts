@@ -2,7 +2,10 @@ import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { getRepositories } from "../db/factory.js";
 import { handleMessageInConversation, streamMessageInConversation } from "../orchestrator/conversation.js";
-import { apiError, logError } from "../utils/errors.js";
+import { apiError, extractErrorMessage, logError } from "../utils/errors.js";
+import { configManager } from "../config/config-manager.js";
+import { normalizeStream } from "./sse-normalizer.js";
+import { withStreamTimeout } from "./stream-timeout.js";
 
 const app = new Hono();
 
@@ -113,43 +116,56 @@ app.post("/:id/messages/stream", async (c) => {
   }
 
   try {
-    const toolCallsLog: { name: string; args: unknown; result: unknown }[] = [];
+    const toolCallsLog: { name: string; input: unknown; output: unknown }[] = [];
     const toolCallIndexByCallId = new Map<string, number>();
 
     return streamSSE(c, async (sseStream) => {
       const streamResult = await streamMessageInConversation(id, body.content, async (event) => {
         if (event.type === 'tool-call') {
           const index = toolCallsLog.length;
-          toolCallsLog.push({ name: event.name, args: event.args ?? null, result: null });
+          toolCallsLog.push({ name: event.name, input: event.args ?? null, output: null });
           toolCallIndexByCallId.set(event.toolCallId, index);
           await sseStream.writeSSE({
-            event: 'tool-call',
-            data: JSON.stringify({ name: event.name, toolCallId: event.toolCallId, args: event.args }),
+            event: 'tool_calls',
+            data: JSON.stringify({ name: event.name, toolCallId: event.toolCallId, input: event.args }),
           });
         } else if (event.type === 'tool-result') {
           const index = toolCallIndexByCallId.get(event.toolCallId);
           if (index !== undefined && toolCallsLog[index]) {
-            toolCallsLog[index].result = event.result;
+            toolCallsLog[index].output = event.result;
           }
           await sseStream.writeSSE({
-            event: 'tool-result',
-            data: JSON.stringify({ name: event.name, toolCallId: event.toolCallId, result: event.result }),
+            event: 'tool_result',
+            data: JSON.stringify({ name: event.name, toolCallId: event.toolCallId, output: event.result }),
           });
         }
       });
 
-      // If it's AI-enabled, stream the LLM response
+      // If it's AI-enabled, stream the LLM response via normalized fullStream
       if (streamResult.isAi && streamResult.result) {
         let fullText = "";
+        const timeoutMs = configManager.getStreamTimeout();
 
         try {
-          // Iterate over textStream to capture text tokens (highly stable)
-          for await (const chunk of streamResult.result.textStream) {
-            fullText += chunk;
-            await sseStream.writeSSE({
-              event: "token",
-              data: JSON.stringify({ text: chunk }),
-            });
+          const normalized = withStreamTimeout(
+            normalizeStream(streamResult.result.fullStream),
+            timeoutMs,
+          );
+
+          for await (const event of normalized) {
+            if (event.type === "delta") {
+              fullText += event.text;
+              await sseStream.writeSSE({
+                event: "delta",
+                data: JSON.stringify({ text: event.text }),
+              });
+            } else if (event.type === "thinking") {
+              await sseStream.writeSSE({
+                event: "thinking",
+                data: JSON.stringify({ text: event.text }),
+              });
+            }
+            // tool_calls and tool_result are handled by onToolEvent callback above
           }
 
           // Save assistant message to database when complete
@@ -166,7 +182,7 @@ app.post("/:id/messages/stream", async (c) => {
           });
         } catch (err) {
           logError("conversations/stream/ai", err);
-          const message = err instanceof Error ? err.message : String(err);
+          const message = extractErrorMessage(err);
           await sseStream.writeSSE({
             event: "error",
             data: JSON.stringify({ error: message }),
@@ -176,7 +192,7 @@ app.post("/:id/messages/stream", async (c) => {
         // Non-AI fallback: stream local response in one chunk
         try {
           await sseStream.writeSSE({
-            event: "token",
+            event: "delta",
             data: JSON.stringify({ text: streamResult.reply || "" }),
           });
 
@@ -196,7 +212,7 @@ app.post("/:id/messages/stream", async (c) => {
           });
         } catch (err) {
           logError("conversations/stream/local", err);
-          const message = err instanceof Error ? err.message : String(err);
+          const message = extractErrorMessage(err);
           await sseStream.writeSSE({
             event: "error",
             data: JSON.stringify({ error: message }),
@@ -206,7 +222,7 @@ app.post("/:id/messages/stream", async (c) => {
     });
   } catch (err) {
     logError("conversations/stream", err);
-    const message = err instanceof Error ? err.message : String(err);
+    const message = extractErrorMessage(err);
     return apiError(c, message, 500);
   }
 });

@@ -10,7 +10,7 @@ describe('createSSEParser', () => {
 
     parser.feed('data: hello\n\n');
 
-    expect(events).toEqual([{ event: 'token', data: 'hello' }]);
+    expect(events).toEqual([{ event: 'delta', data: 'hello' }]);
   });
 
   it('parses multiple events in one chunk', () => {
@@ -22,8 +22,8 @@ describe('createSSEParser', () => {
     parser.feed('data: first\n\ndata: second\n\n');
 
     expect(events).toEqual([
-      { event: 'token', data: 'first' },
-      { event: 'token', data: 'second' },
+      { event: 'delta', data: 'first' },
+      { event: 'delta', data: 'second' },
     ]);
   });
 
@@ -38,7 +38,7 @@ describe('createSSEParser', () => {
 
     parser.feed('lo\n\n');
 
-    expect(events).toEqual([{ event: 'token', data: 'hello' }]);
+    expect(events).toEqual([{ event: 'delta', data: 'hello' }]);
   });
 
   it('flush fires remaining buffer as a data event', () => {
@@ -50,7 +50,7 @@ describe('createSSEParser', () => {
     parser.feed('data: leftover');
     parser.flush();
 
-    expect(events).toEqual([{ event: 'token', data: 'leftover' }]);
+    expect(events).toEqual([{ event: 'delta', data: 'leftover' }]);
   });
 
   it('flush on empty buffer is a no-op', () => {
@@ -74,7 +74,7 @@ describe('createSSEParser', () => {
     // After reset, feeding new data should use default "token" event type
     parser.feed('data: after-reset\n\n');
 
-    expect(events).toEqual([{ event: 'token', data: 'after-reset' }]);
+    expect(events).toEqual([{ event: 'delta', data: 'after-reset' }]);
   });
 
   it('tracks custom event type', () => {
@@ -98,7 +98,7 @@ describe('createSSEParser', () => {
     parser.feed('data: \n\n');
     parser.feed('data: valid\n\n');
 
-    expect(events).toEqual([{ event: 'token', data: 'valid' }]);
+    expect(events).toEqual([{ event: 'delta', data: 'valid' }]);
   });
 
   it('ignores malformed lines', () => {
@@ -109,6 +109,6 @@ describe('createSSEParser', () => {
 
     parser.feed('this is not valid SSE\ndata: ok\n\n');
 
-    expect(events).toEqual([{ event: 'token', data: 'ok' }]);
+    expect(events).toEqual([{ event: 'delta', data: 'ok' }]);
   });
 });
