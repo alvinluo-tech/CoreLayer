@@ -64,6 +64,8 @@ sqlite.exec(`
     title TEXT NOT NULL DEFAULT 'New Chat',
     model_used TEXT NOT NULL DEFAULT 'mimo-v2.5-pro',
     message_count INTEGER NOT NULL DEFAULT 0,
+    prompt_tokens INTEGER DEFAULT 0,
+    completion_tokens INTEGER DEFAULT 0,
     created_at TEXT DEFAULT 'CURRENT_TIMESTAMP',
     updated_at TEXT DEFAULT 'CURRENT_TIMESTAMP'
   );
@@ -166,6 +168,18 @@ sqlite.exec(`
 // Migration: add `uses` column to memories if it doesn't exist (Phase 4)
 try {
   sqlite.exec(`ALTER TABLE memories ADD COLUMN uses INTEGER DEFAULT 0`);
+} catch {
+  // Column already exists — ignore
+}
+
+// Migration: add token tracking columns to conversations (Phase 12)
+try {
+  sqlite.exec(`ALTER TABLE conversations ADD COLUMN prompt_tokens INTEGER DEFAULT 0`);
+} catch {
+  // Column already exists — ignore
+}
+try {
+  sqlite.exec(`ALTER TABLE conversations ADD COLUMN completion_tokens INTEGER DEFAULT 0`);
 } catch {
   // Column already exists — ignore
 }

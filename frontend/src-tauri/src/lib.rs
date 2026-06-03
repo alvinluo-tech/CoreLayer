@@ -46,6 +46,8 @@ pub struct Conversation {
     pub title: String,
     pub model_used: String,
     pub message_count: i32,
+    pub prompt_tokens: Option<i32>,
+    pub completion_tokens: Option<i32>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -500,6 +502,11 @@ async fn get_db_stats() -> Result<serde_json::Value, String> {
 }
 
 #[tauri::command]
+async fn get_usage_stats() -> Result<serde_json::Value, String> {
+    daemon_get(get_daemon_client(), "/api/settings/usage").await
+}
+
+#[tauri::command]
 async fn db_manager_list_tables() -> Result<serde_json::Value, String> {
     daemon_get(get_daemon_client(), "/api/settings/db-manager/tables").await
 }
@@ -905,6 +912,7 @@ pub fn run() {
             get_settings,
             update_storage_mode,
             get_db_stats,
+            get_usage_stats,
             db_manager_list_tables,
             db_manager_get_table_rows,
             db_manager_delete_row,

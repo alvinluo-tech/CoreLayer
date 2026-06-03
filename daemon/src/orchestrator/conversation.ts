@@ -1,12 +1,12 @@
 import { generateText, streamText, stepCountIs } from "ai";
 import type { ModelMessage, Tool } from "ai";
-import { ContextBuilder } from "./context-builder.js";
+import { ContextBuilder, MEMORY_MIN_SCORE } from "./context-builder.js";
 import { compressConversation, createSummaryMessage } from "./compressor.js";
-import { getModel } from "../ai/provider.js";
 import { getAllTools } from "../tools/registry.js";
 import { wrapToolsForAI } from "../runtime/ai-tool-wrapper.js";
 import { env } from "../config/env.js";
 import { configManager } from "../config/config-manager.js";
+import { getModelGateway } from "../model/gateway.js";
 import { getRepositories } from "../db/factory.js";
 import type { MessageRow, ConversationRow, ScoredMemoryRow } from "../db/repository.js";
 import { classifyError, extractErrorMessage, logError } from "../utils/errors.js";
@@ -141,6 +141,42 @@ export function logCacheStats(providerMetadata: Record<string, unknown> | undefi
   console.info(`[Jarvis][Cache/${context}] creation=${creation} read=${read} status=${hitRate}`);
 }
 
+// ---- Model Routing ----
+
+/** Infer task context from message content for model selection. */
+function inferTaskContext(userMessage: string, hasTools: boolean, historyLength: number): {
+  mode?: 'text' | 'voice';
+  expectedAnswerLength?: 'short' | 'medium' | 'long';
+  requiresToolCalling?: boolean;
+  requiresLongContext?: boolean;
+} {
+  const msgLen = userMessage.length;
+  return {
+    expectedAnswerLength: msgLen < 50 ? 'short' : msgLen > 300 ? 'long' : 'medium',
+    requiresToolCalling: hasTools,
+    requiresLongContext: historyLength > 40,
+  };
+}
+
+/** Select model via ModelGateway, falling back to activeModel on failure. */
+function selectModelForConversation(
+  userMessage: string,
+  hasTools: boolean,
+  historyLength: number,
+): string {
+  try {
+    const gateway = getModelGateway();
+    const criteria = inferTaskContext(userMessage, hasTools, historyLength);
+    const selected = gateway.selectModel(criteria);
+    const profile = gateway.getProfile(selected);
+    console.info(`[Router] selected model: ${selected} (${profile?.displayName ?? selected})`);
+    return selected;
+  } catch (err) {
+    logError("selectModelForConversation/fallback", err);
+    return configManager.getActiveModel();
+  }
+}
+
 /**
  * Fetch relevant memories for context injection.
  * Uses scored search when a query is available for relevance-based retrieval.
@@ -148,15 +184,23 @@ export function logCacheStats(providerMetadata: Record<string, unknown> | undefi
 async function fetchRelevantMemories(query?: string, limit = 15): Promise<ScoredMemoryRow[]> {
   try {
     const repo = getRepositories().memories;
+    let scored: ScoredMemoryRow[];
     if (query) {
-      return await repo.searchScored(query, "default", limit);
+      scored = await repo.searchScored(query, "default", limit);
+    } else {
+      const all = await repo.getAll();
+      scored = all
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+        .slice(0, limit)
+        .map((m) => ({ ...m, score: 0 }));
     }
-    // No query — fall back to all memories sorted by recency
-    const all = await repo.getAll();
-    return all
-      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-      .slice(0, limit)
-      .map((m) => ({ ...m, score: 0 }));
+    const before = scored.length;
+    const filtered = scored.filter((m) => m.score >= MEMORY_MIN_SCORE);
+    const removed = before - filtered.length;
+    if (removed > 0) {
+      console.info(`[Memory] filtered ${removed} low-relevance memories (score < ${MEMORY_MIN_SCORE})`);
+    }
+    return filtered;
   } catch {
     return [];
   }
@@ -383,10 +427,12 @@ export async function handleMessageInConversation(
   const memories = await fetchRelevantMemories(userMessage);
   const summary = extractSummaryFromHistory(history);
 
+  const selectedModel = selectModelForConversation(userMessage, true, history.length);
+
   const builder = new ContextBuilder({
     mode: "text",
     conversationId,
-    modelName: configManager.getActiveModel(),
+    modelName: selectedModel,
     userMessage,
   });
   if (summary) builder.withSummary(summary);
@@ -405,7 +451,7 @@ export async function handleMessageInConversation(
 
       const maxSteps = configManager.getMaxSteps();
       const result = await generateText({
-        model: getModel(),
+        model: getModelGateway().getModel(selectedModel),
         messages: aiMessages,
         tools: aiTools,
         stopWhen: stepCountIs(maxSteps),
@@ -510,10 +556,12 @@ export async function streamMessageInConversation(
   const memories = await fetchRelevantMemories(userMessage);
   const summary = extractSummaryFromHistory(history);
 
+  const selectedModel = selectModelForConversation(userMessage, true, history.length);
+
   const builder = new ContextBuilder({
     mode: "text",
     conversationId,
-    modelName: configManager.getActiveModel(),
+    modelName: selectedModel,
     userMessage,
   });
   if (summary) builder.withSummary(summary);
@@ -561,6 +609,9 @@ export async function streamMessageInConversation(
       const maxSteps = configManager.getMaxSteps();
       const budget = new IterationBudget(maxSteps);
 
+      // Token usage accumulator
+      const tokenUsage = { promptTokens: 0, completionTokens: 0 };
+
       // Set up stream timeout via AbortController
       const controller = abortController ?? new AbortController();
       const streamTimeout = configManager.getStreamTimeout();
@@ -570,7 +621,7 @@ export async function streamMessageInConversation(
       }, streamTimeout);
 
       const result = streamText({
-        model: getModel(),
+        model: getModelGateway().getModel(selectedModel),
         messages: aiMessages,
         tools: aiTools,
         stopWhen: stepCountIs(maxSteps),
@@ -578,37 +629,50 @@ export async function streamMessageInConversation(
         onFinish: async (event: any) => {
           clearTimeout(timeoutId);
           logCacheStats(event.providerMetadata as Record<string, unknown> | undefined, "streamMessage");
-        },
-        ...(onToolEvent
-          ? {
-              onStepFinish: async (step: any) => {
-                const toolCalls = step.toolCalls ?? [];
-                let toolResults = step.toolResults ?? [];
-
-                // Track iteration budget and inject warning if needed
-                if (budget.advance()) {
-                  toolResults = injectBudgetWarning(toolResults);
-                }
-
-                for (const tc of toolCalls) {
-                  await onToolEvent({
-                    type: 'tool-call',
-                    name: tc.toolName,
-                    toolCallId: tc.toolCallId,
-                    args: tc.input ?? tc.args,
-                  });
-                }
-                for (const tr of toolResults) {
-                  await onToolEvent({
-                    type: 'tool-result',
-                    name: tr.toolName,
-                    toolCallId: tr.toolCallId,
-                    result: tr.output ?? tr.result,
-                  });
-                }
-              },
+          // Persist accumulated token usage
+          if (tokenUsage.promptTokens > 0 || tokenUsage.completionTokens > 0) {
+            try {
+              repo.updateTokenUsage(conversationId, tokenUsage.promptTokens, tokenUsage.completionTokens);
+              console.info(`[Tokens] conversation ${conversationId}: prompt=${tokenUsage.promptTokens} completion=${tokenUsage.completionTokens}`);
+            } catch (err) {
+              logError("onFinish/updateTokenUsage", err);
             }
-          : {}),
+          }
+        },
+        onStepFinish: async (step: any) => {
+          // Accumulate token usage from each step
+          if (step.usage) {
+            tokenUsage.promptTokens += step.usage.promptTokens ?? 0;
+            tokenUsage.completionTokens += step.usage.completionTokens ?? 0;
+          }
+
+          const toolCalls = step.toolCalls ?? [];
+          let toolResults = step.toolResults ?? [];
+
+          // Track iteration budget and inject warning if needed
+          if (budget.advance()) {
+            toolResults = injectBudgetWarning(toolResults);
+          }
+
+          if (onToolEvent) {
+            for (const tc of toolCalls) {
+              await onToolEvent({
+                type: 'tool-call',
+                name: tc.toolName,
+                toolCallId: tc.toolCallId,
+                args: tc.input ?? tc.args,
+              });
+            }
+            for (const tr of toolResults) {
+              await onToolEvent({
+                type: 'tool-result',
+                name: tr.toolName,
+                toolCallId: tr.toolCallId,
+                result: tr.output ?? tr.result,
+              });
+            }
+          }
+        },
       });
 
       return {
@@ -643,10 +707,12 @@ export async function streamChat(
   abortController?: AbortController,
 ): Promise<{ stream: ReturnType<typeof streamText>; abortController: AbortController }> {
   try {
+    const selectedModel = selectModelForConversation(messages[0]?.content?.toString() ?? "", false, 0);
+
     const builder = new ContextBuilder({
       mode,
       conversationId,
-      modelName: configManager.getActiveModel(),
+      modelName: selectedModel,
     });
     // streamChat doesn't have history or memories — build minimal context
     const context = await builder.build([], []);
@@ -671,7 +737,7 @@ export async function streamChat(
     }, streamTimeout);
 
     const stream = streamText({
-      model: getModel(),
+      model: getModelGateway().getModel(selectedModel),
       system: systemMessage,
       messages,
       tools: aiTools,
@@ -733,9 +799,11 @@ export async function handleMessage(userMessage: string): Promise<{
     return handleLocally(userMessage);
   }
 
+  const selectedModel = selectModelForConversation(userMessage, true, 0);
+
   const builder = new ContextBuilder({
     mode: "text",
-    modelName: configManager.getActiveModel(),
+    modelName: selectedModel,
     userMessage,
   });
   const context = await builder.build([], []);
@@ -751,7 +819,7 @@ export async function handleMessage(userMessage: string): Promise<{
 
   const maxSteps = configManager.getMaxSteps();
   const result = await generateText({
-    model: getModel(),
+    model: getModelGateway().getModel(selectedModel),
     system: systemMessage,
     messages: [{ role: "user", content: userMessage }],
     tools: aiTools,

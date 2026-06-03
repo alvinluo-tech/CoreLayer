@@ -14,6 +14,8 @@ function createTestDb() {
       title TEXT NOT NULL DEFAULT 'New Chat',
       model_used TEXT NOT NULL DEFAULT 'mimo-v2.5-pro',
       message_count INTEGER NOT NULL DEFAULT 0,
+      prompt_tokens INTEGER NOT NULL DEFAULT 0,
+      completion_tokens INTEGER NOT NULL DEFAULT 0,
       created_at TEXT DEFAULT 'CURRENT_TIMESTAMP',
       updated_at TEXT DEFAULT 'CURRENT_TIMESTAMP'
     );

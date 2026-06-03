@@ -24,6 +24,8 @@ export function createSqliteConversationRepo(): ConversationRepository {
         title: convTitle,
         modelUsed: "mimo-v2.5-pro",
         messageCount: 0,
+        promptTokens: 0,
+        completionTokens: 0,
         createdAt: now,
         updatedAt: now,
       };
@@ -120,6 +122,24 @@ export function createSqliteConversationRepo(): ConversationRepository {
       db.delete(schema.messages).run();
       const result = db.delete(schema.conversations).run();
       return result.changes;
+    },
+
+    async updateTokenUsage(id: string, promptTokens: number, completionTokens: number): Promise<ConversationRow> {
+      db.update(schema.conversations)
+        .set({
+          promptTokens: sql`${schema.conversations.promptTokens} + ${promptTokens}`,
+          completionTokens: sql`${schema.conversations.completionTokens} + ${completionTokens}`,
+          updatedAt: new Date().toISOString(),
+        })
+        .where(eq(schema.conversations.id, id))
+        .run();
+
+      const row = db
+        .select()
+        .from(schema.conversations)
+        .where(eq(schema.conversations.id, id))
+        .get();
+      return row as ConversationRow;
     },
   };
 }

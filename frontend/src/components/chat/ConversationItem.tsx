@@ -26,6 +26,12 @@ function formatRelativeTime(dateStr: string): string {
   return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
 }
 
+function formatTokenCount(tokens: number): string {
+  if (tokens < 1000) return `${tokens} tokens`;
+  if (tokens < 1000000) return `${(tokens / 1000).toFixed(1)}k tokens`;
+  return `${(tokens / 1000000).toFixed(1)}M tokens`;
+}
+
 export function ConversationItem({
   conversation,
   isActive,
@@ -131,6 +137,16 @@ export function ConversationItem({
               <span>{formatRelativeTime(conversation.updatedAt)}</span>
               <span className="text-muted-foreground/30">•</span>
               <span>{conversation.messageCount} 消息</span>
+              {(conversation.promptTokens ?? 0) + (conversation.completionTokens ?? 0) > 0 && (
+                <>
+                  <span className="text-muted-foreground/30">•</span>
+                  <span>
+                    {formatTokenCount(
+                      (conversation.promptTokens ?? 0) + (conversation.completionTokens ?? 0)
+                    )}
+                  </span>
+                </>
+              )}
             </p>
           </div>
         )}

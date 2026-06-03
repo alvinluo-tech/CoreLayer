@@ -17,6 +17,8 @@ const baseConversation = {
   title: 'Test conversation',
   modelUsed: 'gpt-4',
   messageCount: 0,
+  promptTokens: 0,
+  completionTokens: 0,
   createdAt: '2026-01-01T00:00:00Z',
   updatedAt: '2026-01-01T00:00:00Z',
 };

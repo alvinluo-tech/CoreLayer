@@ -13,6 +13,8 @@ function toConversationRow(row: Record<string, unknown>): ConversationRow {
     title: row.title as string,
     modelUsed: row.model_used as string,
     messageCount: (row.message_count as number) ?? 0,
+    promptTokens: (row.prompt_tokens as number) ?? 0,
+    completionTokens: (row.completion_tokens as number) ?? 0,
     createdAt: (row.created_at as string) ?? "",
     updatedAt: (row.updated_at as string) ?? "",
   };
@@ -148,6 +150,30 @@ export function createSupabaseConversationRepo(): ConversationRepository {
         .neq("id", "");
       if (error) throw new Error(`Failed to clear conversations: ${error.message}`);
       return count ?? 0;
+    },
+
+    async updateTokenUsage(id: string, promptTokens: number, completionTokens: number): Promise<ConversationRow> {
+      const { data: current } = await client
+        .from("conversations")
+        .select("prompt_tokens, completion_tokens")
+        .eq("id", id)
+        .single();
+
+      const existing = current ?? { prompt_tokens: 0, completion_tokens: 0 };
+
+      const { data: row, error } = await client
+        .from("conversations")
+        .update({
+          prompt_tokens: (existing.prompt_tokens as number) + promptTokens,
+          completion_tokens: (existing.completion_tokens as number) + completionTokens,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", id)
+        .select()
+        .single();
+
+      if (error) throw new Error(`Failed to update token usage: ${error.message}`);
+      return toConversationRow(row);
     },
   };
 }

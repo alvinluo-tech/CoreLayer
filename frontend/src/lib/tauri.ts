@@ -14,6 +14,8 @@ export interface Conversation {
   title: string;
   modelUsed: string;
   messageCount: number;
+  promptTokens: number;
+  completionTokens: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -224,6 +226,29 @@ export interface DbStats {
 
 export async function getDbStats(): Promise<DbStats> {
   return invoke('get_db_stats');
+}
+
+export interface ModelUsageSummary {
+  modelId: string;
+  displayName: string;
+  conversationCount: number;
+  totalPromptTokens: number;
+  totalCompletionTokens: number;
+  totalTokens: number;
+  estimatedCostUsd: number;
+}
+
+export interface UsageStats {
+  totalConversations: number;
+  totalPromptTokens: number;
+  totalCompletionTokens: number;
+  totalTokens: number;
+  estimatedCostUsd: number;
+  models: ModelUsageSummary[];
+}
+
+export async function getUsageStats(): Promise<UsageStats> {
+  return invoke('get_usage_stats');
 }
 
 export interface DbTableInfo {

@@ -53,6 +53,8 @@ export interface ConversationRow {
   title: string;
   modelUsed: string;
   messageCount: number;
+  promptTokens: number;
+  completionTokens: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -259,6 +261,7 @@ export interface ConversationRepository {
   addMessage(conversationId: string, data: MessageInput): Promise<MessageRow>;
   getMessages(conversationId: string): Promise<MessageRow[]>;
   clear(): Promise<number>;
+  updateTokenUsage(id: string, promptTokens: number, completionTokens: number): Promise<ConversationRow>;
 }
 
 // ---- Input Types: New Tables ----

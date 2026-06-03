@@ -7,6 +7,8 @@ export interface ConversationRow {
   title: string;
   modelUsed: string;
   messageCount: number;
+  promptTokens: number;
+  completionTokens: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -49,6 +51,8 @@ export function createConversation(title?: string): ConversationRow {
     title: title ?? "New Chat",
     modelUsed: "mimo-v2.5-pro",
     messageCount: 0,
+    promptTokens: 0,
+    completionTokens: 0,
     createdAt: timestamp,
     updatedAt: timestamp,
   };
@@ -59,15 +63,22 @@ export function listConversations(): ConversationRow[] {
     .select()
     .from(schema.conversations)
     .orderBy(desc(schema.conversations.updatedAt))
-    .all();
+    .all()
+    .map((row) => ({
+      ...row,
+      promptTokens: row.promptTokens ?? 0,
+      completionTokens: row.completionTokens ?? 0,
+    }));
 }
 
 export function getConversation(id: string): ConversationRow | undefined {
-  return db
+  const row = db
     .select()
     .from(schema.conversations)
     .where(eq(schema.conversations.id, id))
     .get();
+  if (!row) return undefined;
+  return { ...row, promptTokens: row.promptTokens ?? 0, completionTokens: row.completionTokens ?? 0 };
 }
 
 export function deleteConversation(id: string): boolean {
@@ -87,6 +98,23 @@ export function updateConversation(
 
   db.update(schema.conversations)
     .set(updates)
+    .where(eq(schema.conversations.id, id))
+    .run();
+
+  return getConversation(id);
+}
+
+export function updateTokenUsage(
+  id: string,
+  promptTokens: number,
+  completionTokens: number,
+): ConversationRow | undefined {
+  db.update(schema.conversations)
+    .set({
+      promptTokens: sql`${schema.conversations.promptTokens} + ${promptTokens}`,
+      completionTokens: sql`${schema.conversations.completionTokens} + ${completionTokens}`,
+      updatedAt: now(),
+    })
     .where(eq(schema.conversations.id, id))
     .run();
 
