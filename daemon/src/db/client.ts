@@ -136,6 +136,7 @@ sqlite.exec(`
     value TEXT NOT NULL,
     source TEXT,
     confidence REAL,
+    uses INTEGER DEFAULT 0,
     expires_at TEXT,
     created_at TEXT DEFAULT 'CURRENT_TIMESTAMP',
     updated_at TEXT DEFAULT 'CURRENT_TIMESTAMP'

@@ -1,6 +1,7 @@
 import type {
   MemoryRepository,
   MemoryRow,
+  ScoredMemoryRow,
   UpsertMemoryInput,
 } from "../repository.js";
 
@@ -18,7 +19,13 @@ export function createSupabaseMemoryRepo(): MemoryRepository {
     async search(_query: string, _userId?: string): Promise<MemoryRow[]> {
       throw new Error("Supabase MemoryRepository not implemented — use SQLite mode");
     },
+    async searchScored(_query: string, _userId?: string, _limit?: number): Promise<ScoredMemoryRow[]> {
+      throw new Error("Supabase MemoryRepository not implemented — use SQLite mode");
+    },
     async upsert(_input: UpsertMemoryInput): Promise<MemoryRow> {
+      throw new Error("Supabase MemoryRepository not implemented — use SQLite mode");
+    },
+    async incrementUses(_id: string): Promise<void> {
       throw new Error("Supabase MemoryRepository not implemented — use SQLite mode");
     },
     async delete(_id: string): Promise<boolean> {

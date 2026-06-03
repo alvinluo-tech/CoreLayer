@@ -201,6 +201,7 @@ export interface MemoryRow {
   value: string;
   source: string | null;
   confidence: number | null;
+  uses: number;
   expiresAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -331,12 +332,18 @@ export interface ModelProfileRepository {
   delete(id: string): Promise<boolean>;
 }
 
+export interface ScoredMemoryRow extends MemoryRow {
+  score: number;
+}
+
 export interface MemoryRepository {
   getAll(userId?: string): Promise<MemoryRow[]>;
   getByType(type: MemoryRow["type"], userId?: string): Promise<MemoryRow[]>;
   getByKey(key: string, userId?: string): Promise<MemoryRow | null>;
   search(query: string, userId?: string): Promise<MemoryRow[]>;
+  searchScored(query: string, userId?: string, limit?: number): Promise<ScoredMemoryRow[]>;
   upsert(input: UpsertMemoryInput): Promise<MemoryRow>;
+  incrementUses(id: string): Promise<void>;
   delete(id: string): Promise<boolean>;
   cleanExpired(): Promise<number>;
   clear(): Promise<number>;
