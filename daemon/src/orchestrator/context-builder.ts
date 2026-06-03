@@ -43,6 +43,8 @@ export interface BuiltContext {
   compressionUrgency: "soft" | "hard" | "none";
   tokens: ContextDebugInfo["tokens"];
   toolsUsed: string[];
+  /** Whether Anthropic prompt caching should be enabled for this context. */
+  cacheEnabled: boolean;
   debug: () => ContextDebugInfo;
 }
 
@@ -252,6 +254,10 @@ export class ContextBuilder {
 
     const totalTokens = systemPromptTokens + historyTokens;
 
+    // Enable Anthropic prompt caching when tools are present or system prompt is large
+    const cacheEnabled =
+      this.selectedToolNames.length > 0 || systemPrompt.length > 4000;
+
     return {
       messages,
       historyTruncated: truncated,
@@ -265,6 +271,7 @@ export class ContextBuilder {
         budget: budget.maxInputTokens,
       },
       toolsUsed: this.selectedToolNames,
+      cacheEnabled,
       debug: () => this.buildDebugInfo(memories, {
         system: systemPromptTokens,
         memory: memoryTokens,
