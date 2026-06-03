@@ -131,6 +131,7 @@ export const memories = sqliteTable("memories", {
   id: text("id").primaryKey(),
   userId: text("user_id").notNull().default("default"),
   type: text("type", { enum: ["fact", "preference", "context", "summary"] }).notNull(),
+  tier: text("tier", { enum: ["preference", "context", "fact"] }).notNull().default("context"),
   key: text("key").notNull(),
   value: text("value").notNull(),
   source: text("source"),

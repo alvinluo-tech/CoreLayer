@@ -11,6 +11,7 @@ function createTestDb() {
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL DEFAULT 'default',
       type TEXT NOT NULL CHECK(type IN ('fact', 'preference', 'context', 'summary')),
+      tier TEXT NOT NULL DEFAULT 'context' CHECK(tier IN ('preference', 'context', 'fact')),
       key TEXT NOT NULL,
       value TEXT NOT NULL,
       source TEXT,
@@ -51,6 +52,7 @@ describe("Memory Repository", () => {
       expect(mem.key).toBe("user_name");
       expect(mem.value).toBe("Alvin");
       expect(mem.type).toBe("fact");
+      expect(mem.tier).toBeDefined();
       expect(mem.uses).toBe(0);
       expect(mem.userId).toBe("default");
     });
@@ -77,6 +79,70 @@ describe("Memory Repository", () => {
       await memories.incrementUses(mem.id);
       const updated = await memories.upsert({ type: "fact", key: "k", value: "v2" });
       expect(updated.uses).toBe(2);
+    });
+  });
+
+  describe("tier auto-classification", () => {
+    it("should auto-classify preference tier from type", async () => {
+      const mem = await memories.upsert({
+        type: "preference",
+        key: "coding_style",
+        value: "喜欢函数式编程",
+      });
+      expect(mem.tier).toBe("preference");
+    });
+
+    it("should auto-classify preference tier from content patterns", async () => {
+      const mem = await memories.upsert({
+        type: "context",
+        key: "work_habit",
+        value: "用户喜欢在晚上写代码",
+      });
+      expect(mem.tier).toBe("preference");
+    });
+
+    it("should auto-classify fact tier from content patterns", async () => {
+      const mem = await memories.upsert({
+        type: "context",
+        key: "birthday",
+        value: "生日是1995年3月15日",
+      });
+      expect(mem.tier).toBe("fact");
+    });
+
+    it("should default to context tier", async () => {
+      const mem = await memories.upsert({
+        type: "context",
+        key: "project_status",
+        value: "正在开发Phase 13",
+      });
+      expect(mem.tier).toBe("context");
+    });
+
+    it("should allow explicit tier override", async () => {
+      const mem = await memories.upsert({
+        type: "fact",
+        tier: "preference",
+        key: "explicit_tier",
+        value: "强制设置为preference",
+      });
+      expect(mem.tier).toBe("preference");
+    });
+  });
+
+  describe("getByTier", () => {
+    it("should filter memories by tier", async () => {
+      await memories.upsert({ type: "preference", key: "pref1", value: "v1" });
+      await memories.upsert({ type: "context", key: "ctx1", value: "v2" });
+      await memories.upsert({ type: "fact", key: "fact1", value: "v3" });
+
+      const prefs = await memories.getByTier("preference");
+      expect(prefs).toHaveLength(1);
+      expect(prefs[0].key).toBe("pref1");
+
+      const facts = await memories.getByTier("fact");
+      expect(facts).toHaveLength(1);
+      expect(facts[0].key).toBe("fact1");
     });
   });
 
@@ -357,6 +423,28 @@ describe("Memory Repository", () => {
       await memories.upsert({ type: "fact", key: "k", value: "v" });
       const deleted = await memories.cleanExpired();
       expect(deleted).toBe(0);
+    });
+  });
+
+  // ---- upsertPreferences ----
+
+  describe("upsertPreferences", () => {
+    it("should batch insert preferences with deduplication", async () => {
+      const prefs = [
+        { key: "coding_style", value: "喜欢函数式编程" },
+        { key: "work_time", value: "晚上写代码" },
+      ];
+      const results = await memories.upsertPreferences(prefs);
+      expect(results).toHaveLength(2);
+      expect(results[0].tier).toBe("preference");
+      expect(results[1].tier).toBe("preference");
+
+      // Dedup: same key should update, not create duplicate
+      await memories.upsertPreferences([{ key: "coding_style", value: "更新后的偏好" }]);
+      const all = await memories.getByTier("preference");
+      expect(all).toHaveLength(2);
+      const updated = all.find((m) => m.key === "coding_style");
+      expect(updated!.value).toBe("更新后的偏好");
     });
   });
 });

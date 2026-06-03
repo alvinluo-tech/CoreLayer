@@ -56,6 +56,7 @@ function createTestDb() {
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL DEFAULT 'default',
       type TEXT NOT NULL CHECK(type IN ('fact', 'preference', 'context', 'summary')),
+      tier TEXT NOT NULL DEFAULT 'context' CHECK(tier IN ('preference', 'context', 'fact')),
       key TEXT NOT NULL,
       value TEXT NOT NULL,
       source TEXT,

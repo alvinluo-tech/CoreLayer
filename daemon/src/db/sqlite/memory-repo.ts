@@ -14,6 +14,52 @@ function normalize(row: typeof schema.memories.$inferSelect): MemoryRow {
   return { ...row };
 }
 
+// ---- Auto-classify tier based on content patterns (Hermes pattern) ----
+
+const PREFERENCE_PATTERNS: RegExp[] = [
+  /用户喜[欢好]/i,
+  /偏好/i,
+  /习惯/i,
+  /喜欢/i,
+  /prefer/i,
+  /favorite/i,
+  /习惯用/i,
+  /常用/i,
+  /风格/i,
+  /风格是/i,
+];
+
+const FACT_PATTERNS: RegExp[] = [
+  /是\d{4}/,
+  /地址是/,
+  /电话是/,
+  /邮箱是/,
+  /位于/,
+  /成立于/,
+  /出生/,
+  /id是/i,
+  /编号是/,
+  /版本是/,
+];
+
+function classifyTier(
+  type: MemoryRow["type"],
+  key: string,
+  value: string,
+): MemoryRow["tier"] {
+  // Explicit type mappings
+  if (type === "preference") return "preference";
+  if (type === "fact") return "fact";
+
+  // For "context" and "summary" types, check content patterns
+  const combined = `${key} ${value}`;
+  if (PREFERENCE_PATTERNS.some((p) => p.test(combined))) return "preference";
+  if (FACT_PATTERNS.some((p) => p.test(combined))) return "fact";
+
+  // Default: context
+  return "context";
+}
+
 // ---- Prompt injection scanning (Hermes pattern) ----
 
 const INJECTION_PATTERNS: RegExp[] = [
@@ -85,6 +131,15 @@ export function createSqliteMemoryRepo(database?: DrizzleDb): MemoryRepository {
         .select()
         .from(schema.memories)
         .where(and(eq(schema.memories.userId, userId), eq(schema.memories.type, type)))
+        .all();
+      return rows.map(normalize);
+    },
+
+    async getByTier(tier: MemoryRow["tier"], userId = "default"): Promise<MemoryRow[]> {
+      const rows = db
+        .select()
+        .from(schema.memories)
+        .where(and(eq(schema.memories.userId, userId), eq(schema.memories.tier, tier)))
         .all();
       return rows.map(normalize);
     },
@@ -181,6 +236,9 @@ export function createSqliteMemoryRepo(database?: DrizzleDb): MemoryRepository {
       const now = new Date().toISOString();
       const userId = input.userId ?? "default";
 
+      // Auto-classify tier if not explicitly provided
+      const tier = input.tier ?? classifyTier(input.type, input.key, input.value);
+
       // Deduplication: case-insensitive exact match on key via SQL LOWER()
       const duplicate = db
         .select()
@@ -198,6 +256,7 @@ export function createSqliteMemoryRepo(database?: DrizzleDb): MemoryRepository {
           .set({
             value: input.value,
             type: input.type,
+            tier,
             source: input.source ?? duplicate.source,
             confidence: input.confidence ?? duplicate.confidence,
             expiresAt: input.expiresAt ?? duplicate.expiresAt,
@@ -220,6 +279,7 @@ export function createSqliteMemoryRepo(database?: DrizzleDb): MemoryRepository {
           id: crypto.randomUUID(),
           userId,
           type: input.type,
+          tier,
           key: input.key,
           value: input.value,
           source: input.source ?? null,
@@ -237,6 +297,66 @@ export function createSqliteMemoryRepo(database?: DrizzleDb): MemoryRepository {
         .where(and(eq(schema.memories.userId, userId), eq(schema.memories.key, input.key)))
         .get()!;
       return normalize(row);
+    },
+
+    async upsertPreferences(prefs: { key: string; value: string }[], userId = "default"): Promise<MemoryRow[]> {
+      const results: MemoryRow[] = [];
+      const now = new Date().toISOString();
+      for (const pref of prefs) {
+        if (containsInjection(pref.key) || containsInjection(pref.value)) continue;
+
+        const tier = classifyTier("preference", pref.key, pref.value);
+
+        // Dedup: check for existing preference with same key
+        const duplicate = db
+          .select()
+          .from(schema.memories)
+          .where(
+            and(
+              eq(schema.memories.userId, userId),
+              sql`lower(${schema.memories.key}) = lower(${pref.key})`,
+            ),
+          )
+          .get();
+
+        if (duplicate) {
+          db.update(schema.memories)
+            .set({
+              value: pref.value,
+              tier,
+              source: "compression",
+              confidence: 0.9,
+              updatedAt: now,
+            })
+            .where(eq(schema.memories.id, duplicate.id))
+            .run();
+          const row = db.select().from(schema.memories).where(eq(schema.memories.id, duplicate.id)).get()!;
+          results.push(normalize(row));
+        } else {
+          db.insert(schema.memories)
+            .values({
+              id: crypto.randomUUID(),
+              userId,
+              type: "preference",
+              tier,
+              key: pref.key,
+              value: pref.value,
+              source: "compression",
+              confidence: 0.9,
+              uses: 0,
+              createdAt: now,
+              updatedAt: now,
+            })
+            .run();
+          const row = db
+            .select()
+            .from(schema.memories)
+            .where(and(eq(schema.memories.userId, userId), eq(schema.memories.key, pref.key)))
+            .get()!;
+          results.push(normalize(row));
+        }
+      }
+      return results;
     },
 
     async incrementUses(id: string): Promise<void> {
