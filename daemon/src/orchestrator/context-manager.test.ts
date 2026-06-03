@@ -258,6 +258,7 @@ describe("assembleContext", () => {
       id: crypto.randomUUID(),
       userId: "default",
       type: "fact",
+      tier: "fact",
       key,
       value,
       source: null,

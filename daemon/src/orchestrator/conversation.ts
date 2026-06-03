@@ -505,6 +505,11 @@ export async function handleMessageInConversation(
           );
           await repo.addMessage(conversationId, summaryMsg);
         }
+        // Store extracted preferences as tier:'preference' memories
+        if (compaction.extractedPreferences.length > 0) {
+          const { memories } = getRepositories();
+          await memories.upsertPreferences(compaction.extractedPreferences);
+        }
       })
       .catch((err) => {
         logError("handleMessageInConversation/compress", err);
@@ -589,6 +594,11 @@ export async function streamMessageInConversation(
               compaction.compressedMessages.length,
             );
             await repo.addMessage(conversationId, summaryMsg);
+          }
+          // Store extracted preferences as tier:'preference' memories
+          if (compaction.extractedPreferences.length > 0) {
+            const { memories } = getRepositories();
+            await memories.upsertPreferences(compaction.extractedPreferences);
           }
         })
         .catch((err) => {

@@ -184,5 +184,12 @@ try {
   // Column already exists — ignore
 }
 
+// Migration: add `tier` column to memories (Phase 13)
+try {
+  sqlite.exec(`ALTER TABLE memories ADD COLUMN tier TEXT NOT NULL DEFAULT 'context'`);
+} catch {
+  // Column already exists — ignore
+}
+
 export const db = drizzle(sqlite, { schema });
 export { schema };

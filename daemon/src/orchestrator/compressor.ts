@@ -14,6 +14,16 @@ export interface CompactionSummary {
   keyContext: string;
 }
 
+export interface ToolSummary {
+  toolName: string;
+  summary: string;
+}
+
+export interface ExtractedPreference {
+  key: string;
+  value: string;
+}
+
 export interface CompactionResult {
   /** The summary text (structured, < 1000 tokens) */
   summary: string;
@@ -21,6 +31,8 @@ export interface CompactionResult {
   compressedMessages: MessageRow[];
   /** Messages that were preserved (recent N) */
   preservedMessages: MessageRow[];
+  /** User preferences extracted from the conversation */
+  extractedPreferences: ExtractedPreference[];
 }
 
 // ---- Summary Prompt ----
@@ -44,12 +56,16 @@ You MUST produce a summary in exactly this format (in Chinese, matching the user
 ## 关键上下文
 [Important constraints, preferences, tool results, or details that must not be lost]
 
+## 工具调用结果
+[Structured summaries of tool calls — include tool name and key outcome]
+
 Rules:
 - Keep the total summary under 800 tokens
 - Be specific, not vague — include tool names, file paths, concrete numbers
 - Preserve user preferences and constraints
 - Do NOT include filler conversation, greetings, or repeated confirmations
-- If there were tool calls, summarize their results, not the raw output`;
+- Tool call results section must use the preserved tool summaries provided below
+- Each tool call entry: \`- toolName: 关键结果（一句话）\``;
 
 // ---- Tool Message Sanitization ----
 
@@ -112,6 +128,68 @@ export function sanitizeToolMessages(messages: MessageRow[]): MessageRow[] {
   });
 }
 
+// ---- Tool Result Summary Extraction ----
+
+/** Max characters per tool summary output */
+const TOOL_SUMMARY_MAX_CHARS = 200;
+
+/**
+ * Extract structured summaries from tool call/result pairs.
+ *
+ * Walks through messages to find assistant messages with tool_calls,
+ * then pairs each call with its corresponding tool result message.
+ * Returns tool name + key output (truncated to 200 chars each).
+ */
+export function extractToolSummaries(messages: MessageRow[]): ToolSummary[] {
+  const summaries: ToolSummary[] = [];
+
+  // Build a map of toolCallId -> tool result content
+  const toolResults = new Map<string, string>();
+  for (const msg of messages) {
+    if (msg.role === "tool" && msg.toolCallId) {
+      let content = msg.content;
+      if (content.length > TOOL_SUMMARY_MAX_CHARS) {
+        content = content.slice(0, TOOL_SUMMARY_MAX_CHARS) + "...";
+      }
+      toolResults.set(msg.toolCallId, content);
+    }
+  }
+
+  // Find assistant messages with tool_calls and pair with results
+  for (const msg of messages) {
+    if (msg.role !== "assistant" || !msg.toolCalls) continue;
+
+    try {
+      const calls = JSON.parse(msg.toolCalls) as {
+        toolCallId?: string;
+        toolName?: string;
+      }[];
+      for (const call of calls) {
+        if (!call.toolCallId || !call.toolName) continue;
+        const result = toolResults.get(call.toolCallId) ?? "(no result)";
+        summaries.push({
+          toolName: call.toolName,
+          summary: result,
+        });
+      }
+    } catch {
+      // Invalid JSON, skip
+    }
+  }
+
+  return summaries;
+}
+
+/**
+ * Format tool summaries for inclusion in the compression prompt.
+ */
+function formatToolSummaries(summaries: ToolSummary[]): string {
+  if (summaries.length === 0) return "";
+  return summaries
+    .map((s) => `- ${s.toolName}: ${s.summary}`)
+    .join("\n");
+}
+
 // ---- Message Formatting ----
 
 /** Max characters per message when formatting for summarization */
@@ -134,6 +212,60 @@ function formatMessagesForSummary(messages: MessageRow[]): string {
       return `${role}: ${content}`;
     })
     .join("\n\n");
+}
+
+// ---- Preference Extraction ----
+
+const PREFERENCE_EXTRACTION_PROMPT = `从以下对话摘要中提取用户偏好、习惯、工作方式。以JSON格式输出一个数组，每个元素包含 "key"（偏好名称，简短）和 "value"（偏好描述，一句话）。
+
+只提取明确表达的偏好，不要猜测。如果没有发现任何偏好，返回空数组 []。
+
+示例输出：
+[
+  { "key": "coding_style", "value": "用户喜欢函数式编程风格" },
+  { "key": "work_time", "value": "用户习惯在晚上写代码" }
+]`;
+
+/**
+ * Run a second LLM pass to extract user preferences from the compressed summary.
+ */
+export async function extractPreferences(
+  summary: string,
+): Promise<ExtractedPreference[]> {
+  if (!summary) return [];
+
+  try {
+    const result = await generateText({
+      model: getModel(),
+      messages: [
+        { role: "system", content: PREFERENCE_EXTRACTION_PROMPT },
+        { role: "user", content: summary },
+      ],
+      maxOutputTokens: 512,
+    });
+
+    const text = result.text?.trim() ?? "";
+    if (!text || text === "[]") return [];
+
+    // Parse JSON array from LLM output
+    const jsonMatch = text.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) return [];
+
+    const parsed = JSON.parse(jsonMatch[0]) as unknown[];
+    return parsed
+      .filter(
+        (item): item is ExtractedPreference =>
+          typeof item === "object" &&
+          item !== null &&
+          "key" in item &&
+          "value" in item &&
+          typeof (item as Record<string, unknown>).key === "string" &&
+          typeof (item as Record<string, unknown>).value === "string",
+      )
+      .slice(0, 10); // Cap at 10 preferences per extraction
+  } catch {
+    return [];
+  }
 }
 
 // ---- Compression Logic ----
@@ -180,6 +312,7 @@ export async function compressConversation(
       summary: "",
       compressedMessages: [],
       preservedMessages: messages,
+      extractedPreferences: [],
     };
   }
 
@@ -199,19 +332,27 @@ export async function compressConversation(
       summary: "",
       compressedMessages: [],
       preservedMessages: recentMessages,
+      extractedPreferences: [],
     };
   }
 
   // Format for summarization
   const formattedHistory = formatMessagesForSummary(toSummarize);
 
+  // Extract tool summaries for preserved context
+  const toolSummaries = extractToolSummaries(sanitizedOlder);
+  const toolSummaryText = formatToolSummaries(toolSummaries);
+
+  // Build prompt with preserved tool context
+  let userContent = `请将以下对话历史压缩为结构化摘要：\n\n${formattedHistory}`;
+  if (toolSummaryText) {
+    userContent += `\n\n## 已提取的工具调用摘要（请保留在摘要中）：\n${toolSummaryText}`;
+  }
+
   // Call LLM for summarization
   const summaryPrompt: ModelMessage[] = [
     { role: "system", content: SUMMARY_SYSTEM_PROMPT },
-    {
-      role: "user",
-      content: `请将以下对话历史压缩为结构化摘要：\n\n${formattedHistory}`,
-    },
+    { role: "user", content: userContent },
   ];
 
   try {
@@ -229,13 +370,18 @@ export async function compressConversation(
         summary: `[对话历史已压缩，共 ${olderMessages.length} 条消息]`,
         compressedMessages: olderMessages,
         preservedMessages: recentMessages,
+        extractedPreferences: [],
       };
     }
+
+    // Second LLM pass: extract user preferences from the summary
+    const extractedPreferences = await extractPreferences(summary);
 
     return {
       summary,
       compressedMessages: olderMessages,
       preservedMessages: recentMessages,
+      extractedPreferences,
     };
   } catch (err) {
     // On failure, return a fallback summary and preserve all messages
@@ -245,6 +391,7 @@ export async function compressConversation(
       summary: `[摘要生成失败，已保留完整历史。共 ${olderMessages.length} 条早期消息]`,
       compressedMessages: [],
       preservedMessages: messages,
+      extractedPreferences: [],
     };
   }
 }

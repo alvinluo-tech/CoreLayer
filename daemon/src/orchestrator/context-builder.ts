@@ -56,17 +56,22 @@ const MAX_TOOLS = 16;
 /** Maximum memories to inject */
 const MAX_MEMORIES = 15;
 
+/** Tier-specific memory limits */
+const MAX_PREFERENCE_MEMORIES = 5;
+const MAX_CONTEXT_MEMORIES = 8;
+const MAX_FACT_MEMORIES = 5;
+
 /** Maximum tokens for the tool catalog section */
 const TOOL_CATALOG_TOKEN_BUDGET = 3000;
 
 /** Maximum tokens for the memory section */
 const MEMORY_SECTION_TOKEN_BUDGET = 2000;
 
+/** Minimum relevance score for memory injection (context and fact tiers) */
+export const MEMORY_MIN_SCORE = 0.3;
+
 /** Maximum tokens for the summary section */
 const SUMMARY_TOKEN_BUDGET = 1500;
-
-/** Minimum relevance score for memory injection — memories below this are skipped. */
-export const MEMORY_MIN_SCORE = 0.3;
 
 // ---- Tool Scoring ----
 
@@ -212,13 +217,13 @@ export class ContextBuilder {
     const toolSection = this.buildToolSection();
     this.sections.push(toolSection);
 
-    const memorySection = this.buildMemorySection(memories);
-    this.sections.push(memorySection);
-
     const summarySection = this.buildSummarySection();
     if (summarySection) {
       this.sections.push(summarySection);
     }
+
+    const memorySection = this.buildMemorySection(memories);
+    this.sections.push(memorySection);
 
     this.sections.push(this.buildConversationInfoSection());
     this.sections.push(this.buildDateSection());
@@ -375,8 +380,21 @@ export class ContextBuilder {
       };
     }
 
-    // Take top-K memories
-    const topMemories = memories.slice(0, MAX_MEMORIES);
+    // Tier-specific selection: preferences always inject, others score-thresholded
+    const preferences = memories
+      .filter((m) => m.tier === "preference")
+      .slice(0, MAX_PREFERENCE_MEMORIES);
+
+    const contexts = memories
+      .filter((m) => m.tier === "context" && m.score >= MEMORY_MIN_SCORE)
+      .slice(0, MAX_CONTEXT_MEMORIES);
+
+    const facts = memories
+      .filter((m) => m.tier === "fact" && m.score >= MEMORY_MIN_SCORE)
+      .slice(0, MAX_FACT_MEMORIES);
+
+    const topMemories = [...preferences, ...contexts, ...facts].slice(0, MAX_MEMORIES);
+
     this.selectedMemoryItems = topMemories.map((m) => ({
       key: m.key,
       type: m.type,
@@ -414,7 +432,7 @@ export class ContextBuilder {
 
     const content = `## 之前的对话摘要\n${summaryText}`;
     return {
-      name: "summary",
+      name: "conversation-summary",
       content,
       tokens: estimateTokens(content),
     };

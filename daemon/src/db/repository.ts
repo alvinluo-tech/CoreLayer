@@ -199,6 +199,7 @@ export interface MemoryRow {
   id: string;
   userId: string;
   type: "fact" | "preference" | "context" | "summary";
+  tier: "preference" | "context" | "fact";
   key: string;
   value: string;
   source: string | null;
@@ -304,6 +305,7 @@ export interface UpsertModelProfileInput {
 export interface UpsertMemoryInput {
   userId?: string;
   type: "fact" | "preference" | "context" | "summary";
+  tier?: "preference" | "context" | "fact";
   key: string;
   value: string;
   source?: string;
@@ -342,10 +344,12 @@ export interface ScoredMemoryRow extends MemoryRow {
 export interface MemoryRepository {
   getAll(userId?: string): Promise<MemoryRow[]>;
   getByType(type: MemoryRow["type"], userId?: string): Promise<MemoryRow[]>;
+  getByTier(tier: MemoryRow["tier"], userId?: string): Promise<MemoryRow[]>;
   getByKey(key: string, userId?: string): Promise<MemoryRow | null>;
   search(query: string, userId?: string): Promise<MemoryRow[]>;
   searchScored(query: string, userId?: string, limit?: number): Promise<ScoredMemoryRow[]>;
   upsert(input: UpsertMemoryInput): Promise<MemoryRow>;
+  upsertPreferences(prefs: { key: string; value: string }[], userId?: string): Promise<MemoryRow[]>;
   incrementUses(id: string): Promise<void>;
   delete(id: string): Promise<boolean>;
   cleanExpired(): Promise<number>;

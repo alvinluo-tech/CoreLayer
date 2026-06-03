@@ -67,6 +67,7 @@ function makeMemory(
   value: string,
   type: string = "fact",
   score: number = 1.0,
+  tier?: string,
 ): ScoredMemoryRow {
   return {
     id: `mem-${key}`,
@@ -74,6 +75,7 @@ function makeMemory(
     key,
     value,
     type: type as ScoredMemoryRow["type"],
+    tier: (tier ?? (type === "preference" ? "preference" : type === "fact" ? "fact" : "context")) as ScoredMemoryRow["tier"],
     source: null,
     confidence: 1.0,
     uses: 0,
@@ -217,6 +219,37 @@ describe("ContextBuilder", () => {
       const context = await builder.build([], []);
       expect(context.messages.length).toBeGreaterThanOrEqual(1);
     });
+
+    it("always injects preference memories regardless of score", async () => {
+      const builder = new ContextBuilder({
+        modelName: "gpt-4o",
+      });
+      // Preference with very low score should still be injected
+      const memories = [
+        makeMemory("low_pref", "低分偏好", "preference", 0.01, "preference"),
+      ];
+      const context = await builder.build(memories, []);
+      const systemMsg = context.messages[0].content as string;
+      expect(systemMsg).toContain("low_pref");
+    });
+
+    it("applies score threshold to context and fact memories", async () => {
+      const builder = new ContextBuilder({
+        modelName: "gpt-4o",
+      });
+      const memories = [
+        makeMemory("high_ctx", "高分上下文", "context", 2.0, "context"),
+        makeMemory("low_ctx", "低分上下文", "context", 0.1, "context"),
+        makeMemory("high_fact", "高分事实", "fact", 2.0, "fact"),
+        makeMemory("low_fact", "低分事实", "fact", 0.1, "fact"),
+      ];
+      const context = await builder.build(memories, []);
+      const systemMsg = context.messages[0].content as string;
+      expect(systemMsg).toContain("high_ctx");
+      expect(systemMsg).toContain("high_fact");
+      expect(systemMsg).not.toContain("low_ctx");
+      expect(systemMsg).not.toContain("low_fact");
+    });
   });
 
   describe("summary injection", () => {
@@ -306,6 +339,20 @@ describe("ContextBuilder", () => {
       expect(sectionNames).toContain("persona");
       expect(sectionNames).toContain("tools");
       expect(sectionNames).toContain("date");
+    });
+
+    it("places conversation-summary after tools, before memory", async () => {
+      const builder = new ContextBuilder({
+        modelName: "gpt-4o",
+      }).withSummary("test summary");
+      const context = await builder.build([], []);
+      const debugInfo = context.debug();
+      const sectionNames = debugInfo.sections.map((s) => s.name);
+      const toolsIdx = sectionNames.indexOf("tools");
+      const summaryIdx = sectionNames.indexOf("conversation-summary");
+      const memoryIdx = sectionNames.indexOf("memory");
+      expect(summaryIdx).toBeGreaterThan(toolsIdx);
+      expect(summaryIdx).toBeLessThan(memoryIdx);
     });
   });
 
