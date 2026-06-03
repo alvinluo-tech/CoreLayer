@@ -181,19 +181,20 @@
 ## Phase 10: Streaming Enhancements
 
 > Source: Odysseus (normalized SSE) + OpenClaw (event-driven)
-> Files: `daemon/src/api/chat.ts`
+> Files: `daemon/src/api/chat.ts`, `daemon/src/api/conversations.ts`, `daemon/src/api/voice.ts`
 
-- [ ] Normalize streaming events across providers
+- [x] Normalize streaming events across providers
   - `delta` for text chunks
-  - `thinking` for reasoning tokens
+  - `thinking` for reasoning tokens (via `fullStream` reasoning-delta)
   - `tool_calls` for tool invocations
+  - `tool_result` for tool outputs
   - `error` for errors
-  - `[DONE]` for termination
-- [ ] Handle provider quirks
-  - Gemini missing tool call index
-  - vLLM `reasoning_content` field
-- [ ] Connection pooling (httpx-style)
-- [ ] Stream timeout with granular config
+  - `done` for termination
+- [x] Handle provider quirks — AI SDK normalizes vLLM `reasoning_content` and Gemini tool calls transparently
+- [ ] Connection pooling (httpx-style) — deferred
+- [x] Stream timeout with granular config (default 120s, `streamTimeout` in config)
+- [x] Tests: 19 new tests (11 normalizer + 8 timeout)
+- [x] Full suite: 457 daemon + 120 frontend tests passing
 
 ---
 
@@ -228,7 +229,13 @@
 | `daemon/src/ai/response-cache.test.ts` | Done | Phase 9: 9 tests |
 | `daemon/src/ai/fallback.test.ts` | Done | Phase 9: 8 tests |
 | `daemon/src/config/provider-resolver.test.ts` | Done | Phase 9: 7 tests (hostname auto-detection) |
-| `daemon/src/api/chat.ts` | Todo | Phase 10: streaming |
+| `daemon/src/api/chat.ts` | Done | Phase 10: normalized SSE, fullStream + timeout |
+| `daemon/src/api/conversations.ts` | Done | Phase 10: normalized SSE events, fullStream |
+| `daemon/src/api/voice.ts` | Done | Phase 10: normalized SSE events, fullStream |
+| `daemon/src/api/sse-normalizer.ts` | Done | Phase 10: SSE event normalizer from fullStream |
+| `daemon/src/api/sse-normalizer.test.ts` | Done | Phase 10: 11 tests |
+| `daemon/src/api/stream-timeout.ts` | Done | Phase 10: per-chunk stream timeout wrapper |
+| `daemon/src/api/stream-timeout.test.ts` | Done | Phase 10: 8 tests |
 
 ---
 
@@ -239,8 +246,8 @@ When resuming work in a new session:
 1. Read this task list first to understand current progress
 2. Read `docs/research/2026-06-03-agent-patterns-comparative-analysis.md` for full context
 3. Check `git log --oneline -10` on branch `feat/agent-patterns-research`
-4. The next uncompleted item is in **Phase 9: Model Routing Enhancements**
-5. All Phase 1-9 items are complete and tested (438 daemon + 120 frontend tests passing)
+4. The next uncompleted item is **Phase 10: Connection pooling** (deferred, optional)
+5. All Phase 1-10 items are complete and tested (457 daemon + 120 frontend tests passing)
 
 ## Per-Phase Commit Workflow
 
