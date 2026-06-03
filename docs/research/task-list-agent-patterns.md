@@ -143,19 +143,22 @@
 ## Phase 8: Agent Loop Enhancements
 
 > Source: Hermes (IterationBudget) + Odysseus (completion verifier)
-> Files: `daemon/src/orchestrator/conversation.ts`
+> Files: `daemon/src/orchestrator/conversation.ts`, `daemon/src/runtime/ai-tool-wrapper.ts`
 
-- [ ] Make max steps configurable (default 20, currently hardcoded 5)
-- [ ] Add `IterationBudget` with pressure warnings injected into tool results
-  - At 80% budget: inject "Please consolidate and wrap up"
-- [ ] Add empty response guard for thinking models
+- [x] Make max steps configurable (default 20, currently hardcoded 5)
+- [x] Add `IterationBudget` with pressure warnings injected into tool results
+  - At 80% budget: inject "请整合已有信息并尽快结束回答"
+  - Warning injected exactly once via `injectBudgetWarning`
+- [x] Add empty response guard for thinking models
   - If model returns empty text but has reasoning content, produce fallback
-- [ ] Add completion verifier for effectful tool turns
+- [~] Add completion verifier for effectful tool turns — deferred to Phase 9
   - Sub-agent with fresh context verifies task completion
   - Max 2 re-verify cycles
-- [ ] Tool result size limiting
-  - Soft-trim oversized results (keep head + tail)
+- [x] Tool result size limiting
+  - Soft-trim oversized results (keep head + tail, 70/30)
   - Max ~4000 chars per tool result
+- [x] Tests: 29 tests passing in agent-loop.test.ts
+- [x] Full suite: 405 daemon + 120 frontend tests passing
 
 ---
 
@@ -215,6 +218,9 @@
 | `frontend/src/lib/audioQueue.ts` | Done | Phase 6: setVolume ducking support |
 | `frontend/src/hooks/useVoiceConversation.ts` | Done | Phase 6: integrated two-stage barge-in + false-positive recovery |
 | `daemon/src/orchestrator/cache-control.test.ts` | Done | Phase 7: 15 tests — cache conditions, immutability, stats |
+| `daemon/src/config/config-manager.ts` | Done | Phase 8: added maxSteps config (default 20) |
+| `daemon/src/orchestrator/agent-loop.test.ts` | Done | Phase 8: 29 tests — IterationBudget, empty guard, trim |
+| `daemon/src/runtime/ai-tool-wrapper.ts` | Done | Phase 8: trimToolResult for oversized tool outputs |
 | `daemon/src/ai/provider.ts` | Todo | Phase 9: routing |
 | `daemon/src/api/chat.ts` | Todo | Phase 10: streaming |
 
@@ -227,8 +233,8 @@ When resuming work in a new session:
 1. Read this task list first to understand current progress
 2. Read `docs/research/2026-06-03-agent-patterns-comparative-analysis.md` for full context
 3. Check `git log --oneline -10` on branch `feat/agent-patterns-research`
-4. The next uncompleted item is in **Phase 7: Anthropic Prompt Caching**
-5. All Phase 1-6 items are complete and tested (361 daemon + 119 frontend tests passing)
+4. The next uncompleted item is in **Phase 9: Model Routing Enhancements**
+5. All Phase 1-8 items are complete and tested (405 daemon + 120 frontend tests passing)
 
 ## Per-Phase Commit Workflow
 

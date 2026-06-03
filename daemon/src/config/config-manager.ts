@@ -27,6 +27,7 @@ export interface JarvisConfig {
   defaults: {
     temperature: number;
     maxTokens: number;
+    maxSteps: number;
   };
   migrated?: boolean;
 }
@@ -93,6 +94,7 @@ const DEFAULT_CONFIG: JarvisConfig = {
   defaults: {
     temperature: 0.7,
     maxTokens: 4096,
+    maxSteps: 20,
   },
 };
 
@@ -209,6 +211,10 @@ class ConfigManager {
 
   getRoutingRules(): RoutingRule[] {
     return this.getConfig().routingRules;
+  }
+
+  getMaxSteps(): number {
+    return this.getConfig().defaults.maxSteps ?? 20;
   }
 
   setRoutingRules(rules: RoutingRule[]): void {

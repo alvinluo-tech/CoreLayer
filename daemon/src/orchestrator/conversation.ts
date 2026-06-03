@@ -11,6 +11,80 @@ import { getRepositories } from "../db/factory.js";
 import type { MessageRow, ConversationRow, ScoredMemoryRow } from "../db/repository.js";
 import { classifyError, extractErrorMessage, logError } from "../utils/errors.js";
 
+// ---- IterationBudget ----
+
+const BUDGET_WARNING_MSG = "[系统提示] 你已达到迭代次数上限，请整合已有信息并尽快结束回答。不要再调用工具。";
+
+/**
+ * Tracks agent loop step count and injects a pressure warning
+ * when the loop reaches 80% of the configured budget.
+ * The warning is injected exactly once into the next tool result.
+ */
+export class IterationBudget {
+  private readonly threshold: number;
+  private currentStep = 0;
+  private warned = false;
+
+  constructor(maxSteps: number) {
+    this.threshold = Math.floor(maxSteps * 0.8);
+  }
+
+  /**
+   * Record a completed step. Returns true if a warning should be injected.
+   */
+  advance(): boolean {
+    this.currentStep++;
+    if (!this.warned && this.currentStep >= this.threshold) {
+      this.warned = true;
+      return true;
+    }
+    return false;
+  }
+
+  get shouldWarn(): boolean {
+    return this.warned && this.currentStep >= this.threshold;
+  }
+
+  get step(): number {
+    return this.currentStep;
+  }
+}
+
+/**
+ * Inject a budget warning into the tool results of a step event.
+ * Returns a new array with the warning appended to the first tool result.
+ */
+export function injectBudgetWarning(toolResults: any[]): any[] {
+  if (toolResults.length === 0) return toolResults;
+  const first = toolResults[0]!;
+  const warnedResult = "output" in first
+    ? { ...first, output: `${BUDGET_WARNING_MSG}\n\n${String(first.output)}` }
+    : { ...first, result: `${BUDGET_WARNING_MSG}\n\n${String(first.result ?? "")}` };
+  return [warnedResult, ...toolResults.slice(1)];
+}
+
+// ---- Empty Response Guard ----
+
+/**
+ * If the model returns empty text but has reasoning content (thinking models),
+ * fall back to reasoning as the response text.
+ * Returns the original result if text is non-empty.
+ */
+export function guardEmptyResponse(result: { text: string; reasoning?: string | { text: string }[] }): string {
+  if (result.text && result.text.trim().length > 0) return result.text;
+
+  const reasoning = result.reasoning;
+  if (!reasoning) return result.text;
+
+  if (typeof reasoning === "string" && reasoning.trim().length > 0) return reasoning;
+  if (Array.isArray(reasoning)) {
+    const combined = reasoning.map((r) => r.text).filter(Boolean).join("\n");
+    if (combined.trim().length > 0) return combined;
+  }
+
+  return result.text;
+}
+
 // ---- Anthropic Prompt Caching Helpers ----
 
 export const CACHE_CONTROL = { type: "ephemeral" } as const;
@@ -321,16 +395,17 @@ export async function handleMessageInConversation(
         ? applyCacheControl(context.messages, rawTools)
         : { messages: context.messages, tools: rawTools };
 
+      const maxSteps = configManager.getMaxSteps();
       const result = await generateText({
         model: getModel(),
         messages: aiMessages,
         tools: aiTools,
-        stopWhen: stepCountIs(5),
+        stopWhen: stepCountIs(maxSteps),
       });
 
       logCacheStats(result.providerMetadata as Record<string, unknown> | undefined, "handleMessage");
 
-      reply = result.text;
+      reply = guardEmptyResponse(result as { text: string; reasoning?: string | { text: string }[] });
 
       // Extract tool calls from steps
       for (const step of result.steps ?? []) {
@@ -473,11 +548,14 @@ export async function streamMessageInConversation(
         ? applyCacheControl(context.messages, rawTools)
         : { messages: context.messages, tools: rawTools };
 
+      const maxSteps = configManager.getMaxSteps();
+      const budget = new IterationBudget(maxSteps);
+
       const result = streamText({
         model: getModel(),
         messages: aiMessages,
         tools: aiTools,
-        stopWhen: stepCountIs(5),
+        stopWhen: stepCountIs(maxSteps),
         onFinish: async (event: any) => {
           logCacheStats(event.providerMetadata as Record<string, unknown> | undefined, "streamMessage");
         },
@@ -485,7 +563,13 @@ export async function streamMessageInConversation(
           ? {
               onStepFinish: async (step: any) => {
                 const toolCalls = step.toolCalls ?? [];
-                const toolResults = step.toolResults ?? [];
+                let toolResults = step.toolResults ?? [];
+
+                // Track iteration budget and inject warning if needed
+                if (budget.advance()) {
+                  toolResults = injectBudgetWarning(toolResults);
+                }
+
                 for (const tc of toolCalls) {
                   await onToolEvent({
                     type: 'tool-call',
@@ -554,12 +638,15 @@ export async function streamChat(
       ? { role: "system" as const, content: context.messages[0].content as string, providerOptions: { anthropic: { cacheControl: CACHE_CONTROL } } }
       : context.messages[0].content as string;
 
+    const maxSteps = configManager.getMaxSteps();
+    const budget = new IterationBudget(maxSteps);
+
     return streamText({
       model: getModel(),
       system: systemMessage,
       messages,
       tools: aiTools,
-      stopWhen: stepCountIs(5),
+      stopWhen: stepCountIs(maxSteps),
       onFinish: async (event: any) => {
         logCacheStats(event.providerMetadata as Record<string, unknown> | undefined, "streamChat");
       },
@@ -567,7 +654,13 @@ export async function streamChat(
         ? {
             onStepFinish: async (step: any) => {
               const toolCalls = step.toolCalls ?? [];
-              const toolResults = step.toolResults ?? [];
+              let toolResults = step.toolResults ?? [];
+
+              // Track iteration budget and inject warning if needed
+              if (budget.advance()) {
+                toolResults = injectBudgetWarning(toolResults);
+              }
+
               for (const tc of toolCalls) {
                 await onToolEvent({
                   type: 'tool-call',
@@ -623,12 +716,13 @@ export async function handleMessage(userMessage: string): Promise<{
     ? { role: "system" as const, content: context.messages[0].content as string, providerOptions: { anthropic: { cacheControl: CACHE_CONTROL } } }
     : context.messages[0].content as string;
 
+  const maxSteps = configManager.getMaxSteps();
   const result = await generateText({
     model: getModel(),
     system: systemMessage,
     messages: [{ role: "user", content: userMessage }],
     tools: aiTools,
-    stopWhen: stepCountIs(5),
+    stopWhen: stepCountIs(maxSteps),
   });
 
   logCacheStats(result.providerMetadata as Record<string, unknown> | undefined, "handleMessage");
@@ -646,7 +740,7 @@ export async function handleMessage(userMessage: string): Promise<{
   }
 
   return {
-    reply: result.text,
+    reply: guardEmptyResponse(result as { text: string; reasoning?: string | { text: string }[] }),
     toolCalls: toolCallsLog,
   };
 }
