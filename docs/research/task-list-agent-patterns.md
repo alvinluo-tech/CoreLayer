@@ -219,5 +219,16 @@ When resuming work in a new session:
 1. Read this task list first to understand current progress
 2. Read `docs/research/2026-06-03-agent-patterns-comparative-analysis.md` for full context
 3. Check `git log --oneline -10` on branch `feat/agent-patterns-research`
-4. The next uncompleted item is in **Phase 5: Smart Prompt Assembly (ContextBuilder)**
-5. All Phase 1-4 items are complete and tested (342 tests passing)
+4. The next uncompleted item is in **Phase 6: Voice Barge-in**
+5. All Phase 1-5 items are complete and tested (361 tests passing)
+
+## Per-Phase Commit Workflow
+
+Each phase MUST be committed individually after all tests pass. Do not batch multiple phases into one commit.
+
+1. Implement all items in the phase
+2. Run full test suite (`pnpm -r test`) — must pass with 0 failures
+3. Run typecheck (`pnpm -r typecheck`) — must pass clean
+4. Commit with a descriptive message following conventional commits format
+5. Verify commit with `git log --oneline -1`
+6. Move to the next phase
