@@ -54,11 +54,19 @@ export class IterationBudget {
  * Inject a budget warning into the tool results of a step event.
  * Returns a new array with the warning appended to the first tool result.
  */
-export function injectBudgetWarning(toolResults: any[]): any[] {
+interface ToolResultEntry {
+  toolName?: string;
+  toolCallId?: string;
+  output?: unknown;
+  result?: unknown;
+  [key: string]: unknown;
+}
+
+export function injectBudgetWarning(toolResults: ToolResultEntry[]): ToolResultEntry[] {
   if (toolResults.length === 0) return toolResults;
   const first = toolResults[0]!;
-  const warnedResult = "output" in first
-    ? { ...first, output: `${BUDGET_WARNING_MSG}\n\n${String(first.output)}` }
+  const warnedResult: ToolResultEntry = "output" in first
+    ? { ...first, output: `${BUDGET_WARNING_MSG}\n\n${String(first.output ?? "")}` }
     : { ...first, result: `${BUDGET_WARNING_MSG}\n\n${String(first.result ?? "")}` };
   return [warnedResult, ...toolResults.slice(1)];
 }

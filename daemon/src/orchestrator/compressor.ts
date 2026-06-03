@@ -2,6 +2,7 @@ import { generateText } from "ai";
 import type { ModelMessage } from "ai";
 import { getModel } from "../ai/provider.js";
 import type { MessageRow } from "../db/repository.js";
+import { logError } from "../utils/errors.js";
 
 // ---- Summary Structure ----
 
@@ -238,8 +239,7 @@ export async function compressConversation(
     };
   } catch (err) {
     // On failure, return a fallback summary and preserve all messages
-    const errMsg = err instanceof Error ? err.message : String(err);
-    console.error(`[Compressor] Summarization failed for conversation ${_conversationId}: ${errMsg}`);
+    logError("compressor/summarize", err);
 
     return {
       summary: `[摘要生成失败，已保留完整历史。共 ${olderMessages.length} 条早期消息]`,
