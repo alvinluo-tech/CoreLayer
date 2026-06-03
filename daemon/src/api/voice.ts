@@ -140,7 +140,7 @@ voiceRoutes.post("/converse-stream", async (c) => {
     const toolCallsLog: { name: string; args: unknown; result: unknown }[] = [];
     const toolCallIndexByCallId = new Map<string, number>();
 
-    const result = streamChat(messages, "voice", conversationId, async (event) => {
+    const result = await streamChat(messages, "voice", conversationId, async (event) => {
       if (event.type === 'tool-call') {
         const index = toolCallsLog.length;
         toolCallsLog.push({ name: event.name, args: event.args ?? null, result: null });

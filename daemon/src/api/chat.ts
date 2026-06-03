@@ -1,6 +1,9 @@
 import { Hono } from "hono";
 import { stream } from "hono/streaming";
 import { handleMessage, streamChat } from "../orchestrator/conversation.js";
+import { ContextBuilder } from "../orchestrator/context-builder.js";
+import { getRepositories } from "../db/factory.js";
+import { configManager } from "../config/config-manager.js";
 import { apiError, extractErrorMessage, classifyError, logError } from "../utils/errors.js";
 import type { ModelMessage } from "ai";
 
@@ -39,7 +42,7 @@ chatRoutes.post("/stream", async (c) => {
     }
 
     // streamChat may throw immediately if the model is not configured
-    const result = streamChat(body.messages);
+    const result = await streamChat(body.messages);
 
     return stream(c, async (streamWriter) => {
       streamWriter.onAbort(() => {
@@ -58,6 +61,45 @@ chatRoutes.post("/stream", async (c) => {
     });
   } catch (err) {
     logError("chat/stream", err);
+    const { status, code } = classifyError(err);
+    return apiError(c, extractErrorMessage(err), status, code);
+  }
+});
+
+/**
+ * Debug endpoint: inspect context assembly for a conversation.
+ * Accepts { conversationId: string, message?: string }
+ * Returns per-component token usage, memory items, tool catalog info.
+ */
+chatRoutes.post("/debug/context", async (c) => {
+  try {
+    const body = await c.req.json<{ conversationId?: string; message?: string }>();
+    const conversationId = body.conversationId;
+    const message = body.message ?? "";
+
+    const repo = getRepositories();
+    const memories = await repo.memories.getAll();
+    const scoredMemories = memories.map((m) => ({ ...m, score: 0 }));
+
+    // If conversationId provided, fetch history
+    let history: Awaited<ReturnType<typeof repo.conversations.getMessages>> = [];
+    if (conversationId) {
+      history = await repo.conversations.getMessages(conversationId);
+    }
+
+    const builder = new ContextBuilder({
+      mode: "text",
+      conversationId,
+      modelName: configManager.getActiveModel(),
+      userMessage: message,
+    });
+
+    const context = await builder.build(scoredMemories, history);
+    const debugInfo = context.debug();
+
+    return c.json(debugInfo);
+  } catch (err) {
+    logError("chat/debug/context", err);
     const { status, code } = classifyError(err);
     return apiError(c, extractErrorMessage(err), status, code);
   }

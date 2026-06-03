@@ -1,7 +1,6 @@
 import { generateText, streamText, stepCountIs } from "ai";
 import type { ModelMessage } from "ai";
-import { buildSystemPrompt } from "./prompt-builder.js";
-import { assembleContext } from "./context-manager.js";
+import { ContextBuilder } from "./context-builder.js";
 import { compressConversation, createSummaryMessage } from "./compressor.js";
 import { getModel } from "../ai/provider.js";
 import { getAllTools } from "../tools/registry.js";
@@ -9,24 +8,44 @@ import { wrapToolsForAI } from "../runtime/ai-tool-wrapper.js";
 import { env } from "../config/env.js";
 import { configManager } from "../config/config-manager.js";
 import { getRepositories } from "../db/factory.js";
-import type { MessageRow, ConversationRow, MemoryRow } from "../db/repository.js";
+import type { MessageRow, ConversationRow, ScoredMemoryRow } from "../db/repository.js";
 import { classifyError, extractErrorMessage, logError } from "../utils/errors.js";
 
 /**
  * Fetch relevant memories for context injection.
- * Returns top memories sorted by recency, limited to avoid context bloat.
+ * Uses scored search when a query is available for relevance-based retrieval.
  */
-async function fetchRelevantMemories(limit = 20): Promise<MemoryRow[]> {
+async function fetchRelevantMemories(query?: string, limit = 15): Promise<ScoredMemoryRow[]> {
   try {
     const repo = getRepositories().memories;
+    if (query) {
+      return await repo.searchScored(query, "default", limit);
+    }
+    // No query — fall back to all memories sorted by recency
     const all = await repo.getAll();
-    // Sort by updatedAt descending, take top N
     return all
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-      .slice(0, limit);
+      .slice(0, limit)
+      .map((m) => ({ ...m, score: 0 }));
   } catch {
     return [];
   }
+}
+
+/**
+ * Extract the most recent conversation summary from history.
+ * Summary messages have role "system" and start with "[对话摘要".
+ */
+function extractSummaryFromHistory(history: MessageRow[]): string | undefined {
+  for (let i = history.length - 1; i >= 0; i--) {
+    const msg = history[i];
+    if (msg.role === "system" && msg.content.startsWith("[对话摘要")) {
+      // Strip the prefix header
+      const idx = msg.content.indexOf("\n\n");
+      return idx >= 0 ? msg.content.slice(idx + 2) : msg.content;
+    }
+  }
+  return undefined;
 }
 
 export function isAiConfigured(): boolean {
@@ -231,15 +250,18 @@ export async function handleMessageInConversation(
 
   // Load message history and assemble context
   const history = await repo.getMessages(conversationId);
-  const memories = await fetchRelevantMemories();
-  const systemPrompt = buildSystemPrompt("text", conversationId);
+  const memories = await fetchRelevantMemories(userMessage);
+  const summary = extractSummaryFromHistory(history);
 
-  const context = assembleContext(
-    configManager.getActiveModel(),
-    systemPrompt,
-    memories,
-    history,
-  );
+  const builder = new ContextBuilder({
+    mode: "text",
+    conversationId,
+    modelName: configManager.getActiveModel(),
+    userMessage,
+  });
+  if (summary) builder.withSummary(summary);
+
+  const context = await builder.build(memories, history);
 
   let reply: string;
   let toolCallsLog: { name: string; args: unknown; result: unknown }[] = [];
@@ -345,15 +367,18 @@ export async function streamMessageInConversation(
 
   // Load message history and assemble context
   const history = await repo.getMessages(conversationId);
-  const memories = await fetchRelevantMemories();
-  const systemPrompt = buildSystemPrompt("text", conversationId);
+  const memories = await fetchRelevantMemories(userMessage);
+  const summary = extractSummaryFromHistory(history);
 
-  const context = assembleContext(
-    configManager.getActiveModel(),
-    systemPrompt,
-    memories,
-    history,
-  );
+  const builder = new ContextBuilder({
+    mode: "text",
+    conversationId,
+    modelName: configManager.getActiveModel(),
+    userMessage,
+  });
+  if (summary) builder.withSummary(summary);
+
+  const context = await builder.build(memories, history);
 
   const saveAssistantMessage = async (reply: string, toolCallsLog: any[]) => {
     // Save assistant message
@@ -442,17 +467,24 @@ export async function streamMessageInConversation(
   }
 }
 
-export function streamChat(
+export async function streamChat(
   messages: ModelMessage[],
   mode: "text" | "voice" = "text",
   conversationId?: string,
   onToolEvent?: (event: { type: 'tool-call' | 'tool-result'; name: string; toolCallId: string; args?: unknown; result?: unknown }) => void | Promise<void>,
-): ReturnType<typeof streamText> {
+): Promise<ReturnType<typeof streamText>> {
   try {
-    const systemPrompt = buildSystemPrompt(mode, conversationId);
+    const builder = new ContextBuilder({
+      mode,
+      conversationId,
+      modelName: configManager.getActiveModel(),
+    });
+    // streamChat doesn't have history or memories — build minimal context
+    const context = await builder.build([], []);
+
     return streamText({
       model: getModel(),
-      system: systemPrompt,
+      system: context.messages[0].content as string,
       messages,
       tools: wrapToolsForAI(getAllTools(), conversationId),
       stopWhen: stepCountIs(5),
@@ -500,9 +532,16 @@ export async function handleMessage(userMessage: string): Promise<{
     return handleLocally(userMessage);
   }
 
+  const builder = new ContextBuilder({
+    mode: "text",
+    modelName: configManager.getActiveModel(),
+    userMessage,
+  });
+  const context = await builder.build([], []);
+
   const result = await generateText({
     model: getModel(),
-    system: buildSystemPrompt(),
+    system: context.messages[0].content as string,
     messages: [{ role: "user", content: userMessage }],
     tools: wrapToolsForAI(getAllTools()),
     stopWhen: stepCountIs(5),
