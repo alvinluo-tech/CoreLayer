@@ -87,4 +87,21 @@ describe('CircularPCMBuffer', () => {
     const result = buf.flush();
     expect(Array.from(result[0]!)).toEqual([2]);
   });
+
+  it('maintains chronological order after multiple wrap-arounds', () => {
+    const buf = new CircularPCMBuffer({ maxChunks: 3 });
+
+    // Push 9 chunks through a buffer of size 3 — 3 full wrap-arounds
+    for (let i = 1; i <= 9; i++) {
+      buf.push(new Float32Array([i]));
+    }
+
+    expect(buf.size).toBe(3);
+    const result = buf.flush();
+    expect(result).toHaveLength(3);
+    // Should contain the LAST 3 chunks in order: 7, 8, 9
+    expect(Array.from(result[0]!)).toEqual([7]);
+    expect(Array.from(result[1]!)).toEqual([8]);
+    expect(Array.from(result[2]!)).toEqual([9]);
+  });
 });
