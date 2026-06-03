@@ -1,5 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Server, Brain, Plug, Wrench, Mic, Database, Activity } from 'lucide-react';
+
+function formatTokenCount(tokens: number): string {
+  if (tokens < 1000) return `${tokens}`;
+  if (tokens < 1000000) return `${(tokens / 1000).toFixed(1)}k`;
+  return `${(tokens / 1000000).toFixed(1)}M`;
+}
+import { Server, Brain, Plug, Wrench, Mic, Database, Activity, BarChart3 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { StatusBadge } from './StatusBadge';
 import { useMCPStore } from '@/stores/mcpStore';
@@ -9,8 +15,10 @@ import {
   getDaemonStatus,
   getVoiceStatus,
   getHealth,
+  getUsageStats,
   type DaemonStatus,
   type VoiceStatus,
+  type UsageStats,
 } from '@/lib/tauri';
 
 export function OverviewPage() {
@@ -24,6 +32,7 @@ export function OverviewPage() {
     aiProvider: string;
     aiModel: string;
   } | null>(null);
+  const [usageStats, setUsageStats] = useState<UsageStats | null>(null);
 
   useEffect(() => {
     fetchServers();
@@ -38,6 +47,9 @@ export function OverviewPage() {
       .catch(() => {});
     getHealth()
       .then(setHealth)
+      .catch(() => {});
+    getUsageStats()
+      .then(setUsageStats)
       .catch(() => {});
   }, [fetchServers, fetchTools, fetchModels, fetchSettings]);
 
@@ -137,6 +149,51 @@ export function OverviewPage() {
               </span>
             ))}
           </div>
+        </Card>
+      )}
+
+      {/* Usage stats */}
+      {usageStats && (
+        <Card className="p-4">
+          <h3 className="text-sm font-medium flex items-center gap-2 mb-3">
+            <BarChart3 className="h-4 w-4" />
+            用量统计
+          </h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3">
+            <div>
+              <p className="text-xs text-muted-foreground">总对话</p>
+              <p className="text-lg font-semibold">{usageStats.totalConversations}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">总 Token</p>
+              <p className="text-lg font-semibold">{formatTokenCount(usageStats.totalTokens)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">输入 Token</p>
+              <p className="text-lg font-semibold">
+                {formatTokenCount(usageStats.totalPromptTokens)}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">输出 Token</p>
+              <p className="text-lg font-semibold">
+                {formatTokenCount(usageStats.totalCompletionTokens)}
+              </p>
+            </div>
+          </div>
+          {usageStats.models.length > 0 && (
+            <div className="border-t pt-3 mt-2 space-y-2">
+              <p className="text-xs text-muted-foreground font-medium">按模型</p>
+              {usageStats.models.map((m) => (
+                <div key={m.modelId} className="flex items-center justify-between text-xs">
+                  <span>{m.displayName}</span>
+                  <span className="text-muted-foreground">
+                    {formatTokenCount(m.totalTokens)} · ${m.estimatedCostUsd.toFixed(2)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </Card>
       )}
     </div>

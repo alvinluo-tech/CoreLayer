@@ -65,6 +65,9 @@ const MEMORY_SECTION_TOKEN_BUDGET = 2000;
 /** Maximum tokens for the summary section */
 const SUMMARY_TOKEN_BUDGET = 1500;
 
+/** Minimum relevance score for memory injection — memories below this are skipped. */
+export const MEMORY_MIN_SCORE = 0.3;
+
 // ---- Tool Scoring ----
 
 /**

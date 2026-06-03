@@ -56,6 +56,8 @@ export const conversations = sqliteTable("conversations", {
   title: text("title").notNull().default("New Chat"),
   modelUsed: text("model_used").notNull().default("mimo-v2.5-pro"),
   messageCount: integer("message_count").notNull().default(0),
+  promptTokens: integer("prompt_tokens").default(0),
+  completionTokens: integer("completion_tokens").default(0),
   createdAt: text("created_at").default("CURRENT_TIMESTAMP").notNull(),
   updatedAt: text("updated_at").default("CURRENT_TIMESTAMP").notNull(),
 });
