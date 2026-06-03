@@ -1,8 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// We test callWithFallback and isRetryableError logic via integration-style tests.
-// The actual provider creation is mocked to avoid real API calls.
-
 // Mock configManager
 const mockProviders = [
   { id: "groq", enabled: true },
@@ -60,16 +57,20 @@ describe("callWithFallback", () => {
     expect(fn).toHaveBeenCalledWith("mimo");
   });
 
-  it("should fall back to next provider on retryable error", async () => {
+  it("should fall back to next provider after exhausting retries", { timeout: 15000 }, async () => {
+    // mimo fails all 3 retries, groq succeeds
     const fn = vi.fn()
+      .mockRejectedValueOnce(Object.assign(new Error("timeout"), { status: 503 }))
+      .mockRejectedValueOnce(Object.assign(new Error("timeout"), { status: 503 }))
       .mockRejectedValueOnce(Object.assign(new Error("timeout"), { status: 503 }))
       .mockResolvedValueOnce("fallback-ok");
 
     const result = await callWithFallback(fn);
     expect(result).toBe("fallback-ok");
-    expect(fn).toHaveBeenCalledTimes(2);
+    // 3 retries for mimo + 1 for groq
+    expect(fn).toHaveBeenCalledTimes(4);
     expect(fn).toHaveBeenNthCalledWith(1, "mimo");
-    expect(fn).toHaveBeenNthCalledWith(2, "groq");
+    expect(fn).toHaveBeenNthCalledWith(4, "groq");
   });
 
   it("should NOT fall back on 4xx errors (auth/quota)", async () => {
@@ -80,29 +81,31 @@ describe("callWithFallback", () => {
     expect(fn).toHaveBeenCalledTimes(1);
   });
 
-  it("should throw last error if all providers fail", async () => {
+  it("should throw last error if all providers fail", { timeout: 30000 }, async () => {
     const fn = vi.fn()
       .mockRejectedValue(Object.assign(new Error("server error"), { status: 500 }));
 
     await expect(callWithFallback(fn)).rejects.toThrow("server error");
-    // Should have tried all enabled providers
-    expect(fn).toHaveBeenCalledTimes(3);
+    // Each provider retried 3 times: 3 providers * 3 retries = 9
+    expect(fn).toHaveBeenCalledTimes(9);
   });
 
-  it("should skip dead providers", async () => {
+  it("should skip dead providers", { timeout: 15000 }, async () => {
     // Mark groq as dead
     deadHostManager.recordFailure("groq");
     deadHostManager.recordFailure("groq");
 
+    // mimo fails 3 retries, openrouter succeeds
     const fn = vi.fn()
+      .mockRejectedValueOnce(Object.assign(new Error("timeout"), { status: 503 }))
+      .mockRejectedValueOnce(Object.assign(new Error("timeout"), { status: 503 }))
       .mockRejectedValueOnce(Object.assign(new Error("timeout"), { status: 503 }))
       .mockResolvedValueOnce("openrouter-ok");
 
     const result = await callWithFallback(fn);
     expect(result).toBe("openrouter-ok");
-    // groq was skipped, so fn was called with mimo then openrouter
     expect(fn).toHaveBeenNthCalledWith(1, "mimo");
-    expect(fn).toHaveBeenNthCalledWith(2, "openrouter");
+    expect(fn).toHaveBeenNthCalledWith(4, "openrouter"); // groq skipped
   });
 
   it("should record success on successful call", async () => {

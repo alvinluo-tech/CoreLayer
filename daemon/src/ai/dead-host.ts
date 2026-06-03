@@ -7,6 +7,7 @@
 
 interface HostState {
   consecutiveFailures: number;
+  consecutiveCooldowns: number;
   deadUntil: number; // epoch ms; 0 = not dead
 }
 
@@ -21,13 +22,15 @@ export class DeadHostManager {
     const state = this.getState(provider);
     state.consecutiveFailures += 1;
     if (state.consecutiveFailures >= FAILURE_THRESHOLD) {
-      state.deadUntil = Date.now() + COOLDOWN_MS;
+      const backoff = Math.pow(2, Math.min(state.consecutiveCooldowns, 3));
+      state.deadUntil = Date.now() + COOLDOWN_MS * backoff;
+      state.consecutiveCooldowns += 1;
     }
   }
 
-  /** Record a successful call — resets failure counter. */
+  /** Record a successful call — resets failure counter and cooldown counter. */
   recordSuccess(provider: string): void {
-    this.hosts.set(provider, { consecutiveFailures: 0, deadUntil: 0 });
+    this.hosts.set(provider, { consecutiveFailures: 0, consecutiveCooldowns: 0, deadUntil: 0 });
   }
 
   /** Returns true if the provider is in cooldown. */
@@ -36,7 +39,7 @@ export class DeadHostManager {
     if (!state) return false;
     if (state.deadUntil === 0) return false;
     if (Date.now() >= state.deadUntil) {
-      // Cooldown expired — auto-recover
+      // Cooldown expired — auto-recover (preserve consecutiveCooldowns for backoff progression)
       state.consecutiveFailures = 0;
       state.deadUntil = 0;
       return false;
@@ -60,7 +63,7 @@ export class DeadHostManager {
   private getState(provider: string): HostState {
     let state = this.hosts.get(provider);
     if (!state) {
-      state = { consecutiveFailures: 0, deadUntil: 0 };
+      state = { consecutiveFailures: 0, consecutiveCooldowns: 0, deadUntil: 0 };
       this.hosts.set(provider, state);
     }
     return state;

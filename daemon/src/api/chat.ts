@@ -44,11 +44,13 @@ chatRoutes.post("/stream", async (c) => {
     }
 
     // streamChat may throw immediately if the model is not configured
-    const result = await streamChat(body.messages);
+    const { stream: result, abortController: controller } = await streamChat(body.messages);
 
     return stream(c, async (streamWriter) => {
-      streamWriter.onAbort(() => {
-        // Client disconnected — no action needed, stream closes naturally
+      // Propagate client disconnect to upstream stream
+      c.req.raw.signal.addEventListener("abort", () => {
+        logError("[Stream] client disconnected, aborting upstream", new Error("client disconnect"));
+        controller.abort();
       });
 
       try {

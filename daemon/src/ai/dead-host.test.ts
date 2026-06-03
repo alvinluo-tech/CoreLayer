@@ -42,6 +42,78 @@ describe("DeadHostManager", () => {
     vi.useRealTimers();
   });
 
+  it("should use exponential backoff: 20s → 40s → 80s → 160s", () => {
+    vi.useFakeTimers();
+
+    // First cooldown: 20s
+    manager.recordFailure("groq");
+    manager.recordFailure("groq");
+    expect(manager.isDead("groq")).toBe(true);
+    expect(manager.remainingCooldown("groq")).toBeLessThanOrEqual(20_000);
+
+    // Expire first cooldown
+    vi.advanceTimersByTime(21_000);
+    expect(manager.isDead("groq")).toBe(false);
+
+    // Second cooldown: 40s
+    manager.recordFailure("groq");
+    manager.recordFailure("groq");
+    expect(manager.isDead("groq")).toBe(true);
+    expect(manager.remainingCooldown("groq")).toBeLessThanOrEqual(40_000);
+    expect(manager.remainingCooldown("groq")).toBeGreaterThan(20_000);
+
+    // Expire second cooldown
+    vi.advanceTimersByTime(41_000);
+    expect(manager.isDead("groq")).toBe(false);
+
+    // Third cooldown: 80s
+    manager.recordFailure("groq");
+    manager.recordFailure("groq");
+    expect(manager.isDead("groq")).toBe(true);
+    expect(manager.remainingCooldown("groq")).toBeLessThanOrEqual(80_000);
+    expect(manager.remainingCooldown("groq")).toBeGreaterThan(40_000);
+
+    // Expire third cooldown
+    vi.advanceTimersByTime(81_000);
+    expect(manager.isDead("groq")).toBe(false);
+
+    // Fourth cooldown: 160s (capped)
+    manager.recordFailure("groq");
+    manager.recordFailure("groq");
+    expect(manager.isDead("groq")).toBe(true);
+    expect(manager.remainingCooldown("groq")).toBeLessThanOrEqual(160_000);
+    expect(manager.remainingCooldown("groq")).toBeGreaterThan(80_000);
+
+    // Fifth cooldown: still 160s (cap)
+    vi.advanceTimersByTime(161_000);
+    expect(manager.isDead("groq")).toBe(false);
+    manager.recordFailure("groq");
+    manager.recordFailure("groq");
+    expect(manager.remainingCooldown("groq")).toBeLessThanOrEqual(160_000);
+
+    vi.useRealTimers();
+  });
+
+  it("should reset backoff on success", () => {
+    vi.useFakeTimers();
+
+    // Trigger first cooldown
+    manager.recordFailure("groq");
+    manager.recordFailure("groq");
+    vi.advanceTimersByTime(21_000);
+    expect(manager.isDead("groq")).toBe(false);
+
+    // Reset via success
+    manager.recordSuccess("groq");
+
+    // Next failure should start at 20s again
+    manager.recordFailure("groq");
+    manager.recordFailure("groq");
+    expect(manager.remainingCooldown("groq")).toBeLessThanOrEqual(20_000);
+
+    vi.useRealTimers();
+  });
+
   it("should track providers independently", () => {
     manager.recordFailure("groq");
     manager.recordFailure("groq");

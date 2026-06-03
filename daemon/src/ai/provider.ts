@@ -87,6 +87,14 @@ function wrapModelWithAdaptations(model: LanguageModelV3): LanguageModelV3 {
 
 // ---- Fallback chains ----
 
+const MAX_RETRIES = 3;
+const RETRY_BASE_DELAY_MS = 1_000;
+
+/** Sleep for a given number of milliseconds. Exported for test mocking. */
+export function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 /** Errors that are safe to retry (network / server errors). */
 function isRetryableError(err: unknown): boolean {
   if (err instanceof Error) {
@@ -162,15 +170,25 @@ export async function callWithFallback<T>(
 
   for (const name of chain) {
     if (deadHostManager.isDead(name)) continue;
-    try {
-      const result = await fn(name);
-      deadHostManager.recordSuccess(name);
-      return result;
-    } catch (err) {
-      lastError = err;
-      logError("callWithFallback", err);
-      if (!isRetryableError(err)) throw err;
-      deadHostManager.recordFailure(name);
+
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const result = await fn(name);
+        deadHostManager.recordSuccess(name);
+        return result;
+      } catch (err) {
+        lastError = err;
+        if (!isRetryableError(err)) throw err;
+
+        if (attempt < MAX_RETRIES) {
+          const delay = RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1);
+          logError(`[Provider Retry] attempt ${attempt}/${MAX_RETRIES} for "${name}", waiting ${delay}ms...`, err);
+          await sleep(delay);
+        } else {
+          logError(`[Provider Retry] exhausted ${MAX_RETRIES} attempts for "${name}", falling back`, err);
+          deadHostManager.recordFailure(name);
+        }
+      }
     }
   }
 

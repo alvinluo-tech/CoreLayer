@@ -480,12 +480,14 @@ export async function streamMessageInConversation(
   conversationId: string,
   userMessage: string,
   onToolEvent?: (event: { type: 'tool-call' | 'tool-result'; name: string; toolCallId: string; args?: unknown; result?: unknown }) => void | Promise<void>,
+  abortController?: AbortController,
 ): Promise<{
   isAi: boolean;
   userMessage: MessageRow;
   result?: any;
   reply?: string;
   toolCalls?: any[];
+  abortController?: AbortController;
   saveAssistantMessage: (reply: string, toolCallsLog: any[]) => Promise<MessageRow>;
 }> {
   const repo = getRepositories().conversations;
@@ -559,12 +561,22 @@ export async function streamMessageInConversation(
       const maxSteps = configManager.getMaxSteps();
       const budget = new IterationBudget(maxSteps);
 
+      // Set up stream timeout via AbortController
+      const controller = abortController ?? new AbortController();
+      const streamTimeout = configManager.getStreamTimeout();
+      const timeoutId = setTimeout(() => {
+        logError(`[Stream] timed out after ${streamTimeout}ms`, new Error("stream timeout"));
+        controller.abort();
+      }, streamTimeout);
+
       const result = streamText({
         model: getModel(),
         messages: aiMessages,
         tools: aiTools,
         stopWhen: stepCountIs(maxSteps),
+        abortSignal: controller.signal,
         onFinish: async (event: any) => {
+          clearTimeout(timeoutId);
           logCacheStats(event.providerMetadata as Record<string, unknown> | undefined, "streamMessage");
         },
         ...(onToolEvent
@@ -603,6 +615,7 @@ export async function streamMessageInConversation(
         isAi: true,
         userMessage: savedUserMsg,
         result,
+        abortController: controller,
         saveAssistantMessage,
       };
     } catch (err) {
@@ -627,7 +640,8 @@ export async function streamChat(
   mode: "text" | "voice" = "text",
   conversationId?: string,
   onToolEvent?: (event: { type: 'tool-call' | 'tool-result'; name: string; toolCallId: string; args?: unknown; result?: unknown }) => void | Promise<void>,
-): Promise<ReturnType<typeof streamText>> {
+  abortController?: AbortController,
+): Promise<{ stream: ReturnType<typeof streamText>; abortController: AbortController }> {
   try {
     const builder = new ContextBuilder({
       mode,
@@ -649,13 +663,22 @@ export async function streamChat(
     const maxSteps = configManager.getMaxSteps();
     const budget = new IterationBudget(maxSteps);
 
-    return streamText({
+    const controller = abortController ?? new AbortController();
+    const streamTimeout = configManager.getStreamTimeout();
+    const timeoutId = setTimeout(() => {
+      logError(`[Stream] timed out after ${streamTimeout}ms`, new Error("stream timeout"));
+      controller.abort();
+    }, streamTimeout);
+
+    const stream = streamText({
       model: getModel(),
       system: systemMessage,
       messages,
       tools: aiTools,
       stopWhen: stepCountIs(maxSteps),
+      abortSignal: controller.signal,
       onFinish: async (event: any) => {
+        clearTimeout(timeoutId);
         logCacheStats(event.providerMetadata as Record<string, unknown> | undefined, "streamChat");
       },
       ...(onToolEvent
@@ -689,6 +712,8 @@ export async function streamChat(
           }
         : {}),
     });
+
+    return { stream, abortController: controller };
   } catch (err) {
     logError("streamChat", err);
     const { code } = classifyError(err);

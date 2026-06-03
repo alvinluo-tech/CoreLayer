@@ -1,6 +1,30 @@
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
+import { readFileSync, writeFileSync, existsSync, mkdirSync, statSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
+
+// ---- In-memory cache ----
+
+interface CacheEntry<T> {
+  data: T;
+  mtime: number;
+}
+
+let configCache: CacheEntry<JarvisConfig> | null = null;
+let credentialsCache: CacheEntry<Credentials> | null = null;
+
+/** Invalidate all cached config/credentials. Callers can use this after external file changes. */
+export function invalidateConfigCache(): void {
+  configCache = null;
+  credentialsCache = null;
+}
+
+function getFileMtime(filePath: string): number {
+  try {
+    return statSync(filePath).mtimeMs;
+  } catch {
+    return 0;
+  }
+}
 
 // ---- Types ----
 
@@ -129,29 +153,46 @@ function writeJsonFile(filePath: string, data: unknown): void {
 
 class ConfigManager {
   getConfig(): JarvisConfig {
-    return readJsonFile(getConfigPath(), DEFAULT_CONFIG);
+    const filePath = getConfigPath();
+    const mtime = getFileMtime(filePath);
+    if (configCache && configCache.mtime === mtime) {
+      return configCache.data;
+    }
+    const data = readJsonFile(filePath, DEFAULT_CONFIG);
+    configCache = { data, mtime };
+    return data;
   }
 
   updateConfig(partial: Partial<JarvisConfig>): void {
     const current = this.getConfig();
     const merged = { ...current, ...partial };
     writeJsonFile(getConfigPath(), merged);
+    configCache = null; // invalidate on write
   }
 
   getCredentials(): Credentials {
-    return readJsonFile(getCredentialsPath(), {});
+    const filePath = getCredentialsPath();
+    const mtime = getFileMtime(filePath);
+    if (credentialsCache && credentialsCache.mtime === mtime) {
+      return credentialsCache.data;
+    }
+    const data = readJsonFile(filePath, {});
+    credentialsCache = { data, mtime };
+    return data;
   }
 
   setCredential(providerId: string, apiKey: string): void {
     const creds = this.getCredentials();
-    creds[providerId] = apiKey;
-    writeJsonFile(getCredentialsPath(), creds);
+    const updated = { ...creds, [providerId]: apiKey };
+    writeJsonFile(getCredentialsPath(), updated);
+    credentialsCache = null; // invalidate on write
   }
 
   removeCredential(providerId: string): void {
     const creds = this.getCredentials();
-    delete creds[providerId];
-    writeJsonFile(getCredentialsPath(), creds);
+    const { [providerId]: _, ...rest } = creds;
+    writeJsonFile(getCredentialsPath(), rest);
+    credentialsCache = null; // invalidate on write
   }
 
   getProviderConfig(providerId: string): { baseURL: string; apiKey: string } {

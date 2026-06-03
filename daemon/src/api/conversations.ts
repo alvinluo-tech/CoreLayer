@@ -120,6 +120,14 @@ app.post("/:id/messages/stream", async (c) => {
     const toolCallIndexByCallId = new Map<string, number>();
 
     return streamSSE(c, async (sseStream) => {
+      const streamAbortController = new AbortController();
+
+      // Propagate client disconnect to upstream stream
+      c.req.raw.signal.addEventListener("abort", () => {
+        logError("[Stream] client disconnected, aborting upstream", new Error("client disconnect"));
+        streamAbortController.abort();
+      });
+
       const streamResult = await streamMessageInConversation(id, body.content, async (event) => {
         if (event.type === 'tool-call') {
           const index = toolCallsLog.length;
@@ -139,7 +147,7 @@ app.post("/:id/messages/stream", async (c) => {
             data: JSON.stringify({ name: event.name, toolCallId: event.toolCallId, output: event.result }),
           });
         }
-      });
+      }, streamAbortController);
 
       // If it's AI-enabled, stream the LLM response via normalized fullStream
       if (streamResult.isAi && streamResult.result) {
