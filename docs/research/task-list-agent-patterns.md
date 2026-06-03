@@ -167,14 +167,14 @@
 > Source: Odysseus (fallback chains, dead host) + Hermes (provider resolver)
 > Files: `daemon/src/ai/provider.ts`, `daemon/src/model/gateway.ts`
 
-- [ ] Fallback chains — try ordered list of providers on failure
-- [ ] Dead host management — 2 failures → 20s cooldown
-- [ ] Provider auto-detection from URL hostname
-- [ ] Model-specific adaptations
+- [x] Fallback chains — try ordered list of providers on failure
+- [x] Dead host management — 2 failures → 20s cooldown
+- [x] Provider auto-detection from URL hostname
+- [x] Model-specific adaptations
   - `max_completion_tokens` for reasoning models (o1/o3/o4)
   - Omit temperature for reasoning models
   - Anthropic temperature clamped to [0.0, 1.0]
-- [ ] Response caching (Odysseus SHA-256 128-entry LRU)
+- [x] Response caching (Odysseus SHA-256 128-entry LRU)
 
 ---
 
@@ -221,7 +221,13 @@
 | `daemon/src/config/config-manager.ts` | Done | Phase 8: added maxSteps config (default 20) |
 | `daemon/src/orchestrator/agent-loop.test.ts` | Done | Phase 8: 29 tests — IterationBudget, empty guard, trim |
 | `daemon/src/runtime/ai-tool-wrapper.ts` | Done | Phase 8: trimToolResult for oversized tool outputs |
-| `daemon/src/ai/provider.ts` | Todo | Phase 9: routing |
+| `daemon/src/ai/provider.ts` | Done | Phase 9: fallback chains, model adaptations |
+| `daemon/src/ai/dead-host.ts` | Done | Phase 9: dead host management with cooldown |
+| `daemon/src/ai/dead-host.test.ts` | Done | Phase 9: 9 tests |
+| `daemon/src/ai/response-cache.ts` | Done | Phase 9: SHA-256 128-entry LRU cache |
+| `daemon/src/ai/response-cache.test.ts` | Done | Phase 9: 9 tests |
+| `daemon/src/ai/fallback.test.ts` | Done | Phase 9: 8 tests |
+| `daemon/src/config/provider-resolver.test.ts` | Done | Phase 9: 7 tests (hostname auto-detection) |
 | `daemon/src/api/chat.ts` | Todo | Phase 10: streaming |
 
 ---
@@ -234,7 +240,7 @@ When resuming work in a new session:
 2. Read `docs/research/2026-06-03-agent-patterns-comparative-analysis.md` for full context
 3. Check `git log --oneline -10` on branch `feat/agent-patterns-research`
 4. The next uncompleted item is in **Phase 9: Model Routing Enhancements**
-5. All Phase 1-8 items are complete and tested (405 daemon + 120 frontend tests passing)
+5. All Phase 1-9 items are complete and tested (438 daemon + 120 frontend tests passing)
 
 ## Per-Phase Commit Workflow
 
