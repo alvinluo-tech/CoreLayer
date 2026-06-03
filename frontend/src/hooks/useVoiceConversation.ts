@@ -14,6 +14,8 @@ import {
   type WebSpeechASROptions,
 } from '@/lib/webSpeechASR';
 import { HALLUCINATION_PATTERNS, getSpokenText, playSciFiChime } from '@/lib/voiceUtils';
+import { BargeInStateMachine } from '@/lib/bargeInStateMachine';
+import { CircularPCMBuffer } from '@/lib/circularPCMBuffer';
 import { useDataPanelStore } from '@/stores/dataPanelStore';
 import { createCleanup, createCleanupStreaming } from './voiceConversationCleanup';
 import { createConnectRealtimeSession } from './voiceRealtimeSession';
@@ -64,7 +66,7 @@ export function useVoiceConversation(
   const startConversationRef = useRef<(text: string) => void>(() => {});
   const lastUserTextRef = useRef('');
   const bargeInMonitorRef = useRef<{ stop: () => void } | null>(null);
-  const bargeInRef = useRef<() => void>(() => {});
+  const bargeInRef = useRef<(preBufferedAudio?: Float32Array[]) => void>(() => {});
   const isFarewellPlayingRef = useRef(false);
   const playFarewellAndExitRef = useRef<() => void>(() => {});
   const greetingAudioCtxRef = useRef<AudioContext | null>(null);
@@ -76,6 +78,10 @@ export function useVoiceConversation(
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
   const listeningSafetyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const accumulatedFinalTextRef = useRef<string>('');
+
+  // False-positive recovery: save TTS state for resume after spurious barge-in
+  const savedAssistantTextForResumeRef = useRef<string>('');
+  const falsePositiveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Lazily get or create ASR instance, or update options if it already exists
   const getOrCreateASR = useCallback((options: WebSpeechASROptions) => {
@@ -314,7 +320,12 @@ export function useVoiceConversation(
       bargeInMonitorRef.current.stop();
       bargeInMonitorRef.current = null;
     }
-    createCleanup(cleanupRefs)();
+    if (falsePositiveTimerRef.current) {
+      clearTimeout(falsePositiveTimerRef.current);
+      falsePositiveTimerRef.current = null;
+    }
+    savedAssistantTextForResumeRef.current = '';
+    createCleanup(cleanupRefs as Parameters<typeof createCleanup>[0])();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const cleanupStreaming = useCallback(() => {
@@ -479,8 +490,6 @@ export function useVoiceConversation(
 
   const startBargeInMonitor = useCallback(() => {
     // Only monitor for voice barge-in if the main window is actively focused!
-    // If the main window is in the background (blurred), we disable active microphone VAD barge-in
-    // to prevent hardware speaker loopback/feedback and eliminate background mic locks.
     if (!document.hasFocus()) {
       logger.debug(
         '[VoiceConversation] Main window is in background. Skipping VAD barge-in monitor.'
@@ -495,14 +504,33 @@ export function useVoiceConversation(
 
     let stopped = false;
     let micStream: MediaStream | null = null;
-    let audioCtx: AudioContext | null = null;
+    let micAudioCtx: AudioContext | null = null;
+    let micProcessor: ScriptProcessorNode | null = null;
+    let micSource: MediaStreamAudioSourceNode | null = null;
     let animationFrameId = 0;
+
+    const stateMachine = new BargeInStateMachine();
+    const preBuffer = new CircularPCMBuffer({ maxChunks: 12 }); // ~300ms at 25ms/chunk
 
     const stop = () => {
       stopped = true;
       if (animationFrameId) cancelAnimationFrame(animationFrameId);
+      if (micProcessor) {
+        try {
+          micProcessor.disconnect();
+        } catch {
+          /* noop */
+        }
+      }
+      if (micSource) {
+        try {
+          micSource.disconnect();
+        } catch {
+          /* noop */
+        }
+      }
       if (micStream) micStream.getTracks().forEach((t) => t.stop());
-      if (audioCtx) audioCtx.close().catch(() => {});
+      if (micAudioCtx) micAudioCtx.close().catch(() => {});
     };
 
     bargeInMonitorRef.current = { stop };
@@ -521,18 +549,32 @@ export function useVoiceConversation(
           return;
         }
         micStream = stream;
-        audioCtx = new AudioContext();
-        const source = audioCtx.createMediaStreamSource(stream);
-        const analyser = audioCtx.createAnalyser();
+        micAudioCtx = new AudioContext();
+        micSource = micAudioCtx.createMediaStreamSource(stream);
+
+        // Use ScriptProcessorNode to capture raw PCM for pre-buffering
+        micProcessor = micAudioCtx.createScriptProcessor(4096, 1, 1);
+        micSource.connect(micProcessor);
+        micProcessor.connect(micAudioCtx.destination);
+
+        // AnalyserNode for volume measurement
+        const analyser = micAudioCtx.createAnalyser();
         analyser.fftSize = 256;
-        source.connect(analyser);
+        micSource.connect(analyser);
 
         const dataArray = new Uint8Array(analyser.frequencyBinCount);
-        const BARGE_IN_THRESHOLD = 62; // Raised from 50 to 62 to highly filter out speaker output leak, loud keyboard typing, fan noise, and breathing
-        let sustainedVoiceDuration = 0;
-        const CHECK_INTERVAL = 100;
+
+        // Write mic chunks to pre-buffer during TTS playback
+        micProcessor.onaudioprocess = (e) => {
+          if (stopped) return;
+          const isTtsPlaying = audioQueueRef.current && audioQueueRef.current.isPlaying;
+          if (isTtsPlaying) {
+            preBuffer.push(new Float32Array(e.inputBuffer.getChannelData(0)));
+          }
+        };
 
         let lastCheck = Date.now();
+        const CHECK_INTERVAL = 50; // Higher frequency for responsive two-stage detection
 
         const checkFrame = () => {
           if (stopped) return;
@@ -543,26 +585,28 @@ export function useVoiceConversation(
             analyser.getByteFrequencyData(dataArray);
             const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
 
-            if (avg > BARGE_IN_THRESHOLD) {
-              sustainedVoiceDuration += CHECK_INTERVAL;
-              if (sustainedVoiceDuration >= 750) {
-                // Raised from 450ms to 750ms to verify intentional, continuous spoken words instead of transient clicks or echo spikes
-                // Only barge-in if the AI is actively playing synthesized voice audio.
-                // If the AI is still "thinking" (generating text) or silent, we ignore environmental noises.
-                const isTtsPlaying = audioQueueRef.current && audioQueueRef.current.isPlaying;
-                if (isTtsPlaying) {
-                  logger.debug(
-                    '[VoiceConversation:BargeIn] Voice activity detected! Interrupting AI...'
-                  );
-                  stop();
-                  bargeInRef.current(); // Call barge-in via ref
-                  return;
-                } else {
-                  sustainedVoiceDuration = 0; // Reset accumulation since AI is not speaking yet
-                }
+            const isTtsPlaying = audioQueueRef.current && audioQueueRef.current.isPlaying;
+
+            // Only run state machine when TTS is actively playing
+            if (!isTtsPlaying) {
+              stateMachine.reset();
+              return;
+            }
+
+            const action = stateMachine.feed(avg, now);
+
+            if (action === 'duck') {
+              // Stage 1: Duck TTS volume
+              logger.debug('[VoiceConversation:BargeIn] Stage 1: Ducking TTS volume');
+              if (audioQueueRef.current) {
+                audioQueueRef.current.setVolume(0.15);
               }
-            } else {
-              sustainedVoiceDuration = Math.max(0, sustainedVoiceDuration - CHECK_INTERVAL);
+            } else if (action === 'barge-in') {
+              // Stage 2: Confirm barge-in — stop TTS and start ASR
+              logger.debug('[VoiceConversation:BargeIn] Stage 2: Confirmed! Stopping TTS.');
+              stop();
+              bargeInRef.current(preBuffer.flush());
+              return;
             }
           }
 
@@ -980,57 +1024,122 @@ export function useVoiceConversation(
     setLastError(null);
   }, [cleanup]);
 
-  const bargeIn = useCallback(() => {
-    isFarewellPlayingRef.current = false;
-    // Stop TTS playback and abort LLM stream
-    if (audioQueueRef.current) {
-      audioQueueRef.current.stop();
-      audioQueueRef.current = null;
-    }
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
-    }
-    // Go back to listening
-    isActiveRef.current = true;
-    setState('listening');
-    setAssistantText('');
-    setInterimTranscript('');
-    setFinalTranscript('');
+  const bargeIn = useCallback(
+    (preBufferedAudio?: Float32Array[]) => {
+      isFarewellPlayingRef.current = false;
 
-    if (isWebSpeechASRAvailable()) {
-      let latestInterimText = '';
-      accumulatedFinalTextRef.current = '';
+      // Save current assistant text for false-positive recovery
+      savedAssistantTextForResumeRef.current = assistantText;
 
-      const asr = getOrCreateASR({
-        lang: 'zh-CN',
-        onInterim: (text: string) => {
-          setInterimTranscript(text);
-          latestInterimText = text;
-        },
-        onFinal: (text: string) => {
-          accumulatedFinalTextRef.current += text;
-          setFinalTranscript(accumulatedFinalTextRef.current);
-          setInterimTranscript('');
-          latestInterimText = '';
-        },
-        onEnd: () => {
-          logger.debug('[VoiceConversation:BargeIn] ASR onEnd called');
-          const textToSubmit = (accumulatedFinalTextRef.current + latestInterimText).trim();
-          logger.debug('[VoiceConversation:BargeIn] Text to submit:', textToSubmit);
+      // Clear any existing false-positive timer
+      if (falsePositiveTimerRef.current) {
+        clearTimeout(falsePositiveTimerRef.current);
+        falsePositiveTimerRef.current = null;
+      }
 
-          isActiveRef.current = false;
-          if (textToSubmit) {
-            startConversation(textToSubmit);
-          } else {
-            playFarewellAndExitRef.current();
+      // Stop TTS playback and abort LLM stream
+      if (audioQueueRef.current) {
+        audioQueueRef.current.stop();
+        audioQueueRef.current = null;
+      }
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+
+      // Log pre-buffer info
+      if (preBufferedAudio && preBufferedAudio.length > 0) {
+        logger.debug(
+          `[VoiceConversation:BargeIn] Pre-buffered ${preBufferedAudio.length} PCM chunks for ASR`
+        );
+      }
+
+      // Go back to listening
+      isActiveRef.current = true;
+      setState('listening');
+      setAssistantText('');
+      setInterimTranscript('');
+      setFinalTranscript('');
+
+      if (isWebSpeechASRAvailable()) {
+        let latestInterimText = '';
+        accumulatedFinalTextRef.current = '';
+        let speechDetected = false;
+
+        const asr = getOrCreateASR({
+          lang: 'zh-CN',
+          onInterim: (text: string) => {
+            if (!speechDetected && text.trim()) {
+              speechDetected = true;
+              // Clear false-positive timer once speech is detected
+              if (falsePositiveTimerRef.current) {
+                clearTimeout(falsePositiveTimerRef.current);
+                falsePositiveTimerRef.current = null;
+              }
+            }
+            setInterimTranscript(text);
+            latestInterimText = text;
+          },
+          onFinal: (text: string) => {
+            if (!speechDetected && text.trim()) {
+              speechDetected = true;
+              if (falsePositiveTimerRef.current) {
+                clearTimeout(falsePositiveTimerRef.current);
+                falsePositiveTimerRef.current = null;
+              }
+            }
+            accumulatedFinalTextRef.current += text;
+            setFinalTranscript(accumulatedFinalTextRef.current);
+            setInterimTranscript('');
+            latestInterimText = '';
+          },
+          onEnd: () => {
+            logger.debug('[VoiceConversation:BargeIn] ASR onEnd called');
+            const textToSubmit = (accumulatedFinalTextRef.current + latestInterimText).trim();
+            logger.debug('[VoiceConversation:BargeIn] Text to submit:', textToSubmit);
+
+            // Clear false-positive timer
+            if (falsePositiveTimerRef.current) {
+              clearTimeout(falsePositiveTimerRef.current);
+              falsePositiveTimerRef.current = null;
+            }
+
+            isActiveRef.current = false;
+            if (textToSubmit) {
+              savedAssistantTextForResumeRef.current = '';
+              startConversation(textToSubmit);
+            } else {
+              playFarewellAndExitRef.current();
+            }
+          },
+          silenceTimeout: 4000,
+        });
+        asr.start();
+
+        // False-positive recovery: if no speech detected in 3.5s, resume TTS
+        falsePositiveTimerRef.current = setTimeout(() => {
+          falsePositiveTimerRef.current = null;
+          if (!speechDetected && isActiveRef.current) {
+            const savedText = savedAssistantTextForResumeRef.current;
+            if (savedText) {
+              logger.debug(
+                '[VoiceConversation:BargeIn] False-positive: no speech in 3.5s, resuming TTS'
+              );
+              // Stop ASR
+              if (webAsrRef.current) {
+                webAsrRef.current.stop();
+              }
+              isActiveRef.current = false;
+              savedAssistantTextForResumeRef.current = '';
+              // Re-speak the saved text
+              startConversation(savedText);
+            }
           }
-        },
-        silenceTimeout: 4000,
-      });
-      asr.start();
-    }
-  }, [startConversation, getOrCreateASR]);
+        }, 3500);
+      }
+    },
+    [startConversation, getOrCreateASR, assistantText]
+  );
 
   const finishListening = useCallback(() => {
     if (state !== 'listening') return;

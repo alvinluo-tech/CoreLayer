@@ -112,17 +112,17 @@
 > Source: BaiLongma (two-stage interruption)
 > Files: `frontend/src/` (voice panel), `daemon/src/voice/`
 
-- [ ] Frontend: microphone volume monitoring during TTS playback
-- [ ] Stage 1 — Ducking: volume > threshold for ~50ms → reduce TTS volume
-- [ ] Stage 2 — Confirmation: sustained for ~160ms → stop TTS completely
-- [ ] Pre-buffering: circular buffer of PCM chunks during TTS
-- [ ] Send buffered audio to ASR on barge-in
-- [ ] False-positive recovery: no speech in 3.5s → resume TTS
-- [ ] Voice-specific system prompt (BaiLongma pattern)
+- [x] Frontend: microphone volume monitoring during TTS playback
+- [x] Stage 1 — Ducking: volume > threshold for ~50ms → reduce TTS volume
+- [x] Stage 2 — Confirmation: sustained for ~160ms → stop TTS completely
+- [x] Pre-buffering: circular buffer of PCM chunks during TTS
+- [x] Send buffered audio to ASR on barge-in
+- [x] False-positive recovery: no speech in 3.5s → resume TTS
+- [x] Voice-specific system prompt (BaiLongma pattern)
   - Natural speech, no Markdown
   - Ignore garbled ASR errors
   - Concise responses (60-150 chars)
-- [ ] Tests for barge-in state machine
+- [x] Tests for barge-in state machine (15 tests)
 
 ---
 
@@ -207,6 +207,12 @@
 | `daemon/src/orchestrator/context-builder.ts` | Done | Phase 5: ContextBuilder class, tool selection, memory injection |
 | `daemon/src/orchestrator/context-builder.test.ts` | Done | Phase 5: 19 tests |
 | `daemon/src/orchestrator/prompt-builder.ts` | Done | Phase 5: legacy, superseded by context-builder |
+| `frontend/src/lib/bargeInStateMachine.ts` | Done | Phase 6: two-stage barge-in state machine |
+| `frontend/src/lib/bargeInStateMachine.test.ts` | Done | Phase 6: 9 tests |
+| `frontend/src/lib/circularPCMBuffer.ts` | Done | Phase 6: ring buffer for pre-buffering |
+| `frontend/src/lib/circularPCMBuffer.test.ts` | Done | Phase 6: 6 tests |
+| `frontend/src/lib/audioQueue.ts` | Done | Phase 6: setVolume ducking support |
+| `frontend/src/hooks/useVoiceConversation.ts` | Done | Phase 6: integrated two-stage barge-in + false-positive recovery |
 | `daemon/src/ai/provider.ts` | Todo | Phase 7, 9: caching, routing |
 | `daemon/src/api/chat.ts` | Todo | Phase 10: streaming |
 
@@ -219,8 +225,8 @@ When resuming work in a new session:
 1. Read this task list first to understand current progress
 2. Read `docs/research/2026-06-03-agent-patterns-comparative-analysis.md` for full context
 3. Check `git log --oneline -10` on branch `feat/agent-patterns-research`
-4. The next uncompleted item is in **Phase 6: Voice Barge-in**
-5. All Phase 1-5 items are complete and tested (361 tests passing)
+4. The next uncompleted item is in **Phase 7: Anthropic Prompt Caching**
+5. All Phase 1-6 items are complete and tested (361 daemon + 119 frontend tests passing)
 
 ## Per-Phase Commit Workflow
 
