@@ -1,16 +1,33 @@
 import { generateText, streamText, stepCountIs } from "ai";
 import type { ModelMessage } from "ai";
 import { buildSystemPrompt } from "./prompt-builder.js";
+import { assembleContext } from "./context-manager.js";
+import { compressConversation, createSummaryMessage } from "./compressor.js";
 import { getModel } from "../ai/provider.js";
 import { getAllTools } from "../tools/registry.js";
 import { wrapToolsForAI } from "../runtime/ai-tool-wrapper.js";
 import { env } from "../config/env.js";
 import { configManager } from "../config/config-manager.js";
 import { getRepositories } from "../db/factory.js";
-import type { MessageRow, ConversationRow } from "../db/repository.js";
+import type { MessageRow, ConversationRow, MemoryRow } from "../db/repository.js";
 import { classifyError, extractErrorMessage, logError } from "../utils/errors.js";
 
-const MAX_HISTORY_MESSAGES = 20;
+/**
+ * Fetch relevant memories for context injection.
+ * Returns top memories sorted by recency, limited to avoid context bloat.
+ */
+async function fetchRelevantMemories(limit = 20): Promise<MemoryRow[]> {
+  try {
+    const repo = getRepositories().memories;
+    const all = await repo.getAll();
+    // Sort by updatedAt descending, take top N
+    return all
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+      .slice(0, limit);
+  } catch {
+    return [];
+  }
+}
 
 export function isAiConfigured(): boolean {
   // Check ~/.jarvis/credentials.json first
@@ -212,26 +229,26 @@ export async function handleMessageInConversation(
     await repo.update(conversationId, { title });
   }
 
-  // Load message history
+  // Load message history and assemble context
   const history = await repo.getMessages(conversationId);
-  const recentHistory = history.slice(-MAX_HISTORY_MESSAGES);
+  const memories = await fetchRelevantMemories();
+  const systemPrompt = buildSystemPrompt("text", conversationId);
+
+  const context = assembleContext(
+    configManager.getActiveModel(),
+    systemPrompt,
+    memories,
+    history,
+  );
 
   let reply: string;
   let toolCallsLog: { name: string; args: unknown; result: unknown }[] = [];
 
   if (isAiConfigured()) {
-    const messages: ModelMessage[] = [
-      { role: "system", content: buildSystemPrompt("text", conversationId) },
-      ...recentHistory.map((msg) => ({
-        role: msg.role as "user" | "assistant",
-        content: msg.content,
-      })),
-    ];
-
     try {
       const result = await generateText({
         model: getModel(),
-        messages,
+        messages: context.messages,
         tools: wrapToolsForAI(getAllTools(), conversationId),
         stopWhen: stepCountIs(5),
       });
@@ -268,6 +285,25 @@ export async function handleMessageInConversation(
   });
 
   const updatedConversation = (await repo.getById(conversationId))!;
+
+  // Trigger compression if needed (async, non-blocking, after assistant message saved)
+  if (context.shouldCompress && isAiConfigured()) {
+    repo.getMessages(conversationId)
+      .then((currentHistory) => compressConversation(currentHistory, conversationId))
+      .then(async (compaction) => {
+        if (compaction.summary && compaction.compressedMessages.length > 0) {
+          const summaryMsg = createSummaryMessage(
+            conversationId,
+            compaction.summary,
+            compaction.compressedMessages.length,
+          );
+          await repo.addMessage(conversationId, summaryMsg);
+        }
+      })
+      .catch((err) => {
+        logError("handleMessageInConversation/compress", err);
+      });
+  }
 
   return {
     userMessage: savedUserMsg,
@@ -307,31 +343,54 @@ export async function streamMessageInConversation(
     await repo.update(conversationId, { title });
   }
 
-  // Load message history
+  // Load message history and assemble context
   const history = await repo.getMessages(conversationId);
-  const recentHistory = history.slice(-MAX_HISTORY_MESSAGES);
+  const memories = await fetchRelevantMemories();
+  const systemPrompt = buildSystemPrompt("text", conversationId);
+
+  const context = assembleContext(
+    configManager.getActiveModel(),
+    systemPrompt,
+    memories,
+    history,
+  );
 
   const saveAssistantMessage = async (reply: string, toolCallsLog: any[]) => {
-    return repo.addMessage(conversationId, {
+    // Save assistant message
+    const msg = await repo.addMessage(conversationId, {
       role: "assistant",
       content: reply,
       toolCalls: toolCallsLog.length > 0 ? JSON.stringify(toolCallsLog) : undefined,
     });
+
+    // Trigger compression if needed after response is saved
+    // Re-fetch messages to include the latest assistant reply
+    if (context.shouldCompress && isAiConfigured()) {
+      repo.getMessages(conversationId)
+        .then((currentHistory) => compressConversation(currentHistory, conversationId))
+        .then(async (compaction) => {
+          if (compaction.summary && compaction.compressedMessages.length > 0) {
+            const summaryMsg = createSummaryMessage(
+              conversationId,
+              compaction.summary,
+              compaction.compressedMessages.length,
+            );
+            await repo.addMessage(conversationId, summaryMsg);
+          }
+        })
+        .catch((err) => {
+          logError("streamMessageInConversation/compress", err);
+        });
+    }
+
+    return msg;
   };
 
   if (isAiConfigured()) {
-    const messages: ModelMessage[] = [
-      { role: "system", content: buildSystemPrompt("text", conversationId) },
-      ...recentHistory.map((msg) => ({
-        role: msg.role as "user" | "assistant",
-        content: msg.content,
-      })),
-    ];
-
     try {
       const result = streamText({
         model: getModel(),
-        messages,
+        messages: context.messages,
         tools: wrapToolsForAI(getAllTools(), conversationId),
         stopWhen: stepCountIs(5),
         ...(onToolEvent
@@ -390,9 +449,10 @@ export function streamChat(
   onToolEvent?: (event: { type: 'tool-call' | 'tool-result'; name: string; toolCallId: string; args?: unknown; result?: unknown }) => void | Promise<void>,
 ): ReturnType<typeof streamText> {
   try {
+    const systemPrompt = buildSystemPrompt(mode, conversationId);
     return streamText({
       model: getModel(),
-      system: buildSystemPrompt(mode, conversationId),
+      system: systemPrompt,
       messages,
       tools: wrapToolsForAI(getAllTools(), conversationId),
       stopWhen: stepCountIs(5),
