@@ -2,7 +2,6 @@ import { generateText, streamText, stepCountIs } from "ai";
 import type { ModelMessage, Tool } from "ai";
 import { ContextBuilder, MEMORY_MIN_SCORE } from "./context-builder.js";
 import { compressConversation, createSummaryMessage } from "./compressor.js";
-import { getModel } from "../ai/provider.js";
 import { getAllTools } from "../tools/registry.js";
 import { wrapToolsForAI } from "../runtime/ai-tool-wrapper.js";
 import { env } from "../config/env.js";
@@ -452,7 +451,7 @@ export async function handleMessageInConversation(
 
       const maxSteps = configManager.getMaxSteps();
       const result = await generateText({
-        model: getModel(selectedModel),
+        model: getModelGateway().getModel(selectedModel),
         messages: aiMessages,
         tools: aiTools,
         stopWhen: stepCountIs(maxSteps),
@@ -620,7 +619,7 @@ export async function streamMessageInConversation(
       }, streamTimeout);
 
       const result = streamText({
-        model: getModel(selectedModel),
+        model: getModelGateway().getModel(selectedModel),
         messages: aiMessages,
         tools: aiTools,
         stopWhen: stepCountIs(maxSteps),
@@ -727,7 +726,7 @@ export async function streamChat(
     const budget = new IterationBudget(maxSteps);
 
     return streamText({
-      model: getModel(selectedModel),
+      model: getModelGateway().getModel(selectedModel),
       system: systemMessage,
       messages,
       tools: aiTools,
@@ -805,7 +804,7 @@ export async function handleMessage(userMessage: string): Promise<{
 
   const maxSteps = configManager.getMaxSteps();
   const result = await generateText({
-    model: getModel(selectedModel),
+    model: getModelGateway().getModel(selectedModel),
     system: systemMessage,
     messages: [{ role: "user", content: userMessage }],
     tools: aiTools,
