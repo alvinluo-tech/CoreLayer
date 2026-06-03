@@ -129,13 +129,14 @@
 ## Phase 7: Anthropic Prompt Caching
 
 > Source: Odysseus (`cache_control` breakpoints)
-> Files: `daemon/src/orchestrator/conversation.ts`, `daemon/src/ai/provider.ts`
+> Files: `daemon/src/orchestrator/conversation.ts`, `daemon/src/orchestrator/context-builder.ts`
 
-- [ ] Add `cache_control: {"type": "ephemeral"}` to last system message
+- [x] Add `cache_control: {"type": "ephemeral"}` to last system message
   - When tools are present OR system text > 4000 chars
-- [ ] Add `cache_control` to last tool schema definition
-- [ ] Verify with Anthropic API that cache breakpoints work
-- [ ] Log cache hit/miss stats for monitoring
+- [x] Add `cache_control` to last tool schema definition
+- [x] Verify with Anthropic API that cache breakpoints work
+- [x] Log cache hit/miss stats for monitoring
+- [x] Tests: 15 tests passing
 
 ---
 
@@ -213,7 +214,8 @@
 | `frontend/src/lib/circularPCMBuffer.test.ts` | Done | Phase 6: 6 tests |
 | `frontend/src/lib/audioQueue.ts` | Done | Phase 6: setVolume ducking support |
 | `frontend/src/hooks/useVoiceConversation.ts` | Done | Phase 6: integrated two-stage barge-in + false-positive recovery |
-| `daemon/src/ai/provider.ts` | Todo | Phase 7, 9: caching, routing |
+| `daemon/src/orchestrator/cache-control.test.ts` | Done | Phase 7: 15 tests — cache conditions, immutability, stats |
+| `daemon/src/ai/provider.ts` | Todo | Phase 9: routing |
 | `daemon/src/api/chat.ts` | Todo | Phase 10: streaming |
 
 ---
