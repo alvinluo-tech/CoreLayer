@@ -50,3 +50,6 @@ Cargo.lock
 
 # Test coverage
 coverage/
+
+# Docs (local only)
+docs/
