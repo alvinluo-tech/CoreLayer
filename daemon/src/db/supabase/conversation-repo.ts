@@ -85,10 +85,11 @@ export function createSupabaseConversationRepo(): ConversationRepository {
       return toConversationRow(data);
     },
 
-    async update(id: string, data: { title?: string }): Promise<ConversationRow> {
+    async update(id: string, data: { title?: string; modelUsed?: string }): Promise<ConversationRow> {
       const now = new Date().toISOString();
       const updates: Record<string, unknown> = { updated_at: now };
       if (data.title !== undefined) updates.title = data.title;
+      if (data.modelUsed !== undefined) updates.model_used = data.modelUsed;
 
       const { data: row, error } = await client
         .from("conversations")

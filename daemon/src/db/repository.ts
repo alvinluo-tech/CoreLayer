@@ -272,7 +272,7 @@ export interface ConversationRepository {
   create(title?: string): Promise<ConversationRow>;
   list(): Promise<ConversationRow[]>;
   getById(id: string): Promise<ConversationRow | null>;
-  update(id: string, data: { title?: string }): Promise<ConversationRow>;
+  update(id: string, data: { title?: string; modelUsed?: string }): Promise<ConversationRow>;
   delete(id: string): Promise<boolean>;
   addMessage(conversationId: string, data: MessageInput): Promise<MessageRow>;
   getMessages(conversationId: string): Promise<MessageRow[]>;

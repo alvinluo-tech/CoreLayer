@@ -519,6 +519,15 @@ export async function handleMessageInConversation(
 
   const selectedModel = selectModelForConversation(userMessage, true, history.length);
 
+  // Update conversation model if it changed
+  if (conversation && conversation.modelUsed !== selectedModel) {
+    try {
+      await repo.update(conversationId, { modelUsed: selectedModel });
+    } catch (err) {
+      logError("handleMessageInConversation/updateModel", err);
+    }
+  }
+
   const builder = new ContextBuilder({
     mode: "text",
     conversationId,
@@ -549,6 +558,19 @@ export async function handleMessageInConversation(
 
       logCacheStats(result.providerMetadata as Record<string, unknown> | undefined, "handleMessage");
 
+      // Track token usage
+      if (result.usage) {
+        const promptTokens = result.usage.inputTokens ?? 0;
+        const completionTokens = result.usage.outputTokens ?? 0;
+        if (promptTokens > 0 || completionTokens > 0) {
+          try {
+            repo.updateTokenUsage(conversationId, promptTokens, completionTokens);
+          } catch (err) {
+            logError("handleMessageInConversation/updateTokenUsage", err);
+          }
+        }
+      }
+
       // Force answer: if the loop ended on a tool-only step, force a text response
       const lastStep = result.steps?.[result.steps.length - 1];
       const forceDetector = new ForceAnswerDetector();
@@ -566,6 +588,18 @@ export async function handleMessageInConversation(
           model: getModelGateway().getModel(selectedModel),
           messages: toolMessages,
         });
+        // Track token usage from forced answer
+        if (forced.usage) {
+          try {
+            repo.updateTokenUsage(
+              conversationId,
+              forced.usage.inputTokens ?? 0,
+              forced.usage.outputTokens ?? 0,
+            );
+          } catch (err) {
+            logError("handleMessageInConversation/forceAnswerTokenUsage", err);
+          }
+        }
         reply = guardEmptyResponse(forced as { text: string; reasoning?: string | { text: string }[] });
       } else {
         reply = guardEmptyResponse(result as { text: string; reasoning?: string | { text: string }[] });

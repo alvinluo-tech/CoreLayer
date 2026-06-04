@@ -51,10 +51,13 @@ export function createSqliteConversationRepo(): ConversationRepository {
       return (row as ConversationRow) ?? null;
     },
 
-    async update(id: string, data: { title?: string }): Promise<ConversationRow> {
+    async update(id: string, data: { title?: string; modelUsed?: string }): Promise<ConversationRow> {
       const now = new Date().toISOString();
+      const updates: Record<string, unknown> = { updatedAt: now };
+      if (data.title !== undefined) updates.title = data.title;
+      if (data.modelUsed !== undefined) updates.modelUsed = data.modelUsed;
       db.update(schema.conversations)
-        .set({ title: data.title, updatedAt: now })
+        .set(updates)
         .where(eq(schema.conversations.id, id))
         .run();
 
