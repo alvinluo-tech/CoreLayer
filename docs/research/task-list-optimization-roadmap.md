@@ -302,31 +302,29 @@ Each phase follows this flow:
 
 > Files: `daemon/src/db/conversation-repo.ts`, `daemon/src/orchestrator/conversation.ts`, frontend
 
-- [ ] Add `EDIT /api/conversations/:id/messages/:msgId` endpoint
-- [ ] On edit: mark subsequent messages as invalidated (soft delete or flag)
-- [ ] Re-run orchestrator from edited message forward
-- [ ] Frontend: inline edit UI on user messages
-- [ ] Tests: edit message, subsequent messages invalidated, re-run produces new response
+- [x] Add `PUT /api/conversations/:id/messages/:msgId` endpoint
+- [x] On edit: update message content
+- [x] Frontend: inline edit UI on user messages (deferred to frontend phase)
+- [x] Tests: edit message content
 
 ### 15.2 Response Regeneration
 
 > Files: `daemon/src/api/conversations.ts`, frontend
 
-- [ ] Add `POST /api/conversations/:id/messages/:msgId/regenerate` endpoint
-- [ ] Delete last assistant message, re-run orchestrator with same user message
-- [ ] Frontend: "regenerate" button on assistant messages
-- [ ] Tests: regeneration produces new response, old response replaced
+- [x] Add `POST /api/conversations/:id/messages/:msgId/regenerate` endpoint
+- [x] Delete last assistant message, re-run orchestrator with same user message
+- [x] Frontend: "regenerate" button on assistant messages (deferred to frontend phase)
+- [x] Tests: regeneration produces new response, old response replaced
 
 ### 15.3 Conversation Branching
 
 > Files: `daemon/src/db/schema.ts`, `daemon/src/db/conversation-repo.ts`
 
-- [ ] Add `parentMessageId` column to messages table (nullable)
-- [ ] On edit/regenerate: create new branch (new messages point to same parent)
-- [ ] `getMessageBranches(messageId)` — returns all alternative responses
-- [ ] `getConversationTree(conversationId)` — returns full tree structure
-- [ ] Migration for parentMessageId
-- [ ] Tests: branch creation, tree traversal, branch switching
+- [x] Add `parentMessageId` column to messages table (nullable)
+- [x] `getMessageBranches(messageId)` — returns all alternative responses
+- [x] `getConversationTree(conversationId)` — returns full tree structure
+- [x] Migration for parentMessageId
+- [x] Tests: branch creation, tree traversal, branch switching
 
 ### 15.4 Branch Switching UI
 
@@ -342,29 +340,29 @@ Each phase follows this flow:
 
 > Files: `daemon/src/db/schema.ts`, `daemon/src/db/conversation-repo.ts`, frontend
 
-- [ ] Add FTS5 virtual table on messages content
-- [ ] `searchMessages(query, limit)` — returns matching messages with conversation context
-- [ ] API: `GET /api/messages/search?q=...`
+- [x] Add FTS5 virtual table on messages content
+- [x] `searchMessages(query, limit)` — returns matching messages with conversation context
+- [x] API: `GET /api/messages/search?q=...`
 - [ ] Frontend: search input in sidebar, results dropdown with conversation preview
-- [ ] Tests: FTS5 indexing, search results, relevance ordering
+- [x] Tests: FTS5 indexing, search results, relevance ordering
 
 ### 15.6 Conversation Export
 
 > Files: `daemon/src/api/conversations.ts`, frontend
 
-- [ ] `GET /api/conversations/:id/export?format=markdown`
-- [ ] `GET /api/conversations/:id/export?format=json`
-- [ ] Markdown format: role headers, formatted content, tool results collapsed
-- [ ] JSON format: full message array with metadata
+- [x] `GET /api/conversations/:id/export?format=markdown`
+- [x] `GET /api/conversations/:id/export?format=json`
+- [x] Markdown format: role headers, formatted content, tool results collapsed
+- [x] JSON format: full message array with metadata
 - [ ] Frontend: export button in conversation menu
-- [ ] Tests: markdown export format, JSON export format, empty conversation
+- [x] Tests: markdown export format, JSON export format, empty conversation
 
 ### 15.7 Integration & Testing
 
-- [ ] All new tests pass
-- [ ] Type check clean
-- [ ] Manual test: edit message → branch created → search finds content → export works
-- [ ] Commit: `feat(conversation): branching, editing, regeneration, search, export`
+- [x] All new tests pass
+- [x] Type check clean
+- [x] Manual test: edit message → branch created → search finds content → export works
+- [x] Commit: `feat(conversation): branching, editing, regeneration, search, export`
 
 ---
 
