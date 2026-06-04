@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { createSSEParser } from './sseParser';
+import { logger } from './logger';
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_MAX_RETRIES = 2;
@@ -151,6 +152,40 @@ class JarvisClient {
       `TTS 请求失败，请检查 daemon 是否运行: ${lastError?.message}`,
       lastError ?? undefined
     );
+  }
+
+  async synthesizeBatch(
+    sentences: string[],
+    voice?: string,
+    model?: string
+  ): Promise<ArrayBuffer[]> {
+    const url = await this.getDaemonUrl();
+
+    try {
+      const response = await fetch(`${url}/api/voice/synthesize-batch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sentences, voice, model }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Batch TTS failed (${response.status})`);
+      }
+
+      const data = (await response.json()) as { chunks: string[] };
+      return data.chunks.map((b64) => {
+        const binary = atob(b64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+          bytes[i] = binary.charCodeAt(i);
+        }
+        return bytes.buffer;
+      });
+    } catch (error) {
+      // Fallback: batch endpoint unavailable, caller should use per-sentence
+      logger.warn('[JarvisClient] Batch TTS unavailable, falling back to per-sentence:', error);
+      throw error;
+    }
   }
 
   async transcribe(audioBlob: Blob, language?: string): Promise<string> {

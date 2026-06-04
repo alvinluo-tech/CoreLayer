@@ -90,6 +90,52 @@ voiceRoutes.post("/synthesize", async (c) => {
 });
 
 /**
+ * POST /api/voice/synthesize-batch
+ * Batch TTS synthesis: accepts multiple sentences, returns ordered audio chunks.
+ * Body: { sentences: string[], model?, voice?, speed? }
+ * Response: { chunks: ArrayBuffer[] } (each chunk is a WAV buffer)
+ */
+voiceRoutes.post("/synthesize-batch", async (c) => {
+  if (!isTtsAvailable()) {
+    return c.json({ error: "TTS not configured. Set MIMO_API_KEY." }, 503);
+  }
+
+  try {
+    const body = await c.req.json<{
+      sentences: string[];
+      model?: TTSModel;
+      voice?: string;
+      speed?: number;
+    }>();
+
+    if (!body.sentences?.length) {
+      return c.json({ error: "sentences array is required" }, 400);
+    }
+
+    // Process sentences in parallel (limited concurrency to avoid rate limits)
+    const results = await Promise.all(
+      body.sentences.map(async (text) => {
+        const trimmed = text.length > 2000 ? text.slice(0, 2000) + "..." : text;
+        const audioBuffer = await synthesizeSpeech({
+          text: trimmed,
+          model: body.model,
+          voice: body.voice,
+          speed: body.speed,
+        });
+        return audioBuffer;
+      })
+    );
+
+    // Return as JSON with base64-encoded audio chunks
+    const chunks = results.map((buf) => Buffer.from(buf).toString("base64"));
+    return c.json({ chunks });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return c.json({ error: message }, 500);
+  }
+});
+
+/**
  * GET /api/voice/status
  * Returns voice pipeline availability.
  */

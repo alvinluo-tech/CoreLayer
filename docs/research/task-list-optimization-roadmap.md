@@ -376,90 +376,90 @@ Each phase follows this flow:
 
 > Files: new `frontend/src/hooks/useASR.ts`
 
-- [ ] Extract ASR logic from `useVoiceConversation`
-- [ ] Interface: `{ start(), stop(), transcript, isListening, error }`
-- [ ] Web Speech API primary, Whisper fallback (existing logic)
-- [ ] Auto-restart on silence timeout (existing behavior)
-- [ ] Cleanup on unmount
-- [ ] Tests: start/stop, transcript updates, fallback behavior
+- [x] Extract ASR logic from `useVoiceConversation`
+- [x] Interface: `{ start(), stop(), transcript, isListening, error }`
+- [x] Web Speech API primary, Whisper fallback (existing logic)
+- [x] Auto-restart on silence timeout (existing behavior)
+- [x] Cleanup on unmount
+- [x] Tests: start/stop, transcript updates, fallback behavior
 
 ### 16.2 Extract useTTSPlayback Hook
 
 > Files: new `frontend/src/hooks/useTTSPlayback.ts`
 
-- [ ] Extract TTS playback from `useVoiceConversation`
-- [ ] Interface: `{ play(sentences), stop(), setVolume(v), isPlaying, currentSentence }`
-- [ ] AudioQueueManager lifecycle management
-- [ ] AudioContext reuse (don't create new one per conversation)
-- [ ] Cleanup on unmount
-- [ ] Tests: playback sequence, volume control, stop clears queue
+- [x] Extract TTS playback from `useVoiceConversation`
+- [x] Interface: `{ play(sentences), stop(), setVolume(v), isPlaying, currentSentence }`
+- [x] AudioQueueManager lifecycle management
+- [x] AudioContext reuse (don't create new one per conversation)
+- [x] Cleanup on unmount
+- [x] Tests: playback sequence, volume control, stop clears queue
 
 ### 16.3 Extract useBargeIn Hook
 
 > Files: new `frontend/src/hooks/useBargeIn.ts`
 
-- [ ] Extract barge-in monitoring from `useVoiceConversation`
-- [ ] Interface: `{ start(micStream, onBargeIn), stop(), isMonitoring }`
-- [ ] Volume monitoring via AnalyserNode
-- [ ] BargeInStateMachine integration
-- [ ] CircularPCMBuffer for pre-buffering
-- [ ] Tests: barge-in triggers, false-positive recovery
+- [x] Extract barge-in monitoring from `useVoiceConversation`
+- [x] Interface: `{ start(micStream, onBargeIn), stop(), isMonitoring }`
+- [x] Volume monitoring via AnalyserNode
+- [x] BargeInStateMachine integration
+- [x] CircularPCMBuffer for pre-buffering
+- [x] Tests: barge-in triggers, false-positive recovery
 
 ### 16.4 Create useVoiceFSM
 
 > Files: new `frontend/src/hooks/useVoiceFSM.ts`
 
-- [ ] Top-level state machine: `idle → listening → processing → speaking → post-listen`
-- [ ] Composes useASR, useTTSPlayback, useBargeIn
-- [ ] State transitions with guards (e.g., can only go to `speaking` from `processing`)
-- [ ] Event-driven: `WAKE`, `ASR_RESULT`, `LLM_TOKEN`, `TTS_DONE`, `BARGE_IN`, `SILENCE`, `ERROR`
-- [ ] Replace 14+ refs with structured state
-- [ ] Tests: all state transitions, guard conditions, error recovery
+- [x] Top-level state machine: `idle → listening → processing → speaking → post-listen`
+- [x] Composes useASR, useTTSPlayback, useBargeIn
+- [x] State transitions with guards (e.g., can only go to `speaking` from `processing`)
+- [x] Event-driven: `WAKE`, `ASR_RESULT`, `LLM_TOKEN`, `TTS_DONE`, `BARGE_IN`, `SILENCE`, `ERROR`
+- [x] Replace 14+ refs with structured state
+- [x] Tests: all state transitions, guard conditions, error recovery
 
 ### 16.5 Voice Error Recovery
 
 > Files: `frontend/src/hooks/useVoiceFSM.ts`, `frontend/src/hooks/useChat.ts`
 
-- [ ] On LLM stream failure mid-voice-conversation: retry once before giving up
-- [ ] On TTS failure: skip sentence, continue with next
-- [ ] On ASR failure: fallback to Whisper (already exists, ensure it works)
-- [ ] User-visible error state with manual retry option
-- [ ] Tests: each failure mode, retry behavior, user feedback
+- [x] On LLM stream failure mid-voice-conversation: retry once before giving up
+- [x] On TTS failure: skip sentence, continue with next
+- [x] On ASR failure: fallback to Whisper (already exists, ensure it works)
+- [x] User-visible error state with manual retry option
+- [x] Tests: each failure mode, retry behavior, user feedback
 
 ### 16.6 Connection Health Monitoring
 
 > Files: `frontend/src/lib/jarvisClient.ts`
 
-- [ ] Add heartbeat check: `GET /api/health` every 30s during active voice
-- [ ] On heartbeat failure: show connection lost indicator
-- [ ] On heartbeat recovery: reconnect and resume
-- [ ] Tests: heartbeat failure detection, recovery
+- [x] Add heartbeat check: `GET /api/health` every 30s during active voice
+- [x] On heartbeat failure: show connection lost indicator
+- [x] On heartbeat recovery: reconnect and resume
+- [x] Tests: heartbeat failure detection, recovery
 
 ### 16.7 TTS Batching
 
 > Files: `frontend/src/hooks/useTTSPlayback.ts`, `daemon/src/api/voice.ts`
 
-- [ ] Batch multiple sentences into single `/api/voice/synthesize-batch` request
-- [ ] Server-side: process batch, return ordered audio chunks
-- [ ] Client-side: queue received chunks for sequential playback
-- [ ] Fallback to per-sentence if batch endpoint unavailable
-- [ ] Tests: batch synthesis, ordering preserved, fallback behavior
+- [x] Batch multiple sentences into single `/api/voice/synthesize-batch` request
+- [x] Server-side: process batch, return ordered audio chunks
+- [x] Client-side: queue received chunks for sequential playback
+- [x] Fallback to per-sentence if batch endpoint unavailable
+- [x] Tests: batch synthesis, ordering preserved, fallback behavior
 
 ### 16.8 Thinking Event Display
 
 > Files: frontend chat components
 
-- [ ] Add `thinking` event handler to SSE parser (currently silently dropped)
-- [ ] Display thinking content in a collapsible section during streaming
-- [ ] Style: dimmed text, expandable, auto-collapse after response complete
-- [ ] Tests: thinking events rendered, collapse behavior
+- [x] Add `thinking` event handler to SSE parser (currently silently dropped)
+- [x] Display thinking content in a collapsible section during streaming
+- [x] Style: dimmed text, expandable, auto-collapse after response complete
+- [x] Tests: thinking events rendered, collapse behavior
 
 ### 16.9 Integration & Testing
 
-- [ ] All new tests pass
-- [ ] Type check clean
-- [ ] Manual test: full voice flow with new hooks, barge-in works, error recovery works
-- [ ] Commit: `refactor(voice): decompose voice pipeline, add error recovery, TTS batching`
+- [x] All new tests pass
+- [x] Type check clean
+- [x] Manual test: full voice flow with new hooks, barge-in works, error recovery works
+- [x] Commit: `refactor(voice): decompose voice pipeline, add error recovery, TTS batching`
 
 ---
 
