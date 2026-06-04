@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { getRepositories } from "../db/factory.js";
 import { apiError, extractErrorMessage, logError } from "../utils/errors.js";
 import { triggerTask, computeNextRun } from "../scheduler.js";
+import { parseNlTimeToCron } from "../utils/nl-time-parse.js";
 
 const app = new Hono();
 
@@ -38,17 +39,26 @@ app.post("/", async (c) => {
       return apiError(c, "Either prompt or skillName must be provided", 400);
     }
 
+    // Try NL time parsing if cronExpr doesn't look like a standard cron expression
+    let cronExpr = body.cronExpr.trim();
+    if (!/^[0-9*/]/.test(cronExpr)) {
+      const parsed = parseNlTimeToCron(cronExpr);
+      if (parsed) {
+        cronExpr = parsed;
+      }
+    }
+
     // Validate cron expression by computing next run
     let nextRun: string;
     try {
-      nextRun = computeNextRun(body.cronExpr);
+      nextRun = computeNextRun(cronExpr);
     } catch {
       return apiError(c, "Invalid cron expression", 400);
     }
 
     const task = await getRepositories().scheduledTasks.upsert({
       name: body.name,
-      cronExpr: body.cronExpr,
+      cronExpr,
       prompt: body.prompt,
       skillName: body.skillName,
       input: body.input,
@@ -78,16 +88,21 @@ app.put("/:id", async (c) => {
       enabled?: boolean;
     }>();
 
-    // Validate cron if provided
-    if (body.cronExpr) {
+    // Validate cron if provided, with NL time parsing
+    let cronExpr = body.cronExpr;
+    if (cronExpr) {
+      if (!/^[0-9*/]/.test(cronExpr)) {
+        const parsed = parseNlTimeToCron(cronExpr);
+        if (parsed) cronExpr = parsed;
+      }
       try {
-        computeNextRun(body.cronExpr);
+        computeNextRun(cronExpr);
       } catch {
         return apiError(c, "Invalid cron expression", 400);
       }
     }
 
-    const task = await getRepositories().scheduledTasks.update(id, body);
+    const task = await getRepositories().scheduledTasks.update(id, { ...body, cronExpr });
     return c.json({ task });
   } catch (err) {
     logError("scheduled-tasks/update", err);
