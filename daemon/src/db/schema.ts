@@ -144,6 +144,23 @@ export const memories = sqliteTable("memories", {
   updatedAt: text("updated_at").default("CURRENT_TIMESTAMP").notNull(),
 });
 
+// ---- Scheduled Tasks (Cron) ----
+
+export const scheduledTasks = sqliteTable("scheduled_tasks", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  cronExpr: text("cron_expr").notNull(),
+  prompt: text("prompt"),
+  skillName: text("skill_name"),
+  input: text("input"), // JSON stored as text
+  enabled: integer("enabled", { mode: "boolean" }).default(true).notNull(),
+  lastRun: text("last_run"),
+  nextRun: text("next_run"),
+  lastResult: text("last_result"), // JSON stored as text
+  createdAt: text("created_at").default("CURRENT_TIMESTAMP").notNull(),
+  updatedAt: text("updated_at").default("CURRENT_TIMESTAMP").notNull(),
+});
+
 // ---- Agent Runs ----
 
 export const agentRuns = sqliteTable("agent_runs", {

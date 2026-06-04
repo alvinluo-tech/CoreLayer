@@ -8,6 +8,7 @@ import { createSqliteAppConnectionRepo } from "./app-connection-repo.js";
 import { createSqliteModelProfileRepo } from "./model-profile-repo.js";
 import { createSqliteMemoryRepo } from "./memory-repo.js";
 import { createSqliteAgentRunRepo } from "./agent-run-repo.js";
+import { createSqliteScheduledTaskRepo } from "./scheduled-task-repo.js";
 
 export function createSqliteRepositories(): Repositories {
   return {
@@ -20,5 +21,6 @@ export function createSqliteRepositories(): Repositories {
     modelProfiles: createSqliteModelProfileRepo(),
     memories: createSqliteMemoryRepo(),
     agentRuns: createSqliteAgentRunRepo(),
+    scheduledTasks: createSqliteScheduledTaskRepo(),
   };
 }

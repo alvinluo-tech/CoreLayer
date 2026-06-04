@@ -1,4 +1,4 @@
-import { eq, and, like, or, sql, isNull, gt } from "drizzle-orm";
+import { eq, and, like, or, sql, isNull, gt, lte } from "drizzle-orm";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import { db as defaultDb, schema } from "../client.js";
 import type {
@@ -382,6 +382,31 @@ export function createSqliteMemoryRepo(database?: DrizzleDb): MemoryRepository {
       let deleted = 0;
       for (const mem of expired) {
         db.delete(schema.memories).where(eq(schema.memories.id, mem.id)).run();
+        deleted++;
+      }
+      return deleted;
+    },
+
+    async pruneUnusedMemories(maxAgeDays = 30): Promise<number> {
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - maxAgeDays);
+      const cutoffStr = cutoff.toISOString();
+
+      // Delete memories with uses === 0 AND createdAt < cutoff
+      const rows = db
+        .select()
+        .from(schema.memories)
+        .where(
+          and(
+            eq(schema.memories.uses, 0),
+            lte(schema.memories.createdAt, cutoffStr),
+          ),
+        )
+        .all();
+
+      let deleted = 0;
+      for (const row of rows) {
+        db.delete(schema.memories).where(eq(schema.memories.id, row.id)).run();
         deleted++;
       }
       return deleted;

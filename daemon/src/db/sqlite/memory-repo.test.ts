@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
+import { eq } from "drizzle-orm";
 import * as schema from "../schema.js";
 
 function createTestDb() {
@@ -445,6 +446,67 @@ describe("Memory Repository", () => {
       expect(all).toHaveLength(2);
       const updated = all.find((m) => m.key === "coding_style");
       expect(updated!.value).toBe("更新后的偏好");
+    });
+  });
+
+  // ---- pruneUnusedMemories ----
+
+  describe("pruneUnusedMemories", () => {
+    it("should prune old unused memories (uses=0, older than maxAgeDays)", async () => {
+      const oldDate = new Date();
+      oldDate.setDate(oldDate.getDate() - 35);
+
+      await memories.upsert({ type: "context", key: "old-unused", value: "v" });
+      // Manually set old createdAt
+      testDb.update(schema.memories)
+        .set({ createdAt: oldDate.toISOString(), uses: 0 })
+        .where(eq(schema.memories.key, "old-unused"))
+        .run();
+
+      await memories.upsert({ type: "context", key: "recent-unused", value: "v" });
+
+      const pruned = await memories.pruneUnusedMemories(30);
+      expect(pruned).toBeGreaterThanOrEqual(1);
+
+      const remaining = await memories.getAll();
+      expect(remaining.find((m) => m.key === "old-unused")).toBeUndefined();
+      expect(remaining.find((m) => m.key === "recent-unused")).toBeDefined();
+    });
+
+    it("should keep used old memories", async () => {
+      const oldDate = new Date();
+      oldDate.setDate(oldDate.getDate() - 35);
+
+      const mem = await memories.upsert({ type: "context", key: "old-used", value: "v" });
+      testDb.update(schema.memories)
+        .set({ createdAt: oldDate.toISOString(), uses: 5 })
+        .where(eq(schema.memories.id, mem.id))
+        .run();
+
+      const pruned = await memories.pruneUnusedMemories(30);
+      expect(pruned).toBe(0);
+
+      const remaining = await memories.getAll();
+      expect(remaining.find((m) => m.key === "old-used")).toBeDefined();
+    });
+
+    it("should respect custom maxAgeDays", async () => {
+      const tenDaysAgo = new Date();
+      tenDaysAgo.setDate(tenDaysAgo.getDate() - 10);
+
+      const mem = await memories.upsert({ type: "context", key: "ten-days", value: "v" });
+      testDb.update(schema.memories)
+        .set({ createdAt: tenDaysAgo.toISOString(), uses: 0 })
+        .where(eq(schema.memories.id, mem.id))
+        .run();
+
+      // Should not prune with 30-day threshold
+      const pruned30 = await memories.pruneUnusedMemories(30);
+      expect(pruned30).toBe(0);
+
+      // Should prune with 7-day threshold
+      const pruned7 = await memories.pruneUnusedMemories(7);
+      expect(pruned7).toBeGreaterThanOrEqual(1);
     });
   });
 });
