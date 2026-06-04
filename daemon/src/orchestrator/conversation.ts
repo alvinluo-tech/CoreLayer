@@ -558,10 +558,10 @@ export async function handleMessageInConversation(
 
       logCacheStats(result.providerMetadata as Record<string, unknown> | undefined, "handleMessage");
 
-      // Track token usage
-      if (result.usage) {
-        const promptTokens = result.usage.inputTokens ?? 0;
-        const completionTokens = result.usage.outputTokens ?? 0;
+      // Track token usage (totalUsage includes all steps in multi-step tool loops)
+      if (result.totalUsage) {
+        const promptTokens = result.totalUsage.inputTokens ?? 0;
+        const completionTokens = result.totalUsage.outputTokens ?? 0;
         if (promptTokens > 0 || completionTokens > 0) {
           try {
             repo.updateTokenUsage(conversationId, promptTokens, completionTokens);
@@ -816,8 +816,8 @@ export async function streamMessageInConversation(
         onStepFinish: async (step: any) => {
           // Accumulate token usage from each step
           if (step.usage) {
-            tokenUsage.promptTokens += step.usage.promptTokens ?? 0;
-            tokenUsage.completionTokens += step.usage.completionTokens ?? 0;
+            tokenUsage.promptTokens += step.usage.inputTokens ?? 0;
+            tokenUsage.completionTokens += step.usage.outputTokens ?? 0;
           }
 
           const toolCalls = step.toolCalls ?? [];
@@ -869,6 +869,17 @@ export async function streamMessageInConversation(
                   { role: "user" as const, content: FORCE_ANSWER_MSG },
                 ],
               });
+              if (forced.totalUsage) {
+                try {
+                  repo.updateTokenUsage(
+                    conversationId,
+                    forced.totalUsage.inputTokens ?? 0,
+                    forced.totalUsage.outputTokens ?? 0,
+                  );
+                } catch (err) {
+                  logError("forceAnswerFollowUp/updateTokenUsage", err);
+                }
+              }
               return guardEmptyResponse(forced as { text: string; reasoning?: string | { text: string }[] });
             }
           : undefined,
