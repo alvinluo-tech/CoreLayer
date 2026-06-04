@@ -549,6 +549,8 @@ function MainApp() {
           interimTranscript={voiceConv.interimTranscript}
           finalTranscript={voiceConv.finalTranscript}
           assistantText={voiceConv.assistantText}
+          thinkingText={voiceConv.thinkingText}
+          isConnected={voiceConv.isConnected}
           onClose={handleVoiceToggle}
           onStop={
             voiceConv.state === 'listening' ? voiceConv.finishListening : voiceConv.stopConversation
@@ -672,6 +674,8 @@ function MainApp() {
           interimTranscript={voiceConv.interimTranscript}
           finalTranscript={voiceConv.finalTranscript}
           assistantText={voiceConv.assistantText}
+          thinkingText={voiceConv.thinkingText}
+          isConnected={voiceConv.isConnected}
           onClose={voiceConv.stopConversation}
           onStop={voiceConv.state === 'listening' ? voiceConv.finishListening : voiceConv.bargeIn}
           onOpenSettings={() => {

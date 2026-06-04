@@ -9,6 +9,8 @@ export interface UseTTSPlaybackReturn {
   createQueue: (daemonUrl: string) => AudioQueueManager;
   /** Enqueue a sentence for synthesis and playback */
   enqueue: (sentence: string, index: number) => void;
+  /** Batch-synthesize multiple sentences in a single request */
+  enqueueBatch: (sentences: Array<{ text: string; index: number }>) => Promise<void>;
   /** Set total expected sentences (for completion detection) */
   setTotalExpected: (count: number) => void;
   /** Wait for all queued audio to finish playing */
@@ -55,6 +57,14 @@ export function useTTSPlayback(): UseTTSPlaybackReturn {
     if (!queueRef.current) return;
     queueRef.current.enqueue(sentence, index);
     setCurrentSentence(index + 1);
+  }, []);
+
+  const enqueueBatch = useCallback(async (sentences: Array<{ text: string; index: number }>) => {
+    if (!queueRef.current) return;
+    await queueRef.current.enqueueBatch(sentences);
+    if (sentences.length > 0) {
+      setCurrentSentence(Math.max(...sentences.map((s) => s.index)) + 1);
+    }
   }, []);
 
   const setTotalExpected = useCallback((count: number) => {
@@ -125,6 +135,7 @@ export function useTTSPlayback(): UseTTSPlaybackReturn {
     totalSentences,
     createQueue,
     enqueue,
+    enqueueBatch,
     setTotalExpected,
     waitForCompletion,
     stop,

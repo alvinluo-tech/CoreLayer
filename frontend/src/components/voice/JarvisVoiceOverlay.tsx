@@ -3,12 +3,15 @@ import { X, Mic, Square, Loader2, Settings2, XCircle, Maximize2 } from 'lucide-r
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { VoiceConversationState } from '@/hooks/useVoiceConversation';
+import { ThinkingDisplay } from './ThinkingDisplay';
 
 interface JarvisVoiceOverlayProps {
   state: VoiceConversationState;
   interimTranscript: string;
   finalTranscript: string;
   assistantText: string;
+  thinkingText?: string;
+  isConnected?: boolean;
   onClose: () => void;
   onStop: () => void;
   onOpenSettings?: () => void;
@@ -21,6 +24,8 @@ export function JarvisVoiceOverlay({
   interimTranscript,
   finalTranscript,
   assistantText,
+  thinkingText = '',
+  isConnected = true,
   onClose,
   onStop,
   onOpenSettings,
@@ -379,6 +384,16 @@ export function JarvisVoiceOverlay({
           </div>
         </div>
 
+        {/* Connection lost indicator */}
+        {!isConnected && (
+          <div className="mx-0 mb-3 flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-1.5">
+            <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-ping" />
+            <span className="font-mono text-[10px] text-red-400 tracking-wider">
+              CONNECTION LOST — RETRYING...
+            </span>
+          </div>
+        )}
+
         {/* Content body */}
         <div
           className={cn(
@@ -445,25 +460,8 @@ export function JarvisVoiceOverlay({
               </div>
             )}
 
-            {/* Holographic Thought Ticker */}
-            {(state === 'streaming' || state === 'transcribing' || state === 'error') &&
-              !assistantText && (
-                <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5 space-y-1.5 animate-pulse">
-                  <div className="flex items-center justify-between">
-                    <p className="font-mono text-[9px] text-amber-400 uppercase tracking-widest font-bold">
-                      🧠 COGNITIVE MATRIX SCANNERS:
-                    </p>
-                    <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-ping" />
-                  </div>
-                  <div className="font-mono text-[10px] text-amber-300/80 space-y-0.5">
-                    <p className="animate-pulse">▶ [RETRIEVING KNOWLEDGE SCHEMAS...]</p>
-                    <p className="text-[9px] text-amber-500/60 pl-3">DECRYPTING NEURAL NODES: OK</p>
-                    <p className="text-[9px] text-amber-500/60 pl-3">
-                      SEMANTIC RESPONSE CORRELATION: SYNTHESIZING
-                    </p>
-                  </div>
-                </div>
-              )}
+            {/* Thinking Display */}
+            <ThinkingDisplay text={thinkingText} isStreaming={state === 'streaming'} />
 
             {/* AI speaking response bubble */}
             {assistantText && (

@@ -5,6 +5,7 @@ export class AudioQueueManager {
   private analyser: AnalyserNode | null = null;
   private gainNode: GainNode | null = null;
   private ttsUrl: string;
+  private batchTtsUrl: string;
   private voice: string;
   private model: string;
   private buffers: Map<number, AudioBuffer> = new Map();
@@ -27,6 +28,7 @@ export class AudioQueueManager {
       // Analyser creation may fail in some environments; TTS still works without it
     }
     this.ttsUrl = ttsUrl;
+    this.batchTtsUrl = ttsUrl.replace(/\/synthesize$/, '/synthesize-batch');
     this.voice = voice ?? voiceProfileManager.getVoiceName();
     this.model = voiceProfileManager.getTTSModel();
   }
@@ -63,6 +65,63 @@ export class AudioQueueManager {
       .finally(() => {
         this.pending--;
       });
+  }
+
+  /**
+   * Batch-synthesize multiple sentences in a single request.
+   * Falls back to per-sentence synthesis if the batch endpoint fails.
+   */
+  async enqueueBatch(sentences: Array<{ text: string; index: number }>): Promise<void> {
+    if (this.stopped || sentences.length === 0) return;
+
+    if (sentences.length === 1) {
+      this.enqueue(sentences[0]!.text, sentences[0]!.index);
+      return;
+    }
+
+    this.pending++;
+    try {
+      const batchUrl = this.batchTtsUrl;
+      const cleanedSentences = sentences.map((s) =>
+        s.text.replace(/alvin\s+luo/gi, 'alvin 骆').replace(/(?<![a-zA-Z])luo(?![a-zA-Z])/gi, '骆')
+      );
+
+      const response = await fetch(batchUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sentences: cleanedSentences, model: this.model, voice: this.voice }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Batch TTS error ${response.status}`);
+      }
+
+      const data = (await response.json()) as { chunks: string[] };
+      if (!data.chunks || data.chunks.length !== sentences.length) {
+        throw new Error('Batch TTS returned wrong number of chunks');
+      }
+
+      if (this.audioCtx.state === 'suspended') {
+        await this.audioCtx.resume().catch(() => {});
+      }
+
+      for (let i = 0; i < data.chunks.length; i++) {
+        if (this.stopped) return;
+        const raw = Uint8Array.from(atob(data.chunks[i]!), (c) => c.charCodeAt(0));
+        const buffer = await this.audioCtx.decodeAudioData(raw.buffer);
+        this.buffers.set(sentences[i]!.index, buffer);
+        this.tryPlay();
+      }
+    } catch (err) {
+      console.warn('[AudioQueue] Batch TTS failed, falling back to per-sentence:', err);
+      // Fallback: enqueue each sentence individually
+      for (const s of sentences) {
+        if (this.stopped) return;
+        this.enqueue(s.text, s.index);
+      }
+    } finally {
+      this.pending--;
+    }
   }
 
   private async synthesize(text: string): Promise<AudioBuffer> {

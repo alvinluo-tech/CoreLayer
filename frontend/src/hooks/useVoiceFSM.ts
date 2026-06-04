@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { useASR } from './useASR';
 import { useTTSPlayback } from './useTTSPlayback';
 import { useBargeIn } from './useBargeIn';
+import { useConnectionHealth } from './useConnectionHealth';
 import { getDaemonUrl } from '@/lib/tauri';
 import { splitSentences } from '@/lib/sentenceSplitter';
 import { voiceProfileManager } from '@/lib/voiceProfile';
@@ -72,6 +73,7 @@ export function useVoiceFSM(options: UseVoiceFSMOptions) {
   const bargeIn = useBargeIn((preBufferedAudio) => {
     handleBargeIn(preBufferedAudio);
   });
+  const connectionHealth = useConnectionHealth();
 
   // Keep onIdle ref in sync
   useEffect(() => {
@@ -82,10 +84,13 @@ export function useVoiceFSM(options: UseVoiceFSMOptions) {
   useEffect(() => {
     if (state === 'idle' && prevStateRef.current !== 'idle') {
       logger.debug(`[VoiceFSM] Transition: ${prevStateRef.current} → idle`);
+      connectionHealth.stop();
       onIdleRef.current?.();
+    } else if (state !== 'idle' && prevStateRef.current === 'idle') {
+      connectionHealth.start();
     }
     prevStateRef.current = state;
-  }, [state]);
+  }, [state, connectionHealth]);
 
   // Initialize daemon URL
   useEffect(() => {
@@ -268,14 +273,25 @@ export function useVoiceFSM(options: UseVoiceFSMOptions) {
           }
 
           const { complete, remainder } = splitSentences(ttsBuffer, sentenceIndex);
-          for (const sentence of complete) {
-            tts.enqueue(sentence, sentenceIndex++);
+          for (const s of complete) {
+            tts.enqueue(s, sentenceIndex++);
           }
           ttsBuffer = remainder;
         }
 
         if (ttsBuffer.trim() && isActiveRef.current) {
-          tts.enqueue(ttsBuffer.trim(), sentenceIndex++);
+          const finalSentences = splitSentences(ttsBuffer.trim(), sentenceIndex);
+          if (finalSentences.complete.length > 0) {
+            const batchItems = finalSentences.complete.map((s) => {
+              const idx = sentenceIndex;
+              sentenceIndex++;
+              return { text: s, index: idx };
+            });
+            await tts.enqueueBatch(batchItems);
+          }
+          if (finalSentences.remainder.trim()) {
+            tts.enqueue(finalSentences.remainder.trim(), sentenceIndex++);
+          }
         }
 
         tts.setTotalExpected(sentenceIndex);
@@ -767,6 +783,7 @@ export function useVoiceFSM(options: UseVoiceFSMOptions) {
     thinkingText,
     lastError,
     isSupported,
+    isConnected: connectionHealth.isConnected,
     startListening,
     playGreetingAndListen,
     stopConversation,
