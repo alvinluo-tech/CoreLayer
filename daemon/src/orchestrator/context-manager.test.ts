@@ -170,6 +170,7 @@ describe("selectHistoryWithinBudget", () => {
       toolCallId: null,
       parentMessageId: null,
       tokenCount: null,
+      compressed: false,
       createdAt: new Date().toISOString(),
     };
   }
@@ -251,6 +252,7 @@ describe("assembleContext", () => {
       toolCallId: null,
       parentMessageId: null,
       tokenCount: null,
+      compressed: false,
       createdAt: new Date().toISOString(),
     };
   }

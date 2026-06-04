@@ -32,6 +32,7 @@ function toMessageRow(row: Record<string, unknown>): MessageRow {
     toolCallId: (row.tool_call_id as string) ?? null,
     parentMessageId: (row.parent_message_id as string) ?? null,
     tokenCount: (row.token_count as number) ?? null,
+    compressed: (row.compressed as boolean) ?? false,
     createdAt: (row.created_at as string) ?? "",
   };
 }
@@ -121,6 +122,7 @@ export function createSupabaseConversationRepo(): ConversationRepository {
           tool_calls: data.toolCalls ?? null,
           tool_call_id: data.toolCallId ?? null,
           token_count: data.tokenCount ?? null,
+          compressed: false,
           created_at: now,
         })
         .select()
@@ -255,6 +257,16 @@ export function createSupabaseConversationRepo(): ConversationRepository {
         .delete()
         .eq("id", messageId);
       return !error;
+    },
+
+    async markMessagesCompressed(messageIds: string[]): Promise<number> {
+      if (messageIds.length === 0) return 0;
+      const { data, error } = await client
+        .from("messages")
+        .update({ compressed: true })
+        .in("id", messageIds)
+        .select("id");
+      return error ? 0 : (data?.length ?? 0);
     },
 
     async searchMessages(query: string, limit: number = 20): Promise<SearchResult[]> {

@@ -88,6 +88,7 @@ export function createSqliteConversationRepo(): ConversationRepository {
           toolCallId: data.toolCallId ?? null,
           parentMessageId: data.parentMessageId ?? null,
           tokenCount: data.tokenCount ?? null,
+          compressed: false,
           createdAt: now,
         })
         .run();
@@ -109,6 +110,7 @@ export function createSqliteConversationRepo(): ConversationRepository {
         toolCallId: data.toolCallId ?? null,
         parentMessageId: data.parentMessageId ?? null,
         tokenCount: data.tokenCount ?? null,
+        compressed: false,
         createdAt: now,
       };
     },
@@ -224,6 +226,20 @@ export function createSqliteConversationRepo(): ConversationRepository {
         .where(eq(schema.messages.id, messageId))
         .run();
       return result.changes > 0;
+    },
+
+    async markMessagesCompressed(messageIds: string[]): Promise<number> {
+      if (messageIds.length === 0) return 0;
+      let total = 0;
+      for (const id of messageIds) {
+        const result = db
+          .update(schema.messages)
+          .set({ compressed: true })
+          .where(eq(schema.messages.id, id))
+          .run();
+        total += result.changes;
+      }
+      return total;
     },
 
     async searchMessages(query: string, limit: number = 20): Promise<SearchResult[]> {

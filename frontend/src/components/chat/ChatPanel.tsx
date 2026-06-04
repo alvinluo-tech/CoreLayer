@@ -32,6 +32,8 @@ export function ChatPanel({
   isVoiceStreaming,
 }: ChatPanelProps) {
   const createConversation = useConversationStore((s) => s.createConversation);
+  const conversations = useConversationStore((s) => s.conversations);
+  const activeConversation = conversations.find((c) => c.id === conversationId);
   const scrollRef = useRef<HTMLDivElement>(null);
   const isNearBottomRef = useRef(true);
   const prevConversationIdRef = useRef(conversationId);
@@ -121,6 +123,16 @@ export function ChatPanel({
 
   return (
     <div className="flex flex-col h-full bg-gradient-to-b from-indigo-500/[0.015] via-transparent to-transparent">
+      {/* Token usage header */}
+      {activeConversation &&
+        (activeConversation.promptTokens > 0 || activeConversation.completionTokens > 0) && (
+          <div className="flex items-center justify-end px-4 py-1.5 border-b border-border/40">
+            <span className="font-mono text-[10px] text-muted-foreground/60 tracking-wider">
+              {activeConversation.promptTokens.toLocaleString()} prompt ·{' '}
+              {activeConversation.completionTokens.toLocaleString()} completion
+            </span>
+          </div>
+        )}
       {/* Messages area with scroll-to-bottom overlay */}
       <div className="flex-1 overflow-hidden relative">
         <div ref={scrollRef} className="h-full overflow-y-auto p-4 space-y-4">

@@ -548,6 +548,10 @@ export async function handleMessageInConversation(
       .then((currentHistory) => compressConversation(currentHistory, conversationId))
       .then(async (compaction) => {
         if (compaction.summary && compaction.compressedMessages.length > 0) {
+          // Mark compressed messages instead of deleting them
+          const compressedIds = compaction.compressedMessages.map((m) => m.id);
+          await repo.markMessagesCompressed(compressedIds);
+
           const summaryMsg = createSummaryMessage(
             conversationId,
             compaction.summary,
@@ -643,6 +647,10 @@ export async function streamMessageInConversation(
         .then((currentHistory) => compressConversation(currentHistory, conversationId))
         .then(async (compaction) => {
           if (compaction.summary && compaction.compressedMessages.length > 0) {
+            // Mark compressed messages instead of deleting them
+            const compressedIds = compaction.compressedMessages.map((m) => m.id);
+            await repo.markMessagesCompressed(compressedIds);
+
             const summaryMsg = createSummaryMessage(
               conversationId,
               compaction.summary,

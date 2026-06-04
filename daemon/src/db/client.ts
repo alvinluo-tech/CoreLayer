@@ -199,6 +199,13 @@ try {
   // Column already exists — ignore
 }
 
+// Migration: add compressed flag to messages (context compression)
+try {
+  sqlite.exec(`ALTER TABLE messages ADD COLUMN compressed INTEGER NOT NULL DEFAULT 0`);
+} catch {
+  // Column already exists — ignore
+}
+
 // Migration: FTS5 for message search (Phase 15)
 sqlite.exec(`
   CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(

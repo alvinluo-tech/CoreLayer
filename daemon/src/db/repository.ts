@@ -68,6 +68,7 @@ export interface MessageRow {
   toolCallId: string | null;
   parentMessageId: string | null;
   tokenCount: number | null;
+  compressed: boolean;
   createdAt: string;
 }
 
@@ -280,6 +281,7 @@ export interface ConversationRepository {
   getMessageBranches(messageId: string): Promise<MessageRow[]>;
   getConversationTree(conversationId: string): Promise<MessageTreeNode[]>;
   deleteMessage(messageId: string): Promise<boolean>;
+  markMessagesCompressed(messageIds: string[]): Promise<number>;
   searchMessages(query: string, limit?: number): Promise<SearchResult[]>;
 }
 

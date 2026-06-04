@@ -53,6 +53,7 @@ export interface JarvisConfig {
     maxTokens: number;
     maxSteps: number;
     streamTimeout: number;
+    memoryMinScore: number;
   };
   migrated?: boolean;
 }
@@ -121,6 +122,7 @@ const DEFAULT_CONFIG: JarvisConfig = {
     maxTokens: 4096,
     maxSteps: 20,
     streamTimeout: 120_000,
+    memoryMinScore: 0.3,
   },
 };
 
@@ -262,6 +264,10 @@ class ConfigManager {
 
   getStreamTimeout(): number {
     return this.getConfig().defaults.streamTimeout ?? 120_000;
+  }
+
+  getMemoryMinScore(): number {
+    return this.getConfig().defaults.memoryMinScore ?? 0.3;
   }
 
   setRoutingRules(rules: RoutingRule[]): void {

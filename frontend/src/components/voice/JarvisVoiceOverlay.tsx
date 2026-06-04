@@ -2,11 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { X, Mic, Square, Loader2, Settings2, XCircle, Maximize2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import type { VoiceConversationState } from '@/hooks/useVoiceConversation';
+import type { VoiceState } from '@/hooks/useVoiceFSM';
 import { ThinkingDisplay } from './ThinkingDisplay';
 
 interface JarvisVoiceOverlayProps {
-  state: VoiceConversationState;
+  state: VoiceState;
   interimTranscript: string;
   finalTranscript: string;
   assistantText: string;
@@ -14,6 +14,7 @@ interface JarvisVoiceOverlayProps {
   isConnected?: boolean;
   onClose: () => void;
   onStop: () => void;
+  onRetry?: () => void;
   onOpenSettings?: () => void;
   onRestore?: () => void;
   layoutMode?: 'centered' | 'bottom-right';
@@ -28,6 +29,7 @@ export function JarvisVoiceOverlay({
   isConnected = true,
   onClose,
   onStop,
+  onRetry,
   onOpenSettings,
   onRestore,
   layoutMode = 'centered',
@@ -278,7 +280,7 @@ export function JarvisVoiceOverlay({
   if (state === 'idle') return null;
 
   // Custom styling based on state
-  const glowColors: Record<VoiceConversationState, string> = {
+  const glowColors: Record<VoiceState, string> = {
     idle: 'shadow-slate-500/40 border-slate-700/50 bg-[#0B0F19]/95 text-white',
     listening: 'shadow-cyan-500/40 border-cyan-500/40 bg-[#091E2A]/95 text-white',
     transcribing: 'shadow-blue-500/40 border-blue-500/40 bg-[#0A1A30]/95 text-white',
@@ -287,7 +289,7 @@ export function JarvisVoiceOverlay({
     error: 'shadow-red-500/40 border-red-500/40 bg-[#2C0B0B]/95 text-white',
   };
 
-  const stateTitle: Record<VoiceConversationState, string> = {
+  const stateTitle: Record<VoiceState, string> = {
     idle: 'IDLE',
     listening: '🎤 JARVIS IS LISTENING...',
     transcribing: '🔄 TRANSCRIBING...',
@@ -296,7 +298,7 @@ export function JarvisVoiceOverlay({
     error: '⚠️ CRITICAL PIPELINE ERROR',
   };
 
-  const stateSubtitle: Record<VoiceConversationState, string> = {
+  const stateSubtitle: Record<VoiceState, string> = {
     idle: 'Waiting',
     listening: 'Speak your command clearly',
     transcribing: 'Converting speech to digital instructions',
@@ -498,6 +500,14 @@ export function JarvisVoiceOverlay({
             {state === 'error' ? (
               // Error state: show actionable buttons
               <>
+                {onRetry && (
+                  <Button
+                    onClick={onRetry}
+                    className="flex items-center gap-1.5 rounded-full px-4 py-2 bg-cyan-600/80 hover:bg-cyan-600 border border-cyan-500/30 font-mono text-[10px] tracking-wider shadow-lg shadow-cyan-900/30 transition-all"
+                  >
+                    <Loader2 className="h-3 w-3" /> 重试
+                  </Button>
+                )}
                 {onOpenSettings && (
                   <Button
                     onClick={() => {

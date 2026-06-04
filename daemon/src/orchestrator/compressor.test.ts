@@ -29,6 +29,7 @@ describe("sanitizeToolMessages", () => {
       toolCallId: opts?.toolCallId ?? null,
       parentMessageId: null,
       tokenCount: null,
+      compressed: false,
       createdAt: new Date().toISOString(),
     };
   }
@@ -122,6 +123,7 @@ describe("extractToolSummaries", () => {
       toolCallId: opts?.toolCallId ?? null,
       parentMessageId: null,
       tokenCount: null,
+      compressed: false,
       createdAt: new Date().toISOString(),
     };
   }
@@ -209,6 +211,7 @@ describe("compressConversation", () => {
       toolCallId: null,
       parentMessageId: null,
       tokenCount: null,
+      compressed: false,
       createdAt: new Date().toISOString(),
     };
   }
@@ -261,6 +264,7 @@ describe("compressConversation", () => {
         toolCallId: opts?.toolCallId ?? null,
         parentMessageId: null,
         tokenCount: null,
+        compressed: false,
         createdAt: new Date().toISOString(),
       };
     }

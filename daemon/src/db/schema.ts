@@ -73,6 +73,7 @@ export const messages = sqliteTable("messages", {
   toolCallId: text("tool_call_id"),
   parentMessageId: text("parent_message_id"),
   tokenCount: integer("token_count"),
+  compressed: integer("compressed", { mode: "boolean" }).default(false).notNull(),
   createdAt: text("created_at").default("CURRENT_TIMESTAMP").notNull(),
 });
 

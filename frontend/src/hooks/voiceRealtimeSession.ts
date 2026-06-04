@@ -1,4 +1,4 @@
-import type { VoiceConversationState } from './useVoiceConversation';
+import type { VoiceState } from './useVoiceFSM';
 import { logger } from '@/lib/logger';
 
 interface RealtimeRefs {
@@ -10,7 +10,7 @@ interface RealtimeRefs {
 }
 
 interface RealtimeCallbacks {
-  setState: (state: VoiceConversationState) => void;
+  setState: (state: VoiceState) => void;
   setAssistantText: (text: string) => void;
   setFinalTranscript: (text: string) => void;
   setLastError: (msg: string | null) => void;

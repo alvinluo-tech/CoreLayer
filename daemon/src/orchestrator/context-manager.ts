@@ -301,8 +301,10 @@ export function assembleContext(
   const memoryTokens = estimateTokens(memoryText);
 
   const budget = computeContextBudget(modelName, systemPromptTokens, memoryTokens);
+  // Filter out compressed messages — they've been summarized into a summary message
+  const uncompressedHistory = history.filter((m) => !m.compressed);
   const { selected, truncated, estimatedTokens: historyTokens } =
-    selectHistoryWithinBudget(history, budget);
+    selectHistoryWithinBudget(uncompressedHistory, budget);
 
   const { shouldCompress: needsCompress, urgency } = shouldCompress(
     historyTokens,

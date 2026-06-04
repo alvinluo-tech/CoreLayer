@@ -3,6 +3,7 @@ import type { MessageRow, ScoredMemoryRow } from "../db/repository.js";
 import { getAllJarvisTools } from "../tools/registry.js";
 import type { JarvisTool } from "@jarvis/types";
 import { estimateTokens, computeContextBudget, selectHistoryWithinBudget, shouldCompress } from "./context-manager.js";
+import { configManager } from "../config/config-manager.js";
 
 // ---- Types ----
 
@@ -240,8 +241,11 @@ export class ContextBuilder {
     // 3. Compute context budget — memory is part of systemPrompt, so we pass 0
     // to avoid double-counting. The budget struct's memoryTokens is intentionally 0.
     const budget = computeContextBudget(this.modelName, systemPromptTokens, 0);
+
+    // Filter out compressed messages — they've been summarized into a summary message
+    const uncompressedHistory = history.filter((m) => !m.compressed);
     const { selected, truncated, estimatedTokens: historyTokens } =
-      selectHistoryWithinBudget(history, budget);
+      selectHistoryWithinBudget(uncompressedHistory, budget);
 
     const { shouldCompress: needsCompress, urgency } = shouldCompress(
       historyTokens,
@@ -385,12 +389,13 @@ export class ContextBuilder {
       .filter((m) => m.tier === "preference")
       .slice(0, MAX_PREFERENCE_MEMORIES);
 
+    const minScore = configManager.getMemoryMinScore();
     const contexts = memories
-      .filter((m) => m.tier === "context" && m.score >= MEMORY_MIN_SCORE)
+      .filter((m) => m.tier === "context" && m.score >= minScore)
       .slice(0, MAX_CONTEXT_MEMORIES);
 
     const facts = memories
-      .filter((m) => m.tier === "fact" && m.score >= MEMORY_MIN_SCORE)
+      .filter((m) => m.tier === "fact" && m.score >= minScore)
       .slice(0, MAX_FACT_MEMORIES);
 
     const topMemories = [...preferences, ...contexts, ...facts].slice(0, MAX_MEMORIES);

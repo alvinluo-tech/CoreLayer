@@ -14,7 +14,7 @@ import { logger } from '@/lib/logger';
 import { CommandPalette } from '@/components/palette/CommandPalette';
 import { useChat } from '@/hooks/useChat';
 import { useVoice } from '@/hooks/useVoice';
-import { useVoiceConversation } from '@/hooks/useVoiceConversation';
+import { useVoiceFSM } from '@/hooks/useVoiceFSM';
 import { useConversationStore } from '@/stores/conversationStore';
 import { usePaletteStore } from '@/stores/paletteStore';
 import { useTaskStore } from '@/stores/taskStore';
@@ -70,11 +70,11 @@ function MainApp() {
   );
 
   // Streaming voice conversation (primary)
-  const voiceConv = useVoiceConversation(
-    activeConversationId,
-    handleConversationIdle,
-    getOrCreateDefaultConversation
-  );
+  const voiceConv = useVoiceFSM({
+    conversationId: activeConversationId,
+    onIdle: handleConversationIdle,
+    createConversation: getOrCreateDefaultConversation,
+  });
 
   // Keep voiceConv ref in sync to avoid stale closures in focus handler timeouts
   const voiceConvRef = useRef(voiceConv);
@@ -555,6 +555,7 @@ function MainApp() {
           onStop={
             voiceConv.state === 'listening' ? voiceConv.finishListening : voiceConv.stopConversation
           }
+          onRetry={voiceConv.retryLastAction}
           onOpenSettings={() => {
             exitMirrorMode(false);
             setInitialControlPage('models');
@@ -678,6 +679,7 @@ function MainApp() {
           isConnected={voiceConv.isConnected}
           onClose={voiceConv.stopConversation}
           onStop={voiceConv.state === 'listening' ? voiceConv.finishListening : voiceConv.bargeIn}
+          onRetry={voiceConv.retryLastAction}
           onOpenSettings={() => {
             setInitialControlPage('models');
             setCurrentView('control-center');

@@ -1,10 +1,10 @@
 import { Mic, MicOff, Loader2, Square } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import type { VoiceState } from '@/hooks/useVoice';
-import type { VoiceConversationState } from '@/hooks/useVoiceConversation';
+import type { VoiceState as WakeWordVoiceState } from '@/hooks/useVoice';
+import type { VoiceState } from '@/hooks/useVoiceFSM';
 
-type CombinedState = VoiceState | VoiceConversationState;
+type CombinedState = WakeWordVoiceState | VoiceState;
 
 interface VoicePanelProps {
   state: CombinedState;

@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { JarvisVoiceOverlay } from './JarvisVoiceOverlay';
-import type { VoiceConversationState } from '@/hooks/useVoiceConversation';
+import type { VoiceState } from '@/hooks/useVoiceFSM';
 import { logger } from '@/lib/logger';
 
 export function AssistantMirror() {
-  const [mirroredState, setMirroredState] = useState<VoiceConversationState>('idle');
+  const [mirroredState, setMirroredState] = useState<VoiceState>('idle');
   const [interimTranscript, setInterimTranscript] = useState('');
   const [finalTranscript, setFinalTranscript] = useState('');
   const [assistantText, setAssistantText] = useState('');
@@ -29,7 +29,7 @@ export function AssistantMirror() {
         if (!active) return;
 
         const unsub = await listen<{
-          state: VoiceConversationState;
+          state: VoiceState;
           interimTranscript: string;
           finalTranscript: string;
           assistantText: string;

@@ -100,6 +100,7 @@ function makeMessage(
     toolCallId: null,
     parentMessageId: null,
     tokenCount: null,
+    compressed: false,
     createdAt: "2026-01-01",
   };
 }
