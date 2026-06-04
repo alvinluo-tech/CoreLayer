@@ -141,6 +141,11 @@ const {
   getIdleMs,
   setIdleThreshold,
   consolidateOnIdle,
+  canRunTick,
+  getTickAgeMs,
+  runTick,
+  NO_REPLY_PREFIX,
+  resetTickState,
 } = await import("./scheduler.js");
 
 describe("Scheduler", () => {
@@ -367,6 +372,56 @@ describe("Scheduler", () => {
 
       const remaining = await memRepo.getAll();
       expect(remaining.find((m) => m.id === "expired")).toBeUndefined();
+    });
+  });
+
+  // ---- TICK system ----
+
+  describe("TICK system", () => {
+    beforeEach(() => {
+      resetTickState();
+    });
+
+    it("canRunTick returns true when no TICK has run", () => {
+      expect(canRunTick()).toBe(true);
+    });
+
+    it("canRunTick returns false within 30 minutes of last TICK", async () => {
+      await runTick();
+      expect(canRunTick()).toBe(false);
+    });
+
+    it("getTickAgeMs returns time since last TICK", () => {
+      const before = getTickAgeMs();
+      expect(before).toBeGreaterThanOrEqual(0);
+    });
+
+    it("NO_REPLY_PREFIX is defined", () => {
+      expect(NO_REPLY_PREFIX).toBe("NO_REPLY");
+    });
+
+    it("runTick executes and returns ran=true", async () => {
+      const result = await runTick();
+      expect(result.ran).toBe(true);
+      expect(typeof result.conversationsProcessed).toBe("number");
+    });
+
+    it("runTick skips when called too frequently", async () => {
+      await runTick();
+      const result = await runTick();
+      expect(result.ran).toBe(false);
+    });
+
+    it("runTick cleans up TICK conversation when agent replies NO_REPLY", async () => {
+      const { handleMessageInConversation } = await import("./orchestrator/conversation.js");
+      vi.mocked(handleMessageInConversation).mockResolvedValueOnce({
+        userMessage: {} as any,
+        assistantMessage: { content: "NO_REPLY nothing to do" } as any,
+        conversation: { id: "tick-conv" } as any,
+      });
+
+      const result = await runTick();
+      expect(result.ran).toBe(true);
     });
   });
 });

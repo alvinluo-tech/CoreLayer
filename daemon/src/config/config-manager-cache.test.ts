@@ -37,7 +37,7 @@ const SAMPLE_CONFIG = {
   activeModel: "mimo-v2.5-pro",
   providers: [],
   routingRules: [],
-  defaults: { temperature: 0.7, maxTokens: 4096, maxSteps: 20, streamTimeout: 120_000 },
+  defaults: { temperature: 0.7, maxTokens: 4096, maxSteps: 20, streamTimeout: 120_000, turnTimeout: 180_000 },
 };
 
 beforeEach(() => {

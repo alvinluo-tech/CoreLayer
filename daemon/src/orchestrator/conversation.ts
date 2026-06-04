@@ -104,6 +104,47 @@ export function injectBudgetWarning(toolResults: ToolResultEntry[]): ToolResultE
 
 // ---- Empty Response Guard ----
 
+// ---- Force Answer Detector ----
+
+/** Number of consecutive tool-only rounds before force answer triggers */
+const FORCE_ANSWER_ROUNDS = 3;
+
+const FORCE_ANSWER_MSG =
+  "[系统提示] 你已连续调用工具3轮未生成文本。请基于已获取的信息直接回答用户问题，不要再调用工具。";
+
+/**
+ * Tracks consecutive tool-only rounds in the agent loop.
+ * When the model calls tools for 3+ rounds without generating any text,
+ * the loop should stop and force a text-only follow-up call.
+ */
+export class ForceAnswerDetector {
+  private consecutiveToolOnly = 0;
+
+  /**
+   * Record a completed step. Returns true if force answer should trigger.
+   */
+  recordStep(step: { text?: string; toolCalls?: unknown[] }): boolean {
+    const hasToolCalls = (step.toolCalls?.length ?? 0) > 0;
+    const hasText = (step.text?.trim().length ?? 0) > 0;
+
+    if (hasToolCalls && !hasText) {
+      this.consecutiveToolOnly++;
+    } else {
+      this.consecutiveToolOnly = 0;
+    }
+
+    return this.consecutiveToolOnly >= FORCE_ANSWER_ROUNDS;
+  }
+
+  get count(): number {
+    return this.consecutiveToolOnly;
+  }
+
+  reset(): void {
+    this.consecutiveToolOnly = 0;
+  }
+}
+
 /**
  * If the model returns empty text but has reasoning content (thinking models),
  * fall back to reasoning as the response text.
@@ -508,7 +549,27 @@ export async function handleMessageInConversation(
 
       logCacheStats(result.providerMetadata as Record<string, unknown> | undefined, "handleMessage");
 
-      reply = guardEmptyResponse(result as { text: string; reasoning?: string | { text: string }[] });
+      // Force answer: if the loop ended on a tool-only step, force a text response
+      const lastStep = result.steps?.[result.steps.length - 1];
+      const forceDetector = new ForceAnswerDetector();
+      for (const step of result.steps ?? []) {
+        forceDetector.recordStep({ text: step.text, toolCalls: step.toolCalls });
+      }
+      if (lastStep && forceDetector.count >= 3) {
+        console.info("[ForceAnswer] model stuck in tool loop, forcing text response");
+        const toolMessages = [
+          ...aiMessages,
+          { role: "assistant" as const, content: "" },
+          { role: "user" as const, content: FORCE_ANSWER_MSG },
+        ];
+        const forced = await generateText({
+          model: getModelGateway().getModel(selectedModel),
+          messages: toolMessages,
+        });
+        reply = guardEmptyResponse(forced as { text: string; reasoning?: string | { text: string }[] });
+      } else {
+        reply = guardEmptyResponse(result as { text: string; reasoning?: string | { text: string }[] });
+      }
 
       // Extract tool calls from steps
       for (const step of result.steps ?? []) {
@@ -596,6 +657,8 @@ export async function streamMessageInConversation(
   reply?: string;
   toolCalls?: any[];
   abortController?: AbortController;
+  needsForceAnswer?: boolean;
+  forceAnswerFollowUp?: () => Promise<string>;
   saveAssistantMessage: (reply: string, toolCallsLog: any[]) => Promise<MessageRow>;
 }> {
   recordActivity();
@@ -684,17 +747,18 @@ export async function streamMessageInConversation(
 
       const maxSteps = configManager.getMaxSteps();
       const budget = new IterationBudget(maxSteps);
+      const forceDetector = new ForceAnswerDetector();
 
       // Token usage accumulator
       const tokenUsage = { promptTokens: 0, completionTokens: 0 };
 
-      // Set up stream timeout via AbortController
+      // Set up turn timeout via AbortController (watchdog)
       const controller = abortController ?? new AbortController();
-      const streamTimeout = configManager.getStreamTimeout();
+      const turnTimeout = configManager.getTurnTimeout();
       const timeoutId = setTimeout(() => {
-        logError(`[Stream] timed out after ${streamTimeout}ms`, new Error("stream timeout"));
+        logError(`[Turn] timed out after ${turnTimeout}ms`, new Error("turn timeout"));
         controller.abort();
-      }, streamTimeout);
+      }, turnTimeout);
 
       const result = streamText({
         model: getModelGateway().getModel(selectedModel),
@@ -730,6 +794,9 @@ export async function streamMessageInConversation(
             toolResults = injectBudgetWarning(toolResults);
           }
 
+          // Track force answer: consecutive tool-only rounds
+          forceDetector.recordStep({ text: step.text, toolCalls: step.toolCalls });
+
           if (onToolEvent) {
             for (const tc of toolCalls) {
               await onToolEvent({
@@ -756,6 +823,21 @@ export async function streamMessageInConversation(
         userMessage: savedUserMsg,
         result,
         abortController: controller,
+        needsForceAnswer: forceDetector.count >= FORCE_ANSWER_ROUNDS,
+        forceAnswerFollowUp: forceDetector.count >= FORCE_ANSWER_ROUNDS
+          ? async () => {
+              console.info("[ForceAnswer] stream ended on tool loop, forcing text response");
+              const forced = await generateText({
+                model: getModelGateway().getModel(selectedModel),
+                messages: [
+                  ...aiMessages,
+                  { role: "assistant" as const, content: "" },
+                  { role: "user" as const, content: FORCE_ANSWER_MSG },
+                ],
+              });
+              return guardEmptyResponse(forced as { text: string; reasoning?: string | { text: string }[] });
+            }
+          : undefined,
         saveAssistantMessage,
       };
     } catch (err) {
@@ -904,6 +986,29 @@ export async function handleMessage(userMessage: string): Promise<{
 
   logCacheStats(result.providerMetadata as Record<string, unknown> | undefined, "handleMessage");
 
+  // Force answer: if loop ended on tool-only steps, force a text response
+  const forceDetector = new ForceAnswerDetector();
+  for (const step of result.steps ?? []) {
+    forceDetector.recordStep({ text: step.text, toolCalls: step.toolCalls });
+  }
+
+  let reply: string;
+  if (forceDetector.count >= FORCE_ANSWER_ROUNDS) {
+    console.info("[ForceAnswer] model stuck in tool loop, forcing text response");
+    const forced = await generateText({
+      model: getModelGateway().getModel(selectedModel),
+      system: systemMessage,
+      messages: [
+        { role: "user", content: userMessage },
+        { role: "assistant", content: "" },
+        { role: "user", content: FORCE_ANSWER_MSG },
+      ],
+    });
+    reply = guardEmptyResponse(forced as { text: string; reasoning?: string | { text: string }[] });
+  } else {
+    reply = guardEmptyResponse(result as { text: string; reasoning?: string | { text: string }[] });
+  }
+
   const toolCallsLog: { name: string; args: unknown; result: unknown }[] = [];
   for (const step of result.steps ?? []) {
     for (const toolCall of step.toolCalls ?? []) {
@@ -917,7 +1022,7 @@ export async function handleMessage(userMessage: string): Promise<{
   }
 
   return {
-    reply: guardEmptyResponse(result as { text: string; reasoning?: string | { text: string }[] }),
+    reply,
     toolCalls: toolCallsLog,
   };
 }

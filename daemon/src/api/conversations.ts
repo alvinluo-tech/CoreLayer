@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { getRepositories } from "../db/factory.js";
 import { handleMessageInConversation, streamMessageInConversation } from "../orchestrator/conversation.js";
+import { isGoalCommand, handleGoalCommand } from "../orchestrator/goal-handler.js";
 import { apiError, extractErrorMessage, logError } from "../utils/errors.js";
 import { configManager } from "../config/config-manager.js";
 import { normalizeStream } from "./sse-normalizer.js";
@@ -115,6 +116,27 @@ app.post("/:id/messages/stream", async (c) => {
     return apiError(c, "Message content is required", 400);
   }
 
+  // Intercept /goal commands before reaching LLM
+  if (isGoalCommand(body.content)) {
+    try {
+      const goalResult = await handleGoalCommand(body.content);
+      return streamSSE(c, async (sseStream) => {
+        await sseStream.writeSSE({ event: "delta", data: JSON.stringify({ text: goalResult.reply }) });
+        const repo = getRepositories().conversations;
+        const userMsg = await repo.addMessage(id, { role: "user", content: body.content });
+        const assistantMsg = await repo.addMessage(id, { role: "assistant", content: goalResult.reply });
+        const updatedConv = await repo.getById(id);
+        await sseStream.writeSSE({
+          event: "done",
+          data: JSON.stringify({ userMessage: userMsg, assistantMessage: assistantMsg, conversation: updatedConv }),
+        });
+      });
+    } catch (err) {
+      logError("conversations/goal-command", err);
+      return apiError(c, extractErrorMessage(err), 500);
+    }
+  }
+
   try {
     const toolCallsLog: { name: string; input: unknown; output: unknown }[] = [];
     const toolCallIndexByCallId = new Map<string, number>();
@@ -176,9 +198,26 @@ app.post("/:id/messages/stream", async (c) => {
             // tool_calls and tool_result are handled by onToolEvent callback above
           }
 
+          // Force answer: if model was stuck in tool loop, do a follow-up text-only call
+          if (streamResult.needsForceAnswer && streamResult.forceAnswerFollowUp) {
+            const forcedText = await streamResult.forceAnswerFollowUp();
+            if (forcedText) {
+              fullText = forcedText;
+              await sseStream.writeSSE({
+                event: "delta",
+                data: JSON.stringify({ text: forcedText }),
+              });
+            }
+          }
+
           // Save assistant message to database when complete
           const savedAssistantMsg = await streamResult.saveAssistantMessage(fullText, toolCallsLog);
           const updatedConv = await getRepositories().conversations.getById(id);
+
+          // Goal auto-continuation: check if active goals need more work
+          const { GoalJudge } = await import("../orchestrator/goal-handler.js");
+          const goalJudge = new GoalJudge();
+          const goalCheck = await goalJudge.checkAfterTurn(fullText);
 
           await sseStream.writeSSE({
             event: "done",
@@ -186,15 +225,41 @@ app.post("/:id/messages/stream", async (c) => {
               userMessage: streamResult.userMessage,
               assistantMessage: savedAssistantMsg,
               conversation: updatedConv,
+              goalContinuation: goalCheck.needsContinuation ? goalCheck.continuationPrompt : undefined,
             }),
           });
         } catch (err) {
           logError("conversations/stream/ai", err);
-          const message = extractErrorMessage(err);
-          await sseStream.writeSSE({
-            event: "error",
-            data: JSON.stringify({ error: message }),
-          });
+          // Preserve partial results on timeout: if we have accumulated text,
+          // save it as a partial response instead of discarding
+          if (fullText) {
+            try {
+              const savedAssistantMsg = await streamResult.saveAssistantMessage(fullText, toolCallsLog);
+              const updatedConv = await getRepositories().conversations.getById(id);
+              await sseStream.writeSSE({
+                event: "done",
+                data: JSON.stringify({
+                  userMessage: streamResult.userMessage,
+                  assistantMessage: savedAssistantMsg,
+                  conversation: updatedConv,
+                  partial: true,
+                }),
+              });
+            } catch (saveErr) {
+              logError("conversations/stream/ai/partial-save", saveErr);
+              const message = extractErrorMessage(err);
+              await sseStream.writeSSE({
+                event: "error",
+                data: JSON.stringify({ error: message }),
+              });
+            }
+          } else {
+            const message = extractErrorMessage(err);
+            await sseStream.writeSSE({
+              event: "error",
+              data: JSON.stringify({ error: message }),
+            });
+          }
         }
       } else {
         // Non-AI fallback: stream local response in one chunk

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { IterationBudget, injectBudgetWarning, guardEmptyResponse } from "./conversation.js";
+import { IterationBudget, injectBudgetWarning, guardEmptyResponse, ForceAnswerDetector } from "./conversation.js";
 import { trimToolResult } from "../runtime/ai-tool-wrapper.js";
 
 // ---- IterationBudget ----
@@ -209,5 +209,75 @@ describe("trimToolResult", () => {
     // Verify head portion is all 'c'
     const head = result.slice(0, headLen);
     expect(head).toBe("c".repeat(headLen));
+  });
+});
+
+// ---- ForceAnswerDetector ----
+
+describe("ForceAnswerDetector", () => {
+  it("starts with count 0", () => {
+    const detector = new ForceAnswerDetector();
+    expect(detector.count).toBe(0);
+  });
+
+  it("does not trigger on tool-only rounds below threshold", () => {
+    const detector = new ForceAnswerDetector();
+    expect(detector.recordStep({ toolCalls: [{ name: "t1" }], text: "" })).toBe(false);
+    expect(detector.recordStep({ toolCalls: [{ name: "t2" }], text: "" })).toBe(false);
+    expect(detector.count).toBe(2);
+  });
+
+  it("triggers after 3 consecutive tool-only rounds", () => {
+    const detector = new ForceAnswerDetector();
+    expect(detector.recordStep({ toolCalls: [{ name: "t1" }], text: "" })).toBe(false);
+    expect(detector.recordStep({ toolCalls: [{ name: "t2" }], text: "" })).toBe(false);
+    expect(detector.recordStep({ toolCalls: [{ name: "t3" }], text: "" })).toBe(true);
+  });
+
+  it("resets counter when a text step appears", () => {
+    const detector = new ForceAnswerDetector();
+    detector.recordStep({ toolCalls: [{ name: "t1" }], text: "" });
+    detector.recordStep({ toolCalls: [{ name: "t2" }], text: "" });
+    // Text step resets counter
+    detector.recordStep({ text: "Here is my answer", toolCalls: [] });
+    expect(detector.count).toBe(0);
+    // Need 3 more tool-only rounds to trigger
+    expect(detector.recordStep({ toolCalls: [{ name: "t3" }], text: "" })).toBe(false);
+    expect(detector.recordStep({ toolCalls: [{ name: "t4" }], text: "" })).toBe(false);
+    expect(detector.recordStep({ toolCalls: [{ name: "t5" }], text: "" })).toBe(true);
+  });
+
+  it("treats step with only whitespace text as tool-only", () => {
+    const detector = new ForceAnswerDetector();
+    expect(detector.recordStep({ toolCalls: [{ name: "t1" }], text: "   " })).toBe(false);
+    expect(detector.recordStep({ toolCalls: [{ name: "t2" }], text: "   " })).toBe(false);
+    expect(detector.recordStep({ toolCalls: [{ name: "t3" }], text: "   " })).toBe(true);
+  });
+
+  it("does not trigger on text-only steps", () => {
+    const detector = new ForceAnswerDetector();
+    expect(detector.recordStep({ text: "answer", toolCalls: [] })).toBe(false);
+    expect(detector.count).toBe(0);
+  });
+
+  it("does not trigger on empty steps (no tools, no text)", () => {
+    const detector = new ForceAnswerDetector();
+    expect(detector.recordStep({ text: "", toolCalls: [] })).toBe(false);
+    expect(detector.count).toBe(0);
+  });
+
+  it("reset clears counter", () => {
+    const detector = new ForceAnswerDetector();
+    detector.recordStep({ toolCalls: [{ name: "t1" }], text: "" });
+    detector.recordStep({ toolCalls: [{ name: "t2" }], text: "" });
+    detector.reset();
+    expect(detector.count).toBe(0);
+    expect(detector.recordStep({ toolCalls: [{ name: "t3" }], text: "" })).toBe(false);
+  });
+
+  it("handles step with undefined toolCalls", () => {
+    const detector = new ForceAnswerDetector();
+    expect(detector.recordStep({ text: "" })).toBe(false);
+    expect(detector.count).toBe(0);
   });
 });

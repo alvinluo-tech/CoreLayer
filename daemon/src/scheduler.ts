@@ -25,6 +25,89 @@ export function getIdleMs(): number {
   return Date.now() - lastActivityTimestamp;
 }
 
+// ---- TICK system (autonomous idle processing) ----
+
+/** Minimum interval between TICK executions (30 minutes) */
+const TICK_INTERVAL_MS = 30 * 60 * 1000;
+
+/** Prefix that marks an agent response as silent (not shown in UI) */
+export const NO_REPLY_PREFIX = "NO_REPLY";
+
+let lastTickAt = 0;
+
+/**
+ * Check if enough time has elapsed since the last TICK.
+ */
+export function canRunTick(): boolean {
+  return Date.now() - lastTickAt >= TICK_INTERVAL_MS;
+}
+
+/**
+ * Get milliseconds since the last TICK execution.
+ */
+export function getTickAgeMs(): number {
+  return Date.now() - lastTickAt;
+}
+
+/**
+ * Reset TICK state (for testing).
+ */
+export function resetTickState(): void {
+  lastTickAt = 0;
+}
+
+/**
+ * Run an autonomous TICK: memory consolidation, todo checks, etc.
+ * Uses NO_REPLY mode — conversations created during TICK are cleaned up
+ * if the agent responds with NO_REPLY prefix.
+ */
+export async function runTick(): Promise<{
+  ran: boolean;
+  conversationsProcessed: number;
+  error?: string;
+}> {
+  if (!canRunTick()) {
+    return { ran: false, conversationsProcessed: 0 };
+  }
+
+  lastTickAt = Date.now();
+
+  try {
+    // Run existing consolidation logic
+    const result = await consolidateOnIdle();
+
+    // Create a TICK conversation for L2 agent processing
+    const { handleMessageInConversation } = await import("./orchestrator/conversation.js");
+    const repos = getRepositories();
+    const conv = await repos.conversations.create("TICK: autonomous processing");
+
+    await handleMessageInConversation(
+      conv.id,
+      "[TICK] 自主处理：请检查并执行以下任务（如果没有需要处理的，回复 NO_REPLY）：\n" +
+        "1. 检查是否有过期的待办事项\n" +
+        "2. 检查阅读列表中是否有长时间未阅读的文章\n" +
+        "3. 整理近期对话中的关键信息到记忆",
+    );
+
+    // Check if agent replied with NO_REPLY — clean up if so
+    const messages = await repos.conversations.getMessages(conv.id);
+    const lastAssistant = messages.filter((m) => m.role === "assistant").pop();
+    if (lastAssistant?.content?.startsWith(NO_REPLY_PREFIX)) {
+      // Delete the TICK conversation — it produced no useful output
+      for (const msg of messages) {
+        await repos.conversations.deleteMessage(msg.id);
+      }
+      await repos.conversations.delete(conv.id);
+    }
+
+    return { ran: true, conversationsProcessed: result.conversationsProcessed };
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err);
+    logError("Scheduler/tick", error);
+    return { ran: true, conversationsProcessed: 0, error };
+  }
+}
+
 // ---- Scheduler state ----
 
 interface SchedulerState {
@@ -289,13 +372,25 @@ async function fireTask(row: ScheduledTaskRow): Promise<void> {
 // ---- Idle check ----
 
 async function checkIdle(): Promise<void> {
-  if (!state.running || !state.onIdle) return;
+  if (!state.running) return;
   if (getIdleMs() < state.idleThresholdMs) return;
 
-  try {
-    await state.onIdle();
-  } catch (err) {
-    logError("Scheduler/idle", err);
+  // Run idle callback (consolidation) if registered
+  if (state.onIdle) {
+    try {
+      await state.onIdle();
+    } catch (err) {
+      logError("Scheduler/idle", err);
+    }
+  }
+
+  // Run TICK (autonomous processing) with frequency limiting
+  if (canRunTick()) {
+    try {
+      await runTick();
+    } catch (err) {
+      logError("Scheduler/tick", err);
+    }
   }
 }
 

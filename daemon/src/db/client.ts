@@ -246,6 +246,16 @@ sqlite.exec(`
     created_at TEXT DEFAULT 'CURRENT_TIMESTAMP',
     updated_at TEXT DEFAULT 'CURRENT_TIMESTAMP'
   );
+
+  CREATE TABLE IF NOT EXISTS goals (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL DEFAULT 'default',
+    description TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'paused', 'completed', 'abandoned')),
+    progress TEXT,
+    created_at TEXT DEFAULT 'CURRENT_TIMESTAMP',
+    updated_at TEXT DEFAULT 'CURRENT_TIMESTAMP'
+  );
 `);
 
 export const db = drizzle(sqlite, { schema });

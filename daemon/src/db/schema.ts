@@ -181,3 +181,17 @@ export const agentRuns = sqliteTable("agent_runs", {
   durationMs: integer("duration_ms"),
   error: text("error"),
 });
+
+// ---- Persistent Goals ----
+
+export const goals = sqliteTable("goals", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().default("default"),
+  description: text("description").notNull(),
+  status: text("status", { enum: ["active", "paused", "completed", "abandoned"] })
+    .default("active")
+    .notNull(),
+  progress: text("progress"), // JSON stored as text
+  createdAt: text("created_at").default("CURRENT_TIMESTAMP").notNull(),
+  updatedAt: text("updated_at").default("CURRENT_TIMESTAMP").notNull(),
+});

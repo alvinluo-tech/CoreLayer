@@ -53,6 +53,7 @@ export interface JarvisConfig {
     maxTokens: number;
     maxSteps: number;
     streamTimeout: number;
+    turnTimeout: number;
     memoryMinScore: number;
   };
   migrated?: boolean;
@@ -122,6 +123,7 @@ const DEFAULT_CONFIG: JarvisConfig = {
     maxTokens: 4096,
     maxSteps: 20,
     streamTimeout: 120_000,
+    turnTimeout: 180_000,
     memoryMinScore: 0.3,
   },
 };
@@ -264,6 +266,10 @@ class ConfigManager {
 
   getStreamTimeout(): number {
     return this.getConfig().defaults.streamTimeout ?? 120_000;
+  }
+
+  getTurnTimeout(): number {
+    return this.getConfig().defaults.turnTimeout ?? 180_000;
   }
 
   getMemoryMinScore(): number {
