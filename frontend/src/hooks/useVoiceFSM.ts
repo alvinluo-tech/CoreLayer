@@ -287,7 +287,11 @@ export function useVoiceFSM(options: UseVoiceFSMOptions) {
               sentenceIndex++;
               return { text: s, index: idx };
             });
-            await tts.enqueueBatch(batchItems);
+            try {
+              await tts.enqueueBatch(batchItems);
+            } catch (batchErr) {
+              logger.warn('[VoiceFSM] Batch TTS failed, sentences may be skipped:', batchErr);
+            }
           }
           if (finalSentences.remainder.trim()) {
             tts.enqueue(finalSentences.remainder.trim(), sentenceIndex++);
@@ -298,7 +302,11 @@ export function useVoiceFSM(options: UseVoiceFSMOptions) {
 
         if (sentenceIndex > 0) {
           setState('speaking');
-          await tts.waitForCompletion();
+          try {
+            await tts.waitForCompletion();
+          } catch (ttsErr) {
+            logger.warn('[VoiceFSM] TTS playback error, continuing:', ttsErr);
+          }
         }
 
         if (isActiveRef.current) {

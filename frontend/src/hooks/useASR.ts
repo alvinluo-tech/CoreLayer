@@ -75,6 +75,19 @@ export function useASR(defaultOptions?: UseASROptions): UseASRReturn {
       if (!isWebSpeechASRAvailable()) {
         setError('Web Speech API not available');
         opts.onError?.('Web Speech API not available');
+        // Attempt Whisper fallback asynchronously
+        transcribeWithWhisper()
+          .then((text) => {
+            if (text) {
+              setError(null);
+              opts.onEnd?.(text);
+            } else {
+              opts.onEnd?.('');
+            }
+          })
+          .catch(() => {
+            opts.onEnd?.('');
+          });
         return;
       }
 
@@ -105,6 +118,20 @@ export function useASR(defaultOptions?: UseASROptions): UseASRReturn {
           logger.warn('[useASR] ASR error:', err);
           setError(err);
           opts.onError?.(err);
+          // Attempt Whisper fallback on ASR runtime error
+          (async () => {
+            try {
+              const text = await transcribeWithWhisper();
+              if (text && isListeningRef.current) {
+                setError(null);
+                isListeningRef.current = false;
+                setIsListening(false);
+                opts.onEnd?.(text);
+              }
+            } catch {
+              // Whisper also failed — stay in error state
+            }
+          })();
         },
         onEnd: () => {
           clearSafetyTimer();
@@ -129,6 +156,14 @@ export function useASR(defaultOptions?: UseASROptions): UseASRReturn {
         safetyTimerRef.current = null;
         setError('ASR timeout');
         opts.onEnd?.('');
+        // Attempt Whisper fallback asynchronously after reporting timeout
+        transcribeWithWhisper()
+          .then((text) => {
+            if (text) {
+              opts.onEnd?.(text);
+            }
+          })
+          .catch(() => {});
       }, 5000);
 
       asr.start();

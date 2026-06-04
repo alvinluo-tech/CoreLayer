@@ -66,6 +66,7 @@ vi.mock('./useTTSPlayback', () => ({
     totalSentences: 0,
     createQueue: vi.fn(() => ({
       enqueue: vi.fn(),
+      enqueueBatch: vi.fn(() => Promise.resolve()),
       setTotalExpected: vi.fn(),
       waitForCompletion: vi.fn(() => Promise.resolve()),
       stop: vi.fn(),
@@ -75,6 +76,7 @@ vi.mock('./useTTSPlayback', () => ({
       isPlaying: false,
     })),
     enqueue: vi.fn(),
+    enqueueBatch: vi.fn(() => Promise.resolve()),
     setTotalExpected: vi.fn(),
     waitForCompletion: vi.fn(() => Promise.resolve()),
     stop: vi.fn(),
@@ -87,6 +89,15 @@ vi.mock('./useTTSPlayback', () => ({
 vi.mock('./useBargeIn', () => ({
   useBargeIn: vi.fn(() => ({
     isMonitoring: false,
+    start: vi.fn(),
+    stop: vi.fn(),
+  })),
+}));
+
+vi.mock('./useConnectionHealth', () => ({
+  useConnectionHealth: vi.fn(() => ({
+    isConnected: true,
+    lastCheckTime: null,
     start: vi.fn(),
     stop: vi.fn(),
   })),

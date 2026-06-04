@@ -24,7 +24,7 @@ vi.mock('@/lib/webSpeechASR', () => ({
 }));
 
 vi.mock('@/lib/audioCapture', () => ({
-  startAudioCapture: vi.fn(),
+  startAudioCapture: vi.fn(() => Promise.reject(new Error('no mic in test'))),
   encodeWav: vi.fn(() => new Blob(['fake'], { type: 'audio/wav' })),
 }));
 
