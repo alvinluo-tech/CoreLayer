@@ -24,6 +24,9 @@ import toolRoutes from "./api/tools.js";
 import scheduledTaskRoutes from "./api/scheduled-tasks.js";
 import { startScheduler, setIdleCallback, consolidateOnIdle } from "./scheduler.js";
 import { registerDefaultReportSchedules } from "./reports/generator.js";
+import { registerSensor, startSensors, setSensorChangeHandler } from "./sensors/registry.js";
+import { createTodoSensor } from "./sensors/todo-sensor.js";
+import { createReadingSensor } from "./sensors/reading-sensor.js";
 
 // Run config migration from old locations to ~/.jarvis/
 runMigration();
@@ -162,3 +165,11 @@ startScheduler()
 
 // Register idle consolidation callback
 setIdleCallback(consolidateOnIdle);
+
+// Register and start sensors for proactive memory updates
+setSensorChangeHandler((event) => {
+  console.info(`[Sensor:${event.sensorName}] Change detected:`, event.changes.map((c) => c.detail).join("; "));
+});
+registerSensor(createTodoSensor());
+registerSensor(createReadingSensor());
+startSensors();
