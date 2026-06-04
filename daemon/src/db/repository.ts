@@ -66,6 +66,7 @@ export interface MessageRow {
   content: string;
   toolCalls: string | null;
   toolCallId: string | null;
+  parentMessageId: string | null;
   tokenCount: number | null;
   createdAt: string;
 }
@@ -146,7 +147,19 @@ export interface MessageInput {
   content: string;
   toolCalls?: string;
   toolCallId?: string;
+  parentMessageId?: string;
   tokenCount?: number;
+}
+
+export interface MessageTreeNode {
+  message: MessageRow;
+  children: MessageTreeNode[];
+}
+
+export interface SearchResult {
+  message: MessageRow;
+  conversationTitle: string;
+  snippet: string;
 }
 
 // ---- Row Types: New Tables ----
@@ -263,6 +276,11 @@ export interface ConversationRepository {
   getMessages(conversationId: string): Promise<MessageRow[]>;
   clear(): Promise<number>;
   updateTokenUsage(id: string, promptTokens: number, completionTokens: number): Promise<ConversationRow>;
+  editMessage(conversationId: string, messageId: string, newContent: string): Promise<MessageRow>;
+  getMessageBranches(messageId: string): Promise<MessageRow[]>;
+  getConversationTree(conversationId: string): Promise<MessageTreeNode[]>;
+  deleteMessage(messageId: string): Promise<boolean>;
+  searchMessages(query: string, limit?: number): Promise<SearchResult[]>;
 }
 
 // ---- Input Types: New Tables ----

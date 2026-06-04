@@ -77,6 +77,7 @@ sqlite.exec(`
     content TEXT NOT NULL DEFAULT '',
     tool_calls TEXT,
     tool_call_id TEXT,
+    parent_message_id TEXT,
     token_count INTEGER,
     created_at TEXT DEFAULT 'CURRENT_TIMESTAMP'
   );
@@ -190,6 +191,37 @@ try {
 } catch {
   // Column already exists — ignore
 }
+
+// Migration: add parent_message_id to messages (Phase 15)
+try {
+  sqlite.exec(`ALTER TABLE messages ADD COLUMN parent_message_id TEXT`);
+} catch {
+  // Column already exists — ignore
+}
+
+// Migration: FTS5 for message search (Phase 15)
+sqlite.exec(`
+  CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
+    content, role, conversation_id, content_rowid='rowid'
+  );
+
+  CREATE TRIGGER IF NOT EXISTS messages_ai AFTER INSERT ON messages BEGIN
+    INSERT INTO messages_fts(rowid, content, role, conversation_id)
+    VALUES (new.rowid, new.content, new.role, new.conversation_id);
+  END;
+
+  CREATE TRIGGER IF NOT EXISTS messages_ad AFTER DELETE ON messages BEGIN
+    INSERT INTO messages_fts(messages_fts, rowid, content, role, conversation_id)
+    VALUES('delete', old.rowid, old.content, old.role, old.conversation_id);
+  END;
+
+  CREATE TRIGGER IF NOT EXISTS messages_au AFTER UPDATE ON messages BEGIN
+    INSERT INTO messages_fts(messages_fts, rowid, content, role, conversation_id)
+    VALUES('delete', old.rowid, old.content, old.role, old.conversation_id);
+    INSERT INTO messages_fts(rowid, content, role, conversation_id)
+    VALUES (new.rowid, new.content, new.role, new.conversation_id);
+  END;
+`);
 
 // Migration: create scheduled_tasks table (Phase 14)
 sqlite.exec(`

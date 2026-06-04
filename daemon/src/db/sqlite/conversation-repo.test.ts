@@ -26,6 +26,7 @@ function createTestDb() {
       content TEXT NOT NULL DEFAULT '',
       tool_calls TEXT,
       tool_call_id TEXT,
+      parent_message_id TEXT,
       token_count INTEGER,
       created_at TEXT DEFAULT 'CURRENT_TIMESTAMP'
     );

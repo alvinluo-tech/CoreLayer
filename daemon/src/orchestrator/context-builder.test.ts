@@ -98,6 +98,7 @@ function makeMessage(
     content,
     toolCalls: null,
     toolCallId: null,
+    parentMessageId: null,
     tokenCount: null,
     createdAt: "2026-01-01",
   };

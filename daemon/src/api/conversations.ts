@@ -235,5 +235,208 @@ app.post("/:id/messages/stream", async (c) => {
   }
 });
 
+// PUT /:id/messages/:msgId - Edit a message's content
+app.put("/:id/messages/:msgId", async (c) => {
+  try {
+    const id = c.req.param("id");
+    const msgId = c.req.param("msgId");
+    const body = await c.req.json<{ content: string }>();
+
+    if (!body.content?.trim()) {
+      return apiError(c, "Message content is required", 400);
+    }
+
+    const conversation = await getRepositories().conversations.getById(id);
+    if (!conversation) {
+      return apiError(c, "Conversation not found", 404);
+    }
+
+    const messages = await getRepositories().conversations.getMessages(id);
+    const targetMsg = messages.find((m) => m.id === msgId);
+    if (!targetMsg) {
+      return apiError(c, "Message not found", 404);
+    }
+
+    if (targetMsg.role !== "user") {
+      return apiError(c, "Only user messages can be edited", 400);
+    }
+
+    const updated = await getRepositories().conversations.editMessage(id, msgId, body.content);
+    return c.json({ message: updated });
+  } catch (err) {
+    logError("conversations/editMessage", err);
+    return apiError(c, "Failed to edit message", 500);
+  }
+});
+
+// POST /:id/messages/:msgId/regenerate - Regenerate assistant response
+app.post("/:id/messages/:msgId/regenerate", async (c) => {
+  try {
+    const id = c.req.param("id");
+    const msgId = c.req.param("msgId");
+
+    const conversation = await getRepositories().conversations.getById(id);
+    if (!conversation) {
+      return apiError(c, "Conversation not found", 404);
+    }
+
+    const messages = await getRepositories().conversations.getMessages(id);
+    const targetMsg = messages.find((m) => m.id === msgId);
+    if (!targetMsg) {
+      return apiError(c, "Message not found", 404);
+    }
+
+    if (targetMsg.role !== "user") {
+      return apiError(c, "Can only regenerate after a user message", 400);
+    }
+
+    const targetIndex = messages.indexOf(targetMsg);
+    const nextMsg = messages[targetIndex + 1];
+
+    if (nextMsg && nextMsg.role === "assistant") {
+      await getRepositories().conversations.deleteMessage(nextMsg.id);
+    }
+
+    const result = await handleMessageInConversation(id, targetMsg.content);
+    return c.json({
+      message: result.assistantMessage,
+      conversation: result.conversation,
+    });
+  } catch (err) {
+    logError("conversations/regenerate", err);
+    const message = err instanceof Error ? err.message : String(err);
+    return apiError(c, message, 500);
+  }
+});
+
+// GET /:id/messages/:msgId/branches - Get branch alternatives for a message
+app.get("/:id/messages/:msgId/branches", async (c) => {
+  try {
+    const id = c.req.param("id");
+    const msgId = c.req.param("msgId");
+
+    const conversation = await getRepositories().conversations.getById(id);
+    if (!conversation) {
+      return apiError(c, "Conversation not found", 404);
+    }
+
+    const branches = await getRepositories().conversations.getMessageBranches(msgId);
+    const currentIndex = branches.findIndex((b) => b.id === msgId);
+
+    return c.json({
+      branches,
+      currentIndex,
+      total: branches.length,
+    });
+  } catch (err) {
+    logError("conversations/getBranches", err);
+    return apiError(c, "Failed to get branches", 500);
+  }
+});
+
+// GET /:id/tree - Get conversation tree structure
+app.get("/:id/tree", async (c) => {
+  try {
+    const id = c.req.param("id");
+
+    const conversation = await getRepositories().conversations.getById(id);
+    if (!conversation) {
+      return apiError(c, "Conversation not found", 404);
+    }
+
+    const tree = await getRepositories().conversations.getConversationTree(id);
+    return c.json({ tree });
+  } catch (err) {
+    logError("conversations/getTree", err);
+    return apiError(c, "Failed to get conversation tree", 500);
+  }
+});
+
+// GET /messages/search?q=keyword&limit=20 - Search across all conversations
+app.get("/messages/search", async (c) => {
+  try {
+    const query = c.req.query("q");
+    if (!query?.trim()) {
+      return apiError(c, "Search query is required", 400);
+    }
+
+    const limit = parseInt(c.req.query("limit") ?? "20", 10);
+    const results = await getRepositories().conversations.searchMessages(query, limit);
+    return c.json({ results });
+  } catch (err) {
+    logError("conversations/search", err);
+    return apiError(c, "Failed to search messages", 500);
+  }
+});
+
+// GET /:id/export?format=markdown|json - Export conversation
+app.get("/:id/export", async (c) => {
+  try {
+    const id = c.req.param("id");
+    const format = c.req.query("format") ?? "markdown";
+
+    const conversation = await getRepositories().conversations.getById(id);
+    if (!conversation) {
+      return apiError(c, "Conversation not found", 404);
+    }
+
+    const messages = await getRepositories().conversations.getMessages(id);
+
+    if (format === "json") {
+      return c.json({
+        id: conversation.id,
+        title: conversation.title,
+        model: conversation.modelUsed,
+        messages: messages.map((m) => ({
+          role: m.role,
+          content: m.content,
+          toolCalls: m.toolCalls ? JSON.parse(m.toolCalls) : undefined,
+          createdAt: m.createdAt,
+        })),
+        exportedAt: new Date().toISOString(),
+      });
+    }
+
+    const lines: string[] = [
+      `# ${conversation.title}`,
+      "",
+      `**Model**: ${conversation.modelUsed}`,
+      `**Date**: ${conversation.createdAt}`,
+      "",
+      "---",
+      "",
+    ];
+
+    for (const msg of messages) {
+      if (msg.role === "user") {
+        lines.push("## User");
+        lines.push(msg.content);
+        lines.push("");
+      } else if (msg.role === "assistant") {
+        lines.push("## Assistant");
+        lines.push(msg.content);
+        if (msg.toolCalls) {
+          const toolCalls = JSON.parse(msg.toolCalls) as { name: string; result: unknown }[];
+          for (const tc of toolCalls) {
+            lines.push("");
+            lines.push(`### Tool: ${tc.name}`);
+            lines.push("```json");
+            lines.push(JSON.stringify(tc.result, null, 2));
+            lines.push("```");
+          }
+        }
+        lines.push("");
+      }
+      lines.push("---");
+      lines.push("");
+    }
+
+    return c.text(lines.join("\n"), 200, { "Content-Type": "text/markdown; charset=utf-8" });
+  } catch (err) {
+    logError("conversations/export", err);
+    return apiError(c, "Failed to export conversation", 500);
+  }
+});
+
 
 export default app;

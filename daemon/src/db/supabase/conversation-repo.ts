@@ -4,6 +4,8 @@ import type {
   ConversationRow,
   MessageRow,
   MessageInput,
+  MessageTreeNode,
+  SearchResult,
 } from "../repository.js";
 
 function toConversationRow(row: Record<string, unknown>): ConversationRow {
@@ -28,6 +30,7 @@ function toMessageRow(row: Record<string, unknown>): MessageRow {
     content: (row.content as string) ?? "",
     toolCalls: (row.tool_calls as string) ?? null,
     toolCallId: (row.tool_call_id as string) ?? null,
+    parentMessageId: (row.parent_message_id as string) ?? null,
     tokenCount: (row.token_count as number) ?? null,
     createdAt: (row.created_at as string) ?? "",
   };
@@ -174,6 +177,118 @@ export function createSupabaseConversationRepo(): ConversationRepository {
 
       if (error) throw new Error(`Failed to update token usage: ${error.message}`);
       return toConversationRow(row);
+    },
+
+    async editMessage(conversationId: string, messageId: string, newContent: string): Promise<MessageRow> {
+      const { data: row, error } = await client
+        .from("messages")
+        .update({ content: newContent })
+        .eq("id", messageId)
+        .select()
+        .single();
+
+      if (error) throw new Error(`Failed to edit message: ${error.message}`);
+
+      await client
+        .from("conversations")
+        .update({ updated_at: new Date().toISOString() })
+        .eq("id", conversationId);
+
+      return toMessageRow(row);
+    },
+
+    async getMessageBranches(messageId: string): Promise<MessageRow[]> {
+      const { data: targetMsg } = await client
+        .from("messages")
+        .select("parent_message_id, conversation_id")
+        .eq("id", messageId)
+        .single();
+
+      if (!targetMsg) return [];
+
+      let query = client.from("messages").select("*");
+
+      if (targetMsg.parent_message_id) {
+        query = query.eq("parent_message_id", targetMsg.parent_message_id);
+      } else {
+        query = query
+          .is("parent_message_id", null)
+          .eq("conversation_id", targetMsg.conversation_id);
+      }
+
+      const { data, error } = await query;
+      if (error) throw new Error(`Failed to get branches: ${error.message}`);
+      return (data ?? []).map(toMessageRow);
+    },
+
+    async getConversationTree(conversationId: string): Promise<MessageTreeNode[]> {
+      const { data, error } = await client
+        .from("messages")
+        .select("*")
+        .eq("conversation_id", conversationId)
+        .order("created_at", { ascending: true });
+
+      if (error) throw new Error(`Failed to get tree: ${error.message}`);
+
+      const rows = (data ?? []).map(toMessageRow);
+      const nodeMap = new Map<string, MessageTreeNode>();
+      for (const msg of rows) {
+        nodeMap.set(msg.id, { message: msg, children: [] });
+      }
+
+      const roots: MessageTreeNode[] = [];
+      for (const msg of rows) {
+        const node = nodeMap.get(msg.id)!;
+        if (msg.parentMessageId && nodeMap.has(msg.parentMessageId)) {
+          nodeMap.get(msg.parentMessageId)!.children.push(node);
+        } else {
+          roots.push(node);
+        }
+      }
+
+      return roots;
+    },
+
+    async deleteMessage(messageId: string): Promise<boolean> {
+      const { error } = await client
+        .from("messages")
+        .delete()
+        .eq("id", messageId);
+      return !error;
+    },
+
+    async searchMessages(query: string, limit: number = 20): Promise<SearchResult[]> {
+      const { data: ftsRows, error: ftsError } = await client
+        .rpc("search_messages", { search_query: query, result_limit: limit });
+
+      if (ftsError) {
+        throw new Error(`Failed to search messages: ${ftsError.message}`);
+      }
+
+      const results: SearchResult[] = [];
+      for (const ftsRow of ftsRows ?? []) {
+        const { data: msgRow } = await client
+          .from("messages")
+          .select("*")
+          .eq("id", ftsRow.msg_id)
+          .single();
+
+        if (msgRow) {
+          const { data: convRow } = await client
+            .from("conversations")
+            .select("title")
+            .eq("id", msgRow.conversation_id)
+            .single();
+
+          results.push({
+            message: toMessageRow(msgRow),
+            conversationTitle: convRow?.title ?? "Unknown",
+            snippet: ftsRow.snippet ?? msgRow.content,
+          });
+        }
+      }
+
+      return results;
     },
   };
 }

@@ -5,6 +5,8 @@ import type {
   ConversationRow,
   MessageRow,
   MessageInput,
+  MessageTreeNode,
+  SearchResult,
 } from "../repository.js";
 
 export function createSqliteConversationRepo(): ConversationRepository {
@@ -84,6 +86,7 @@ export function createSqliteConversationRepo(): ConversationRepository {
           content: data.content,
           toolCalls: data.toolCalls ?? null,
           toolCallId: data.toolCallId ?? null,
+          parentMessageId: data.parentMessageId ?? null,
           tokenCount: data.tokenCount ?? null,
           createdAt: now,
         })
@@ -104,6 +107,7 @@ export function createSqliteConversationRepo(): ConversationRepository {
         content: data.content,
         toolCalls: data.toolCalls ?? null,
         toolCallId: data.toolCallId ?? null,
+        parentMessageId: data.parentMessageId ?? null,
         tokenCount: data.tokenCount ?? null,
         createdAt: now,
       };
@@ -140,6 +144,121 @@ export function createSqliteConversationRepo(): ConversationRepository {
         .where(eq(schema.conversations.id, id))
         .get();
       return row as ConversationRow;
+    },
+
+    async editMessage(conversationId: string, messageId: string, newContent: string): Promise<MessageRow> {
+      const now = new Date().toISOString();
+
+      db.update(schema.messages)
+        .set({ content: newContent })
+        .where(eq(schema.messages.id, messageId))
+        .run();
+
+      db.update(schema.conversations)
+        .set({ updatedAt: now })
+        .where(eq(schema.conversations.id, conversationId))
+        .run();
+
+      const row = db
+        .select()
+        .from(schema.messages)
+        .where(eq(schema.messages.id, messageId))
+        .get();
+      return row as MessageRow;
+    },
+
+    async getMessageBranches(messageId: string): Promise<MessageRow[]> {
+      const targetMsg = db
+        .select()
+        .from(schema.messages)
+        .where(eq(schema.messages.id, messageId))
+        .get() as MessageRow | undefined;
+
+      if (!targetMsg) return [];
+
+      if (targetMsg.parentMessageId) {
+        const rows = db
+          .select()
+          .from(schema.messages)
+          .where(eq(schema.messages.parentMessageId, targetMsg.parentMessageId))
+          .all();
+        return rows as MessageRow[];
+      }
+
+      const rows = db
+        .select()
+        .from(schema.messages)
+        .where(sql`${schema.messages.parentMessageId} IS NULL AND ${schema.messages.conversationId} = ${targetMsg.conversationId}`)
+        .all();
+      return rows as MessageRow[];
+    },
+
+    async getConversationTree(conversationId: string): Promise<MessageTreeNode[]> {
+      const rows = db
+        .select()
+        .from(schema.messages)
+        .where(eq(schema.messages.conversationId, conversationId))
+        .all() as MessageRow[];
+
+      const nodeMap = new Map<string, MessageTreeNode>();
+      for (const msg of rows) {
+        nodeMap.set(msg.id, { message: msg, children: [] });
+      }
+
+      const roots: MessageTreeNode[] = [];
+      for (const msg of rows) {
+        const node = nodeMap.get(msg.id)!;
+        if (msg.parentMessageId && nodeMap.has(msg.parentMessageId)) {
+          nodeMap.get(msg.parentMessageId)!.children.push(node);
+        } else {
+          roots.push(node);
+        }
+      }
+
+      return roots;
+    },
+
+    async deleteMessage(messageId: string): Promise<boolean> {
+      const result = db
+        .delete(schema.messages)
+        .where(eq(schema.messages.id, messageId))
+        .run();
+      return result.changes > 0;
+    },
+
+    async searchMessages(query: string, limit: number = 20): Promise<SearchResult[]> {
+      const ftsRows = db.all(
+        sql`SELECT m.id as msg_id, highlight(messages_fts, 0, '<mark>', '</mark>') as snippet
+            FROM messages_fts fts
+            JOIN messages m ON m.rowid = fts.rowid
+            WHERE messages_fts MATCH ${query}
+            LIMIT ${limit}`
+      ) as { msg_id: string; snippet: string }[];
+
+      const results: SearchResult[] = [];
+      for (const ftsRow of ftsRows) {
+        const msgRow = db
+          .select()
+          .from(schema.messages)
+          .where(eq(schema.messages.id, ftsRow.msg_id))
+          .get() as MessageRow | undefined;
+
+        if (msgRow) {
+          const convRow = db
+            .select()
+            .from(schema.conversations)
+            .where(eq(schema.conversations.id, msgRow.conversationId))
+            .get() as ConversationRow | undefined;
+
+          results.push({
+            message: msgRow,
+            conversationTitle: convRow?.title ?? "Unknown",
+            snippet: ftsRow.snippet,
+          });
+        }
+      }
+
+      return results;
     },
   };
 }

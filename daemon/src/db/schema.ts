@@ -71,6 +71,7 @@ export const messages = sqliteTable("messages", {
   content: text("content").notNull().default(""),
   toolCalls: text("tool_calls"), // JSON array stored as text
   toolCallId: text("tool_call_id"),
+  parentMessageId: text("parent_message_id"),
   tokenCount: integer("token_count"),
   createdAt: text("created_at").default("CURRENT_TIMESTAMP").notNull(),
 });
