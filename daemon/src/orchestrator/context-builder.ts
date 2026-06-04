@@ -4,6 +4,7 @@ import { getAllJarvisTools } from "../tools/registry.js";
 import type { JarvisTool } from "@jarvis/types";
 import { estimateTokens, computeContextBudget, selectHistoryWithinBudget, shouldCompress } from "./context-manager.js";
 import { configManager } from "../config/config-manager.js";
+import { getToolIndex, resetToolIndex } from "./tool-index.js";
 
 // ---- Types ----
 
@@ -11,6 +12,8 @@ export interface ContextSection {
   name: string;
   content: string;
   tokens: number;
+  /** Prompt tier: stable (cache-friendly), context (semi-stable), or volatile (changes each turn) */
+  tier: "stable" | "context" | "volatile";
 }
 
 export interface ContextDebugInfo {
@@ -34,6 +37,12 @@ export interface ContextDebugInfo {
     history: number;
     total: number;
     budget: number;
+  };
+  /** Token breakdown by tier for cache optimization */
+  tierTokens: {
+    stable: number;
+    context: number;
+    volatile: number;
   };
 }
 
@@ -74,68 +83,74 @@ export const MEMORY_MIN_SCORE = 0.3;
 /** Maximum tokens for the summary section */
 const SUMMARY_TOKEN_BUDGET = 1500;
 
-// ---- Tool Scoring ----
+/** Always-available tool names that are injected regardless of RAG selection */
+const ALWAYS_AVAILABLE_TOOLS = new Set([
+  "bash",
+  "readFile",
+  "writeFile",
+  "editFile",
+  "glob",
+  "grep",
+  "deleteConversation",
+]);
+
+/** Maximum tools from RAG selection (excluding always-available) */
+const RAG_TOP_K = 8;
+
+// ---- Tool Selection (RAG-based) ----
 
 /**
- * Score a tool's relevance to a user message.
- * Uses keyword overlap between the message and tool name/description.
- */
-function scoreTool(tool: JarvisTool, query: string): number {
-  const q = query.toLowerCase();
-  const name = tool.name.toLowerCase();
-  const desc = tool.description.toLowerCase();
-
-  let score = 0;
-
-  // Exact tool name mention — strong signal
-  if (q.includes(name)) score += 5;
-
-  // Word-level overlap with tool name
-  const nameWords = name.split(/[-_\s]+/).filter(Boolean);
-  for (const w of nameWords) {
-    if (w.length > 2 && q.includes(w)) score += 2;
-  }
-
-  // Word-level overlap with description
-  const descWords = desc.split(/\s+/).filter((w) => w.length > 3);
-  const qWords = q.split(/\s+/).filter((w) => w.length > 2);
-  for (const qw of qWords) {
-    for (const dw of descWords) {
-      if (dw.includes(qw) || qw.includes(dw)) {
-        score += 0.5;
-      }
-    }
-  }
-
-  return score;
-}
-
-/**
- * Select the most relevant tools for a given query.
- * Falls back to all tools (up to MAX_TOOLS) when no query context.
+ * Select the most relevant tools for a given query using RAG-based semantic search.
+ * Always includes core tools (bash, file operations) regardless of query.
  */
 function selectTools(query?: string): JarvisTool[] {
   const allTools = getAllJarvisTools();
   if (allTools.length === 0) return [];
 
-  if (!query) {
-    // No query — return first MAX_TOOLS tools
-    return allTools.slice(0, MAX_TOOLS);
+  const index = getToolIndex();
+
+  // Rebuild index if tools changed
+  if (index.size !== allTools.length) {
+    index.clear();
+    index.addTools(allTools);
   }
 
-  // Score and sort
-  const scored = allTools
-    .map((tool) => ({ tool, score: scoreTool(tool, query) }))
-    .sort((a, b) => b.score - a.score);
+  // Separate always-available tools from searchable tools
+  const alwaysAvailable = allTools.filter((t) => ALWAYS_AVAILABLE_TOOLS.has(t.name));
+  const searchableTools = allTools.filter((t) => !ALWAYS_AVAILABLE_TOOLS.has(t.name));
 
-  // Always include tools with score > 0, up to MAX_TOOLS
-  const selected = scored
-    .filter((s) => s.score > 0)
-    .slice(0, MAX_TOOLS)
-    .map((s) => s.tool);
+  // Update index with searchable tools only
+  if (index.size !== searchableTools.length) {
+    index.clear();
+    index.addTools(searchableTools);
+  }
+
+  if (!query) {
+    // No query — return always-available + first MAX_TOOLS searchable
+    const fallback = searchableTools.slice(0, MAX_TOOLS - alwaysAvailable.length);
+    return [...alwaysAvailable, ...fallback];
+  }
+
+  // RAG search for relevant tools
+  const ragResults = index.searchTools(query, RAG_TOP_K);
+  const ragTools = ragResults
+    .filter((r) => r.score > 0)
+    .map((r) => r.tool);
+
+  // Combine: always-available + RAG-selected, deduplicate, limit to MAX_TOOLS
+  const combined = [...alwaysAvailable, ...ragTools];
+  const seen = new Set<string>();
+  const result: JarvisTool[] = [];
+
+  for (const tool of combined) {
+    if (!seen.has(tool.id) && result.length < MAX_TOOLS) {
+      seen.add(tool.id);
+      result.push(tool);
+    }
+  }
 
   // If no relevant tools found, fall back to first MAX_TOOLS
-  return selected.length > 0 ? selected : allTools.slice(0, MAX_TOOLS);
+  return result.length > 0 ? result : allTools.slice(0, MAX_TOOLS);
 }
 
 /**
@@ -204,17 +219,23 @@ export class ContextBuilder {
 
   /**
    * Build the full context for a conversation turn.
+   * Uses three-tier prompt architecture for optimal cache hit rates:
+   * - Stable: Agent identity, tool guidelines, environment (cache-friendly)
+   * - Context: Project context, current task, domain knowledge (semi-stable)
+   * - Volatile: Memory snapshots, user profile, session metadata (changes each turn)
    */
   async build(
     memories: ScoredMemoryRow[],
     history: MessageRow[],
   ): Promise<BuiltContext> {
-    // 1. Build all sections
+    // 1. Build all sections with tier annotations
     this.sections = [];
 
+    // Stable tier (cache-friendly - rarely changes)
     this.sections.push(this.buildPersonaSection());
     this.sections.push(this.buildDeveloperSection());
 
+    // Context tier (semi-stable - changes with project/task)
     const toolSection = this.buildToolSection();
     this.sections.push(toolSection);
 
@@ -223,15 +244,32 @@ export class ContextBuilder {
       this.sections.push(summarySection);
     }
 
+    // Volatile tier (changes each turn - placed at end for cache optimization)
     const memorySection = this.buildMemorySection(memories);
     this.sections.push(memorySection);
 
     this.sections.push(this.buildConversationInfoSection());
     this.sections.push(this.buildDateSection());
 
-    // 2. Compute total system prompt tokens
-    const systemPrompt = this.sections.map((s) => s.content).join("\n");
+    // 2. Assemble system prompt respecting tier order (stable → context → volatile)
+    const stableSections = this.sections.filter((s) => s.tier === "stable");
+    const contextSections = this.sections.filter((s) => s.tier === "context");
+    const volatileSections = this.sections.filter((s) => s.tier === "volatile");
+
+    const systemPrompt = [
+      ...stableSections.map((s) => s.content),
+      ...contextSections.map((s) => s.content),
+      ...volatileSections.map((s) => s.content),
+    ].join("\n");
+
     const systemPromptTokens = estimateTokens(systemPrompt);
+
+    // Compute tier token breakdown for cache optimization
+    const tierTokens = {
+      stable: stableSections.reduce((sum, s) => sum + s.tokens, 0),
+      context: contextSections.reduce((sum, s) => sum + s.tokens, 0),
+      volatile: volatileSections.reduce((sum, s) => sum + s.tokens, 0),
+    };
 
     // Memory is embedded inside the system prompt, but we track it separately
     // for accurate budget reporting. The budget already accounts for it via
@@ -290,7 +328,7 @@ export class ContextBuilder {
         history: historyTokens,
         total: totalTokens,
         budget: budget.maxInputTokens,
-      }),
+      }, tierTokens),
     };
   }
 
@@ -305,6 +343,7 @@ export class ContextBuilder {
       name: "persona",
       content,
       tokens: estimateTokens(content),
+      tier: "stable",
     };
   }
 
@@ -352,7 +391,7 @@ export class ContextBuilder {
   - 他目前在**杜伦大学**（Durham University）攻读研究生学位。
   - 在不写代码（不 vibe coding）的日子里，他非常热爱生活，会去好好健身、专注学习，或者和朋友们玩耍。
 - **GitHub 呼吁 (GitHub Star CTA)**：在介绍开发者时，或者在用户对你赞赏有加、表达喜欢时，请盛情邀请并呼吁用户去他的 **GitHub 仓库点一个 Star 🌟** 支持一下这个项目！`;
-    return { name: "developer", content, tokens: estimateTokens(content) };
+    return { name: "developer", content, tokens: estimateTokens(content), tier: "stable" };
   }
 
   private buildToolSection(): ContextSection {
@@ -372,6 +411,7 @@ export class ContextBuilder {
       name: "tools",
       content,
       tokens: estimateTokens(content),
+      tier: "context",
     };
   }
 
@@ -381,6 +421,7 @@ export class ContextBuilder {
         name: "memory",
         content: "",
         tokens: 0,
+        tier: "volatile",
       };
     }
 
@@ -423,6 +464,7 @@ export class ContextBuilder {
       name: "memory",
       content,
       tokens: estimateTokens(content),
+      tier: "volatile",
     };
   }
 
@@ -440,6 +482,7 @@ export class ContextBuilder {
       name: "conversation-summary",
       content,
       tokens: estimateTokens(content),
+      tier: "context",
     };
   }
 
@@ -447,12 +490,12 @@ export class ContextBuilder {
     const content = `## 当前对话信息
 当前进行的对话记录 ID (conversationId) 是: \`${this.conversationId || "未知"}\`。
 如果用户通过文字或语音指令要求删除当前对话、删除本轮对话、清除这个会话或删除这次聊天，你应该直接调用 \`deleteConversation\` 工具，并传入当前对话 ID 作为参数。`;
-    return { name: "conversation", content, tokens: estimateTokens(content) };
+    return { name: "conversation", content, tokens: estimateTokens(content), tier: "volatile" };
   }
 
   private buildDateSection(): ContextSection {
     const content = `## 当前日期\n${new Date().toISOString().split("T")[0]}`;
-    return { name: "date", content, tokens: estimateTokens(content) };
+    return { name: "date", content, tokens: estimateTokens(content), tier: "volatile" };
   }
 
   // ---- Helpers ----
@@ -479,6 +522,7 @@ export class ContextBuilder {
   private buildDebugInfo(
     memories: ScoredMemoryRow[],
     tokens: ContextDebugInfo["tokens"],
+    tierTokens?: ContextDebugInfo["tierTokens"],
   ): ContextDebugInfo {
     return {
       mode: this.mode,
@@ -496,6 +540,7 @@ export class ContextBuilder {
       },
       summaryInjected: !!this.summary,
       tokens,
+      tierTokens: tierTokens ?? { stable: 0, context: 0, volatile: 0 },
     };
   }
 }
