@@ -141,4 +141,122 @@ describe('BargeInStateMachine', () => {
     sm.feed(80, 60);
     expect(sm.getState()).toBe('ducking');
   });
+
+  // ---- Decay Detection (18.1) ----
+
+  it('returns restore action when voice stops during ducking', () => {
+    const sm = new BargeInStateMachine({
+      threshold: 50,
+      duckTriggerMs: 50,
+      confirmMs: 160,
+      silenceResetMs: 200,
+      decayMs: 100,
+    });
+
+    // Reach ducking
+    sm.feed(80, 0);
+    sm.feed(80, 30);
+    sm.feed(80, 60); // -> ducking
+
+    // Voice stops, silence accumulates
+    sm.feed(10, 80); // 20ms silence
+    sm.feed(10, 120); // 60ms silence
+
+    // 110ms silence > 100ms decayMs → restore
+    const action = sm.feed(10, 170);
+    expect(action).toBe('restore');
+    expect(sm.getState()).toBe('idle');
+  });
+
+  it('returns restore action when voice stops during ducking after brief resume', () => {
+    const sm = new BargeInStateMachine({
+      threshold: 50,
+      duckTriggerMs: 50,
+      confirmMs: 160,
+      decayMs: 100,
+    });
+
+    // Reach ducking
+    sm.feed(80, 0);
+    sm.feed(80, 30);
+    sm.feed(80, 60); // -> ducking
+
+    // Brief silence (30ms), voice resumes briefly, then stops again
+    sm.feed(10, 80); // 20ms silence
+    sm.feed(80, 100); // voice resumes, silence reset
+    sm.feed(10, 120); // 20ms silence
+    sm.feed(10, 170); // 70ms silence
+
+    // 130ms silence > 100ms decayMs → restore
+    const action = sm.feed(10, 230);
+    expect(action).toBe('restore');
+    expect(sm.getState()).toBe('idle');
+  });
+
+  it('does not restore if voice resumes before decay threshold', () => {
+    const sm = new BargeInStateMachine({
+      threshold: 50,
+      duckTriggerMs: 50,
+      confirmMs: 160,
+      decayMs: 100,
+    });
+
+    // Reach ducking
+    sm.feed(80, 0);
+    sm.feed(80, 30);
+    sm.feed(80, 60); // -> ducking
+
+    // Brief silence, then voice resumes
+    sm.feed(10, 80); // 20ms silence
+    sm.feed(80, 100); // voice resumes at 40ms silence, below 100ms decay
+
+    // Should still be ducking
+    expect(sm.getState()).toBe('ducking');
+
+    // Continue to confirm
+    const action = sm.feed(80, 220);
+    expect(action).toBe('barge-in');
+  });
+
+  it('decayMs defaults to silenceResetMs when not specified', () => {
+    const sm = new BargeInStateMachine({
+      threshold: 50,
+      duckTriggerMs: 50,
+      silenceResetMs: 100,
+    });
+
+    // Reach ducking
+    sm.feed(80, 0);
+    sm.feed(80, 30);
+    sm.feed(80, 60); // -> ducking
+
+    // Silence for > decayMs (defaults to silenceResetMs=100)
+    sm.feed(10, 80);
+
+    // 125ms silence > 100ms → restore
+    const action = sm.feed(10, 185);
+    expect(action).toBe('restore');
+  });
+
+  it('reset clears decay tracking', () => {
+    const sm = new BargeInStateMachine({
+      threshold: 50,
+      duckTriggerMs: 50,
+      decayMs: 100,
+    });
+
+    // Reach ducking
+    sm.feed(80, 0);
+    sm.feed(80, 30);
+    sm.feed(80, 60); // -> ducking
+
+    // Partial decay then reset
+    sm.feed(10, 80);
+    sm.feed(10, 120); // 60ms silence
+    sm.reset();
+
+    // After reset, should be in idle
+    expect(sm.getState()).toBe('idle');
+    expect(sm.feed(80, 200)).toBe('none');
+  });
 });

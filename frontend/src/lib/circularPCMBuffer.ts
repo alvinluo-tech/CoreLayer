@@ -12,7 +12,7 @@ export interface CircularPCMBufferConfig {
 }
 
 export const DEFAULT_CIRCULAR_BUFFER_CONFIG: CircularPCMBufferConfig = {
-  maxChunks: 12, // ~300ms at 25ms per chunk (4096 samples @ 16kHz)
+  maxChunks: 20, // ~500ms at 25ms per chunk (4096 samples @ 16kHz)
 };
 
 export class CircularPCMBuffer {

@@ -21,6 +21,8 @@ export interface BargeInConfig {
   confirmMs: number;
   /** Milliseconds of silence to reset from ducking back to idle */
   silenceResetMs: number;
+  /** Milliseconds of silence to trigger volume restore after ducking. Defaults to silenceResetMs */
+  decayMs: number;
 }
 
 export const DEFAULT_BARGE_IN_CONFIG: BargeInConfig = {
@@ -28,9 +30,10 @@ export const DEFAULT_BARGE_IN_CONFIG: BargeInConfig = {
   duckTriggerMs: 50,
   confirmMs: 160,
   silenceResetMs: 200,
+  decayMs: 200,
 };
 
-export type BargeInAction = 'none' | 'duck' | 'barge-in';
+export type BargeInAction = 'none' | 'duck' | 'barge-in' | 'restore';
 
 export class BargeInStateMachine {
   private state: BargeInState = 'idle';
@@ -40,7 +43,12 @@ export class BargeInStateMachine {
   private lastTimestamp: number | null = null;
 
   constructor(config?: Partial<BargeInConfig>) {
-    this.config = { ...DEFAULT_BARGE_IN_CONFIG, ...config };
+    const merged = { ...DEFAULT_BARGE_IN_CONFIG, ...config };
+    // decayMs defaults to silenceResetMs when not explicitly provided
+    if (config && !('decayMs' in config)) {
+      merged.decayMs = merged.silenceResetMs;
+    }
+    this.config = merged;
   }
 
   getState(): BargeInState {
@@ -89,10 +97,12 @@ export class BargeInStateMachine {
           }
         } else {
           this.silenceAccumMs += elapsed;
-          if (this.silenceAccumMs >= this.config.silenceResetMs) {
+          if (this.silenceAccumMs >= this.config.decayMs) {
+            // Decay detected: voice stopped, restore TTS volume
             this.state = 'idle';
             this.voiceAccumMs = 0;
             this.silenceAccumMs = 0;
+            return 'restore';
           }
         }
         return 'none';

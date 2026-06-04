@@ -104,4 +104,38 @@ describe('CircularPCMBuffer', () => {
     expect(Array.from(result[1]!)).toEqual([8]);
     expect(Array.from(result[2]!)).toEqual([9]);
   });
+
+  it('default config holds ~500ms of audio (20 chunks at 25ms/chunk)', () => {
+    const buf = new CircularPCMBuffer();
+    // Push 25 chunks — should only keep the last 20
+    for (let i = 0; i < 25; i++) {
+      buf.push(new Float32Array([i]));
+    }
+    expect(buf.size).toBe(20);
+
+    const result = buf.flush();
+    expect(result).toHaveLength(20);
+    // Should contain chunks 5-24 (the last 20)
+    expect(Array.from(result[0]!)).toEqual([5]);
+    expect(Array.from(result[19]!)).toEqual([24]);
+  });
+
+  it('captures pre-interruption audio for ASR', () => {
+    const buf = new CircularPCMBuffer({ maxChunks: 20 });
+
+    // Simulate: 10 chunks of TTS-era mic noise, then 5 chunks of user speech
+    for (let i = 0; i < 10; i++) {
+      buf.push(new Float32Array([0.01])); // quiet noise
+    }
+    for (let i = 0; i < 5; i++) {
+      buf.push(new Float32Array([0.8])); // loud user speech
+    }
+
+    // Flush should capture the last 15 chunks (5 speech + 10 noise)
+    const audio = buf.flush();
+    expect(audio).toHaveLength(15);
+    // Last 5 chunks should be the loud speech (check approximate equality for float32)
+    expect(audio[10]![0]).toBeCloseTo(0.8, 5);
+    expect(audio[14]![0]).toBeCloseTo(0.8, 5);
+  });
 });

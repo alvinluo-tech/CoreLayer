@@ -62,12 +62,11 @@ vi.mock("../tools/registry.js", () => ({
 
 // Mock tool-index to reset global state
 vi.mock("./tool-index.js", async () => {
-  const actual = await vi.importActual("./tool-index.js");
+  const actual = (await vi.importActual("./tool-index.js")) as typeof import("./tool-index.js");
   return {
     ...actual,
     getToolIndex: () => {
-      const { ToolIndex } = actual;
-      return new ToolIndex();
+      return new actual.ToolIndex();
     },
   };
 });

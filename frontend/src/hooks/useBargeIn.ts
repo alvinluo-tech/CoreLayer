@@ -44,7 +44,7 @@ export function useBargeIn(
     let animationFrameId = 0;
 
     const stateMachine = new BargeInStateMachine();
-    const preBuffer = new CircularPCMBuffer({ maxChunks: 12 }); // ~300ms at 25ms/chunk
+    const preBuffer = new CircularPCMBuffer(); // ~500ms at 25ms/chunk (default)
 
     const stop = () => {
       stopped = true;
@@ -134,17 +134,23 @@ export function useBargeIn(
             const action = stateMachine.feed(avg, now);
 
             if (action === 'duck') {
-              // Stage 1: Duck TTS volume
-              logger.debug('[useBargeIn] Stage 1: Ducking TTS volume');
+              // Stage 1: Duck TTS volume to 50%
+              logger.debug('[useBargeIn] Stage 1: Ducking TTS volume to 50%');
               if (audioQueue) {
-                audioQueue.setVolume(0.15);
+                audioQueue.setVolume(0.5);
               }
             } else if (action === 'barge-in') {
-              // Stage 2: Confirm barge-in — stop TTS and start ASR
+              // Stage 2: Confirm barge-in — stop TTS, send pre-buffer to ASR
               logger.debug('[useBargeIn] Stage 2: Confirmed! Stopping TTS.');
               stop();
               onBargeInRef.current(preBuffer.flush());
               return;
+            } else if (action === 'restore') {
+              // Decay detected: voice stopped, restore TTS volume
+              logger.debug('[useBargeIn] Decay detected: restoring TTS volume');
+              if (audioQueue) {
+                audioQueue.setVolume(1.0);
+              }
             }
           }
 

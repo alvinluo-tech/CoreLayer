@@ -147,6 +147,37 @@ describe("ContextBuilder", () => {
       expect(systemMsg).toContain("口语化");
     });
 
+    it("voice persona includes ASR noise handling instructions", async () => {
+      const builder = new ContextBuilder({
+        mode: "voice",
+        modelName: "gpt-4o",
+      });
+      const context = await builder.build([], []);
+      const systemMsg = context.messages[0].content as string;
+      expect(systemMsg).toContain("ASR");
+      expect(systemMsg).toContain("噪音");
+    });
+
+    it("voice persona includes 200 char hard limit", async () => {
+      const builder = new ContextBuilder({
+        mode: "voice",
+        modelName: "gpt-4o",
+      });
+      const context = await builder.build([], []);
+      const systemMsg = context.messages[0].content as string;
+      expect(systemMsg).toContain("200");
+    });
+
+    it("voice persona includes single character handling", async () => {
+      const builder = new ContextBuilder({
+        mode: "voice",
+        modelName: "gpt-4o",
+      });
+      const context = await builder.build([], []);
+      const systemMsg = context.messages[0].content as string;
+      expect(systemMsg).toContain("单字符");
+    });
+
     it("includes text persona when mode is text", async () => {
       const builder = new ContextBuilder({
         mode: "text",
