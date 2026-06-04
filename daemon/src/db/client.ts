@@ -191,5 +191,23 @@ try {
   // Column already exists — ignore
 }
 
+// Migration: create scheduled_tasks table (Phase 14)
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS scheduled_tasks (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    cron_expr TEXT NOT NULL,
+    prompt TEXT,
+    skill_name TEXT,
+    input TEXT,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    last_run TEXT,
+    next_run TEXT,
+    last_result TEXT,
+    created_at TEXT DEFAULT 'CURRENT_TIMESTAMP',
+    updated_at TEXT DEFAULT 'CURRENT_TIMESTAMP'
+  );
+`);
+
 export const db = drizzle(sqlite, { schema });
 export { schema };

@@ -1,133 +1,168 @@
+import { CronExpressionParser } from "cron-parser";
 import { executeSkill } from "./skills/executor.js";
 import { getSkill } from "./skills/loader.js";
-import type { SkillExecutionResult } from "./skills/types.js";
+import { getRepositories } from "./db/factory.js";
+import type { ScheduledTaskRow } from "./db/repository.js";
+import { logError } from "./utils/errors.js";
 
 /**
- * Lightweight cron-style scheduler for recurring skill execution.
- * Supports daily/weekly/monthly schedules without external dependencies.
+ * Scheduler for recurring task execution.
+ * Supports cron expressions (via cron-parser) and prompt-based execution.
+ * Persists task state to DB on every change.
  */
 
-export interface ScheduledTask {
-  id: string;
-  name: string;
-  skillName: string;
-  input?: Record<string, unknown>;
-  schedule: ScheduleConfig;
-  enabled: boolean;
-  lastRun?: string;
-  lastResult?: SkillExecutionResult;
-  createdAt: string;
+// ---- Activity tracking for idle detection ----
+
+let lastActivityTimestamp = Date.now();
+
+/** Record user activity (call on each message handled). */
+export function recordActivity(): void {
+  lastActivityTimestamp = Date.now();
 }
 
-export interface ScheduleConfig {
-  type: "daily" | "weekly" | "monthly" | "interval";
-  /** Hour of day (0-23) for daily/weekly/monthly */
-  hour?: number;
-  /** Minute of hour (0-59) for daily/weekly/monthly */
-  minute?: number;
-  /** Day of week (0=Sun, 6=Sat) for weekly */
-  dayOfWeek?: number;
-  /** Day of month (1-31) for monthly */
-  dayOfMonth?: number;
-  /** Interval in milliseconds for interval type */
-  intervalMs?: number;
+/** Get milliseconds since last activity. */
+export function getIdleMs(): number {
+  return Date.now() - lastActivityTimestamp;
 }
 
-export interface SchedulerState {
-  tasks: Map<string, ScheduledTask>;
+// ---- Scheduler state ----
+
+interface SchedulerState {
+  /** In-memory timers keyed by task ID */
   timers: Map<string, ReturnType<typeof setTimeout>>;
+  /** Idle check timer */
+  idleTimer: ReturnType<typeof setInterval> | null;
   running: boolean;
+  /** Idle threshold in ms (default 10 minutes) */
+  idleThresholdMs: number;
+  /** Callback invoked on idle for consolidation */
+  onIdle: (() => Promise<unknown>) | null;
 }
 
 const state: SchedulerState = {
-  tasks: new Map(),
   timers: new Map(),
+  idleTimer: null,
   running: false,
+  idleThresholdMs: 10 * 60 * 1000,
+  onIdle: null,
+};
+
+// ---- Task execution ----
+
+export type TaskExecutionResult = {
+  success: boolean;
+  taskName: string;
+  output: unknown;
+  durationMs: number;
+  error?: string;
 };
 
 /**
- * Register a scheduled task.
+ * Execute a scheduled task. Supports both skill-based and prompt-based execution.
  */
-export function scheduleTask(task: Omit<ScheduledTask, "id" | "createdAt">): ScheduledTask {
-  const id = `sched_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-  const scheduled: ScheduledTask = {
-    ...task,
-    id,
-    createdAt: new Date().toISOString(),
-  };
+async function executeTask(row: ScheduledTaskRow): Promise<TaskExecutionResult> {
+  const start = Date.now();
 
-  state.tasks.set(id, scheduled);
-
-  if (state.running && scheduled.enabled) {
-    scheduleNext(scheduled);
-  }
-
-  console.log(`[Scheduler] Registered task: ${scheduled.name} (${scheduled.schedule.type})`);
-  return scheduled;
-}
-
-/**
- * Remove a scheduled task.
- */
-export function unscheduleTask(taskId: string): boolean {
-  const timer = state.timers.get(taskId);
-  if (timer) {
-    clearTimeout(timer);
-    state.timers.delete(taskId);
-  }
-  return state.tasks.delete(taskId);
-}
-
-/**
- * Enable or disable a scheduled task.
- */
-export function toggleTask(taskId: string, enabled: boolean): boolean {
-  const task = state.tasks.get(taskId);
-  if (!task) return false;
-
-  task.enabled = enabled;
-
-  if (enabled && state.running) {
-    scheduleNext(task);
-  } else {
-    const timer = state.timers.get(taskId);
-    if (timer) {
-      clearTimeout(timer);
-      state.timers.delete(taskId);
+  // Prompt-based execution: send prompt through orchestrator
+  if (row.prompt) {
+    try {
+      const { handleMessageInConversation } = await import("./orchestrator/conversation.js");
+      const conv = await getRepositories().conversations.create(`Scheduled: ${row.name}`);
+      await handleMessageInConversation(conv.id, row.prompt);
+      return {
+        success: true,
+        taskName: row.name,
+        output: { prompt: row.prompt, conversationId: conv.id },
+        durationMs: Date.now() - start,
+      };
+    } catch (err) {
+      return {
+        success: false,
+        taskName: row.name,
+        output: null,
+        durationMs: Date.now() - start,
+        error: err instanceof Error ? err.message : String(err),
+      };
     }
   }
 
-  return true;
+  // Skill-based execution
+  if (row.skillName) {
+    if (!getSkill(row.skillName)) {
+      return {
+        success: false,
+        taskName: row.name,
+        output: null,
+        durationMs: Date.now() - start,
+        error: `Skill not found: ${row.skillName}`,
+      };
+    }
+
+    try {
+      const input = (typeof row.input === "object" && row.input !== null)
+        ? row.input as Record<string, unknown>
+        : {};
+      const result = await executeSkill(row.skillName, input);
+      return {
+        success: result.success,
+        taskName: row.name,
+        output: result.output,
+        durationMs: Date.now() - start,
+        error: result.error ?? undefined,
+      };
+    } catch (err) {
+      return {
+        success: false,
+        taskName: row.name,
+        output: null,
+        durationMs: Date.now() - start,
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+  }
+
+  return {
+    success: false,
+    taskName: row.name,
+    output: null,
+    durationMs: Date.now() - start,
+    error: "Task has neither prompt nor skillName",
+  };
 }
 
 /**
- * Get all registered scheduled tasks.
+ * Compute next fire time from cron expression.
  */
-export function getScheduledTasks(): ScheduledTask[] {
-  return Array.from(state.tasks.values());
+export function computeNextRun(cronExpr: string, from?: Date): string {
+  const interval = CronExpressionParser.parse(cronExpr, { currentDate: from });
+  const next = interval.next();
+  if (!next) throw new Error("No next execution time");
+  return next.toISOString() ?? new Date().toISOString();
 }
 
-/**
- * Get a specific scheduled task by ID.
- */
-export function getScheduledTask(taskId: string): ScheduledTask | undefined {
-  return state.tasks.get(taskId);
-}
+// ---- Scheduler lifecycle ----
 
 /**
- * Start the scheduler. Begins executing pending tasks.
+ * Start the scheduler. Loads tasks from DB and begins scheduling.
  */
-export function startScheduler(): void {
+export async function startScheduler(): Promise<void> {
   if (state.running) return;
   state.running = true;
 
-  for (const task of state.tasks.values()) {
-    if (task.enabled) {
-      scheduleNext(task);
+  try {
+    const tasks = await getRepositories().scheduledTasks.getAll();
+    for (const task of tasks) {
+      if (task.enabled) {
+        scheduleTaskTimer(task);
+      }
     }
+    logError("Scheduler", `Started with ${tasks.length} tasks`);
+  } catch (err) {
+    logError("Scheduler/start", err);
   }
 
-  console.log(`[Scheduler] Started with ${state.tasks.size} tasks`);
+  // Start idle check interval (every minute)
+  state.idleTimer = setInterval(checkIdle, 60_000);
 }
 
 /**
@@ -141,7 +176,10 @@ export function stopScheduler(): void {
   }
   state.timers.clear();
 
-  console.log("[Scheduler] Stopped");
+  if (state.idleTimer) {
+    clearInterval(state.idleTimer);
+    state.idleTimer = null;
+  }
 }
 
 /**
@@ -152,116 +190,188 @@ export function isSchedulerRunning(): boolean {
 }
 
 /**
- * Manually trigger a scheduled task immediately.
+ * Manually trigger a task immediately.
  */
-export async function triggerTask(taskId: string): Promise<SkillExecutionResult | null> {
-  const task = state.tasks.get(taskId);
+export async function triggerTask(taskId: string): Promise<TaskExecutionResult | null> {
+  const task = await getRepositories().scheduledTasks.getById(taskId);
   if (!task) return null;
 
-  return executeScheduledTask(task);
+  const result = await executeTask(task);
+  const now = new Date();
+  let nextRun: string | null = null;
+  try {
+    nextRun = computeNextRun(task.cronExpr, now);
+  } catch {
+    // Invalid cron — leave nextRun null
+  }
+  await getRepositories().scheduledTasks.updateLastRun(taskId, now.toISOString(), nextRun ?? "", result);
+  return result;
 }
 
-function scheduleNext(task: ScheduledTask): void {
-  const existing = state.timers.get(task.id);
+/**
+ * Register the idle callback for memory consolidation.
+ */
+export function setIdleCallback(callback: () => Promise<unknown>): void {
+  state.onIdle = callback;
+}
+
+/**
+ * Set idle threshold in milliseconds.
+ */
+export function setIdleThreshold(ms: number): void {
+  state.idleThresholdMs = ms;
+}
+
+// ---- Internal scheduling ----
+
+function scheduleTaskTimer(row: ScheduledTaskRow): void {
+  const existing = state.timers.get(row.id);
   if (existing) {
     clearTimeout(existing);
   }
 
-  const delay = calculateDelay(task.schedule);
-  if (delay <= 0) return;
+  let nextFireMs: number;
+  try {
+    const interval = CronExpressionParser.parse(row.cronExpr);
+    const nextDate = interval.next();
+    nextFireMs = nextDate.getTime() - Date.now();
+  } catch (err) {
+    logError("Scheduler/schedule", `Invalid cron for ${row.name}: ${err}`);
+    return;
+  }
+
+  if (nextFireMs <= 0) {
+    // Already past, schedule for immediate execution
+    nextFireMs = 1000;
+  }
 
   const timer = setTimeout(async () => {
-    await executeScheduledTask(task);
-    if (state.running && task.enabled) {
-      scheduleNext(task);
+    await fireTask(row);
+    if (state.running) {
+      // Reload from DB to get potentially updated config
+      const updated = await getRepositories().scheduledTasks.getById(row.id);
+      if (updated?.enabled) {
+        scheduleTaskTimer(updated);
+      }
     }
-  }, delay);
+  }, nextFireMs);
 
-  state.timers.set(task.id, timer);
+  state.timers.set(row.id, timer);
 }
 
-async function executeScheduledTask(task: ScheduledTask): Promise<SkillExecutionResult> {
-  console.log(`[Scheduler] Executing: ${task.name}`);
+async function fireTask(row: ScheduledTaskRow): Promise<void> {
+  logError("Scheduler", `Executing: ${row.name}`);
 
-  const skill = getSkill(task.skillName);
-  if (!skill) {
-    const result: SkillExecutionResult = {
-      success: false,
-      skillName: task.skillName,
-      output: null,
-      durationMs: 0,
-      steps: [],
-      error: `Skill not found: ${task.skillName}`,
-    };
-    task.lastResult = result;
-    return result;
-  }
-
-  try {
-    const result = await executeSkill(task.skillName, task.input ?? {});
-    task.lastRun = new Date().toISOString();
-    task.lastResult = result;
-
-    if (result.success) {
-      console.log(`[Scheduler] Completed: ${task.name} (${result.durationMs}ms)`);
-    } else {
-      console.error(`[Scheduler] Failed: ${task.name} — ${result.error}`);
-    }
-
-    return result;
-  } catch (err) {
-    const result: SkillExecutionResult = {
-      success: false,
-      skillName: task.skillName,
-      output: null,
-      durationMs: 0,
-      steps: [],
-      error: err instanceof Error ? err.message : String(err),
-    };
-    task.lastResult = result;
-    console.error(`[Scheduler] Error in ${task.name}:`, err);
-    return result;
-  }
-}
-
-function calculateDelay(schedule: ScheduleConfig): number {
+  const result = await executeTask(row);
   const now = new Date();
 
-  switch (schedule.type) {
-    case "interval":
-      return schedule.intervalMs ?? 60_000;
-
-    case "daily": {
-      const target = new Date(now);
-      target.setHours(schedule.hour ?? 0, schedule.minute ?? 0, 0, 0);
-      if (target <= now) {
-        target.setDate(target.getDate() + 1);
-      }
-      return target.getTime() - now.getTime();
-    }
-
-    case "weekly": {
-      const target = new Date(now);
-      const dayDiff = ((schedule.dayOfWeek ?? 0) - now.getDay() + 7) % 7;
-      target.setDate(target.getDate() + dayDiff);
-      target.setHours(schedule.hour ?? 0, schedule.minute ?? 0, 0, 0);
-      if (target <= now) {
-        target.setDate(target.getDate() + 7);
-      }
-      return target.getTime() - now.getTime();
-    }
-
-    case "monthly": {
-      const target = new Date(now);
-      target.setDate(schedule.dayOfMonth ?? 1);
-      target.setHours(schedule.hour ?? 0, schedule.minute ?? 0, 0, 0);
-      if (target <= now) {
-        target.setMonth(target.getMonth() + 1);
-      }
-      return target.getTime() - now.getTime();
-    }
-
-    default:
-      return 60_000;
+  let nextRun: string | null = null;
+  try {
+    nextRun = computeNextRun(row.cronExpr, now);
+  } catch {
+    // Invalid cron
   }
+
+  await getRepositories().scheduledTasks.updateLastRun(
+    row.id,
+    now.toISOString(),
+    nextRun ?? "",
+    result,
+  );
+
+  if (result.success) {
+    logError("Scheduler", `Completed: ${row.name} (${result.durationMs}ms)`);
+  } else {
+    logError("Scheduler", `Failed: ${row.name} — ${result.error}`);
+  }
+}
+
+// ---- Idle check ----
+
+async function checkIdle(): Promise<void> {
+  if (!state.running || !state.onIdle) return;
+  if (getIdleMs() < state.idleThresholdMs) return;
+
+  try {
+    await state.onIdle();
+  } catch (err) {
+    logError("Scheduler/idle", err);
+  }
+}
+
+// ---- Idle consolidation ----
+
+/** Minimum messages required before compression makes sense */
+const CONSOLIDATION_MIN_MESSAGES = 6;
+
+/**
+ * Consolidate conversations and prune memories during idle time.
+ * Called periodically when user has been idle for the threshold duration.
+ */
+export async function consolidateOnIdle(): Promise<{
+  conversationsProcessed: number;
+  preferencesExtracted: number;
+  memoriesPruned: number;
+}> {
+  const repos = getRepositories();
+  let conversationsProcessed = 0;
+  let preferencesExtracted = 0;
+  let memoriesPruned = 0;
+
+  // 1. Find recent conversations with >6 messages
+  const conversations = await repos.conversations.list();
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 7);
+
+  const recentConversations = conversations.filter(
+    (c) => c.messageCount >= CONSOLIDATION_MIN_MESSAGES && new Date(c.updatedAt) >= cutoff,
+  );
+
+  // 2. Compress each conversation
+  const { compressConversation, extractPreferences } = await import("./orchestrator/compressor.js");
+
+  for (const conv of recentConversations) {
+    try {
+      const messages = await repos.conversations.getMessages(conv.id);
+      if (messages.length < CONSOLIDATION_MIN_MESSAGES) continue;
+
+      const result = await compressConversation(messages, conv.id);
+
+      // Save summary as system message
+      if (result.summary) {
+        await repos.conversations.addMessage(conv.id, {
+          role: "system",
+          content: `[对话摘要 - 压缩了 ${result.compressedMessages.length} 条消息]\n\n${result.summary}`,
+        });
+      }
+
+      // Extract preferences from summary
+      if (result.summary) {
+        const prefs = await extractPreferences(result.summary);
+        if (prefs.length > 0) {
+          await repos.memories.upsertPreferences(prefs);
+          preferencesExtracted += prefs.length;
+        }
+      }
+
+      conversationsProcessed++;
+    } catch (err) {
+      logError("Scheduler/consolidate", `Failed to compress conversation ${conv.id}: ${err}`);
+    }
+  }
+
+  // 3. Clean expired memories
+  const expiredCleaned = await repos.memories.cleanExpired();
+
+  // 4. Prune unused old memories (default 30 days)
+  const pruned = await repos.memories.pruneUnusedMemories(30);
+
+  memoriesPruned = expiredCleaned + pruned;
+
+  logError(
+    "Scheduler/consolidate",
+    `Done: ${conversationsProcessed} conversations compressed, ${preferencesExtracted} preferences extracted, ${memoriesPruned} memories pruned`,
+  );
+
+  return { conversationsProcessed, preferencesExtracted, memoriesPruned };
 }

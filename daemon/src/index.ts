@@ -21,6 +21,9 @@ import chatRoutes from "./api/chat.js";
 import voiceRoutes from "./api/voice.js";
 import mcpRoutes from "./api/mcp.js";
 import toolRoutes from "./api/tools.js";
+import scheduledTaskRoutes from "./api/scheduled-tasks.js";
+import { startScheduler, setIdleCallback, consolidateOnIdle } from "./scheduler.js";
+import { registerDefaultReportSchedules } from "./reports/generator.js";
 
 // Run config migration from old locations to ~/.jarvis/
 runMigration();
@@ -99,6 +102,9 @@ app.route("/api/mcp", mcpRoutes);
 // Unified tool registry routes
 app.route("/api/tools", toolRoutes);
 
+// Scheduled task routes
+app.route("/api/tasks/scheduled", scheduledTaskRoutes);
+
 function startServer(port: number) {
   try {
     const server = serve({ fetch: app.fetch, port }, (info) => {
@@ -148,3 +154,11 @@ startServer(env.DAEMON_PORT);
 import("./mcp/client.js")
   .then(({ autoConnectMCPServers }) => autoConnectMCPServers())
   .catch((err) => console.error("[Jarvis] MCP auto-connect failed:", err));
+
+// Start scheduler and register default report schedules
+startScheduler()
+  .then(() => registerDefaultReportSchedules())
+  .catch((err) => console.error("[Jarvis] Scheduler startup failed:", err));
+
+// Register idle consolidation callback
+setIdleCallback(consolidateOnIdle);

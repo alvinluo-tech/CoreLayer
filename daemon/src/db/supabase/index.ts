@@ -8,6 +8,7 @@ import { createSupabaseAppConnectionRepo } from "./app-connection-repo.js";
 import { createSupabaseModelProfileRepo } from "./model-profile-repo.js";
 import { createSupabaseMemoryRepo } from "./memory-repo.js";
 import { createSupabaseAgentRunRepo } from "./agent-run-repo.js";
+import { createSqliteScheduledTaskRepo } from "../sqlite/scheduled-task-repo.js";
 
 export function createSupabaseRepositories(): Repositories {
   return {
@@ -20,5 +21,6 @@ export function createSupabaseRepositories(): Repositories {
     modelProfiles: createSupabaseModelProfileRepo(),
     memories: createSupabaseMemoryRepo(),
     agentRuns: createSupabaseAgentRunRepo(),
+    scheduledTasks: createSqliteScheduledTaskRepo(),
   };
 }
