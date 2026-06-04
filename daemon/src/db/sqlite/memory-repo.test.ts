@@ -18,6 +18,7 @@ function createTestDb() {
       source TEXT,
       confidence REAL,
       uses INTEGER DEFAULT 0,
+      last_injected_at TEXT,
       expires_at TEXT,
       created_at TEXT DEFAULT 'CURRENT_TIMESTAMP',
       updated_at TEXT DEFAULT 'CURRENT_TIMESTAMP'
@@ -507,6 +508,67 @@ describe("Memory Repository", () => {
       // Should prune with 7-day threshold
       const pruned7 = await memories.pruneUnusedMemories(7);
       expect(pruned7).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  // ---- recordInjection ----
+
+  describe("recordInjection", () => {
+    it("should increment uses and set lastInjectedAt", async () => {
+      const mem = await memories.upsert({ type: "fact", key: "track", value: "v" });
+      expect(mem.uses).toBe(0);
+      expect(mem.lastInjectedAt).toBeNull();
+
+      await memories.recordInjection(mem.id);
+      const updated = await memories.getByKey("track");
+      expect(updated!.uses).toBe(1);
+      expect(updated!.lastInjectedAt).toBeDefined();
+
+      await memories.recordInjection(mem.id);
+      const updated2 = await memories.getByKey("track");
+      expect(updated2!.uses).toBe(2);
+    });
+
+    it("should throw for nonexistent id", async () => {
+      await expect(memories.recordInjection("nonexistent"))
+        .rejects.toThrow("Memory not found: nonexistent");
+    });
+  });
+
+  // ---- promoteHighUsage ----
+
+  describe("promoteHighUsage", () => {
+    it("should promote non-preference memories with enough uses", async () => {
+      const mem = await memories.upsert({ type: "fact", key: "frequent", value: "v" });
+      // Set uses to 5 directly
+      testDb.update(schema.memories)
+        .set({ uses: 5 })
+        .where(eq(schema.memories.id, mem.id))
+        .run();
+
+      const promoted = await memories.promoteHighUsage(5);
+      expect(promoted).toBe(1);
+
+      const updated = await memories.getByKey("frequent");
+      expect(updated!.tier).toBe("preference");
+    });
+
+    it("should not promote memories already at preference tier", async () => {
+      const mem = await memories.upsert({ type: "preference", key: "pref", value: "v" });
+      testDb.update(schema.memories)
+        .set({ uses: 10 })
+        .where(eq(schema.memories.id, mem.id))
+        .run();
+
+      const promoted = await memories.promoteHighUsage(5);
+      expect(promoted).toBe(0);
+    });
+
+    it("should not promote memories below threshold", async () => {
+      await memories.upsert({ type: "fact", key: "low", value: "v" });
+
+      const promoted = await memories.promoteHighUsage(5);
+      expect(promoted).toBe(0);
     });
   });
 });

@@ -34,6 +34,12 @@ export function createSupabaseMemoryRepo(): MemoryRepository {
     async incrementUses(_id: string): Promise<void> {
       throw new Error("Supabase MemoryRepository not implemented — use SQLite mode");
     },
+    async recordInjection(_id: string): Promise<void> {
+      throw new Error("Supabase MemoryRepository not implemented — use SQLite mode");
+    },
+    async promoteHighUsage(_minUses?: number): Promise<number> {
+      throw new Error("Supabase MemoryRepository not implemented — use SQLite mode");
+    },
     async delete(_id: string): Promise<boolean> {
       throw new Error("Supabase MemoryRepository not implemented — use SQLite mode");
     },

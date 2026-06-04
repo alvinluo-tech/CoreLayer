@@ -1,6 +1,7 @@
-import { readFileSync, writeFileSync, existsSync, mkdirSync, statSync } from "fs";
+import { readFileSync, writeFileSync, existsSync, mkdirSync, statSync, watch } from "fs";
 import { join } from "path";
 import { homedir } from "os";
+import { validateConfig } from "./config-schema.js";
 
 // ---- In-memory cache ----
 
@@ -16,6 +17,47 @@ let credentialsCache: CacheEntry<Credentials> | null = null;
 export function invalidateConfigCache(): void {
   configCache = null;
   credentialsCache = null;
+}
+
+// ---- File watcher for hot reload ----
+
+let configWatcher: ReturnType<typeof watch> | null = null;
+const configListeners: Array<(config: JarvisConfig) => void> = [];
+
+export function onConfigChange(listener: (config: JarvisConfig) => void): () => void {
+  configListeners.push(listener);
+  return () => {
+    const idx = configListeners.indexOf(listener);
+    if (idx >= 0) configListeners.splice(idx, 1);
+  };
+}
+
+export function startConfigWatcher(): void {
+  if (configWatcher) return;
+  const filePath = getConfigPath();
+  if (!existsSync(filePath)) return;
+
+  try {
+    configWatcher = watch(filePath, { persistent: false }, () => {
+      invalidateConfigCache();
+      const config = configManager.getConfig();
+      for (const listener of configListeners) {
+        try { listener(config); } catch { /* listener error */ }
+      }
+    });
+    configWatcher.on("error", () => {
+      stopConfigWatcher();
+    });
+  } catch {
+    // Watch not supported on this platform
+  }
+}
+
+export function stopConfigWatcher(): void {
+  if (configWatcher) {
+    configWatcher.close();
+    configWatcher = null;
+  }
 }
 
 function getFileMtime(filePath: string): number {
@@ -162,7 +204,12 @@ class ConfigManager {
     if (configCache && configCache.mtime === mtime) {
       return configCache.data;
     }
-    const data = readJsonFile(filePath, DEFAULT_CONFIG);
+    const raw = readJsonFile(filePath, DEFAULT_CONFIG);
+    const result = validateConfig(raw);
+    if (!result.valid) {
+      console.warn("[Jarvis] Config validation warnings:", result.errors.join("; "));
+    }
+    const data = result.config ?? DEFAULT_CONFIG;
     configCache = { data, mtime };
     return data;
   }

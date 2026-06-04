@@ -219,6 +219,7 @@ export interface MemoryRow {
   source: string | null;
   confidence: number | null;
   uses: number;
+  lastInjectedAt: string | null;
   expiresAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -371,6 +372,8 @@ export interface MemoryRepository {
   upsert(input: UpsertMemoryInput): Promise<MemoryRow>;
   upsertPreferences(prefs: { key: string; value: string }[], userId?: string): Promise<MemoryRow[]>;
   incrementUses(id: string): Promise<void>;
+  recordInjection(id: string): Promise<void>;
+  promoteHighUsage(minUses?: number): Promise<number>;
   delete(id: string): Promise<boolean>;
   cleanExpired(): Promise<number>;
   pruneUnusedMemories(maxAgeDays?: number): Promise<number>;

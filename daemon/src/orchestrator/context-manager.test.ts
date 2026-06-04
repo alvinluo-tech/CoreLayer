@@ -268,6 +268,7 @@ describe("assembleContext", () => {
       source: null,
       confidence: null,
       uses: 0,
+      lastInjectedAt: null,
       expiresAt: null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),

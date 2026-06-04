@@ -369,6 +369,45 @@ export function createSqliteMemoryRepo(database?: DrizzleDb): MemoryRepository {
       }
     },
 
+    async recordInjection(id: string): Promise<void> {
+      const now = new Date().toISOString();
+      const result = db.update(schema.memories)
+        .set({
+          uses: sql`${schema.memories.uses} + 1`,
+          lastInjectedAt: now,
+          updatedAt: now,
+        })
+        .where(eq(schema.memories.id, id))
+        .run();
+      if (result.changes === 0) {
+        throw new Error(`Memory not found: ${id}`);
+      }
+    },
+
+    async promoteHighUsage(minUses = 5): Promise<number> {
+      const now = new Date().toISOString();
+      const rows = db
+        .select()
+        .from(schema.memories)
+        .where(
+          and(
+            sql`${schema.memories.uses} >= ${minUses}`,
+            sql`${schema.memories.tier} != 'preference'`,
+          ),
+        )
+        .all();
+
+      let promoted = 0;
+      for (const row of rows) {
+        db.update(schema.memories)
+          .set({ tier: "preference", updatedAt: now })
+          .where(eq(schema.memories.id, row.id))
+          .run();
+        promoted++;
+      }
+      return promoted;
+    },
+
     async delete(id: string): Promise<boolean> {
       const result = db.delete(schema.memories).where(eq(schema.memories.id, id)).run();
       return result.changes > 0;

@@ -79,6 +79,7 @@ function makeMemory(
     source: null,
     confidence: 1.0,
     uses: 0,
+    lastInjectedAt: null,
     expiresAt: null,
     createdAt: "2026-01-01",
     updatedAt: "2026-01-01",

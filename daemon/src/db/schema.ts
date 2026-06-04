@@ -141,6 +141,7 @@ export const memories = sqliteTable("memories", {
   source: text("source"),
   confidence: real("confidence"),
   uses: integer("uses").default(0).notNull(),
+  lastInjectedAt: text("last_injected_at"),
   expiresAt: text("expires_at"),
   createdAt: text("created_at").default("CURRENT_TIMESTAMP").notNull(),
   updatedAt: text("updated_at").default("CURRENT_TIMESTAMP").notNull(),
