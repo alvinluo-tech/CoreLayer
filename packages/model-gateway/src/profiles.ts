@@ -22,7 +22,7 @@ export const DEFAULT_PROFILES: ModelProfile[] = [
   {
     id: 'mimo-2.5',
     provider: 'mimo',
-    modelName: 'mimo-2.5',
+    modelName: 'mimo-v2.5',
     displayName: 'MiMo 2.5',
     capabilities: {
       text: true,
