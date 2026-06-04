@@ -440,9 +440,9 @@ export async function consolidateOnIdle(): Promise<{
         });
       }
 
-      // Extract preferences from summary
+      // Extract preferences from conversation messages
       if (result.summary) {
-        const prefs = await extractPreferences(result.summary);
+        const prefs = await extractPreferences(messages);
         if (prefs.length > 0) {
           await repos.memories.upsertPreferences(prefs);
           preferencesExtracted += prefs.length;

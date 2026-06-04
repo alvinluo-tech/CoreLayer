@@ -327,20 +327,36 @@ describe("createSummaryMessage", () => {
 // ---- extractPreferences ----
 
 describe("extractPreferences", () => {
-  it("extracts preferences from summary text", async () => {
+  function makePrefMsg(role: "user" | "assistant", content: string): MessageRow {
+    return {
+      id: crypto.randomUUID(),
+      conversationId: "conv-1",
+      role,
+      content,
+      toolCalls: null,
+      toolCallId: null,
+      parentMessageId: null,
+      tokenCount: null,
+      compressed: false,
+      createdAt: new Date().toISOString(),
+    };
+  }
+
+  it("extracts preferences from messages", async () => {
     const { generateText } = await import("ai");
     vi.mocked(generateText).mockResolvedValueOnce({
       text: '[{ "key": "coding_style", "value": "用户喜欢函数式编程" }]',
     } as any);
 
-    const prefs = await extractPreferences("用户讨论了编程风格，表示喜欢函数式编程");
+    const msgs = [makePrefMsg("user", "我喜欢函数式编程风格")];
+    const prefs = await extractPreferences(msgs);
     expect(prefs).toHaveLength(1);
     expect(prefs[0].key).toBe("coding_style");
     expect(prefs[0].value).toContain("函数式编程");
   });
 
-  it("returns empty array for empty summary", async () => {
-    const prefs = await extractPreferences("");
+  it("returns empty array for empty messages", async () => {
+    const prefs = await extractPreferences([]);
     expect(prefs).toEqual([]);
   });
 
@@ -350,7 +366,8 @@ describe("extractPreferences", () => {
       text: "[]",
     } as any);
 
-    const prefs = await extractPreferences("普通对话，没有偏好");
+    const msgs = [makePrefMsg("user", "普通对话，没有偏好")];
+    const prefs = await extractPreferences(msgs);
     expect(prefs).toEqual([]);
   });
 
@@ -358,7 +375,8 @@ describe("extractPreferences", () => {
     const { generateText } = await import("ai");
     vi.mocked(generateText).mockRejectedValueOnce(new Error("API error"));
 
-    const prefs = await extractPreferences("some summary");
+    const msgs = [makePrefMsg("user", "some content")];
+    const prefs = await extractPreferences(msgs);
     expect(prefs).toEqual([]);
   });
 
@@ -372,99 +390,8 @@ describe("extractPreferences", () => {
       text: JSON.stringify(manyPrefs),
     } as any);
 
-    const prefs = await extractPreferences("lots of preferences");
+    const msgs = [makePrefMsg("user", "lots of preferences")];
+    const prefs = await extractPreferences(msgs);
     expect(prefs).toHaveLength(10);
-  });
-});
-
-// ---- snapshotMemoriesBeforeCompression ----
-
-describe("snapshotMemoriesBeforeCompression", () => {
-  it("extracts and saves memories before compression", async () => {
-    const { generateText } = await import("ai");
-    const { snapshotMemoriesBeforeCompression } = await import("./compressor.js");
-
-    vi.mocked(generateText).mockResolvedValueOnce({
-      text: JSON.stringify({
-        preferences: [{ key: "coding_style", value: "用户喜欢函数式编程" }],
-        decisions: [{ key: "use_typescript", value: "决定使用TypeScript" }],
-        pendingTasks: [{ key: "finish_report", value: "完成报告任务" }],
-      }),
-    } as any);
-
-    const mockUpsert = vi.fn().mockResolvedValue({ id: "1" });
-    const memoryRepo = { upsert: mockUpsert } as any;
-
-    const messages = [
-      { role: "user", content: "我喜欢函数式编程风格" } as MessageRow,
-      { role: "assistant", content: "好的，我会用函数式风格" } as MessageRow,
-    ];
-
-    await snapshotMemoriesBeforeCompression(messages, memoryRepo, "conv-1");
-
-    expect(mockUpsert).toHaveBeenCalledTimes(3);
-    expect(mockUpsert).toHaveBeenCalledWith(
-      expect.objectContaining({ key: "pref:coding_style", type: "preference" })
-    );
-    expect(mockUpsert).toHaveBeenCalledWith(
-      expect.objectContaining({ key: "decision:use_typescript", type: "context" })
-    );
-    expect(mockUpsert).toHaveBeenCalledWith(
-      expect.objectContaining({ key: "pending:finish_report", type: "context" })
-    );
-  });
-
-  it("handles empty messages gracefully", async () => {
-    const { snapshotMemoriesBeforeCompression } = await import("./compressor.js");
-    const mockUpsert = vi.fn();
-    const memoryRepo = { upsert: mockUpsert } as any;
-
-    await snapshotMemoriesBeforeCompression([], memoryRepo, "conv-1");
-
-    expect(mockUpsert).not.toHaveBeenCalled();
-  });
-
-  it("handles LLM errors gracefully", async () => {
-    const { generateText } = await import("ai");
-    const { snapshotMemoriesBeforeCompression } = await import("./compressor.js");
-
-    vi.mocked(generateText).mockRejectedValueOnce(new Error("API error"));
-
-    const mockUpsert = vi.fn();
-    const memoryRepo = { upsert: mockUpsert } as any;
-
-    const messages = [
-      { role: "user", content: "test" } as MessageRow,
-    ];
-
-    // Should not throw
-    await snapshotMemoriesBeforeCompression(messages, memoryRepo, "conv-1");
-
-    expect(mockUpsert).not.toHaveBeenCalled();
-  });
-
-  it("limits to 5 items per category", async () => {
-    const { generateText } = await import("ai");
-    const { snapshotMemoriesBeforeCompression } = await import("./compressor.js");
-
-    const manyPrefs = Array.from({ length: 10 }, (_, i) => ({
-      key: `pref_${i}`,
-      value: `偏好 ${i}`,
-    }));
-
-    vi.mocked(generateText).mockResolvedValueOnce({
-      text: JSON.stringify({ preferences: manyPrefs }),
-    } as any);
-
-    const mockUpsert = vi.fn().mockResolvedValue({ id: "1" });
-    const memoryRepo = { upsert: mockUpsert } as any;
-
-    const messages = [
-      { role: "user", content: "test" } as MessageRow,
-    ];
-
-    await snapshotMemoriesBeforeCompression(messages, memoryRepo, "conv-1");
-
-    expect(mockUpsert).toHaveBeenCalledTimes(5);
   });
 });

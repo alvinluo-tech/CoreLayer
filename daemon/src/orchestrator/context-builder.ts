@@ -280,8 +280,12 @@ export class ContextBuilder {
     // to avoid double-counting. The budget struct's memoryTokens is intentionally 0.
     const budget = computeContextBudget(this.modelName, systemPromptTokens, 0);
 
-    // Filter out compressed messages — they've been summarized into a summary message
-    const uncompressedHistory = history.filter((m) => !m.compressed);
+    // Filter out compressed messages AND summary messages.
+    // Summary messages are already injected via withSummary() into the system prompt,
+    // so counting them in historyTokens would double-count their tokens.
+    const uncompressedHistory = history.filter(
+      (m) => !m.compressed && !(m.role === "system" && m.content.startsWith("[对话摘要")),
+    );
     const { selected, truncated, estimatedTokens: historyTokens } =
       selectHistoryWithinBudget(uncompressedHistory, budget);
 

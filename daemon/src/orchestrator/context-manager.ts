@@ -150,8 +150,8 @@ export function computeContextBudget(
 
 // ---- Compression Thresholds ----
 
-/** Soft threshold — trigger compression proactively */
-const COMPRESS_SOFT_THRESHOLD = 0.5;
+/** Soft threshold — trigger compression proactively (raised from 0.5 to reduce frequency) */
+const COMPRESS_SOFT_THRESHOLD = 0.7;
 /** Hard threshold — safety net to prevent API failures */
 const COMPRESS_HARD_THRESHOLD = 0.85;
 /** Minimum messages before compression is worthwhile */

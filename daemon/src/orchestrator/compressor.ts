@@ -1,7 +1,7 @@
 import { generateText } from "ai";
 import type { ModelMessage } from "ai";
 import { getModel } from "../ai/provider.js";
-import type { MessageRow, MemoryRepository, UpsertMemoryInput } from "../db/repository.js";
+import type { MessageRow } from "../db/repository.js";
 import { logError } from "../utils/errors.js";
 
 // ---- Summary Structure ----
@@ -216,7 +216,7 @@ function formatMessagesForSummary(messages: MessageRow[]): string {
 
 // ---- Preference Extraction ----
 
-const PREFERENCE_EXTRACTION_PROMPT = `从以下对话摘要中提取用户偏好、习惯、工作方式。以JSON格式输出一个数组，每个元素包含 "key"（偏好名称，简短）和 "value"（偏好描述，一句话）。
+const PREFERENCE_EXTRACTION_PROMPT = `从以下对话历史中提取用户偏好、习惯、工作方式。以JSON格式输出一个数组，每个元素包含 "key"（偏好名称，简短）和 "value"（偏好描述，一句话）。
 
 只提取明确表达的偏好，不要猜测。如果没有发现任何偏好，返回空数组 []。
 
@@ -227,19 +227,26 @@ const PREFERENCE_EXTRACTION_PROMPT = `从以下对话摘要中提取用户偏好
 ]`;
 
 /**
- * Run a second LLM pass to extract user preferences from the compressed summary.
+ * Extract user preferences from conversation messages.
+ * Merged with the pre-compression memory snapshot to save one LLM call.
  */
 export async function extractPreferences(
-  summary: string,
+  messages: MessageRow[],
 ): Promise<ExtractedPreference[]> {
-  if (!summary) return [];
+  if (messages.length === 0) return [];
 
   try {
+    // Format messages for extraction (reuse same truncation as snapshot)
+    const formatted = messages
+      .slice(-20)
+      .map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content.slice(0, 500)}`)
+      .join("\n\n");
+
     const result = await generateText({
       model: getModel(),
       messages: [
         { role: "system", content: PREFERENCE_EXTRACTION_PROMPT },
-        { role: "user", content: summary },
+        { role: "user", content: formatted },
       ],
       maxOutputTokens: 512,
     });
@@ -286,119 +293,6 @@ const MIN_MESSAGES = 6;
  */
 const MAX_SUMMARY_TOKENS = 1024;
 
-// ---- Pre-compression Memory Snapshot (Hermes pattern) ----
-
-const MEMORY_SNAPSHOT_PROMPT = `从以下对话中提取关键信息，以便在压缩后保留重要上下文。以JSON格式输出，包含以下字段：
-
-{
-  "preferences": [{"key": "偏好名称", "value": "偏好描述"}],
-  "decisions": [{"key": "决策名称", "value": "决策内容"}],
-  "pendingTasks": [{"key": "任务名称", "value": "任务描述"}]
-}
-
-规则：
-- 只提取明确表达的信息，不要猜测
-- 每个类别最多提取 5 条
-- 如果没有发现相关信息，返回空数组
-- key 要简短（10字以内），value 要具体`;
-
-/**
- * Extract key information from conversation before compression.
- * Saves as memory snapshots to preserve important context.
- *
- * @param messages - Recent conversation messages to extract from
- * @param memoryRepo - Memory repository for saving snapshots
- * @param conversationId - For logging context
- */
-export async function snapshotMemoriesBeforeCompression(
-  messages: MessageRow[],
-  memoryRepo: MemoryRepository,
-  conversationId?: string,
-): Promise<void> {
-  if (messages.length === 0) return;
-
-  try {
-    // Format recent messages for extraction
-    const recentMessages = messages.slice(-20); // Last 20 messages
-    const formatted = recentMessages
-      .map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content.slice(0, 500)}`)
-      .join("\n\n");
-
-    const result = await generateText({
-      model: getModel(),
-      messages: [
-        { role: "system", content: MEMORY_SNAPSHOT_PROMPT },
-        { role: "user", content: formatted },
-      ],
-      maxOutputTokens: 1024,
-    });
-
-    const text = result.text?.trim() ?? "";
-    if (!text) return;
-
-    // Parse JSON from LLM output
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) return;
-
-    const parsed = JSON.parse(jsonMatch[0]) as {
-      preferences?: Array<{ key: string; value: string }>;
-      decisions?: Array<{ key: string; value: string }>;
-      pendingTasks?: Array<{ key: string; value: string }>;
-    };
-
-    // Save extracted information as memories
-    const inputs: UpsertMemoryInput[] = [];
-
-    if (parsed.preferences) {
-      for (const pref of parsed.preferences.slice(0, 5)) {
-        inputs.push({
-          key: `pref:${pref.key}`,
-          value: pref.value,
-          type: "preference",
-          source: `conversation:${conversationId ?? "unknown"}`,
-          confidence: 0.8,
-        });
-      }
-    }
-
-    if (parsed.decisions) {
-      for (const dec of parsed.decisions.slice(0, 5)) {
-        inputs.push({
-          key: `decision:${dec.key}`,
-          value: dec.value,
-          type: "context",
-          source: `conversation:${conversationId ?? "unknown"}`,
-          confidence: 0.8,
-        });
-      }
-    }
-
-    if (parsed.pendingTasks) {
-      for (const task of parsed.pendingTasks.slice(0, 5)) {
-        inputs.push({
-          key: `pending:${task.key}`,
-          value: task.value,
-          type: "context",
-          source: `conversation:${conversationId ?? "unknown"}`,
-          confidence: 0.7,
-        });
-      }
-    }
-
-    // Upsert all extracted memories
-    for (const input of inputs) {
-      try {
-        await memoryRepo.upsert(input);
-      } catch {
-        // Skip individual failures
-      }
-    }
-  } catch (err) {
-    logError("compressor/snapshot", err);
-    // Don't fail compression if snapshot fails
-  }
-}
-
 /**
  * Compress conversation history using LLM summarization.
  *
@@ -406,22 +300,20 @@ export async function snapshotMemoriesBeforeCompression(
  * and Odysseus (structured output format).
  *
  * Flow:
- * 0. Snapshot memories before compression (preserve important context)
  * 1. Split messages: older (to compress) + recent (to preserve)
  * 2. Sanitize tool messages in the older portion
  * 3. Format older messages for summarization
  * 4. Call LLM to generate structured summary
- * 5. Return summary + preserved messages
+ * 5. Extract user preferences from older messages (merged with snapshot)
+ * 6. Return summary + preserved messages
  *
  * @param messages - Full conversation history (not including system prompt)
- * @param conversationId - For logging context
- * @param memoryRepo - Memory repository for pre-compression snapshots
+ * @param _conversationId - For logging context
  * @returns CompactionResult with summary and preserved messages
  */
 export async function compressConversation(
   messages: MessageRow[],
   _conversationId?: string,
-  memoryRepo?: MemoryRepository,
 ): Promise<CompactionResult> {
   if (messages.length < MIN_MESSAGES) {
     return {
@@ -430,12 +322,6 @@ export async function compressConversation(
       preservedMessages: messages,
       extractedPreferences: [],
     };
-  }
-
-  // Step 0: Snapshot memories before compression (Hermes pattern)
-  // This ensures important context is preserved even after compression
-  if (memoryRepo) {
-    await snapshotMemoriesBeforeCompression(messages, memoryRepo, _conversationId);
   }
 
   // Split: older messages to compress, recent to preserve
@@ -496,8 +382,8 @@ export async function compressConversation(
       };
     }
 
-    // Second LLM pass: extract user preferences from the summary
-    const extractedPreferences = await extractPreferences(summary);
+    // Extract user preferences from older messages (merged with memory snapshot)
+    const extractedPreferences = await extractPreferences(olderMessages);
 
     return {
       summary,
