@@ -496,6 +496,74 @@ export async function handleMessageInConversation(
   assistantMessage: MessageRow;
   conversation: ConversationRow;
 }> {
+  const streamResult = await streamMessageInConversation(conversationId, userMessage);
+
+  // Non-AI local fallback: save and return directly
+  if (!streamResult.isAi) {
+    const savedAssistantMsg = await streamResult.saveAssistantMessage(
+      streamResult.reply ?? "",
+      streamResult.toolCalls ?? [],
+    );
+    const conversation = (await getRepositories().conversations.getById(conversationId))!;
+    return {
+      userMessage: streamResult.userMessage,
+      assistantMessage: savedAssistantMsg,
+      conversation,
+    };
+  }
+
+  // AI path: consume the stream to get full text
+  let fullText = "";
+  for await (const event of streamResult.result!.fullStream) {
+    if (event.type === "text-delta" && event.text) {
+      fullText += event.text;
+    }
+  }
+
+  // Handle force answer if needed
+  if (streamResult.needsForceAnswer && streamResult.forceAnswerFollowUp) {
+    const forcedText = await streamResult.forceAnswerFollowUp();
+    if (forcedText) {
+      fullText = forcedText;
+    }
+  }
+
+  // Save assistant message (triggers compression internally)
+  const savedAssistantMsg = await streamResult.saveAssistantMessage(
+    fullText,
+    streamResult.toolCallsLog ?? [],
+  );
+
+  const conversation = (await getRepositories().conversations.getById(conversationId))!;
+
+  return {
+    userMessage: streamResult.userMessage,
+    assistantMessage: savedAssistantMsg,
+    conversation,
+  };
+}
+
+/**
+ * Handle a message within a conversation context (streaming).
+ * Saves user message, triggers streamText, and returns callback to save assistant message at finish.
+ */
+export async function streamMessageInConversation(
+  conversationId: string,
+  userMessage: string,
+  onToolEvent?: (event: { type: 'tool-call' | 'tool-result'; name: string; toolCallId: string; args?: unknown; result?: unknown }) => void | Promise<void>,
+  abortController?: AbortController,
+): Promise<{
+  isAi: boolean;
+  userMessage: MessageRow;
+  result?: any;
+  reply?: string;
+  toolCalls?: any[];
+  toolCallsLog?: { name: string; args: unknown; result: unknown }[];
+  abortController?: AbortController;
+  needsForceAnswer?: boolean;
+  forceAnswerFollowUp?: () => Promise<string>;
+  saveAssistantMessage: (reply: string, toolCallsLog: any[]) => Promise<MessageRow>;
+}> {
   recordActivity();
   const repo = getRepositories().conversations;
 
@@ -524,199 +592,9 @@ export async function handleMessageInConversation(
     try {
       await repo.update(conversationId, { modelUsed: selectedModel });
     } catch (err) {
-      logError("handleMessageInConversation/updateModel", err);
+      logError("streamMessageInConversation/updateModel", err);
     }
   }
-
-  const builder = new ContextBuilder({
-    mode: "text",
-    conversationId,
-    modelName: selectedModel,
-    userMessage,
-  });
-  if (summary) builder.withSummary(summary);
-
-  const context = await builder.build(memories, history);
-
-  let reply: string;
-  let toolCallsLog: { name: string; args: unknown; result: unknown }[] = [];
-
-  if (isAiConfigured()) {
-    try {
-      const rawTools = wrapToolsForAI(getAllTools(), conversationId);
-      const { messages: aiMessages, tools: aiTools } = context.cacheEnabled
-        ? applyCacheControl(context.messages, rawTools)
-        : { messages: context.messages, tools: rawTools };
-
-      const maxSteps = configManager.getMaxSteps();
-      const result = await generateText({
-        model: getModelGateway().getModel(selectedModel),
-        messages: aiMessages,
-        tools: aiTools,
-        stopWhen: stepCountIs(maxSteps),
-      });
-
-      logCacheStats(result.providerMetadata as Record<string, unknown> | undefined, "handleMessage");
-
-      // Track token usage (totalUsage includes all steps in multi-step tool loops)
-      if (result.totalUsage) {
-        const promptTokens = result.totalUsage.inputTokens ?? 0;
-        const completionTokens = result.totalUsage.outputTokens ?? 0;
-        if (promptTokens > 0 || completionTokens > 0) {
-          try {
-            repo.updateTokenUsage(conversationId, promptTokens, completionTokens);
-          } catch (err) {
-            logError("handleMessageInConversation/updateTokenUsage", err);
-          }
-        }
-      }
-
-      // Force answer: if the loop ended on a tool-only step, force a text response
-      const lastStep = result.steps?.[result.steps.length - 1];
-      const forceDetector = new ForceAnswerDetector();
-      for (const step of result.steps ?? []) {
-        forceDetector.recordStep({ text: step.text, toolCalls: step.toolCalls });
-      }
-      if (lastStep && forceDetector.count >= 3) {
-        console.info("[ForceAnswer] model stuck in tool loop, forcing text response");
-        const toolMessages = [
-          ...aiMessages,
-          { role: "assistant" as const, content: "" },
-          { role: "user" as const, content: FORCE_ANSWER_MSG },
-        ];
-        const forced = await generateText({
-          model: getModelGateway().getModel(selectedModel),
-          messages: toolMessages,
-        });
-        // Track token usage from forced answer
-        if (forced.usage) {
-          try {
-            repo.updateTokenUsage(
-              conversationId,
-              forced.usage.inputTokens ?? 0,
-              forced.usage.outputTokens ?? 0,
-            );
-          } catch (err) {
-            logError("handleMessageInConversation/forceAnswerTokenUsage", err);
-          }
-        }
-        reply = guardEmptyResponse(forced as { text: string; reasoning?: string | { text: string }[] });
-      } else {
-        reply = guardEmptyResponse(result as { text: string; reasoning?: string | { text: string }[] });
-      }
-
-      // Extract tool calls from steps
-      for (const step of result.steps ?? []) {
-        for (const toolCall of step.toolCalls ?? []) {
-          const toolResult = step.toolResults?.find((r) => r.toolCallId === toolCall.toolCallId);
-          toolCallsLog.push({
-            name: toolCall.toolName,
-            args: "input" in toolCall ? toolCall.input : {},
-            result: toolResult && "output" in toolResult ? toolResult.output : null,
-          });
-        }
-      }
-    } catch (err) {
-      logError("handleMessageInConversation/generateText", err);
-      const { code } = classifyError(err);
-      throw Object.assign(new Error(extractErrorMessage(err)), { code });
-    }
-  } else {
-    const localResult = await handleLocally(userMessage);
-    reply = localResult.reply;
-    toolCallsLog = localResult.toolCalls;
-  }
-
-  // Persist assistant message
-  const savedAssistantMsg = await repo.addMessage(conversationId, {
-    role: "assistant",
-    content: reply,
-    toolCalls: toolCallsLog.length > 0 ? JSON.stringify(toolCallsLog) : undefined,
-  });
-
-  const updatedConversation = (await repo.getById(conversationId))!;
-
-  // Trigger compression if needed (async, non-blocking, after assistant message saved)
-  if (context.shouldCompress && isAiConfigured() && !shouldSkipCompression(conversationId)) {
-    markCompressionStarted(conversationId);
-    repo.getMessages(conversationId)
-      .then((currentHistory) => compressConversation(currentHistory, conversationId))
-      .then(async (compaction) => {
-        if (compaction.summary && compaction.compressedMessages.length > 0) {
-          // Mark compressed messages instead of deleting them
-          const compressedIds = compaction.compressedMessages.map((m) => m.id);
-          await repo.markMessagesCompressed(compressedIds);
-
-          const summaryMsg = createSummaryMessage(
-            conversationId,
-            compaction.summary,
-            compaction.compressedMessages.length,
-          );
-          await repo.addMessage(conversationId, summaryMsg);
-        }
-        // Store extracted preferences as tier:'preference' memories
-        if (compaction.extractedPreferences.length > 0) {
-          const { memories } = getRepositories();
-          await memories.upsertPreferences(compaction.extractedPreferences);
-        }
-      })
-      .catch((err) => {
-        logError("handleMessageInConversation/compress", err);
-      })
-      .finally(() => {
-        markCompressionFinished(conversationId);
-      });
-  }
-
-  return {
-    userMessage: savedUserMsg,
-    assistantMessage: savedAssistantMsg,
-    conversation: updatedConversation,
-  };
-}
-
-/**
- * Handle a message within a conversation context (streaming).
- * Saves user message, triggers streamText, and returns callback to save assistant message at finish.
- */
-export async function streamMessageInConversation(
-  conversationId: string,
-  userMessage: string,
-  onToolEvent?: (event: { type: 'tool-call' | 'tool-result'; name: string; toolCallId: string; args?: unknown; result?: unknown }) => void | Promise<void>,
-  abortController?: AbortController,
-): Promise<{
-  isAi: boolean;
-  userMessage: MessageRow;
-  result?: any;
-  reply?: string;
-  toolCalls?: any[];
-  abortController?: AbortController;
-  needsForceAnswer?: boolean;
-  forceAnswerFollowUp?: () => Promise<string>;
-  saveAssistantMessage: (reply: string, toolCallsLog: any[]) => Promise<MessageRow>;
-}> {
-  recordActivity();
-  const repo = getRepositories().conversations;
-
-  // Persist user message
-  const savedUserMsg = await repo.addMessage(conversationId, {
-    role: "user",
-    content: userMessage,
-  });
-
-  // Auto-generate title from first message
-  const conversation = await repo.getById(conversationId);
-  if (conversation && conversation.title === "New Chat" && conversation.messageCount <= 1) {
-    const title = generateTitleFromMessage(userMessage);
-    await repo.update(conversationId, { title });
-  }
-
-  // Load message history and assemble context
-  const history = await repo.getMessages(conversationId);
-  const memories = await fetchRelevantMemories(userMessage);
-  const summary = extractSummaryFromHistory(history);
-
-  const selectedModel = selectModelForConversation(userMessage, true, history.length);
 
   const builder = new ContextBuilder({
     mode: "text",
@@ -786,6 +664,9 @@ export async function streamMessageInConversation(
       // Token usage accumulator
       const tokenUsage = { promptTokens: 0, completionTokens: 0 };
 
+      // Tool calls log accumulator (consumed by wrapper and SSE caller)
+      const toolCallsLog: { name: string; args: unknown; result: unknown }[] = [];
+
       // Set up turn timeout via AbortController (watchdog)
       const controller = abortController ?? new AbortController();
       const turnTimeout = configManager.getTurnTimeout();
@@ -849,6 +730,21 @@ export async function streamMessageInConversation(
               });
             }
           }
+
+          // Accumulate tool calls log for callers that need it after stream completes
+          for (const tc of toolCalls) {
+            toolCallsLog.push({
+              name: tc.toolName,
+              args: tc.input ?? tc.args,
+              result: null,
+            });
+          }
+          for (const tr of toolResults) {
+            const entry = toolCallsLog.find((e) => e.name === tr.toolName && e.result === null);
+            if (entry) {
+              entry.result = tr.output ?? tr.result;
+            }
+          }
         },
       });
 
@@ -856,6 +752,7 @@ export async function streamMessageInConversation(
         isAi: true,
         userMessage: savedUserMsg,
         result,
+        toolCallsLog,
         abortController: controller,
         needsForceAnswer: forceDetector.count >= FORCE_ANSWER_ROUNDS,
         forceAnswerFollowUp: forceDetector.count >= FORCE_ANSWER_ROUNDS
@@ -897,6 +794,7 @@ export async function streamMessageInConversation(
       userMessage: savedUserMsg,
       reply: localResult.reply,
       toolCalls: localResult.toolCalls,
+      toolCallsLog: localResult.toolCalls,
       saveAssistantMessage,
     };
   }

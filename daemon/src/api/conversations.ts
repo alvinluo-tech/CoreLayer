@@ -138,9 +138,6 @@ app.post("/:id/messages/stream", async (c) => {
   }
 
   try {
-    const toolCallsLog: { name: string; input: unknown; output: unknown }[] = [];
-    const toolCallIndexByCallId = new Map<string, number>();
-
     return streamSSE(c, async (sseStream) => {
       const streamAbortController = new AbortController();
 
@@ -152,18 +149,11 @@ app.post("/:id/messages/stream", async (c) => {
 
       const streamResult = await streamMessageInConversation(id, body.content, async (event) => {
         if (event.type === 'tool-call') {
-          const index = toolCallsLog.length;
-          toolCallsLog.push({ name: event.name, input: event.args ?? null, output: null });
-          toolCallIndexByCallId.set(event.toolCallId, index);
           await sseStream.writeSSE({
             event: 'tool_calls',
             data: JSON.stringify({ name: event.name, toolCallId: event.toolCallId, input: event.args }),
           });
         } else if (event.type === 'tool-result') {
-          const index = toolCallIndexByCallId.get(event.toolCallId);
-          if (index !== undefined && toolCallsLog[index]) {
-            toolCallsLog[index].output = event.result;
-          }
           await sseStream.writeSSE({
             event: 'tool_result',
             data: JSON.stringify({ name: event.name, toolCallId: event.toolCallId, output: event.result }),
@@ -211,7 +201,7 @@ app.post("/:id/messages/stream", async (c) => {
           }
 
           // Save assistant message to database when complete
-          const savedAssistantMsg = await streamResult.saveAssistantMessage(fullText, toolCallsLog);
+          const savedAssistantMsg = await streamResult.saveAssistantMessage(fullText, streamResult.toolCallsLog ?? []);
           const updatedConv = await getRepositories().conversations.getById(id);
 
           // Goal auto-continuation: check if active goals need more work
@@ -234,7 +224,7 @@ app.post("/:id/messages/stream", async (c) => {
           // save it as a partial response instead of discarding
           if (fullText) {
             try {
-              const savedAssistantMsg = await streamResult.saveAssistantMessage(fullText, toolCallsLog);
+              const savedAssistantMsg = await streamResult.saveAssistantMessage(fullText, streamResult.toolCallsLog ?? []);
               const updatedConv = await getRepositories().conversations.getById(id);
               await sseStream.writeSSE({
                 event: "done",
