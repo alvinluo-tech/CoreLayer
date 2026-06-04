@@ -28,6 +28,7 @@ function createTestDb() {
       tool_call_id TEXT,
       parent_message_id TEXT,
       token_count INTEGER,
+      compressed INTEGER NOT NULL DEFAULT 0,
       created_at TEXT DEFAULT 'CURRENT_TIMESTAMP'
     );
   `);
