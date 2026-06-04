@@ -246,7 +246,7 @@ export class ContextBuilder {
     const { shouldCompress: needsCompress, urgency } = shouldCompress(
       historyTokens,
       budget,
-      history.length,
+      selected.length,
     );
 
     // 4. Build messages array

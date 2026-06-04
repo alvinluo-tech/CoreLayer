@@ -307,7 +307,7 @@ export function assembleContext(
   const { shouldCompress: needsCompress, urgency } = shouldCompress(
     historyTokens,
     budget,
-    history.length,
+    selected.length,
   );
 
   // Build the message array for the model

@@ -12,6 +12,36 @@ import type { MessageRow, ConversationRow, ScoredMemoryRow } from "../db/reposit
 import { classifyError, extractErrorMessage, logError } from "../utils/errors.js";
 import { recordActivity } from "../scheduler.js";
 
+// ---- Compression Lock & Cooldown ----
+
+/** Per-conversation compression state to prevent concurrent/duplicate compressions */
+const compressionState = new Map<string, { inProgress: boolean; lastCompressedAt: number }>();
+
+/** Minimum interval between compressions for the same conversation (ms) */
+const COMPRESSION_COOLDOWN_MS = 30_000;
+
+function shouldSkipCompression(conversationId: string): boolean {
+  const state = compressionState.get(conversationId);
+  if (!state) return false;
+  if (state.inProgress) return true;
+  if (Date.now() - state.lastCompressedAt < COMPRESSION_COOLDOWN_MS) return true;
+  return false;
+}
+
+function markCompressionStarted(conversationId: string): void {
+  compressionState.set(conversationId, { inProgress: true, lastCompressedAt: 0 });
+}
+
+function markCompressionFinished(conversationId: string): void {
+  const state = compressionState.get(conversationId);
+  if (state) {
+    state.inProgress = false;
+    state.lastCompressedAt = Date.now();
+  } else {
+    compressionState.set(conversationId, { inProgress: false, lastCompressedAt: Date.now() });
+  }
+}
+
 // ---- IterationBudget ----
 
 const BUDGET_WARNING_MSG = "[系统提示] 你已达到迭代次数上限，请整合已有信息并尽快结束回答。不要再调用工具。";
@@ -495,7 +525,8 @@ export async function handleMessageInConversation(
   const updatedConversation = (await repo.getById(conversationId))!;
 
   // Trigger compression if needed (async, non-blocking, after assistant message saved)
-  if (context.shouldCompress && isAiConfigured()) {
+  if (context.shouldCompress && isAiConfigured() && !shouldSkipCompression(conversationId)) {
+    markCompressionStarted(conversationId);
     repo.getMessages(conversationId)
       .then((currentHistory) => compressConversation(currentHistory, conversationId))
       .then(async (compaction) => {
@@ -515,6 +546,9 @@ export async function handleMessageInConversation(
       })
       .catch((err) => {
         logError("handleMessageInConversation/compress", err);
+      })
+      .finally(() => {
+        markCompressionFinished(conversationId);
       });
   }
 
@@ -586,7 +620,8 @@ export async function streamMessageInConversation(
 
     // Trigger compression if needed after response is saved
     // Re-fetch messages to include the latest assistant reply
-    if (context.shouldCompress && isAiConfigured()) {
+    if (context.shouldCompress && isAiConfigured() && !shouldSkipCompression(conversationId)) {
+      markCompressionStarted(conversationId);
       repo.getMessages(conversationId)
         .then((currentHistory) => compressConversation(currentHistory, conversationId))
         .then(async (compaction) => {
@@ -606,6 +641,9 @@ export async function streamMessageInConversation(
         })
         .catch((err) => {
           logError("streamMessageInConversation/compress", err);
+        })
+        .finally(() => {
+          markCompressionFinished(conversationId);
         });
     }
 
