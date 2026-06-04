@@ -180,12 +180,29 @@ function inferTaskContext(userMessage: string, hasTools: boolean, historyLength:
   expectedAnswerLength?: 'short' | 'medium' | 'long';
   requiresToolCalling?: boolean;
   requiresLongContext?: boolean;
+  requiresPrivacy?: boolean;
+  requiresVision?: boolean;
 } {
   const msgLen = userMessage.length;
+
+  // Privacy-sensitive: messages about passwords, personal data, API keys, credentials
+  const requiresPrivacy =
+    /\b(password|passwd|密码|口令|api[_ ]?key|secret|token|credential|私密|隐私|个人|身份证|id[_ ]?card)\b/i.test(
+      userMessage
+    );
+
+  // Vision: messages referencing images, screenshots, photos, visual analysis
+  const requiresVision =
+    /\b(图片|图像|截图|照片|看图|识别图|image|screenshot|photo|picture|vision|analyze\s+image)\b/i.test(
+      userMessage
+    ) || /!\[.*\]\(.*\)/.test(userMessage); // markdown image syntax
+
   return {
     expectedAnswerLength: msgLen < 50 ? 'short' : msgLen > 300 ? 'long' : 'medium',
     requiresToolCalling: hasTools,
     requiresLongContext: historyLength > 40,
+    requiresPrivacy: requiresPrivacy || undefined,
+    requiresVision: requiresVision || undefined,
   };
 }
 
