@@ -150,8 +150,8 @@ export function computeContextBudget(
 
 // ---- Compression Thresholds ----
 
-/** Soft threshold — trigger compression proactively (raised from 0.5 to reduce frequency) */
-const COMPRESS_SOFT_THRESHOLD = 0.7;
+/** Soft threshold — trigger compression proactively (closer to Odysseus's single 85% threshold) */
+const COMPRESS_SOFT_THRESHOLD = 0.8;
 /** Hard threshold — safety net to prevent API failures */
 const COMPRESS_HARD_THRESHOLD = 0.85;
 /** Minimum messages before compression is worthwhile */
@@ -191,8 +191,8 @@ export function shouldCompress(
 
 // ---- History Selection ----
 
-/** Number of recent messages to always preserve (Hermes pattern) */
-const PROTECT_RECENT_COUNT = 10;
+/** Number of recent messages to always preserve */
+const PROTECT_RECENT_COUNT = 6;
 
 /**
  * Select messages that fit within the token budget.

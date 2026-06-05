@@ -281,7 +281,7 @@ export async function extractPreferences(
  * Protect the last N messages from compression.
  * These are kept intact for immediate conversation continuity.
  */
-const PROTECT_RECENT_COUNT = 10;
+const PROTECT_RECENT_COUNT = 6;
 
 /**
  * Minimum messages required before compression makes sense.

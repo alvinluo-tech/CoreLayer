@@ -15,21 +15,30 @@ import { recordActivity } from "../scheduler.js";
 // ---- Compression Lock & Cooldown ----
 
 /** Per-conversation compression state to prevent concurrent/duplicate compressions */
-const compressionState = new Map<string, { inProgress: boolean; lastCompressedAt: number }>();
+const compressionState = new Map<string, { inProgress: boolean; lastCompressedAt: number; compressCountThisTurn: number }>();
 
 /** Minimum interval between compressions for the same conversation (ms) */
 const COMPRESSION_COOLDOWN_MS = 30_000;
+
+/** Maximum compressions allowed per conversation turn (inspired by OpenClaw's max 3 overflow compactions) */
+const MAX_COMPRESSIONS_PER_TURN = 3;
 
 function shouldSkipCompression(conversationId: string): boolean {
   const state = compressionState.get(conversationId);
   if (!state) return false;
   if (state.inProgress) return true;
   if (Date.now() - state.lastCompressedAt < COMPRESSION_COOLDOWN_MS) return true;
+  if (state.compressCountThisTurn >= MAX_COMPRESSIONS_PER_TURN) return true;
   return false;
 }
 
 function markCompressionStarted(conversationId: string): void {
-  compressionState.set(conversationId, { inProgress: true, lastCompressedAt: 0 });
+  const existing = compressionState.get(conversationId);
+  compressionState.set(conversationId, {
+    inProgress: true,
+    lastCompressedAt: existing?.lastCompressedAt ?? 0,
+    compressCountThisTurn: (existing?.compressCountThisTurn ?? 0) + 1,
+  });
 }
 
 function markCompressionFinished(conversationId: string): void {
@@ -38,7 +47,7 @@ function markCompressionFinished(conversationId: string): void {
     state.inProgress = false;
     state.lastCompressedAt = Date.now();
   } else {
-    compressionState.set(conversationId, { inProgress: false, lastCompressedAt: Date.now() });
+    compressionState.set(conversationId, { inProgress: false, lastCompressedAt: Date.now(), compressCountThisTurn: 0 });
   }
 }
 
@@ -102,9 +111,79 @@ export function injectBudgetWarning(toolResults: ToolResultEntry[]): ToolResultE
   return [warnedResult, ...toolResults.slice(1)];
 }
 
+const LOOP_BREAKER_MSG =
+  "[系统提示] 检测到工具调用循环。请停止调用工具，基于已有信息直接回答用户问题。";
+
+export function injectLoopBreakerWarning(toolResults: ToolResultEntry[]): ToolResultEntry[] {
+  if (toolResults.length === 0) return toolResults;
+  const first = toolResults[0]!;
+  const warnedResult: ToolResultEntry = "output" in first
+    ? { ...first, output: `${LOOP_BREAKER_MSG}\n\n${String(first.output ?? "")}` }
+    : { ...first, result: `${LOOP_BREAKER_MSG}\n\n${String(first.result ?? "")}` };
+  return [warnedResult, ...toolResults.slice(1)];
+}
+
 // ---- Empty Response Guard ----
 
 // ---- Force Answer Detector ----
+
+// ---- Loop Breaker (Odysseus-inspired) ----
+
+/** Same tool + similar args this many times → stuck in a loop */
+const STUCK_THRESHOLD = 3;
+/** Single tool called this many times total → excessive usage */
+const EXCESSIVE_THRESHOLD = 10;
+
+interface ToolCallRecord {
+  callCount: number;
+  lastArgs: string;
+  consecutiveSimilar: number;
+}
+
+/**
+ * Detects tool-loop pathologies:
+ * 1. Same tool called repeatedly with similar args (stuck)
+ * 2. Single tool called excessively many times
+ *
+ * Inspired by Odysseus loop-breaker: 4 stuck rounds or 15 single-tool calls.
+ * Our thresholds are tighter (3 stuck, 10 excessive) because we have IterationBudget
+ * as the outer guardrail and ForceAnswerDetector as the inner one.
+ */
+export class LoopBreaker {
+  private tools = new Map<string, ToolCallRecord>();
+
+  /**
+   * Record a tool call. Returns { stuck, excessive } flags.
+   */
+  recordToolCall(toolName: string, args: unknown): { stuck: boolean; excessive: boolean } {
+    const argsStr = JSON.stringify(args ?? {});
+    const existing = this.tools.get(toolName);
+
+    if (existing) {
+      existing.callCount++;
+      const isSimilar = existing.lastArgs === argsStr;
+      existing.consecutiveSimilar = isSimilar ? existing.consecutiveSimilar + 1 : 0;
+      existing.lastArgs = argsStr;
+    } else {
+      this.tools.set(toolName, {
+        callCount: 1,
+        lastArgs: argsStr,
+        consecutiveSimilar: 0,
+      });
+    }
+
+    const record = this.tools.get(toolName)!;
+    return {
+      stuck: record.consecutiveSimilar >= STUCK_THRESHOLD,
+      excessive: record.callCount >= EXCESSIVE_THRESHOLD,
+    };
+  }
+
+  /** Reset all tracking state (call at start of new turn) */
+  reset(): void {
+    this.tools.clear();
+  }
+}
 
 /** Number of consecutive tool-only rounds before force answer triggers */
 const FORCE_ANSWER_ROUNDS = 3;
@@ -567,6 +646,12 @@ export async function streamMessageInConversation(
   recordActivity();
   const repo = getRepositories().conversations;
 
+  // Reset compression count for new turn
+  const existingState = compressionState.get(conversationId);
+  if (existingState) {
+    existingState.compressCountThisTurn = 0;
+  }
+
   // Persist user message
   const savedUserMsg = await repo.addMessage(conversationId, {
     role: "user",
@@ -660,6 +745,8 @@ export async function streamMessageInConversation(
       const maxSteps = configManager.getMaxSteps();
       const budget = new IterationBudget(maxSteps);
       const forceDetector = new ForceAnswerDetector();
+      const loopBreaker = new LoopBreaker();
+      let loopDetected = false;
 
       // Token usage accumulator
       const tokenUsage = { promptTokens: 0, completionTokens: 0 };
@@ -712,6 +799,17 @@ export async function streamMessageInConversation(
           // Track force answer: consecutive tool-only rounds
           forceDetector.recordStep({ text: step.text, toolCalls: step.toolCalls });
 
+          // Track loop breakage: stuck (same tool + similar args) or excessive (single tool overuse)
+          for (const tc of toolCalls) {
+            const { stuck, excessive } = loopBreaker.recordToolCall(tc.toolName, tc.input ?? tc.args);
+            if (stuck || excessive) {
+              loopDetected = true;
+            }
+          }
+          if (loopDetected) {
+            toolResults = injectLoopBreakerWarning(toolResults);
+          }
+
           if (onToolEvent) {
             for (const tc of toolCalls) {
               await onToolEvent({
@@ -754,8 +852,8 @@ export async function streamMessageInConversation(
         result,
         toolCallsLog,
         abortController: controller,
-        needsForceAnswer: forceDetector.count >= FORCE_ANSWER_ROUNDS,
-        forceAnswerFollowUp: forceDetector.count >= FORCE_ANSWER_ROUNDS
+        needsForceAnswer: forceDetector.count >= FORCE_ANSWER_ROUNDS || loopDetected,
+        forceAnswerFollowUp: (forceDetector.count >= FORCE_ANSWER_ROUNDS || loopDetected)
           ? async () => {
               console.info("[ForceAnswer] stream ended on tool loop, forcing text response");
               const forced = await generateText({

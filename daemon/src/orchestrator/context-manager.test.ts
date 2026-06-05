@@ -138,8 +138,8 @@ describe("shouldCompress", () => {
     expect(result.urgency).toBe("none");
   });
 
-  it("returns soft at 70% usage", () => {
-    const result = shouldCompress(76_000, budget, 10);
+  it("returns soft at 80% usage", () => {
+    const result = shouldCompress(86_000, budget, 10);
     expect(result.shouldCompress).toBe(true);
     expect(result.urgency).toBe("soft");
   });
