@@ -40,7 +40,9 @@ function createTestDb() {
       content TEXT NOT NULL DEFAULT '',
       tool_calls TEXT,
       tool_call_id TEXT,
+      parent_message_id TEXT,
       token_count INTEGER,
+      compressed INTEGER NOT NULL DEFAULT 0,
       created_at TEXT DEFAULT 'CURRENT_TIMESTAMP'
     );
     CREATE TABLE IF NOT EXISTS memories (
@@ -134,6 +136,13 @@ vi.mock("./orchestrator/conversation.js", () => ({
   }),
 }));
 
+const compressorMocks = vi.hoisted(() => ({
+  compressConversation: vi.fn(),
+  extractPreferences: vi.fn(),
+}));
+
+vi.mock("./orchestrator/compressor.js", () => compressorMocks);
+
 const {
   computeNextRun,
   stopScheduler,
@@ -147,6 +156,7 @@ const {
   runTick,
   NO_REPLY_PREFIX,
   resetTickState,
+  resetConsolidationState,
 } = await import("./scheduler.js");
 
 describe("Scheduler", () => {
@@ -158,6 +168,10 @@ describe("Scheduler", () => {
     testDb.delete(schema.memories).run();
     testDb.delete(schema.tasks).run();
     testDb.delete(schema.articles).run();
+    resetConsolidationState();
+    compressorMocks.compressConversation.mockReset();
+    compressorMocks.extractPreferences.mockReset();
+    compressorMocks.extractPreferences.mockResolvedValue([]);
   });
 
   afterEach(() => {
@@ -291,6 +305,75 @@ describe("Scheduler", () => {
   // ---- consolidateOnIdle ----
 
   describe("consolidateOnIdle", () => {
+    it("marks consolidated messages and does not append duplicate summaries on the next run", async () => {
+      const repos = (await import("./db/factory.js")).getRepositories();
+      const conversation = await repos.conversations.create("compression regression");
+
+      for (let i = 0; i < 8; i++) {
+        await repos.conversations.addMessage(conversation.id, {
+          role: i % 2 === 0 ? "user" : "assistant",
+          content: `message ${i}`,
+        });
+      }
+
+      compressorMocks.compressConversation.mockResolvedValueOnce({
+        summary: "compressed summary",
+        compressedMessages: (await repos.conversations.getMessages(conversation.id)).slice(0, 4),
+        preservedMessages: [],
+        extractedPreferences: [],
+      });
+
+      const first = await consolidateOnIdle();
+      const afterFirst = await repos.conversations.getMessages(conversation.id);
+
+      expect(first.conversationsProcessed).toBe(1);
+      expect(afterFirst.filter((m) => m.compressed)).toHaveLength(4);
+      expect(afterFirst.filter((m) => m.role === "system" && m.content.startsWith("[对话摘要"))).toHaveLength(1);
+      expect(compressorMocks.compressConversation).toHaveBeenCalledTimes(1);
+
+      const second = await consolidateOnIdle();
+      const afterSecond = await repos.conversations.getMessages(conversation.id);
+
+      expect(second.conversationsProcessed).toBe(0);
+      expect(afterSecond.filter((m) => m.role === "system" && m.content.startsWith("[对话摘要"))).toHaveLength(1);
+      expect(compressorMocks.compressConversation).toHaveBeenCalledTimes(1);
+    });
+
+    it("stores preferences returned by compression without running extraction again", async () => {
+      const repos = (await import("./db/factory.js")).getRepositories();
+      const conversation = await repos.conversations.create("preference regression");
+
+      for (let i = 0; i < 8; i++) {
+        await repos.conversations.addMessage(conversation.id, {
+          role: i % 2 === 0 ? "user" : "assistant",
+          content: `preference message ${i}`,
+        });
+      }
+
+      compressorMocks.compressConversation.mockResolvedValueOnce({
+        summary: "compressed summary",
+        compressedMessages: (await repos.conversations.getMessages(conversation.id)).slice(0, 4),
+        preservedMessages: [],
+        extractedPreferences: [{ key: "coding_style", value: "用户喜欢简洁实现" }],
+      });
+
+      const result = await consolidateOnIdle();
+      const memories = await repos.memories.getAll();
+
+      expect(result.conversationsProcessed).toBe(1);
+      expect(result.preferencesExtracted).toBe(1);
+      expect(compressorMocks.extractPreferences).not.toHaveBeenCalled();
+      expect(memories).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            key: "coding_style",
+            value: "用户喜欢简洁实现",
+            type: "preference",
+          }),
+        ]),
+      );
+    });
+
     it("should prune unused old memories", async () => {
       const memRepo = (await import("./db/factory.js")).getRepositories().memories;
 

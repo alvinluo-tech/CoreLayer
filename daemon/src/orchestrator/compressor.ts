@@ -394,7 +394,14 @@ export async function compressConversation(
   messages: MessageRow[],
   _conversationId?: string,
 ): Promise<CompactionResult> {
-  if (messages.length < MIN_MESSAGES) {
+  // Filter out already-compressed messages and summary system messages (defense in depth)
+  const activeMessages = messages.filter(
+    (m) =>
+      !m.compressed &&
+      !(m.role === "system" && m.content.startsWith("[对话摘要")),
+  );
+
+  if (activeMessages.length < MIN_MESSAGES) {
     return {
       summary: "",
       compressedMessages: [],
@@ -404,9 +411,9 @@ export async function compressConversation(
   }
 
   // Split: older messages to compress, recent to preserve
-  const recentCount = Math.min(PROTECT_RECENT_COUNT, Math.floor(messages.length / 2));
-  const olderMessages = messages.slice(0, messages.length - recentCount);
-  const recentMessages = messages.slice(messages.length - recentCount);
+  const recentCount = Math.min(PROTECT_RECENT_COUNT, Math.floor(activeMessages.length / 2));
+  const olderMessages = activeMessages.slice(0, activeMessages.length - recentCount);
+  const recentMessages = activeMessages.slice(activeMessages.length - recentCount);
 
   // Sanitize tool messages in the older portion
   const sanitizedOlder = sanitizeToolMessages(olderMessages);

@@ -35,6 +35,11 @@ export const NO_REPLY_PREFIX = "NO_REPLY";
 
 let lastTickAt = 0;
 
+/** Minimum interval between idle consolidation runs (30 minutes) */
+const IDLE_CONSOLIDATION_INTERVAL_MS = 30 * 60 * 1000;
+let lastIdleConsolidationAt = 0;
+let idleConsolidationInProgress = false;
+
 /**
  * Check if enough time has elapsed since the last TICK.
  */
@@ -57,6 +62,14 @@ export function resetTickState(): void {
 }
 
 /**
+ * Reset consolidation cooldown state (for testing).
+ */
+export function resetConsolidationState(): void {
+  lastIdleConsolidationAt = 0;
+  idleConsolidationInProgress = false;
+}
+
+/**
  * Run an autonomous TICK: memory consolidation, todo checks, etc.
  * Uses NO_REPLY mode — conversations created during TICK are cleaned up
  * if the agent responds with NO_REPLY prefix.
@@ -73,8 +86,8 @@ export async function runTick(): Promise<{
   lastTickAt = Date.now();
 
   try {
-    // Run existing consolidation logic
-    const result = await consolidateOnIdle();
+    // Consolidation is already handled by checkIdle() with proper cooldown.
+    // runTick() only handles the autonomous agent processing (TICK conversation).
 
     // Create a TICK conversation for L2 agent processing
     const { handleMessageInConversation } = await import("./orchestrator/conversation.js");
@@ -100,7 +113,7 @@ export async function runTick(): Promise<{
       await repos.conversations.delete(conv.id);
     }
 
-    return { ran: true, conversationsProcessed: result.conversationsProcessed };
+    return { ran: true, conversationsProcessed: 0 };
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
     logError("Scheduler/tick", error);
@@ -375,12 +388,19 @@ async function checkIdle(): Promise<void> {
   if (!state.running) return;
   if (getIdleMs() < state.idleThresholdMs) return;
 
-  // Run idle callback (consolidation) if registered
-  if (state.onIdle) {
-    try {
-      await state.onIdle();
-    } catch (err) {
-      logError("Scheduler/idle", err);
+  // Run idle callback (consolidation) if registered, with cooldown
+  if (state.onIdle && !idleConsolidationInProgress) {
+    const timeSinceLast = Date.now() - lastIdleConsolidationAt;
+    if (timeSinceLast >= IDLE_CONSOLIDATION_INTERVAL_MS) {
+      idleConsolidationInProgress = true;
+      try {
+        await state.onIdle();
+      } catch (err) {
+        logError("Scheduler/idle", err);
+      } finally {
+        lastIdleConsolidationAt = Date.now();
+        idleConsolidationInProgress = false;
+      }
     }
   }
 
@@ -423,33 +443,43 @@ export async function consolidateOnIdle(): Promise<{
   );
 
   // 2. Compress each conversation
-  const { compressConversation, extractPreferences } = await import("./orchestrator/compressor.js");
+  const { compressConversation } = await import("./orchestrator/compressor.js");
 
   for (const conv of recentConversations) {
     try {
       const messages = await repos.conversations.getMessages(conv.id);
-      if (messages.length < CONSOLIDATION_MIN_MESSAGES) continue;
 
-      const result = await compressConversation(messages, conv.id);
+      // Filter to only uncompressed, non-summary messages as candidates
+      const candidates = messages.filter(
+        (m) =>
+          !m.compressed &&
+          !(m.role === "system" && m.content.startsWith("[对话摘要")),
+      );
 
-      // Save summary as system message
-      if (result.summary) {
+      if (candidates.length < CONSOLIDATION_MIN_MESSAGES) continue;
+
+      const result = await compressConversation(candidates, conv.id);
+
+      if (result.summary && result.compressedMessages.length > 0) {
+        // Mark source messages as compressed BEFORE adding summary
+        const compressedIds = result.compressedMessages.map((m) => m.id);
+        await repos.conversations.markMessagesCompressed(compressedIds);
+
+        // Save summary as system message
         await repos.conversations.addMessage(conv.id, {
           role: "system",
           content: `[对话摘要 - 压缩了 ${result.compressedMessages.length} 条消息]\n\n${result.summary}`,
         });
-      }
 
-      // Extract preferences from conversation messages
-      if (result.summary) {
-        const prefs = await extractPreferences(messages);
+        // Store preferences already extracted during compression.
+        const prefs = result.extractedPreferences;
         if (prefs.length > 0) {
           await repos.memories.upsertPreferences(prefs);
           preferencesExtracted += prefs.length;
         }
-      }
 
-      conversationsProcessed++;
+        conversationsProcessed++;
+      }
     } catch (err) {
       logError("Scheduler/consolidate", `Failed to compress conversation ${conv.id}: ${err}`);
     }
