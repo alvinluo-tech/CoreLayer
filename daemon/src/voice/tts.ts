@@ -1,5 +1,7 @@
 import { env } from "../config/env.js";
 import { configManager } from "../config/config-manager.js";
+import type { TTSProvider, TTSOptions as ProviderTTSOptions, TTSResult } from "./providers.js";
+import { voiceRegistry } from "./providers.js";
 
 export type TTSModel = "mimo-v2.5-tts" | "mimo-v2.5-tts-voiceclone" | "mimo-v2.5-tts-voicedesign";
 
@@ -111,3 +113,25 @@ export async function synthesizeSpeech(options: TTSOptions): Promise<Buffer> {
 export function isTtsAvailable(): boolean {
   return Boolean(configManager.getCredentials()["mimo"] || env.MIMO_API_KEY);
 }
+
+// ---- MiMo TTS Provider ----
+
+class MiMoTTSProvider implements TTSProvider {
+  readonly name = "mimo";
+
+  isAvailable(): boolean {
+    return isTtsAvailable();
+  }
+
+  async synthesize(options: ProviderTTSOptions): Promise<TTSResult> {
+    const audio = await synthesizeSpeech({
+      text: options.text,
+      voice: options.voice,
+      speed: options.speed,
+    });
+    return { audio, provider: this.name };
+  }
+}
+
+// Register on module load
+voiceRegistry.registerTTS(new MiMoTTSProvider());

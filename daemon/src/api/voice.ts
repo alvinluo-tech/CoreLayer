@@ -3,6 +3,7 @@ import { streamSSE } from "hono/streaming";
 import { transcribeWithGroq, isAsrAvailable } from "../voice/asr.js";
 import { synthesizeSpeech, isTtsAvailable, type TTSModel } from "../voice/tts.js";
 import { StreamingTTS } from "../voice/streaming-tts.js";
+import { voiceRegistry } from "../voice/providers.js";
 import { streamChat } from "../orchestrator/conversation.js";
 import { getRepositories } from "../db/factory.js";
 import { env } from "../config/env.js";
@@ -144,6 +145,10 @@ voiceRoutes.get("/status", (c) => {
   return c.json({
     asr: isAsrAvailable(),
     tts: isTtsAvailable(),
+    providers: {
+      asr: voiceRegistry.getAvailableASR().map((p) => p.name),
+      tts: voiceRegistry.getAvailableTTS().map((p) => p.name),
+    },
     ttsModels: ["mimo-v2.5-tts", "mimo-v2.5-tts-voiceclone", "mimo-v2.5-tts-voicedesign"],
     wakeWord: !!(env.PORCUPINE_ACCESS_KEY || null),
   });
