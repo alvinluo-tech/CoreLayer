@@ -767,7 +767,7 @@ export function useVoiceConversation(
           };
 
           // Store stop function for barge-in
-          audioQueueRef.current = {
+          const serverTtsQueue = {
             stop: () => {
               if (currentSource) {
                 try {
@@ -780,7 +780,6 @@ export function useVoiceConversation(
               audioBuffers.length = 0;
               audioCtx.close().catch(() => {});
             },
-            isPlaying: () => currentSource !== null,
             setVolume: () => {},
             getVolume: () => 0,
             dispose: () => {
@@ -801,7 +800,12 @@ export function useVoiceConversation(
                   playbackCompleteResolve = resolve;
                 }
               }),
-          } as unknown as AudioQueueManager;
+          };
+          // Add isPlaying as a getter (matches AudioQueueManager interface)
+          Object.defineProperty(serverTtsQueue, 'isPlaying', {
+            get: () => currentSource !== null,
+          });
+          audioQueueRef.current = serverTtsQueue as unknown as AudioQueueManager;
 
           const abortController = new AbortController();
           abortControllerRef.current = abortController;
