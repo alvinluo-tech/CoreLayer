@@ -717,54 +717,171 @@ export function useVoiceConversation(
       lastUserTextRef.current = userText;
       setInterimTranscript('');
 
-      const queue = new AudioQueueManager(`${daemonUrlRef.current}/api/voice/synthesize`);
-      audioQueueRef.current = queue;
+      const useServerTTS = localStorage.getItem('jarvis_voice_server_tts') === 'true';
 
       startBargeInMonitor(); // Start background VAD voice barge-in monitor!
 
       try {
         let fullText = '';
-        let processedSpokenLength = 0;
-        let ttsBuffer = '';
-        let sentenceIndex = 0;
 
-        for await (const token of streamLLMResponse(userText, convId)) {
-          if (!isActiveRef.current) break;
+        if (useServerTTS) {
+          // ---- Server-side streaming TTS (new path) ----
+          const audioCtx = createAudioContext();
+          const audioBuffers: AudioBuffer[] = [];
+          let nextPlayIndex = 0;
+          let currentSource: AudioBufferSourceNode | null = null;
+          let speakingStarted = false;
+          let playbackCompleteResolve: (() => void) | null = null;
 
-          fullText += token;
-          setAssistantText(fullText);
+          const tryPlayNext = () => {
+            if (!isActiveRef.current) return;
+            if (currentSource) return;
+            const buffer = audioBuffers[nextPlayIndex];
+            if (!buffer) return;
+            nextPlayIndex++;
 
-          // Get the total clean spoken text generated so far
-          const spokenText = getSpokenText(fullText);
+            if (!speakingStarted) {
+              speakingStarted = true;
+              setState('speaking');
+            }
 
-          // Get the newly generated clean spoken text since last loop
-          if (spokenText.length > processedSpokenLength) {
-            const newSpokenChars = spokenText.slice(processedSpokenLength);
-            ttsBuffer += newSpokenChars;
-            processedSpokenLength = spokenText.length;
+            if (audioCtx.state === 'suspended') {
+              audioCtx.resume().catch(() => {});
+            }
+            const source = audioCtx.createBufferSource();
+            source.buffer = buffer;
+            source.connect(audioCtx.destination);
+            currentSource = source;
+            source.onended = () => {
+              currentSource = null;
+              tryPlayNext();
+              if (
+                playbackCompleteResolve &&
+                audioBuffers.length <= nextPlayIndex &&
+                !currentSource
+              ) {
+                playbackCompleteResolve();
+              }
+            };
+            source.start();
+          };
+
+          // Store stop function for barge-in
+          audioQueueRef.current = {
+            stop: () => {
+              if (currentSource) {
+                try {
+                  currentSource.stop();
+                } catch {
+                  /* noop */
+                }
+                currentSource = null;
+              }
+              audioBuffers.length = 0;
+              audioCtx.close().catch(() => {});
+            },
+            isPlaying: () => currentSource !== null,
+            setVolume: () => {},
+            getVolume: () => 0,
+            dispose: () => {
+              if (currentSource) {
+                try {
+                  currentSource.stop();
+                } catch {
+                  /* noop */
+                }
+              }
+              audioCtx.close().catch(() => {});
+            },
+            waitForCompletion: () =>
+              new Promise<void>((resolve) => {
+                if (audioBuffers.length <= nextPlayIndex && !currentSource) {
+                  resolve();
+                } else {
+                  playbackCompleteResolve = resolve;
+                }
+              }),
+          } as unknown as AudioQueueManager;
+
+          const abortController = new AbortController();
+          abortControllerRef.current = abortController;
+
+          const voice = voiceProfileManager.getVoiceName();
+          for await (const event of jarvisClient.converseVoiceStream(
+            userText,
+            convId ?? undefined,
+            {
+              voice,
+              signal: abortController.signal,
+            }
+          )) {
+            if (!isActiveRef.current) break;
+
+            if (event.type === 'delta') {
+              fullText += event.text;
+              setAssistantText(fullText);
+            } else if (event.type === 'tts_audio') {
+              try {
+                if (audioCtx.state === 'suspended') {
+                  await audioCtx.resume().catch(() => {});
+                }
+                const decoded = await audioCtx.decodeAudioData(event.audio.slice(0));
+                audioBuffers.push(decoded);
+                tryPlayNext();
+              } catch (err) {
+                logger.warn('[VoiceConversation] Failed to decode TTS audio chunk:', err);
+              }
+            } else if (event.type === 'error') {
+              throw new Error(event.error);
+            }
           }
 
-          const { complete, remainder } = splitSentences(ttsBuffer, sentenceIndex);
-          for (const sentence of complete) {
-            queue.enqueue(sentence, sentenceIndex++);
+          // Wait for all audio to finish playing
+          if (audioBuffers.length > 0) {
+            await audioQueueRef.current.waitForCompletion();
           }
-          ttsBuffer = remainder;
+        } else {
+          // ---- Client-side TTS (existing path) ----
+          const queue = new AudioQueueManager(`${daemonUrlRef.current}/api/voice/synthesize`);
+          audioQueueRef.current = queue;
+
+          let processedSpokenLength = 0;
+          let ttsBuffer = '';
+          let sentenceIndex = 0;
+
+          for await (const token of streamLLMResponse(userText, convId)) {
+            if (!isActiveRef.current) break;
+
+            fullText += token;
+            setAssistantText(fullText);
+
+            const spokenText = getSpokenText(fullText);
+            if (spokenText.length > processedSpokenLength) {
+              const newSpokenChars = spokenText.slice(processedSpokenLength);
+              ttsBuffer += newSpokenChars;
+              processedSpokenLength = spokenText.length;
+            }
+
+            const { complete, remainder } = splitSentences(ttsBuffer, sentenceIndex);
+            for (const sentence of complete) {
+              queue.enqueue(sentence, sentenceIndex++);
+            }
+            ttsBuffer = remainder;
+          }
+
+          if (ttsBuffer.trim() && isActiveRef.current) {
+            queue.enqueue(ttsBuffer.trim(), sentenceIndex++);
+          }
+
+          queue.setTotalExpected(sentenceIndex);
+
+          if (sentenceIndex > 0) {
+            setState('speaking');
+            await queue.waitForCompletion();
+          }
         }
 
-        // Flush remaining text
-        if (ttsBuffer.trim() && isActiveRef.current) {
-          queue.enqueue(ttsBuffer.trim(), sentenceIndex++);
-        }
-
-        queue.setTotalExpected(sentenceIndex);
-
-        // Transition to speaking when first audio starts playing
-        if (sentenceIndex > 0) {
-          setState('speaking');
-          await queue.waitForCompletion();
-        }
-
-        // Done — keep assistantText visible until persisted messages load
+        // Done — breathing delay then post-conversation listen
         if (isActiveRef.current) {
           lastStreamedTextRef.current = fullText;
           logger.debug('[VoiceConversation] Audio done, waiting 800ms breathing delay...');
