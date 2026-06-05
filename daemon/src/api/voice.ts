@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { transcribeWithGroq, isAsrAvailable } from "../voice/asr.js";
 import { synthesizeSpeech, isTtsAvailable, type TTSModel } from "../voice/tts.js";
+import { StreamingTTS } from "../voice/streaming-tts.js";
 import { streamChat } from "../orchestrator/conversation.js";
 import { getRepositories } from "../db/factory.js";
 import { env } from "../config/env.js";
@@ -250,6 +251,141 @@ voiceRoutes.post("/converse-stream", async (c) => {
       });
     } catch (error) {
       logError("voice/converse-stream", error);
+      const message = extractErrorMessage(error);
+      await sseStream.writeSSE({
+        event: "error",
+        data: JSON.stringify({ error: message }),
+      });
+    }
+  });
+});
+
+/**
+ * POST /api/voice/converse-voice-stream
+ * Streaming voice conversation with server-side TTS.
+ * LLM streams text → server splits into sentences → synthesizes audio in parallel →
+ * SSE events: delta (text), tts_audio (base64 WAV), done, error.
+ *
+ * Body: { message: string, conversationId?: string, voice?: string, speed?: number }
+ */
+voiceRoutes.post("/converse-voice-stream", async (c) => {
+  const body = await c.req.json<{
+    message: string;
+    conversationId?: string;
+    voice?: string;
+    speed?: number;
+  }>().catch(() => null);
+
+  if (!body?.message?.trim()) {
+    return c.json({ error: "消息不能为空" }, 400);
+  }
+
+  const repo = getRepositories().conversations;
+  let conversationId = body.conversationId;
+  let messages: ModelMessage[];
+
+  try {
+    if (!conversationId) {
+      const conv = await repo.create("Voice Chat");
+      conversationId = conv.id;
+    }
+
+    await repo.addMessage(conversationId, {
+      role: "user",
+      content: body.message,
+    });
+
+    const history = await repo.getMessages(conversationId);
+    messages = history.slice(-20).map((msg) => ({
+      role: msg.role as "user" | "assistant",
+      content: msg.content,
+    }));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return c.json({ error: `Failed to initialize conversation: ${message}` }, 500);
+  }
+
+  return streamSSE(c, async (sseStream) => {
+    let fullText = "";
+
+    // Initialize streaming TTS
+    const streamingTTS = new StreamingTTS({
+      voice: body.voice,
+      speed: body.speed,
+    });
+
+    // Send audio chunks to client as they're synthesized
+    streamingTTS.onAudio(async (chunk) => {
+      try {
+        await sseStream.writeSSE({
+          event: "tts_audio",
+          data: JSON.stringify({
+            text: chunk.text,
+            audio: Buffer.from(chunk.audio).toString("base64"),
+            index: chunk.index,
+          }),
+        });
+      } catch {
+        // Stream may have been closed by client disconnect
+      }
+    });
+
+    const { stream: result, abortController: streamController } = await streamChat(
+      messages,
+      "voice",
+      conversationId,
+      async () => {}, // no tool events needed for voice
+    );
+
+    c.req.raw.signal.addEventListener("abort", () => {
+      streamController.abort();
+    });
+
+    try {
+      const timeoutMs = configManager.getStreamTimeout();
+      const normalized = withStreamTimeout(
+        normalizeStream(result.fullStream),
+        timeoutMs,
+      );
+
+      for await (const event of normalized) {
+        if (event.type === "delta") {
+          fullText += event.text;
+          // Feed text to streaming TTS for sentence detection
+          streamingTTS.feed(event.text);
+          // Also send text delta for client-side display
+          await sseStream.writeSSE({
+            event: "delta",
+            data: JSON.stringify({ text: event.text }),
+          });
+        } else if (event.type === "thinking") {
+          await sseStream.writeSSE({
+            event: "thinking",
+            data: JSON.stringify({ text: event.text }),
+          });
+        }
+      }
+
+      // Flush remaining text for TTS
+      const ttsChunks = await streamingTTS.flush();
+
+      // Save assistant message
+      await repo.addMessage(conversationId!, {
+        role: "assistant",
+        content: fullText,
+      });
+
+      // Send done event with metadata
+      await sseStream.writeSSE({
+        event: "done",
+        data: JSON.stringify({
+          fullText,
+          conversationId,
+          ttsChunks: ttsChunks.length,
+        }),
+      });
+    } catch (error) {
+      logError("voice/converse-voice-stream", error);
       const message = extractErrorMessage(error);
       await sseStream.writeSSE({
         event: "error",
