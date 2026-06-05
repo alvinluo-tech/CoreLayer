@@ -188,6 +188,93 @@ class JarvisClient {
     }
   }
 
+  /**
+   * Streaming voice conversation with server-side TTS.
+   * Yields text deltas and audio chunks as they arrive via SSE.
+   */
+  async *converseVoiceStream(
+    message: string,
+    conversationId?: string,
+    options?: { voice?: string; speed?: number; signal?: AbortSignal }
+  ): AsyncGenerator<
+    | { type: 'delta'; text: string }
+    | { type: 'tts_audio'; text: string; audio: ArrayBuffer; index: number }
+    | { type: 'thinking'; text: string }
+    | { type: 'done'; fullText: string; conversationId: string; ttsChunks: number }
+    | { type: 'error'; error: string }
+  > {
+    const url = await this.getDaemonUrl();
+
+    const response = await fetch(`${url}/api/voice/converse-voice-stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message, conversationId, ...options }),
+      signal: options?.signal,
+    });
+
+    if (!response.ok) {
+      throw new Error(`Voice stream error (${response.status})`);
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error('No reader');
+
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let currentEvent = 'delta';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (line.startsWith('event: ')) {
+          currentEvent = line.slice(7).trim();
+        } else if (line.startsWith('data: ')) {
+          const data = line.slice(6);
+          if (!data) continue;
+
+          try {
+            const parsed = JSON.parse(data);
+            if (currentEvent === 'delta') {
+              yield { type: 'delta', text: parsed.text };
+            } else if (currentEvent === 'tts_audio') {
+              const binary = atob(parsed.audio);
+              const bytes = new Uint8Array(binary.length);
+              for (let i = 0; i < binary.length; i++) {
+                bytes[i] = binary.charCodeAt(i);
+              }
+              yield {
+                type: 'tts_audio',
+                text: parsed.text,
+                audio: bytes.buffer,
+                index: parsed.index,
+              };
+            } else if (currentEvent === 'thinking') {
+              yield { type: 'thinking', text: parsed.text };
+            } else if (currentEvent === 'done') {
+              yield {
+                type: 'done',
+                fullText: parsed.fullText,
+                conversationId: parsed.conversationId,
+                ttsChunks: parsed.ttsChunks,
+              };
+            } else if (currentEvent === 'error') {
+              yield { type: 'error', error: parsed.error };
+            }
+          } catch {
+            // Skip malformed JSON
+          }
+          currentEvent = 'delta';
+        }
+      }
+    }
+  }
+
   async transcribe(audioBlob: Blob, language?: string): Promise<string> {
     const url = await this.getDaemonUrl();
     const maxRetries = DEFAULT_MAX_RETRIES;
