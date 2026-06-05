@@ -231,6 +231,30 @@ sqlite.exec(`
   END;
 `);
 
+// Migration: FTS5 for memory search
+sqlite.exec(`
+  CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(
+    key, value, type, content_rowid='rowid'
+  );
+
+  CREATE TRIGGER IF NOT EXISTS memories_ai AFTER INSERT ON memories BEGIN
+    INSERT INTO memories_fts(rowid, key, value, type)
+    VALUES (new.rowid, new.key, new.value, new.type);
+  END;
+
+  CREATE TRIGGER IF NOT EXISTS memories_ad AFTER DELETE ON memories BEGIN
+    INSERT INTO memories_fts(memories_fts, rowid, key, value, type)
+    VALUES('delete', old.rowid, old.key, old.value, old.type);
+  END;
+
+  CREATE TRIGGER IF NOT EXISTS memories_au AFTER UPDATE ON memories BEGIN
+    INSERT INTO memories_fts(memories_fts, rowid, key, value, type)
+    VALUES('delete', old.rowid, old.key, old.value, old.type);
+    INSERT INTO memories_fts(rowid, key, value, type)
+    VALUES (new.rowid, new.key, new.value, new.type);
+  END;
+`);
+
 // Migration: create scheduled_tasks table (Phase 14)
 sqlite.exec(`
   CREATE TABLE IF NOT EXISTS scheduled_tasks (

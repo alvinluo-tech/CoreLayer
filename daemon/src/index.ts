@@ -10,6 +10,7 @@ import { registerTodoTools } from "./tools/todo/connector.js";
 import { registerReadingTools } from "./tools/reading/connector.js";
 import { registerReviewTools } from "./tools/review/connector.js";
 import { registerConversationTools } from "./tools/conversation/connector.js";
+import { registerMemoryTools } from "./tools/memory/connector.js";
 import { logError } from "./utils/errors.js";
 import { registerAllAdapters } from "./mcp/adapters/index.js";
 import conversationRoutes from "./api/conversations.js";
@@ -40,6 +41,7 @@ registerTodoTools();
 registerReadingTools();
 registerReviewTools();
 registerConversationTools();
+registerMemoryTools();
 registerAllAdapters();
 
 const app = new Hono();

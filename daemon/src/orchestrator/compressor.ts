@@ -275,6 +275,85 @@ export async function extractPreferences(
   }
 }
 
+// ---- Per-Turn Memory Extraction (BaiLongma Recognizer pattern) ----
+
+export interface ExtractedMemory {
+  key: string;
+  value: string;
+  type: "fact" | "preference" | "context";
+}
+
+const TURN_EXTRACTION_PROMPT = `从以下单轮对话（用户消息 + 助手回复）中提取值得长期记住的信息。
+
+提取类型：
+- fact: 客观事实（用户名字、地址、项目信息等）
+- preference: 用户偏好（喜欢/不喜欢、习惯、风格等）
+- context: 重要上下文（当前任务、进行中的工作等）
+
+规则：
+- 只提取明确表达的信息，不要猜测
+- 每条记忆用一句话描述，key 简短（英文 snake_case）
+- 如果没有值得记住的信息，返回空数组 []
+- 最多提取 5 条
+
+输出 JSON 数组格式：
+[
+  { "key": "user_name", "value": "用户叫张三", "type": "fact" },
+  { "key": "coding_style", "value": "用户喜欢函数式编程", "type": "preference" }
+]`;
+
+/**
+ * Extract memories from a single conversation turn (user + assistant).
+ * Runs as fire-and-forget after each response is saved.
+ */
+export async function extractMemoriesFromTurn(
+  userMessage: string,
+  assistantMessage: string,
+): Promise<ExtractedMemory[]> {
+  if (!userMessage.trim() || !assistantMessage.trim()) return [];
+
+  // Skip very short exchanges (greetings, confirmations)
+  if (userMessage.length < 10 && assistantMessage.length < 50) return [];
+
+  try {
+    const formatted = `User: ${userMessage.slice(0, 1000)}\n\nAssistant: ${assistantMessage.slice(0, 1000)}`;
+
+    const result = await generateText({
+      model: getModel(),
+      messages: [
+        { role: "system", content: TURN_EXTRACTION_PROMPT },
+        { role: "user", content: formatted },
+      ],
+      maxOutputTokens: 512,
+    });
+
+    const text = result.text?.trim() ?? "";
+    if (!text || text === "[]") return [];
+
+    const jsonMatch = text.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) return [];
+
+    const parsed = JSON.parse(jsonMatch[0]) as unknown[];
+    return parsed
+      .filter(
+        (item): item is ExtractedMemory =>
+          typeof item === "object" &&
+          item !== null &&
+          "key" in item &&
+          "value" in item &&
+          "type" in item &&
+          typeof (item as Record<string, unknown>).key === "string" &&
+          typeof (item as Record<string, unknown>).value === "string" &&
+          ["fact", "preference", "context"].includes(
+            (item as Record<string, unknown>).type as string,
+          ),
+      )
+      .slice(0, 5);
+  } catch {
+    return [];
+  }
+}
+
 // ---- Compression Logic ----
 
 /**

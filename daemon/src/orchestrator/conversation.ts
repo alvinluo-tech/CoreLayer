@@ -1,7 +1,7 @@
 import { generateText, streamText, stepCountIs } from "ai";
 import type { ModelMessage, Tool } from "ai";
 import { ContextBuilder, MEMORY_MIN_SCORE } from "./context-builder.js";
-import { compressConversation, createSummaryMessage } from "./compressor.js";
+import { compressConversation, createSummaryMessage, extractMemoriesFromTurn } from "./compressor.js";
 import { getAllTools } from "../tools/registry.js";
 import { wrapToolsForAI } from "../runtime/ai-tool-wrapper.js";
 import { env } from "../config/env.js";
@@ -729,6 +729,23 @@ export async function streamMessageInConversation(
         })
         .finally(() => {
           markCompressionFinished(conversationId);
+        });
+    }
+
+    // Per-turn memory extraction (fire-and-forget, BaiLongma Recognizer pattern)
+    if (isAiConfigured()) {
+      extractMemoriesFromTurn(userMessage, reply)
+        .then(async (extracted) => {
+          if (extracted.length > 0) {
+            const { memories } = getRepositories();
+            for (const mem of extracted) {
+              await memories.upsert({ key: mem.key, value: mem.value, type: mem.type });
+            }
+            console.info(`[Memory] extracted ${extracted.length} memories from turn`);
+          }
+        })
+        .catch((err) => {
+          logError("streamMessageInConversation/extractMemories", err);
         });
     }
 

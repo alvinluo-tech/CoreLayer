@@ -92,28 +92,6 @@ const CATEGORY_BOOSTS: Record<MemoryRow["type"], number> = {
   fact: 1.0,
 };
 
-// ---- Jaccard similarity for scored ranking ----
-
-function tokenize(text: string): Set<string> {
-  return new Set(
-    text
-      .toLowerCase()
-      .replace(/[^\w\s]/g, " ")
-      .split(/\s+/)
-      .filter((w) => w.length > 1),
-  );
-}
-
-function jaccardSimilarity(a: Set<string>, b: Set<string>): number {
-  if (a.size === 0 || b.size === 0) return 0;
-  let intersection = 0;
-  for (const w of a) {
-    if (b.has(w)) intersection++;
-  }
-  const union = a.size + b.size - intersection;
-  return union === 0 ? 0 : intersection / union;
-}
-
 export function createSqliteMemoryRepo(database?: DrizzleDb): MemoryRepository {
   const db = database ?? defaultDb;
   return {
@@ -172,37 +150,74 @@ export function createSqliteMemoryRepo(database?: DrizzleDb): MemoryRepository {
     },
 
     async searchScored(query: string, userId = "default", limit = 10): Promise<ScoredMemoryRow[]> {
-      const queryTokens = tokenize(query);
-      if (queryTokens.size === 0) return [];
+      if (!query.trim()) return [];
+
+      // Sanitize query for FTS5: escape special characters and use OR for multi-word queries
+      const ftsQuery = query
+        .replace(/[^\w一-鿿]+/g, " ")
+        .trim()
+        .split(/\s+/)
+        .filter((w) => w.length > 0)
+        .join(" OR ");
+
+      if (!ftsQuery) return [];
 
       // Fetch non-expired memories for user (expiry filter in SQL)
       const now = new Date().toISOString();
-      const rows = db
-        .select()
-        .from(schema.memories)
-        .where(
-          and(
-            eq(schema.memories.userId, userId),
-            or(
-              isNull(schema.memories.expiresAt),
-              gt(schema.memories.expiresAt, now),
-            ),
-          ),
-        )
-        .all()
-        .map(normalize);
 
-      // Score each memory
+      // Try FTS5 search first, fall back to LIKE search if FTS fails
+      let rows: MemoryRow[];
+      try {
+        // FTS5 search with BM25 ranking
+        const ftsResults = db.all(
+          sql`SELECT m.* FROM memories m
+              INNER JOIN memories_fts fts ON m.rowid = fts.rowid
+              WHERE memories_fts MATCH ${ftsQuery}
+              AND m.user_id = ${userId}
+              AND (m.expires_at IS NULL OR m.expires_at > ${now})
+              ORDER BY rank
+              LIMIT ${limit * 2}`,
+        ) as Array<typeof schema.memories.$inferSelect>;
+        rows = ftsResults.map(normalize);
+      } catch {
+        // FTS query failed (e.g., syntax error), fall back to LIKE
+        // Split query into words and match any word against key or value
+        const words = query.replace(/[^\w一-鿿]+/g, " ").trim().split(/\s+/).filter((w) => w.length > 0);
+        const likeConditions = words.length > 0
+          ? or(
+              ...words.flatMap((w) => [
+                like(schema.memories.key, `%${w}%`),
+                like(schema.memories.value, `%${w}%`),
+              ]),
+            )
+          : or(
+              like(schema.memories.key, `%${query}%`),
+              like(schema.memories.value, `%${query}%`),
+            );
+        const likeResults = db
+          .select()
+          .from(schema.memories)
+          .where(
+            and(
+              eq(schema.memories.userId, userId),
+              or(
+                isNull(schema.memories.expiresAt),
+                gt(schema.memories.expiresAt, now),
+              ),
+              likeConditions,
+            ),
+          )
+          .limit(limit * 2)
+          .all();
+        rows = likeResults.map(normalize);
+      }
+
+      // Score and rank
       const scored: ScoredMemoryRow[] = rows
         .map((m) => {
-          const keyTokens = tokenize(m.key);
-          const valueTokens = tokenize(m.value);
-          const docTokens = new Set([...keyTokens, ...valueTokens]);
+          let score = 0.5; // base score from FTS/LIKE match
 
-          // Base score: Jaccard similarity
-          let score = jaccardSimilarity(queryTokens, docTokens);
-
-          // Key match bonus: if query matches key directly, boost
+          // Key match bonus
           if (m.key.toLowerCase().includes(query.toLowerCase())) {
             score += 0.3;
           }
@@ -211,14 +226,13 @@ export function createSqliteMemoryRepo(database?: DrizzleDb): MemoryRepository {
           const boost = CATEGORY_BOOSTS[m.type] ?? 1.0;
           score *= boost;
 
-          // Confidence boost (if set)
+          // Confidence boost
           if (m.confidence != null) {
-            score *= 0.8 + 0.4 * m.confidence; // range: [0.8, 1.2]
+            score *= 0.8 + 0.4 * m.confidence;
           }
 
           return { ...m, score };
         })
-        .filter((m) => m.score > 0)
         .sort((a, b) => b.score - a.score)
         .slice(0, limit);
 
