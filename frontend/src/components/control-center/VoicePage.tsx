@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { StatusBadge } from './StatusBadge';
-import { Mic, Volume2, Radio, User, Sparkles } from 'lucide-react';
+import { Mic, Volume2, Radio, User, Sparkles, Zap } from 'lucide-react';
 import { voiceProfileManager } from '@/lib/voiceProfile';
 import { getVoiceStatus, type VoiceStatus } from '@/lib/tauri';
 
@@ -10,6 +10,9 @@ export function VoicePage() {
   const [voiceStatus, setVoiceStatus] = useState<VoiceStatus | null>(null);
   const [voiceMode, setVoiceMode] = useState<'pipeline' | 'realtime'>(
     () => (localStorage.getItem('jarvis_voice_mode') as 'pipeline' | 'realtime') || 'pipeline'
+  );
+  const [serverTTS, setServerTTS] = useState(
+    () => localStorage.getItem('jarvis_voice_server_tts') === 'true'
   );
 
   useEffect(() => {
@@ -21,6 +24,12 @@ export function VoicePage() {
   const handleVoiceModeChange = (mode: 'pipeline' | 'realtime') => {
     setVoiceMode(mode);
     localStorage.setItem('jarvis_voice_mode', mode);
+  };
+
+  const handleServerTTSToggle = () => {
+    const next = !serverTTS;
+    setServerTTS(next);
+    localStorage.setItem('jarvis_voice_server_tts', String(next));
   };
 
   return (
@@ -78,6 +87,46 @@ export function VoicePage() {
             </p>
           </button>
         </div>
+      </Card>
+
+      {/* Server TTS Toggle */}
+      <Card className="p-5 space-y-4">
+        <h3 className="text-sm font-medium flex items-center gap-2">
+          <Zap className="h-4 w-4 text-amber-500" />
+          流式语音合成 (Streaming TTS)
+        </h3>
+        <button
+          onClick={handleServerTTSToggle}
+          className={`w-full p-4 rounded-xl border-2 text-left transition-all ${
+            serverTTS
+              ? 'border-amber-500 bg-amber-500/[0.03]'
+              : 'border-border/60 bg-background/50 hover:border-amber-500/30'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold">
+                {serverTTS ? '服务端流式 TTS 已启用' : '客户端逐句 TTS'}
+              </p>
+              <p className="text-[11px] text-muted-foreground mt-1">
+                {serverTTS
+                  ? 'LLM 文本与 TTS 音频同时推送，首字播放延迟 <1s'
+                  : 'LLM 输出后客户端逐句调用 TTS API，延迟 1.5s+'}
+              </p>
+            </div>
+            <div
+              className={`w-10 h-6 rounded-full transition-colors flex items-center px-0.5 ${
+                serverTTS ? 'bg-amber-500' : 'bg-muted'
+              }`}
+            >
+              <div
+                className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                  serverTTS ? 'translate-x-4' : 'translate-x-0'
+                }`}
+              />
+            </div>
+          </div>
+        </button>
       </Card>
 
       {/* Voice Profile Card */}
