@@ -152,9 +152,9 @@ app.route("/api/runs", runsRoutes);
 app.route("/api/memories", memoryRoutes);
 app.route("/api/agent-profiles", agentProfileRoutes);
 
-function startServer(port: number) {
+function startServer(port: number, hostname: string) {
   try {
-    const server = serve({ fetch: app.fetch, port }, (info) => {
+    const server = serve({ fetch: app.fetch, port, hostname }, (info) => {
       console.log(`Jarvis Daemon running on http://localhost:${info.port}`);
     }).on("error", (err: NodeJS.ErrnoException) => {
       if (err.code === "EADDRINUSE") {
@@ -195,7 +195,7 @@ console.log(`[Jarvis] AI: ${aiMode}`);
 console.log(`[Jarvis] 存储: ${getCurrentMode()}`);
 console.log(`[Jarvis] 数据库: ${resolveAppPaths().sqlitePath}`);
 
-startServer(env.DAEMON_PORT);
+startServer(env.DAEMON_PORT, env.DAEMON_HOST);
 
 // Auto-connect saved MCP servers after server starts
 import("./mcp/client.js")
