@@ -11,6 +11,8 @@ function createTestDb() {
     CREATE TABLE IF NOT EXISTS conversations (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL DEFAULT 'default',
+      workspace_id TEXT,
+      project_id TEXT,
       title TEXT NOT NULL DEFAULT 'New Chat',
       model_used TEXT NOT NULL DEFAULT 'mimo-v2.5-pro',
       message_count INTEGER NOT NULL DEFAULT 0,

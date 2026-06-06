@@ -10,6 +10,8 @@ function createTestDb() {
     CREATE TABLE IF NOT EXISTS tasks (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
+      workspace_id TEXT,
+      project_id TEXT,
       title TEXT NOT NULL,
       description TEXT,
       priority INTEGER DEFAULT 3,

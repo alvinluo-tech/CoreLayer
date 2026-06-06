@@ -283,5 +283,127 @@ sqlite.exec(`
   );
 `);
 
+// Migration: Phase 1 - Data Foundation (Workspace, Project, AgentProfile)
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS workspaces (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL DEFAULT 'Default Workspace',
+    description TEXT,
+    owner_id TEXT NOT NULL,
+    settings TEXT,
+    created_at TEXT DEFAULT 'CURRENT_TIMESTAMP',
+    updated_at TEXT DEFAULT 'CURRENT_TIMESTAMP'
+  );
+
+  CREATE TABLE IF NOT EXISTS projects (
+    id TEXT PRIMARY KEY,
+    workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    description TEXT,
+    status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'archived', 'completed')),
+    settings TEXT,
+    created_at TEXT DEFAULT 'CURRENT_TIMESTAMP',
+    updated_at TEXT DEFAULT 'CURRENT_TIMESTAMP'
+  );
+
+  CREATE TABLE IF NOT EXISTS agent_profiles (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT,
+    model_policy TEXT NOT NULL DEFAULT '{}',
+    skills TEXT NOT NULL DEFAULT '[]',
+    tools TEXT NOT NULL DEFAULT '[]',
+    knowledge_scopes TEXT NOT NULL DEFAULT '[]',
+    permissions TEXT NOT NULL DEFAULT '[]',
+    memory_scopes TEXT NOT NULL DEFAULT '[]',
+    is_default INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT DEFAULT 'CURRENT_TIMESTAMP',
+    updated_at TEXT DEFAULT 'CURRENT_TIMESTAMP'
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_projects_workspace_id ON projects(workspace_id);
+`);
+
+// Migration: extend agent_runs table (Phase 1)
+try {
+  sqlite.exec(`ALTER TABLE agent_runs ADD COLUMN workspace_id TEXT REFERENCES workspaces(id)`);
+} catch {
+  // Column already exists — ignore
+}
+try {
+  sqlite.exec(`ALTER TABLE agent_runs ADD COLUMN project_id TEXT REFERENCES projects(id)`);
+} catch {
+  // Column already exists — ignore
+}
+try {
+  sqlite.exec(`ALTER TABLE agent_runs ADD COLUMN task_id TEXT`);
+} catch {
+  // Column already exists — ignore
+}
+try {
+  sqlite.exec(`ALTER TABLE agent_runs ADD COLUMN agent_id TEXT REFERENCES agent_profiles(id)`);
+} catch {
+  // Column already exists — ignore
+}
+try {
+  sqlite.exec(`ALTER TABLE agent_runs ADD COLUMN mode TEXT NOT NULL DEFAULT 'chat'`);
+} catch {
+  // Column already exists — ignore
+}
+try {
+  sqlite.exec(`ALTER TABLE agent_runs ADD COLUMN selected_tools TEXT DEFAULT '[]'`);
+} catch {
+  // Column already exists — ignore
+}
+try {
+  sqlite.exec(`ALTER TABLE agent_runs ADD COLUMN memory_reads TEXT DEFAULT '[]'`);
+} catch {
+  // Column already exists — ignore
+}
+try {
+  sqlite.exec(`ALTER TABLE agent_runs ADD COLUMN memory_writes TEXT DEFAULT '[]'`);
+} catch {
+  // Column already exists — ignore
+}
+try {
+  sqlite.exec(`ALTER TABLE agent_runs ADD COLUMN tool_calls TEXT DEFAULT '[]'`);
+} catch {
+  // Column already exists — ignore
+}
+try {
+  sqlite.exec(`ALTER TABLE agent_runs ADD COLUMN artifacts TEXT DEFAULT '[]'`);
+} catch {
+  // Column already exists — ignore
+}
+try {
+  sqlite.exec(`ALTER TABLE agent_runs ADD COLUMN approvals TEXT DEFAULT '[]'`);
+} catch {
+  // Column already exists — ignore
+}
+
+// Migration: extend conversations table (Phase 1)
+try {
+  sqlite.exec(`ALTER TABLE conversations ADD COLUMN workspace_id TEXT REFERENCES workspaces(id)`);
+} catch {
+  // Column already exists — ignore
+}
+try {
+  sqlite.exec(`ALTER TABLE conversations ADD COLUMN project_id TEXT REFERENCES projects(id)`);
+} catch {
+  // Column already exists — ignore
+}
+
+// Migration: extend tasks table (Phase 1)
+try {
+  sqlite.exec(`ALTER TABLE tasks ADD COLUMN workspace_id TEXT REFERENCES workspaces(id)`);
+} catch {
+  // Column already exists — ignore
+}
+try {
+  sqlite.exec(`ALTER TABLE tasks ADD COLUMN project_id TEXT REFERENCES projects(id)`);
+} catch {
+  // Column already exists — ignore
+}
+
 export const db = drizzle(sqlite, { schema });
 export { schema };

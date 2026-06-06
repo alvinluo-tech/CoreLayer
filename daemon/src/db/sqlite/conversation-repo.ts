@@ -9,6 +9,22 @@ import type {
   SearchResult,
 } from "../repository.js";
 
+function mapConversationRow(row: typeof schema.conversations.$inferSelect): ConversationRow {
+  return {
+    id: row.id,
+    userId: row.userId,
+    workspaceId: row.workspaceId,
+    projectId: row.projectId,
+    title: row.title,
+    modelUsed: row.modelUsed,
+    messageCount: row.messageCount,
+    promptTokens: row.promptTokens ?? 0,
+    completionTokens: row.completionTokens ?? 0,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
 export function createSqliteConversationRepo(): ConversationRepository {
   return {
     async create(title?: string): Promise<ConversationRow> {
@@ -23,6 +39,8 @@ export function createSqliteConversationRepo(): ConversationRepository {
       return {
         id,
         userId: "default",
+        workspaceId: null,
+        projectId: null,
         title: convTitle,
         modelUsed: "mimo-v2.5-pro",
         messageCount: 0,
@@ -39,7 +57,7 @@ export function createSqliteConversationRepo(): ConversationRepository {
         .from(schema.conversations)
         .orderBy(desc(schema.conversations.updatedAt))
         .all();
-      return rows as ConversationRow[];
+      return rows.map(mapConversationRow);
     },
 
     async getById(id: string): Promise<ConversationRow | null> {
@@ -48,7 +66,7 @@ export function createSqliteConversationRepo(): ConversationRepository {
         .from(schema.conversations)
         .where(eq(schema.conversations.id, id))
         .get();
-      return (row as ConversationRow) ?? null;
+      return row ? mapConversationRow(row) : null;
     },
 
     async update(id: string, data: { title?: string; modelUsed?: string }): Promise<ConversationRow> {
@@ -66,7 +84,7 @@ export function createSqliteConversationRepo(): ConversationRepository {
         .from(schema.conversations)
         .where(eq(schema.conversations.id, id))
         .get();
-      return row as ConversationRow;
+      return mapConversationRow(row!);
     },
 
     async delete(id: string): Promise<boolean> {
@@ -148,7 +166,7 @@ export function createSqliteConversationRepo(): ConversationRepository {
         .from(schema.conversations)
         .where(eq(schema.conversations.id, id))
         .get();
-      return row as ConversationRow;
+      return mapConversationRow(row!);
     },
 
     async editMessage(conversationId: string, messageId: string, newContent: string): Promise<MessageRow> {

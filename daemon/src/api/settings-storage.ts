@@ -188,6 +188,8 @@ app.post("/db-config/migrate", async (c) => {
       CREATE TABLE IF NOT EXISTS tasks (
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
+        workspace_id TEXT,
+        project_id TEXT,
         title TEXT NOT NULL,
         description TEXT,
         priority INTEGER DEFAULT 3 NOT NULL,
@@ -232,6 +234,8 @@ app.post("/db-config/migrate", async (c) => {
       CREATE TABLE IF NOT EXISTS conversations (
         id TEXT PRIMARY KEY,
         user_id TEXT DEFAULT 'default' NOT NULL,
+        workspace_id TEXT,
+        project_id TEXT,
         title TEXT DEFAULT 'New Chat' NOT NULL,
         model_used TEXT DEFAULT 'mimo-v2.5-pro' NOT NULL,
         message_count INTEGER DEFAULT 0 NOT NULL,

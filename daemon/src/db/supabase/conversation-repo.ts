@@ -12,6 +12,8 @@ function toConversationRow(row: Record<string, unknown>): ConversationRow {
   return {
     id: row.id as string,
     userId: row.user_id as string,
+    workspaceId: (row.workspace_id as string) ?? null,
+    projectId: (row.project_id as string) ?? null,
     title: row.title as string,
     modelUsed: row.model_used as string,
     messageCount: (row.message_count as number) ?? 0,

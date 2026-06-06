@@ -50,6 +50,8 @@ export interface ReviewRow {
 export interface ConversationRow {
   id: string;
   userId: string;
+  workspaceId: string | null;
+  projectId: string | null;
   title: string;
   modelUsed: string;
   messageCount: number;
@@ -228,12 +230,23 @@ export interface MemoryRow {
 export interface AgentRunRow {
   id: string;
   conversationId: string | null;
+  workspaceId: string | null;
+  projectId: string | null;
+  taskId: string | null;
+  agentId: string | null;
   userMessageId: string | null;
   assistantMessageId: string | null;
   status: "running" | "succeeded" | "failed" | "cancelled";
+  mode: "chat" | "voice" | "tick" | "scheduled" | "workflow";
   selectedModel: string | null;
   routeReason: string | null;
+  selectedTools: string[] | null;
+  memoryReads: string[] | null;
+  memoryWrites: string[] | null;
+  toolCalls: unknown[] | null;
   toolCallCount: number | null;
+  artifacts: unknown[] | null;
+  approvals: unknown[] | null;
   startedAt: string;
   completedAt: string | null;
   durationMs: number | null;
@@ -429,10 +442,16 @@ export interface ScheduledTaskRepository {
 
 export interface CreateAgentRunInput {
   conversationId?: string;
+  workspaceId?: string;
+  projectId?: string;
+  taskId?: string;
+  agentId?: string;
   userMessageId?: string;
   assistantMessageId?: string;
+  mode?: AgentRunRow["mode"];
   selectedModel?: string;
   routeReason?: string;
+  selectedTools?: string[];
 }
 
 export interface AgentRunRepository {
@@ -476,6 +495,127 @@ export interface GoalRepository {
   delete(id: string): Promise<boolean>;
 }
 
+// ---- Workspaces ----
+
+export interface WorkspaceRow {
+  id: string;
+  name: string;
+  description: string | null;
+  ownerId: string;
+  settings: unknown | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateWorkspaceInput {
+  name?: string;
+  description?: string;
+  ownerId: string;
+  settings?: unknown;
+}
+
+export interface UpdateWorkspaceData {
+  name?: string;
+  description?: string;
+  settings?: unknown;
+}
+
+export interface WorkspaceRepository {
+  create(input: CreateWorkspaceInput): Promise<WorkspaceRow>;
+  getById(id: string): Promise<WorkspaceRow | null>;
+  getByOwnerId(ownerId: string): Promise<WorkspaceRow[]>;
+  getDefault(ownerId: string): Promise<WorkspaceRow | null>;
+  update(id: string, data: UpdateWorkspaceData): Promise<WorkspaceRow>;
+  delete(id: string): Promise<boolean>;
+}
+
+// ---- Projects ----
+
+export interface ProjectRow {
+  id: string;
+  workspaceId: string;
+  name: string;
+  description: string | null;
+  status: "active" | "archived" | "completed";
+  settings: unknown | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateProjectInput {
+  workspaceId: string;
+  name: string;
+  description?: string;
+  status?: ProjectRow["status"];
+  settings?: unknown;
+}
+
+export interface UpdateProjectData {
+  name?: string;
+  description?: string;
+  status?: ProjectRow["status"];
+  settings?: unknown;
+}
+
+export interface ProjectRepository {
+  create(input: CreateProjectInput): Promise<ProjectRow>;
+  getById(id: string): Promise<ProjectRow | null>;
+  getByWorkspaceId(workspaceId: string): Promise<ProjectRow[]>;
+  getActiveByWorkspaceId(workspaceId: string): Promise<ProjectRow[]>;
+  update(id: string, data: UpdateProjectData): Promise<ProjectRow>;
+  delete(id: string): Promise<boolean>;
+}
+
+// ---- Agent Profiles ----
+
+export interface AgentProfileRow {
+  id: string;
+  name: string;
+  description: string | null;
+  modelPolicy: unknown;
+  skills: string[];
+  tools: string[];
+  knowledgeScopes: string[];
+  permissions: string[];
+  memoryScopes: string[];
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateAgentProfileInput {
+  name: string;
+  description?: string;
+  modelPolicy?: unknown;
+  skills?: string[];
+  tools?: string[];
+  knowledgeScopes?: string[];
+  permissions?: string[];
+  memoryScopes?: string[];
+  isDefault?: boolean;
+}
+
+export interface UpdateAgentProfileData {
+  name?: string;
+  description?: string;
+  modelPolicy?: unknown;
+  skills?: string[];
+  tools?: string[];
+  knowledgeScopes?: string[];
+  permissions?: string[];
+  memoryScopes?: string[];
+  isDefault?: boolean;
+}
+
+export interface AgentProfileRepository {
+  create(input: CreateAgentProfileInput): Promise<AgentProfileRow>;
+  getById(id: string): Promise<AgentProfileRow | null>;
+  getAll(): Promise<AgentProfileRow[]>;
+  getDefault(): Promise<AgentProfileRow | null>;
+  update(id: string, data: UpdateAgentProfileData): Promise<AgentProfileRow>;
+  delete(id: string): Promise<boolean>;
+}
+
 // ---- Aggregate ----
 
 export interface Repositories {
@@ -490,4 +630,7 @@ export interface Repositories {
   agentRuns: AgentRunRepository;
   scheduledTasks: ScheduledTaskRepository;
   goals: GoalRepository;
+  workspaces: WorkspaceRepository;
+  projects: ProjectRepository;
+  agentProfiles: AgentProfileRepository;
 }

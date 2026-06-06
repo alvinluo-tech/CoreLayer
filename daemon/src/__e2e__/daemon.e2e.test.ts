@@ -19,7 +19,8 @@ function createTestDb() {
   sqlite.pragma("journal_mode = WAL");
   sqlite.exec(`
     CREATE TABLE IF NOT EXISTS tasks (
-      id TEXT PRIMARY KEY, user_id TEXT NOT NULL, title TEXT NOT NULL, description TEXT,
+      id TEXT PRIMARY KEY, user_id TEXT NOT NULL, workspace_id TEXT, project_id TEXT,
+      title TEXT NOT NULL, description TEXT,
       priority INTEGER DEFAULT 3, status TEXT DEFAULT 'pending', due_date TEXT,
       tags TEXT, completed_at TEXT, created_at TEXT DEFAULT 'CURRENT_TIMESTAMP',
       updated_at TEXT DEFAULT 'CURRENT_TIMESTAMP'

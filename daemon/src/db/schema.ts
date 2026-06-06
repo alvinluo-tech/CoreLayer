@@ -1,8 +1,56 @@
 import { sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";
 
+// ---- Workspaces ----
+
+export const workspaces = sqliteTable("workspaces", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull().default("Default Workspace"),
+  description: text("description"),
+  ownerId: text("owner_id").notNull(),
+  settings: text("settings"), // JSON stored as text
+  createdAt: text("created_at").default("CURRENT_TIMESTAMP").notNull(),
+  updatedAt: text("updated_at").default("CURRENT_TIMESTAMP").notNull(),
+});
+
+// ---- Projects ----
+
+export const projects = sqliteTable("projects", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  description: text("description"),
+  status: text("status", { enum: ["active", "archived", "completed"] })
+    .default("active")
+    .notNull(),
+  settings: text("settings"), // JSON stored as text
+  createdAt: text("created_at").default("CURRENT_TIMESTAMP").notNull(),
+  updatedAt: text("updated_at").default("CURRENT_TIMESTAMP").notNull(),
+});
+
+// ---- Agent Profiles ----
+
+export const agentProfiles = sqliteTable("agent_profiles", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  modelPolicy: text("model_policy").notNull().default("{}"), // JSON: preferred_models, fallback
+  skills: text("skills").notNull().default("[]"), // JSON array
+  tools: text("tools").notNull().default("[]"), // JSON array
+  knowledgeScopes: text("knowledge_scopes").notNull().default("[]"), // JSON array
+  permissions: text("permissions").notNull().default("[]"), // JSON array
+  memoryScopes: text("memory_scopes").notNull().default("[]"), // JSON array
+  isDefault: integer("is_default", { mode: "boolean" }).default(false).notNull(),
+  createdAt: text("created_at").default("CURRENT_TIMESTAMP").notNull(),
+  updatedAt: text("updated_at").default("CURRENT_TIMESTAMP").notNull(),
+});
+
 export const tasks = sqliteTable("tasks", {
   id: text("id").primaryKey(),
   userId: text("user_id").notNull(),
+  workspaceId: text("workspace_id").references(() => workspaces.id),
+  projectId: text("project_id").references(() => projects.id),
   title: text("title").notNull(),
   description: text("description"),
   priority: integer("priority").default(3).notNull(), // 1-5, 1=highest
@@ -53,6 +101,8 @@ export const reviews = sqliteTable("reviews", {
 export const conversations = sqliteTable("conversations", {
   id: text("id").primaryKey(),
   userId: text("user_id").notNull().default("default"),
+  workspaceId: text("workspace_id").references(() => workspaces.id),
+  projectId: text("project_id").references(() => projects.id),
   title: text("title").notNull().default("New Chat"),
   modelUsed: text("model_used").notNull().default("mimo-v2.5-pro"),
   messageCount: integer("message_count").notNull().default(0),
@@ -169,14 +219,27 @@ export const scheduledTasks = sqliteTable("scheduled_tasks", {
 export const agentRuns = sqliteTable("agent_runs", {
   id: text("id").primaryKey(),
   conversationId: text("conversation_id"),
+  workspaceId: text("workspace_id").references(() => workspaces.id),
+  projectId: text("project_id").references(() => projects.id),
+  taskId: text("task_id"),
+  agentId: text("agent_id").references(() => agentProfiles.id),
   userMessageId: text("user_message_id"),
   assistantMessageId: text("assistant_message_id"),
   status: text("status", { enum: ["running", "succeeded", "failed", "cancelled"] })
     .default("running")
     .notNull(),
+  mode: text("mode", { enum: ["chat", "voice", "tick", "scheduled", "workflow"] })
+    .default("chat")
+    .notNull(),
   selectedModel: text("selected_model"),
   routeReason: text("route_reason"),
+  selectedTools: text("selected_tools").default("[]"), // JSON array
+  memoryReads: text("memory_reads").default("[]"), // JSON array
+  memoryWrites: text("memory_writes").default("[]"), // JSON array
+  toolCalls: text("tool_calls").default("[]"), // JSON array of ToolCallTrace
   toolCallCount: integer("tool_call_count").default(0),
+  artifacts: text("artifacts").default("[]"), // JSON array
+  approvals: text("approvals").default("[]"), // JSON array
   startedAt: text("started_at").default("CURRENT_TIMESTAMP").notNull(),
   completedAt: text("completed_at"),
   durationMs: integer("duration_ms"),
