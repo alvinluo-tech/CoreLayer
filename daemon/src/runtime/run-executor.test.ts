@@ -362,4 +362,48 @@ describe("runTurn", () => {
 
     expect(result.conversationId).toBe(conv.id);
   });
+
+  it("should emit memory_read and memory_written events when callbacks fire", async () => {
+    const { handleMessageInConversation } = await import("../orchestrator/conversation.js");
+    vi.mocked(handleMessageInConversation).mockImplementationOnce(
+      async (_convId, _input, options) => {
+        // Simulate the conversation handler calling memory callbacks
+        options?.onMemoryRead?.(["mem-1", "mem-2"]);
+        options?.onMemoryWritten?.(["mem-3"]);
+        return {
+          userMessage: {
+            id: "user-msg-2", conversationId: "conv-1", role: "user" as const,
+            content: "test", toolCalls: null, toolCallId: null,
+            parentMessageId: null, tokenCount: null, compressed: false,
+            createdAt: new Date().toISOString(),
+          },
+          assistantMessage: {
+            id: "asst-msg-2", conversationId: "conv-1", role: "assistant" as const,
+            content: "response", toolCalls: null, toolCallId: null,
+            parentMessageId: null, tokenCount: null, compressed: false,
+            createdAt: new Date().toISOString(),
+          },
+          conversation: {
+            id: "conv-1", userId: "default", workspaceId: null, projectId: null,
+            title: "Test", modelUsed: "mimo-v2.5-pro", messageCount: 2,
+            promptTokens: 0, completionTokens: 0,
+            createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+          },
+        };
+      },
+    );
+
+    const events: any[] = [];
+    await runTurn(
+      { workspaceId: "ws-1", agentId: "default", mode: "chat", input: "hello" },
+      { onEvent: (e) => events.push(e) },
+    );
+
+    const memoryRead = events.find((e) => e.type === "memory_read");
+    const memoryWritten = events.find((e) => e.type === "memory_written");
+    expect(memoryRead).toBeDefined();
+    expect(memoryRead.memoryIds).toEqual(["mem-1", "mem-2"]);
+    expect(memoryWritten).toBeDefined();
+    expect(memoryWritten.memoryIds).toEqual(["mem-3"]);
+  });
 });

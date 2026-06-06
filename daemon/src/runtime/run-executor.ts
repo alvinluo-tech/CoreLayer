@@ -150,6 +150,8 @@ export async function runTurn(
           projectId: request.projectId,
           mode: request.mode,
         },
+        onMemoryRead: (memoryIds) => emitAndPersist({ type: "memory_read", memoryIds }),
+        onMemoryWritten: (memoryIds) => emitAndPersist({ type: "memory_written", memoryIds }),
       },
     );
 

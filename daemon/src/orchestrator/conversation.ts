@@ -579,6 +579,10 @@ export interface ConversationOptions {
     projectId?: string;
     mode?: string;
   };
+  /** Called when memories are fetched for context injection */
+  onMemoryRead?: (memoryIds: string[]) => void;
+  /** Called when memories are extracted and written after a turn */
+  onMemoryWritten?: (memoryIds: string[]) => void;
 }
 
 /**
@@ -697,6 +701,9 @@ export async function streamMessageInConversation(
   }
 
   const memories = await fetchRelevantMemories(userMessage, 15, memoryScope);
+  if (memories.length > 0 && options?.onMemoryRead) {
+    options.onMemoryRead(memories.map((m) => m.id));
+  }
   const summary = extractSummaryFromHistory(history);
 
   const selectedModel = options?.modelOverride ?? selectModelForConversation(userMessage, true, history.length);
@@ -768,15 +775,18 @@ export async function streamMessageInConversation(
         .then(async (extracted) => {
           if (extracted.length > 0) {
             const { memories } = getRepositories();
+            const writtenIds: string[] = [];
             for (const mem of extracted) {
-              await memories.upsert({
+              const saved = await memories.upsert({
                 key: mem.key,
                 value: mem.value,
                 type: mem.type,
                 scopeType: memoryScope?.type,
                 scopeId: memoryScope?.id,
               });
+              writtenIds.push(saved.id);
             }
+            options?.onMemoryWritten?.(writtenIds);
             console.info(`[Memory] extracted ${extracted.length} memories from turn`);
           }
         })
