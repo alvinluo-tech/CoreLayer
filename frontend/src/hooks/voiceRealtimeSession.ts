@@ -16,7 +16,11 @@ interface RealtimeCallbacks {
   setLastError: (msg: string | null) => void;
 }
 
-export function createConnectRealtimeSession(refs: RealtimeRefs, callbacks: RealtimeCallbacks) {
+export function createConnectRealtimeSession(
+  refs: RealtimeRefs,
+  callbacks: RealtimeCallbacks,
+  daemonUrl: string
+) {
   return async () => {
     // 1. Clean up any existing connection first
     if (refs.peerConnectionRef.current) {
@@ -38,7 +42,6 @@ export function createConnectRealtimeSession(refs: RealtimeRefs, callbacks: Real
 
     try {
       // 2. Fetch ephemeral key from daemon
-      const daemonUrl = 'http://127.0.0.1:3001';
       const sessionResp = await fetch(`${daemonUrl}/api/voice/realtime-session`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

@@ -19,7 +19,7 @@ export function useVoice(onCommand: (text: string) => void, onWake?: () => void)
   const isRecordingRef = useRef(false);
   const onCommandRef = useRef(onCommand);
   const streamRef = useRef<MediaStream | null>(null);
-  const daemonUrlRef = useRef<string>('http://127.0.0.1:3001');
+  const daemonUrlRef = useRef<string>('');
   const vadAudioCtxRef = useRef<AudioContext | null>(null);
   const vadFrameRef = useRef<number>(0);
   const wantsContinuousRef = useRef(false);
