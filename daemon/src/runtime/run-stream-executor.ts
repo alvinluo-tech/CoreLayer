@@ -168,6 +168,8 @@ export async function runStreamTurn(
           projectId: context.projectId,
           mode: request.mode,
         },
+        // Memory read callback
+        (memoryIds) => emitAndPersist({ type: "memory_read", memoryIds }),
       );
     } catch (err) {
       clearTimeout(watchdogId);

@@ -973,17 +973,35 @@ export async function streamChat(
   onToolEvent?: (event: { type: 'tool-call' | 'tool-result'; name: string; toolCallId: string; args?: unknown; result?: unknown }) => void | Promise<void>,
   abortController?: AbortController,
   runtimeContext?: { runId?: string; projectId?: string; mode?: string },
+  onMemoryRead?: (memoryIds: string[]) => void,
 ): Promise<{ stream: ReturnType<typeof streamText>; abortController: AbortController }> {
   try {
     const selectedModel = selectModelForConversation(messages[0]?.content?.toString() ?? "", false, 0);
+
+    // Build memory scope from conversation context
+    let memoryScope: { type: "user" | "workspace" | "project" | "agent" | "task" | "conversation"; id: string } | null = null;
+    if (conversationId) {
+      const conversation = await getRepositories().conversations.getById(conversationId);
+      if (conversation?.projectId) {
+        memoryScope = { type: "project", id: conversation.projectId };
+      } else if (conversation?.workspaceId) {
+        memoryScope = { type: "workspace", id: conversation.workspaceId };
+      }
+    }
+
+    // Fetch relevant memories for streaming path
+    const userMessage = messages[messages.length - 1]?.content?.toString() ?? "";
+    const memories = await fetchRelevantMemories(userMessage, 15, memoryScope);
+    if (memories.length > 0 && onMemoryRead) {
+      onMemoryRead(memories.map((m) => m.id));
+    }
 
     const builder = new ContextBuilder({
       mode,
       conversationId,
       modelName: selectedModel,
     });
-    // streamChat doesn't have history or memories — build minimal context
-    const context = await builder.build([], []);
+    const context = await builder.build(memories, []);
 
     const rawTools = wrapToolsForAI(getAllTools(), {
       conversationId,
