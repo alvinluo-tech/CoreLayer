@@ -1,19 +1,27 @@
 import { create } from 'zustand';
-import type { Task, CreateTaskInput, UpdateTaskInput } from '@/types/task';
+import type { Task, TaskStatus, CreateTaskInput, UpdateTaskInput } from '@/types/task';
 import * as tauri from '@/lib/tauri';
+
+export type TaskFilterStatus = 'all' | TaskStatus;
 
 interface TaskState {
   tasks: Task[];
+  selectedTaskId: string | null;
+  filterStatus: TaskFilterStatus;
   isLoading: boolean;
   error: string | null;
   fetchTasks: () => Promise<void>;
   createTask: (input: CreateTaskInput) => Promise<Task | null>;
   updateTask: (input: UpdateTaskInput) => Promise<Task | null>;
   deleteTask: (taskId: string) => Promise<boolean>;
+  selectTask: (id: string | null) => void;
+  setFilterStatus: (status: TaskFilterStatus) => void;
 }
 
 export const useTaskStore = create<TaskState>((set) => ({
   tasks: [],
+  selectedTaskId: null,
+  filterStatus: 'all',
   isLoading: false,
   error: null,
 
@@ -65,4 +73,7 @@ export const useTaskStore = create<TaskState>((set) => ({
       return false;
     }
   },
+
+  selectTask: (id) => set({ selectedTaskId: id }),
+  setFilterStatus: (status) => set({ filterStatus: status }),
 }));
