@@ -3,7 +3,12 @@ mod daemon_supervisor;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Duration;
+use tauri::{Manager, State};
 use tokio::sync::Mutex;
+
+/// Runtime daemon URL, set by the supervisor during initialization.
+/// Falls back to DAEMON_URL env var or default.
+static DAEMON_URL: std::sync::OnceLock<String> = std::sync::OnceLock::new();
 
 /// Shared HTTP client with connection pooling and timeout.
 /// Created once at app startup, reused across all daemon proxy calls.
@@ -91,7 +96,9 @@ struct DaemonErrorResponse {
 }
 
 async fn get_daemon_url() -> String {
-    std::env::var("DAEMON_URL").unwrap_or_else(|_| "http://127.0.0.1:3001".to_string())
+    DAEMON_URL.get().cloned().unwrap_or_else(|| {
+        std::env::var("DAEMON_URL").unwrap_or_else(|_| "http://127.0.0.1:3001".to_string())
+    })
 }
 
 /// Percent-encode a string for safe use in URL path segments.
@@ -747,7 +754,15 @@ async fn get_voice_status() -> Result<VoiceStatus, String> {
 }
 
 #[tauri::command]
-async fn get_daemon_url_command() -> Result<String, String> {
+async fn get_daemon_url_command(
+    state: State<'_, daemon_supervisor::DaemonSupervisorState>,
+) -> Result<String, String> {
+    // Try supervisor first, fall back to static
+    let supervisor = state.0.lock().await;
+    let url = supervisor.url().to_string();
+    if url != "http://127.0.0.1:3001" {
+        return Ok(url);
+    }
     Ok(get_daemon_url().await)
 }
 
@@ -1164,7 +1179,6 @@ pub fn run() {
             daemon_supervisor::restart_daemon
         ])
         .setup(|app| {
-            use tauri::Manager;
             // Set window icon from default window icon (embedded via tauri.conf.json bundle)
             if let Some(window) = app.get_webview_window("main") {
                 if let Some(icon) = app.default_window_icon() {
@@ -1179,8 +1193,53 @@ pub fn run() {
                         .build(),
                 )?;
             }
+
+            // Initialize and start daemon supervisor
+            let handle = app.handle().clone();
+            let state = handle.state::<daemon_supervisor::DaemonSupervisorState>();
+            let mut supervisor = state.0.blocking_lock();
+            supervisor.initialize(&handle);
+
+            // Store the daemon URL globally so proxy helpers can use it
+            let daemon_url = supervisor.url().to_string();
+            let _ = DAEMON_URL.set(daemon_url.clone());
+            log::info!("[App] Daemon URL: {}", daemon_url);
+
+            if supervisor.owns_process() {
+                // Spawn daemon in background to not block app startup
+                let state_clone = handle
+                    .state::<daemon_supervisor::DaemonSupervisorState>()
+                    .0
+                    .clone();
+                tauri::async_runtime::spawn(async move {
+                    let mut sup = state_clone.lock().await;
+                    match sup.start_owned_daemon().await {
+                        Ok(()) => log::info!("[App] Daemon started successfully"),
+                        Err(e) => log::error!("[App] Failed to start daemon: {}", e),
+                    }
+                });
+            } else {
+                log::info!("[App] Using external daemon at {}", supervisor.url());
+            }
+
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::Destroyed = event {
+                // Clean up daemon on window close
+                let handle = window.app_handle().clone();
+                if let Some(state) = try_state::<daemon_supervisor::DaemonSupervisorState>(&handle)
+                {
+                    let mut supervisor = state.0.blocking_lock();
+                    supervisor.shutdown();
+                }
+            }
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+/// Try to get state without panicking if not managed.
+fn try_state<T: Send + Sync + 'static>(handle: &tauri::AppHandle) -> Option<tauri::State<'_, T>> {
+    handle.try_state::<T>()
 }
