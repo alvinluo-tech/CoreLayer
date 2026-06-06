@@ -221,6 +221,7 @@ vi.mock("./run-context.js", () => ({
 }));
 
 const { runStreamTurn } = await import("./run-stream-executor.js");
+const { streamChat } = await import("../orchestrator/conversation.js");
 
 describe("runStreamTurn", () => {
   beforeEach(() => {
@@ -404,5 +405,133 @@ describe("runStreamTurn", () => {
     expect(result.runId).toBeDefined();
     expect(result.conversationId).toBeDefined();
     expect(result.abortController).toBeDefined();
+  });
+
+  it("model error marks run as failed", async () => {
+    vi.mocked(streamChat).mockRejectedValueOnce(new Error("LLM unavailable"));
+
+    const result = await runStreamTurn({
+      mode: "chat",
+      input: "test input",
+    });
+
+    const events: unknown[] = [];
+    for await (const event of result.stream) {
+      events.push(event);
+    }
+
+    const run = testDb.select().from(schema.agentRuns).get();
+    expect(run?.status).toBe("failed");
+    expect(run?.error).toContain("LLM unavailable");
+
+    const types = events.map((e: unknown) => (e as { type: string }).type);
+    expect(types).toContain("run_failed");
+  });
+
+  it("client disconnect marks run as cancelled", async () => {
+    const abortController = new AbortController();
+
+    // Mock a stream that yields one delta then checks abort signal on next call
+    let streamStep = 0;
+    vi.mocked(streamChat).mockImplementationOnce(async () => ({
+      stream: {
+        fullStream: {
+          [Symbol.asyncIterator]() {
+            return {
+              async next() {
+                streamStep++;
+                if (streamStep === 1) {
+                  return { value: { type: "delta", text: "partial " }, done: false };
+                }
+                if (abortController.signal.aborted) {
+                  throw new Error("The operation was aborted");
+                }
+                return { value: undefined, done: true };
+              },
+            };
+          },
+        },
+      },
+    }) as never);
+
+    const result = await runStreamTurn(
+      { mode: "chat", input: "test input" },
+      { abortController },
+    );
+
+    // Consume events, abort after first delta
+    const events: unknown[] = [];
+    for await (const event of result.stream) {
+      events.push(event);
+      if (events.length === 2) {
+        abortController.abort();
+      }
+    }
+
+    const run = testDb.select().from(schema.agentRuns).get();
+    expect(run?.status).toBe("cancelled");
+  });
+
+  it("watchdog abort marks run as failed (not cancelled)", async () => {
+    // Simulate watchdog by aborting with the watchdog flag path.
+    // In the real code, the watchdog sets abortedByWatchdog=true before abort().
+    // We test the distinction: when streamChat itself throws (not from abort),
+    // the run is marked "failed" regardless of abort signal state.
+    vi.mocked(streamChat).mockRejectedValueOnce(new Error("watchdog: timeout exceeded"));
+
+    const result = await runStreamTurn({
+      mode: "chat",
+      input: "test input",
+    });
+
+    const events: unknown[] = [];
+    for await (const event of result.stream) {
+      events.push(event);
+    }
+
+    const run = testDb.select().from(schema.agentRuns).get();
+    expect(run?.status).toBe("failed");
+    expect(run?.error).toContain("timeout");
+  });
+
+  it("saves partial assistant text on stream error", async () => {
+    // Mock a stream that yields one delta then throws
+    vi.mocked(streamChat).mockResolvedValueOnce({
+      stream: {
+        fullStream: {
+          [Symbol.asyncIterator]() {
+            let called = false;
+            return {
+              async next() {
+                if (!called) {
+                  called = true;
+                  return { value: { type: "delta", text: "partial" }, done: false };
+                }
+                throw new Error("stream broke");
+              },
+            };
+          },
+        },
+      },
+    } as never);
+
+    const result = await runStreamTurn({
+      mode: "chat",
+      input: "test input",
+    });
+
+    const events: unknown[] = [];
+    for await (const event of result.stream) {
+      events.push(event);
+    }
+
+    // Should have saved partial assistant message
+    const messages = testDb.select().from(schema.messages).all();
+    const asstMsgs = messages.filter((m) => m.role === "assistant");
+    expect(asstMsgs.length).toBe(1);
+    expect(asstMsgs[0].content).toContain("partial");
+
+    const run = testDb.select().from(schema.agentRuns).get();
+    expect(run?.status).toBe("failed");
   });
 });

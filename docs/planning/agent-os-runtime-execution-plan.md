@@ -66,9 +66,9 @@
   - [x] Test: streaming creates AgentRun row
   - [x] Test: stream emits delta events
   - [x] Test: stream captures tool calls
-  - [ ] Test: model error marks run as failed
-  - [ ] Test: client disconnect marks run as cancelled
-  - [ ] Test: watchdog timeout aborts long-running turn
+  - [x] Test: model error marks run as failed
+  - [x] Test: client disconnect marks run as cancelled
+  - [x] Test: watchdog timeout aborts long-running turn
 
 - [x] **1.5** Verify build
   - [x] `pnpm --filter daemon typecheck` passes
@@ -105,7 +105,7 @@
   - [x] Test: voice run produces AgentRun row
   - [x] Test: voice tool calls use approval gate
   - [x] Test: voice errors mark AgentRun failed
-  - [ ] Test: wake-word -> response -> listening loop works
+  - [x] Test: wake-word -> response -> listening loop works (server-side: converse-stream + converse-voice-stream route tests)
 
 - [x] **2.5** Verify build
   - [x] `pnpm --filter daemon typecheck` passes

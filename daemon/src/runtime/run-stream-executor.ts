@@ -55,8 +55,12 @@ export async function runStreamTurn(
 
   const abortController = options?.abortController ?? new AbortController();
 
+  // Track whether abort was triggered by watchdog vs client disconnect
+  let abortedByWatchdog = false;
+
   // Watchdog: abort if turn takes too long
   const watchdogId = setTimeout(() => {
+    abortedByWatchdog = true;
     logError("[StreamTurn] watchdog timeout", new Error(`${WATCHDOG_MS}ms exceeded`));
     abortController.abort();
   }, WATCHDOG_MS);
@@ -165,10 +169,12 @@ export async function runStreamTurn(
       clearTimeout(watchdogId);
       const errorMsg = err instanceof Error ? err.message : String(err);
       logError("runStreamTurn/streamChat", err);
+      const isCancelled = abortController.signal.aborted && !abortedByWatchdog;
+      const finalStatus = isCancelled ? "cancelled" : "failed";
       const failEvent = emit({ type: "run_failed", error: errorMsg });
       persistEvent(run.id, failEvent);
       yield failEvent;
-      await agentRuns.updateStatus(run.id, "failed", errorMsg);
+      await agentRuns.updateStatus(run.id, finalStatus, errorMsg);
       return;
     }
 
@@ -226,9 +232,11 @@ export async function runStreamTurn(
         });
       }
 
+      const isCancelled = abortController.signal.aborted && !abortedByWatchdog;
+      const finalStatus = isCancelled ? "cancelled" : "failed";
       yield emit({ type: "run_failed", error: errorMsg });
       persistEvent(run.id, { type: "run_failed", error: errorMsg });
-      await agentRuns.updateStatus(run.id, "failed", errorMsg);
+      await agentRuns.updateStatus(run.id, finalStatus, errorMsg);
     } finally {
       clearTimeout(watchdogId);
     }
