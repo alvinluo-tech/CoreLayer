@@ -1,5 +1,6 @@
 import type {
   JarvisTool,
+  JSONSchema,
   ToolSource,
   ToolFilter,
   RiskLevel,
@@ -9,6 +10,22 @@ import type {
   MCPToolCallResult,
   MCPToolAnnotations,
 } from '@jarvis/types';
+
+/**
+ * Ensure an MCP-provided JSON Schema has correct types for known fields.
+ * MCP servers may return non-standard shapes (e.g. `required` as an object).
+ */
+function sanitizeSchema(raw: Record<string, unknown> | undefined): JSONSchema {
+  if (!raw) return { type: 'object' };
+  const schema: JSONSchema = { ...raw } as JSONSchema;
+  if (schema.required && !Array.isArray(schema.required)) {
+    delete schema.required;
+  }
+  if (schema.properties && typeof schema.properties !== 'object') {
+    delete schema.properties;
+  }
+  return schema;
+}
 
 export class ToolRegistry {
   private tools: Map<string, JarvisTool> = new Map();
@@ -116,7 +133,7 @@ export class ToolRegistry {
         name: safeName,
         title: t.name,
         description: t.description ?? '',
-        inputSchema: (t.inputSchema ?? { type: 'object' }) as JarvisTool['inputSchema'],
+        inputSchema: sanitizeSchema(t.inputSchema),
         risk,
         permissions: [],
         requiresConfirmation: risk === 'high' || risk === 'critical',
