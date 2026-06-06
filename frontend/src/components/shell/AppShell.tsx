@@ -28,6 +28,7 @@ import { usePaletteStore } from '@/stores/paletteStore';
 import { useTaskStore } from '@/stores/taskStore';
 import { useArticleStore } from '@/stores/articleStore';
 import { useReviewStore } from '@/stores/reviewStore';
+import { useApprovalStore } from '@/stores/approvalStore';
 import { useShellStore } from '@/stores/shellStore';
 
 export function AppShell() {
@@ -308,6 +309,8 @@ export function AppShell() {
   const fetchTasks = useTaskStore((s) => s.fetchTasks);
   const fetchArticles = useArticleStore((s) => s.fetchArticles);
   const fetchDailySummary = useReviewStore((s) => s.fetchDailySummary);
+  const fetchApprovals = useApprovalStore((s) => s.fetchApprovals);
+  const pendingApprovalCount = useApprovalStore((s) => s.pendingCount);
 
   const refreshAllDashboardStates = useCallback(async () => {
     try {
@@ -317,11 +320,19 @@ export function AppShell() {
         fetchTasks().catch(() => {}),
         fetchArticles().catch(() => {}),
         fetchDailySummary().catch(() => {}),
+        fetchApprovals().catch(() => {}),
       ]);
     } catch (err) {
       console.warn('Failed to refresh dashboard states:', err);
     }
-  }, [fetchConversations, refreshMessages, fetchTasks, fetchArticles, fetchDailySummary]);
+  }, [
+    fetchConversations,
+    refreshMessages,
+    fetchTasks,
+    fetchArticles,
+    fetchDailySummary,
+    fetchApprovals,
+  ]);
 
   useEffect(() => {
     if (!isLoading) refreshAllDashboardStates();
@@ -579,7 +590,13 @@ export function AppShell() {
       />
 
       <ShellLayout
-        rail={<GlobalRail activeView={activeView} onViewChange={setActiveView} />}
+        rail={
+          <GlobalRail
+            activeView={activeView}
+            onViewChange={setActiveView}
+            pendingApprovalCount={pendingApprovalCount()}
+          />
+        }
         mainSurface={renderMainContent()}
         inspector={activeView === 'assistant' ? <RightPanel /> : undefined}
       />
