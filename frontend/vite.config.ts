@@ -21,5 +21,12 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     include: ["src/**/*.test.{ts,tsx}"],
+    alias: {
+      "@picovoice/porcupine-web": resolve(__dirname, "./src/test/mocks/porcupine-web.ts"),
+      "@picovoice/web-voice-processor": resolve(
+        __dirname,
+        "./src/test/mocks/web-voice-processor.ts",
+      ),
+    },
   },
 });

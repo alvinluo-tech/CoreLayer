@@ -236,7 +236,7 @@ export function useWakeWord(onWake: () => void, daemonUrl?: string) {
     if (!isActiveRef.current) return;
     isActiveRef.current = false;
 
-    if (method === 'porcupine' && porcupineRef.current) {
+    if (porcupineRef.current) {
       try {
         await porcupineRef.current.unsubscribe();
         await porcupineRef.current.release();
@@ -246,7 +246,7 @@ export function useWakeWord(onWake: () => void, daemonUrl?: string) {
       porcupineRef.current = null;
     }
 
-    if (method === 'webspeech' && recognitionRef.current) {
+    if (recognitionRef.current) {
       try {
         recognitionRef.current.abort();
       } catch (e) {
@@ -258,7 +258,7 @@ export function useWakeWord(onWake: () => void, daemonUrl?: string) {
     setMethod(null);
     setIsListening(false);
     logger.debug('[WakeWord] Stopped');
-  }, [method]);
+  }, []);
 
   // Cleanup on unmount
   useEffect(() => {
