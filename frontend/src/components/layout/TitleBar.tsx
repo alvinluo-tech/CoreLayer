@@ -159,6 +159,28 @@ export function TitleBar() {
           JARVIS
         </span>
 
+        {/* User avatar */}
+        <div
+          className="flex items-center justify-center w-6 h-6 rounded-full shrink-0"
+          style={{
+            border: '1px solid var(--cyan-dim)',
+            background: 'rgba(0,212,255,0.08)',
+          }}
+          title="Alvin"
+        >
+          <span
+            style={{
+              fontFamily: 'var(--font-hud)',
+              fontSize: 10,
+              fontWeight: 700,
+              color: 'var(--cyan)',
+              letterSpacing: 0,
+            }}
+          >
+            A
+          </span>
+        </div>
+
         {/* Separator */}
         <div
           className="h-5"

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 const mockQuery = vi.fn();
 const mockArticleList = vi.fn();
@@ -30,6 +30,12 @@ const { generateDailyReport, generateWeeklyReport, registerDefaultReportSchedule
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Pin to a fixed date so tests are deterministic
+  vi.setSystemTime(new Date("2026-06-04T12:00:00Z"));
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe("generateDailyReport", () => {

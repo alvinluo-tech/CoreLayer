@@ -99,21 +99,51 @@ function SessionCard() {
             fontFamily: 'var(--font-hud)',
             fontSize: 14,
             fontWeight: 700,
-            color: 'var(--cyan)',
-            marginBottom: 2,
+            color: 'var(--text-primary)',
+            marginBottom: 3,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
           }}
         >
-          {modelName}
+          {conversation.title || 'Untitled Session'}
         </div>
         <div
           style={{
-            fontFamily: 'var(--font-data)',
-            fontSize: 10,
-            color: 'var(--text-tertiary)',
-            letterSpacing: 0.5,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
           }}
         >
-          {conversation.messageCount} messages
+          <span
+            style={{
+              fontFamily: 'var(--font-data)',
+              fontSize: 10,
+              color: 'var(--cyan)',
+              letterSpacing: 0.5,
+            }}
+          >
+            {modelName}
+          </span>
+          <span
+            style={{
+              width: 3,
+              height: 3,
+              borderRadius: '50%',
+              background: 'var(--glass-border)',
+              flexShrink: 0,
+            }}
+          />
+          <span
+            style={{
+              fontFamily: 'var(--font-data)',
+              fontSize: 10,
+              color: 'var(--text-tertiary)',
+              letterSpacing: 0.5,
+            }}
+          >
+            {conversation.messageCount} messages
+          </span>
         </div>
       </div>
 
