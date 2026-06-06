@@ -416,9 +416,15 @@ async function checkIdle(): Promise<void> {
   // Expire stale pending approvals (5-minute default timeout)
   try {
     const { approvalRequests } = getRepositories();
-    const expired = await approvalRequests.expireStale(300_000);
-    if (expired > 0) {
-      logError("Scheduler/idle", `Expired ${expired} stale approval requests`);
+    const { count, ids } = await approvalRequests.expireStale(300_000);
+    if (count > 0) {
+      logError("Scheduler/idle", `Expired ${count} stale approval requests`);
+      // Resolve in-memory PermissionGuard confirmations for expired requests
+      const { toolRuntime } = await import("./runtime/index.js");
+      const guard = toolRuntime.getPermissionGuard();
+      for (const id of ids) {
+        guard.resolvePendingConfirmation(id, false);
+      }
     }
   } catch (err) {
     logError("Scheduler/approval-expire", err);

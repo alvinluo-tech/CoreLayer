@@ -111,6 +111,17 @@ export class ToolRuntime {
     }
 
     const startTime = Date.now();
+
+    // Gate: validate args before any execution or approval flow
+    const validationError = validateToolArgs(args, tool.inputSchema);
+    if (validationError) {
+      return {
+        result: { success: false, error: `Validation failed: ${validationError}` },
+        confirmed: false,
+        durationMs: Date.now() - startTime,
+      };
+    }
+
     const permissionCheck = this.permissionGuard.checkPermission(tool);
     const effectiveRequiresConfirmation = adjustPermissionForMode(
       permissionCheck.requiresConfirmation,
@@ -183,10 +194,6 @@ export class ToolRuntime {
       if (context.runId && effectiveRequiresConfirmation) {
         const { approvalRequests } = getRepositories();
         const expiresInMs = 5 * 60_000; // 5 minutes
-        const validationError = validateToolArgs(args, tool.inputSchema);
-        const preview = validationError
-          ? `[validation warning] ${validationError} — ${tool.description}`
-          : tool.description;
         await approvalRequests.create({
           id: pending.confirmationId,
           runId: context.runId,
@@ -197,7 +204,7 @@ export class ToolRuntime {
           projectScope: !!context.projectId,
           mode: context.mode,
           source: context.source,
-          preview,
+          preview: tool.description,
           toolCallId: context.toolCallId,
           expiresAt: Date.now() + expiresInMs,
         });

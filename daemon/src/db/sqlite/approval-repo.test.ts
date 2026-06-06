@@ -265,4 +265,58 @@ describe("ApprovalRequest Repository", () => {
       expect(requests).toHaveLength(2);
     });
   });
+
+  describe("expireStale", () => {
+    it("should return empty ids when no stale approvals exist", async () => {
+      const result = await approvalRepo.expireStale(300_000);
+      expect(result.count).toBe(0);
+      expect(result.ids).toEqual([]);
+    });
+
+    it("should expire stale pending approvals and return their ids", async () => {
+      const a = await approvalRepo.create({
+        runId: testRunId,
+        toolId: "a",
+        toolName: "A",
+        args: {},
+        risk: "high",
+      });
+      const b = await approvalRepo.create({
+        runId: testRunId,
+        toolId: "b",
+        toolName: "B",
+        args: {},
+        risk: "high",
+      });
+      // Approve one so it's not stale
+      await approvalRepo.approve(b.id);
+
+      // Use maxAge=0 to make everything stale
+      const result = await approvalRepo.expireStale(0);
+      expect(result.count).toBe(1);
+      expect(result.ids).toEqual([a.id]);
+
+      // Verify the expired request is no longer pending
+      const expired = await approvalRepo.getById(a.id);
+      expect(expired!.status).toBe("expired");
+      // Verify approved request is unchanged
+      const approved = await approvalRepo.getById(b.id);
+      expect(approved!.status).toBe("approved");
+    });
+
+    it("should not expire non-pending requests", async () => {
+      const a = await approvalRepo.create({
+        runId: testRunId,
+        toolId: "a",
+        toolName: "A",
+        args: {},
+        risk: "high",
+      });
+      await approvalRepo.deny(a.id);
+
+      const result = await approvalRepo.expireStale(0);
+      expect(result.count).toBe(0);
+      expect(result.ids).toEqual([]);
+    });
+  });
 });

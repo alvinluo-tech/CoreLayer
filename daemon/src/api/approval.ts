@@ -168,8 +168,13 @@ approvalRoutes.post("/expire-stale", async (c) => {
     const { approvalRequests } = getRepositories();
     const body = (await c.req.json<{ maxAgeMs?: number }>().catch(() => ({}))) as { maxAgeMs?: number };
     const maxAgeMs = body.maxAgeMs ?? 300_000; // 5 minutes default
-    const expired = await approvalRequests.expireStale(maxAgeMs);
-    return c.json({ expired });
+    const { count, ids } = await approvalRequests.expireStale(maxAgeMs);
+    // Resolve in-memory PermissionGuard confirmations for expired requests
+    const guard = toolRuntime.getPermissionGuard();
+    for (const id of ids) {
+      guard.resolvePendingConfirmation(id, false);
+    }
+    return c.json({ expired: count });
   } catch (err) {
     logError("approvals/expire-stale", err);
     return apiError(c, extractErrorMessage(err), 500);
