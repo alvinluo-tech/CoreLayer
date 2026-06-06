@@ -14,6 +14,7 @@ import {
   ShieldCheck,
   FolderKanban,
   Bot,
+  Plus,
 } from 'lucide-react';
 
 interface CommandItem {
@@ -191,6 +192,40 @@ export function CommandPalette({ onChat, onNavigate, onVoiceToggle }: CommandPal
         close();
       },
       keywords: ['帮助', 'help', '能做什么'],
+    },
+    // Action commands
+    {
+      id: 'create-task',
+      label: 'Create Task',
+      description: '创建新任务',
+      icon: <Plus className="h-4 w-4" />,
+      action: () => {
+        onNavigate('tasks');
+        close();
+      },
+      keywords: ['create', 'task', '新建', '任务', '添加'],
+    },
+    {
+      id: 'search-memory',
+      label: 'Search Memory',
+      description: '搜索记忆',
+      icon: <Search className="h-4 w-4" />,
+      action: () => {
+        onNavigate('memory');
+        close();
+      },
+      keywords: ['search', 'memory', '搜索', '记忆', '查找'],
+    },
+    {
+      id: 'open-recent-run',
+      label: 'Open Recent Run',
+      description: '查看最近的 AgentRun',
+      icon: <Activity className="h-4 w-4" />,
+      action: () => {
+        onNavigate('runs');
+        close();
+      },
+      keywords: ['recent', 'run', '最近', '运行', '执行'],
     },
   ];
 
