@@ -44,6 +44,7 @@ src-tauri/target/
 
 # Rust
 Cargo.lock
+!frontend/src-tauri/Cargo.lock
 
 # TypeScript
 *.tsbuildinfo
