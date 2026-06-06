@@ -19,6 +19,10 @@ describe("configSchema", () => {
         turnTimeout: 180_000,
         memoryMinScore: 0.3,
       },
+      tick: {
+        enabled: true,
+        intervalMinutes: 30,
+      },
     };
     const result = configSchema.safeParse(valid);
     expect(result.success).toBe(true);

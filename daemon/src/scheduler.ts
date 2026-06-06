@@ -4,6 +4,8 @@ import { getSkill } from "./skills/loader.js";
 import { getRepositories } from "./db/factory.js";
 import type { ScheduledTaskRow } from "./db/repository.js";
 import { logError } from "./utils/errors.js";
+import { configManager } from "./config/config-manager.js";
+import { buildTickSystemPrompt } from "./orchestrator/prompt-builder.js";
 
 /**
  * Scheduler for recurring task execution.
@@ -27,9 +29,6 @@ export function getIdleMs(): number {
 
 // ---- TICK system (autonomous idle processing) ----
 
-/** Minimum interval between TICK executions (30 minutes) */
-const TICK_INTERVAL_MS = 30 * 60 * 1000;
-
 /** Prefix that marks an agent response as silent (not shown in UI) */
 export const NO_REPLY_PREFIX = "NO_REPLY";
 
@@ -41,10 +40,13 @@ let lastIdleConsolidationAt = 0;
 let idleConsolidationInProgress = false;
 
 /**
- * Check if enough time has elapsed since the last TICK.
+ * Check if TICK is enabled and enough time has elapsed since the last TICK.
  */
 export function canRunTick(): boolean {
-  return Date.now() - lastTickAt >= TICK_INTERVAL_MS;
+  const config = configManager.getConfig();
+  if (!config.tick.enabled) return false;
+  const intervalMs = configManager.getTickIntervalMs();
+  return Date.now() - lastTickAt >= intervalMs;
 }
 
 /**
@@ -100,6 +102,11 @@ export async function runTick(): Promise<{
         "1. 检查是否有过期的待办事项\n" +
         "2. 检查阅读列表中是否有长时间未阅读的文章\n" +
         "3. 整理近期对话中的关键信息到记忆",
+      {
+        modelOverride: configManager.getTickModelId(),
+        providerOverride: configManager.getTickProviderId(),
+        systemPromptOverride: buildTickSystemPrompt(),
+      },
     );
 
     // Check if agent replied with NO_REPLY — clean up if so

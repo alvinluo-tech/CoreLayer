@@ -570,6 +570,25 @@ export async function setActiveModel(modelId: string): Promise<{ success: boolea
   return invoke('set_active_model', { modelId });
 }
 
+// ---- TICK Config ----
+
+export interface TickConfig {
+  enabled: boolean;
+  intervalMinutes: number;
+  modelId?: string;
+  providerId?: string;
+}
+
+export async function getTickConfig(): Promise<TickConfig> {
+  return invoke('get_tick_config');
+}
+
+export async function updateTickConfig(
+  config: Partial<TickConfig>
+): Promise<{ success: boolean; config: TickConfig }> {
+  return invoke('update_tick_config', { config });
+}
+
 // ---- Model Profile CRUD ----
 
 export async function upsertModelProfile(profile: {

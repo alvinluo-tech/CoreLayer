@@ -23,6 +23,13 @@ const defaultsSchema = z.object({
   memoryMinScore: z.number().min(0).max(1).default(0.3),
 });
 
+const tickSchema = z.object({
+  enabled: z.boolean().default(true),
+  intervalMinutes: z.number().int().min(5).max(240).default(30),
+  modelId: z.string().optional(),
+  providerId: z.string().optional(),
+}).default({});
+
 export const configSchema = z.object({
   version: z.literal(1).default(1),
   activeProvider: z.string().default("mimo"),
@@ -30,6 +37,7 @@ export const configSchema = z.object({
   providers: z.array(providerSchema).default([]),
   routingRules: z.array(routingRuleSchema).default([]),
   defaults: defaultsSchema.default({}),
+  tick: tickSchema,
   migrated: z.boolean().optional(),
 });
 

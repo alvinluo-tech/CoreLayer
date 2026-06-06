@@ -563,6 +563,13 @@ async function handleLocally(userMessage: string): Promise<{
   };
 }
 
+/** Options for conversation message handling (used by TICK, scheduled tasks, etc.) */
+export interface ConversationOptions {
+  modelOverride?: string;
+  providerOverride?: string;
+  systemPromptOverride?: string;
+}
+
 /**
  * Handle a message within a conversation context (non-streaming).
  * Uses Vercel AI SDK generateText with automatic tool calling.
@@ -570,12 +577,13 @@ async function handleLocally(userMessage: string): Promise<{
 export async function handleMessageInConversation(
   conversationId: string,
   userMessage: string,
+  options?: ConversationOptions,
 ): Promise<{
   userMessage: MessageRow;
   assistantMessage: MessageRow;
   conversation: ConversationRow;
 }> {
-  const streamResult = await streamMessageInConversation(conversationId, userMessage);
+  const streamResult = await streamMessageInConversation(conversationId, userMessage, undefined, undefined, options);
 
   // Non-AI local fallback: save and return directly
   if (!streamResult.isAi) {
@@ -631,6 +639,7 @@ export async function streamMessageInConversation(
   userMessage: string,
   onToolEvent?: (event: { type: 'tool-call' | 'tool-result'; name: string; toolCallId: string; args?: unknown; result?: unknown }) => void | Promise<void>,
   abortController?: AbortController,
+  options?: ConversationOptions,
 ): Promise<{
   isAi: boolean;
   userMessage: MessageRow;
@@ -670,7 +679,7 @@ export async function streamMessageInConversation(
   const memories = await fetchRelevantMemories(userMessage);
   const summary = extractSummaryFromHistory(history);
 
-  const selectedModel = selectModelForConversation(userMessage, true, history.length);
+  const selectedModel = options?.modelOverride ?? selectModelForConversation(userMessage, true, history.length);
 
   // Update conversation model if it changed
   if (conversation && conversation.modelUsed !== selectedModel) {
@@ -686,6 +695,7 @@ export async function streamMessageInConversation(
     conversationId,
     modelName: selectedModel,
     userMessage,
+    systemPromptOverride: options?.systemPromptOverride,
   });
   if (summary) builder.withSummary(summary);
 

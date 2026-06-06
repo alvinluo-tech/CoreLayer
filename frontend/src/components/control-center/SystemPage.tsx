@@ -2,8 +2,25 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { StatusBadge } from './StatusBadge';
-import { Server, RefreshCw, Loader2, Clock, AlertTriangle, RotateCw } from 'lucide-react';
-import { getDaemonStatus, getHealth, restartDaemon, type DaemonStatus } from '@/lib/tauri';
+import { SettingsCard } from './SettingsCard';
+import { useModelStore } from '@/stores/modelStore';
+import { Server, RefreshCw, Loader2, Clock, AlertTriangle, RotateCw, Activity } from 'lucide-react';
+import {
+  getDaemonStatus,
+  getHealth,
+  restartDaemon,
+  getTickConfig,
+  updateTickConfig,
+  type DaemonStatus,
+  type TickConfig,
+} from '@/lib/tauri';
+
+const intervalOptions = [
+  { value: '15', label: '15 分钟' },
+  { value: '30', label: '30 分钟' },
+  { value: '60', label: '60 分钟' },
+  { value: '120', label: '120 分钟' },
+] as const;
 
 export function SystemPage() {
   const [daemon, setDaemon] = useState<DaemonStatus | null>(null);
@@ -16,16 +33,35 @@ export function SystemPage() {
   } | null>(null);
   const [restarting, setRestarting] = useState(false);
   const [restartError, setRestartError] = useState<string | null>(null);
+  const [tick, setTick] = useState<TickConfig | null>(null);
+  const [tickSaving, setTickSaving] = useState(false);
+
+  const { modelProfiles, fetchAll: fetchModels } = useModelStore();
 
   const fetchData = async () => {
-    const [d, h] = await Promise.allSettled([getDaemonStatus(), getHealth()]);
+    const [d, h, t] = await Promise.allSettled([getDaemonStatus(), getHealth(), getTickConfig()]);
     if (d.status === 'fulfilled') setDaemon(d.value);
     if (h.status === 'fulfilled') setHealth(h.value);
+    if (t.status === 'fulfilled') setTick(t.value);
   };
 
   useEffect(() => {
     fetchData();
+    fetchModels();
   }, []);
+
+  const saveTick = async (patch: Partial<TickConfig>) => {
+    if (!tick) return;
+    setTickSaving(true);
+    try {
+      const result = await updateTickConfig(patch);
+      if (result.config) setTick(result.config);
+    } catch (err) {
+      console.error('Failed to update TICK config:', err);
+    } finally {
+      setTickSaving(false);
+    }
+  };
 
   const handleRestart = async () => {
     setRestarting(true);
@@ -171,6 +207,113 @@ export function SystemPage() {
           </p>
         )}
       </Card>
+
+      {/* TICK Settings */}
+      <SettingsCard title="TICK 自主处理" icon={Activity}>
+        <p
+          className="text-xs mb-4"
+          style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-data)' }}
+        >
+          后台自主任务循环，定期检查待办、阅读和记忆。
+        </p>
+
+        {tick && (
+          <div className="space-y-4">
+            {/* Toggle */}
+            <div className="flex items-center justify-between">
+              <span className="text-sm">启用 TICK</span>
+              <button
+                onClick={() => saveTick({ enabled: !tick.enabled })}
+                disabled={tickSaving}
+                className="relative w-10 h-5 rounded-full transition-colors duration-200"
+                style={{
+                  background: tick.enabled ? 'var(--cyan)' : 'var(--glass-border)',
+                }}
+              >
+                <span
+                  className="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform duration-200"
+                  style={{
+                    transform: tick.enabled ? 'translateX(20px)' : 'translateX(0)',
+                  }}
+                />
+              </button>
+            </div>
+
+            {/* Interval */}
+            <div>
+              <span className="text-sm block mb-2">执行间隔</span>
+              <div
+                className="inline-flex rounded-lg p-0.5"
+                style={{
+                  background: 'var(--glass-bg)',
+                  border: '1px solid var(--glass-border)',
+                }}
+              >
+                {intervalOptions.map((opt) => {
+                  const val = Number(opt.value);
+                  const isActive = tick.intervalMinutes === val;
+                  return (
+                    <button
+                      key={opt.value}
+                      onClick={() => saveTick({ intervalMinutes: val })}
+                      disabled={tickSaving}
+                      className="px-3 py-1.5 rounded-md text-xs transition-all duration-200"
+                      style={{
+                        fontFamily: 'var(--font-hud)',
+                        fontWeight: isActive ? 600 : 400,
+                        letterSpacing: 0.5,
+                        background: isActive ? 'rgba(0,212,255,0.1)' : 'transparent',
+                        color: isActive ? 'var(--cyan)' : 'var(--text-tertiary)',
+                        border: isActive
+                          ? '1px solid rgba(0,212,255,0.15)'
+                          : '1px solid transparent',
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Model */}
+            <div>
+              <span className="text-sm block mb-2">TICK 模型</span>
+              <select
+                value={tick.modelId ?? ''}
+                onChange={(e) => saveTick({ modelId: e.target.value || undefined })}
+                disabled={tickSaving}
+                className="w-full px-3 py-2 rounded-md text-xs"
+                style={{
+                  background: 'var(--glass-bg)',
+                  border: '1px solid var(--glass-border)',
+                  color: 'var(--text-primary)',
+                  fontFamily: 'var(--font-data)',
+                }}
+              >
+                <option value="">跟随默认模型</option>
+                {modelProfiles.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.displayName ?? p.modelName} ({p.provider})
+                  </option>
+                ))}
+              </select>
+              <p
+                className="text-xs mt-1.5"
+                style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-data)' }}
+              >
+                选择轻量模型可大幅降低 TICK 的 token 成本。
+              </p>
+            </div>
+
+            {tickSaving && (
+              <p className="text-xs" style={{ color: 'var(--cyan)' }}>
+                保存中...
+              </p>
+            )}
+          </div>
+        )}
+      </SettingsCard>
     </div>
   );
 }

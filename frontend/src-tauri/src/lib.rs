@@ -865,6 +865,18 @@ async fn set_active_model(model_id: String) -> Result<serde_json::Value, String>
     .await
 }
 
+// ---- TICK Config Commands ----
+
+#[tauri::command]
+async fn get_tick_config() -> Result<serde_json::Value, String> {
+    daemon_get(get_daemon_client(), "/api/settings/tick").await
+}
+
+#[tauri::command]
+async fn update_tick_config(config: serde_json::Value) -> Result<serde_json::Value, String> {
+    daemon_put(get_daemon_client(), "/api/settings/tick", config).await
+}
+
 // ---- Model Profile CRUD Commands ----
 
 #[tauri::command]
@@ -945,6 +957,8 @@ pub fn run() {
             update_routing_rules,
             get_active_model,
             set_active_model,
+            get_tick_config,
+            update_tick_config,
             upsert_model_profile,
             delete_model_profile,
             daemon_supervisor::daemon_status,

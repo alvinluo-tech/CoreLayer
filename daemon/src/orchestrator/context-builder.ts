@@ -192,6 +192,7 @@ export class ContextBuilder {
   private modelName: string;
   private userMessage?: string;
   private summary?: string;
+  private systemPromptOverride?: string;
   private sections: ContextSection[] = [];
   private selectedToolNames: string[] = [];
   private selectedMemoryItems: { key: string; type: string; score: number }[] =
@@ -202,11 +203,13 @@ export class ContextBuilder {
     conversationId?: string;
     modelName: string;
     userMessage?: string;
+    systemPromptOverride?: string;
   }) {
     this.mode = config.mode ?? "text";
     this.conversationId = config.conversationId;
     this.modelName = config.modelName;
     this.userMessage = config.userMessage;
+    this.systemPromptOverride = config.systemPromptOverride;
   }
 
   /**
@@ -228,6 +231,48 @@ export class ContextBuilder {
     memories: ScoredMemoryRow[],
     history: MessageRow[],
   ): Promise<BuiltContext> {
+    // Fast path: use override system prompt directly (e.g. for TICK)
+    if (this.systemPromptOverride) {
+      const systemPrompt = this.systemPromptOverride;
+      const systemPromptTokens = estimateTokens(systemPrompt);
+      const budget = computeContextBudget(this.modelName, systemPromptTokens, 0);
+      const uncompressedHistory = history.filter(
+        (m) => !m.compressed && !(m.role === "system" && m.content.startsWith("[对话摘要")),
+      );
+      const { selected, truncated, estimatedTokens: historyTokens } =
+        selectHistoryWithinBudget(uncompressedHistory, budget);
+      const { shouldCompress: needsCompress, urgency } = shouldCompress(
+        historyTokens, budget, selected.length,
+      );
+      const messages: ModelMessage[] = [{ role: "system", content: systemPrompt }];
+      for (const msg of selected) {
+        if (msg.role === "user" || msg.role === "assistant") {
+          messages.push({ role: msg.role, content: msg.content });
+        }
+      }
+      const totalTokens = systemPromptTokens + historyTokens;
+      const tokenInfo = { system: systemPromptTokens, memory: 0, history: historyTokens, total: totalTokens, budget: budget.maxInputTokens };
+      return {
+        messages,
+        historyTruncated: truncated,
+        shouldCompress: needsCompress,
+        compressionUrgency: urgency,
+        tokens: tokenInfo,
+        toolsUsed: [],
+        cacheEnabled: systemPrompt.length > 4000,
+        debug: () => ({
+          mode: this.mode,
+          modelName: this.modelName,
+          sections: [],
+          tools: { total: 0, selected: 0, names: [] },
+          memories: { total: 0, selected: 0, items: [] },
+          summaryInjected: false,
+          tokens: tokenInfo,
+          tierTokens: { stable: systemPromptTokens, context: 0, volatile: 0 },
+        }),
+      };
+    }
+
     // 1. Build all sections with tier annotations
     this.sections = [];
 

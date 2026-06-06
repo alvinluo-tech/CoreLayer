@@ -98,6 +98,12 @@ export interface JarvisConfig {
     turnTimeout: number;
     memoryMinScore: number;
   };
+  tick: {
+    enabled: boolean;
+    intervalMinutes: number;
+    modelId?: string;
+    providerId?: string;
+  };
   migrated?: boolean;
 }
 
@@ -167,6 +173,10 @@ const DEFAULT_CONFIG: JarvisConfig = {
     streamTimeout: 120_000,
     turnTimeout: 180_000,
     memoryMinScore: 0.3,
+  },
+  tick: {
+    enabled: true,
+    intervalMinutes: 30,
   },
 };
 
@@ -325,6 +335,27 @@ class ConfigManager {
 
   setRoutingRules(rules: RoutingRule[]): void {
     this.updateConfig({ routingRules: rules });
+  }
+
+  getTickConfig(): JarvisConfig["tick"] {
+    return this.getConfig().tick;
+  }
+
+  getTickIntervalMs(): number {
+    return (this.getConfig().tick.intervalMinutes ?? 30) * 60 * 1000;
+  }
+
+  getTickModelId(): string | undefined {
+    return this.getConfig().tick.modelId;
+  }
+
+  getTickProviderId(): string | undefined {
+    return this.getConfig().tick.providerId;
+  }
+
+  updateTickConfig(partial: Partial<JarvisConfig["tick"]>): void {
+    const current = this.getConfig();
+    this.updateConfig({ tick: { ...current.tick, ...partial } });
   }
 }
 
