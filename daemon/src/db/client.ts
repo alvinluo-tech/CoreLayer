@@ -1,11 +1,13 @@
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import * as schema from "./schema.js";
-import { env } from "../config/env.js";
+import { resolveAppPaths, ensureAppDirs } from "../config/app-paths.js";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 
-const dbPath = env.SQLITE_DB_PATH;
+const appPaths = resolveAppPaths();
+ensureAppDirs(appPaths);
+const dbPath = appPaths.sqlitePath;
 mkdirSync(dirname(dbPath), { recursive: true });
 
 const sqlite = new Database(dbPath);

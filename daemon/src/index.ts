@@ -2,6 +2,7 @@ import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { env } from "./config/env.js";
+import { resolveAppPaths } from "./config/app-paths.js";
 import { initializeRepositories, getCurrentMode } from "./db/factory.js";
 import { getStorageMode } from "./config/storage-config.js";
 import { runMigration } from "./config/migration.js";
@@ -90,6 +91,31 @@ app.get("/health", (c) => {
   });
 });
 
+// ─── Runtime status & shutdown (for Tauri supervisor) ─────────────────────────
+app.get("/api/runtime/status", (c) => {
+  const paths = resolveAppPaths();
+  return c.json({
+    status: "ok",
+    runtimeMode: env.JARVIS_RUNTIME_MODE,
+    pid: process.pid,
+    uptime: process.uptime(),
+    memoryUsage: process.memoryUsage(),
+    storageMode: getCurrentMode(),
+    paths: {
+      appDataDir: paths.appDataDir,
+      sqlitePath: paths.sqlitePath,
+      logDir: paths.logDir,
+    },
+  });
+});
+
+app.post("/api/runtime/shutdown", async (c) => {
+  console.log("[Jarvis] Shutdown requested via API");
+  // Give the response time to send before exiting
+  setTimeout(() => process.exit(0), 200);
+  return c.json({ status: "shutting_down" });
+});
+
 // Chat routes (streaming + non-streaming)
 app.route("/api/chat", chatRoutes);
 
@@ -167,7 +193,7 @@ const aiConfigured = Boolean(Object.values(creds).some((v) => v) || env.MIMO_API
 const aiMode = aiConfigured ? `AI 模式 (${activeProvider}/${activeModel})` : "本地模式 (无 API Key)";
 console.log(`[Jarvis] AI: ${aiMode}`);
 console.log(`[Jarvis] 存储: ${getCurrentMode()}`);
-console.log(`[Jarvis] 数据库: ${env.SQLITE_DB_PATH}`);
+console.log(`[Jarvis] 数据库: ${resolveAppPaths().sqlitePath}`);
 
 startServer(env.DAEMON_PORT);
 
