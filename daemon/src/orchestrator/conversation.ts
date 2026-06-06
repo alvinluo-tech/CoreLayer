@@ -3,6 +3,7 @@ import type { ModelMessage, Tool } from "ai";
 import { ContextBuilder, MEMORY_MIN_SCORE } from "./context-builder.js";
 import { compressConversation, createSummaryMessage, extractMemoriesFromTurn } from "./compressor.js";
 import { getAllTools } from "../tools/registry.js";
+import { isTaskComplete } from "../task/task-status.js";
 import { wrapToolsForAI } from "../runtime/ai-tool-wrapper.js";
 import { env } from "../config/env.js";
 import { configManager } from "../config/config-manager.js";
@@ -428,7 +429,7 @@ async function handleLocally(userMessage: string): Promise<{
         toolCallsLog.push({ name: "getTodayTasks", args: {}, result });
         const data = result as { tasks: { title: string; status: string; priority: number }[]; count: number };
         if (data.count === 0) return { reply: "今天没有待办任务。", toolCalls: toolCallsLog };
-        const lines = data.tasks.map((t, i) => `${i + 1}. [${t.status === "done" ? "✅" : "⬜"}] ${t.title} (优先级: ${t.priority})`);
+        const lines = data.tasks.map((t, i) => `${i + 1}. [${isTaskComplete(t.status) ? "✅" : "⬜"}] ${t.title} (优先级: ${t.priority})`);
         return { reply: `今日 ${data.count} 个任务：\n${lines.join("\n")}`, toolCalls: toolCallsLog };
       } catch (e) {
         logError("handleLocally/getTodayTasks", e);

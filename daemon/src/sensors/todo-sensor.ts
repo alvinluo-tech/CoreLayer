@@ -1,5 +1,6 @@
 import type { Sensor, SensorChange } from "./types.js";
 import { getRepositories } from "../db/factory.js";
+import { isTaskComplete } from "../task/task-status.js";
 
 /**
  * Todo sensor — polls the task repository for changes.
@@ -59,7 +60,7 @@ export function createTodoSensor(options: TodoSensorOptions = {}): Sensor {
         for (const task of activeTasks) {
           const prev = prevMap.get(task.id);
           if (prev && prev.status !== task.status) {
-            if (task.status === "done") {
+            if (isTaskComplete(task.status)) {
               changes.push({
                 type: "todo_completed",
                 detail: `Completed: ${task.title}`,
@@ -76,7 +77,7 @@ export function createTodoSensor(options: TodoSensorOptions = {}): Sensor {
         // Detect overdue tasks
         const today = new Date().toISOString().slice(0, 10);
         for (const task of activeTasks) {
-          if (task.dueDate && task.dueDate < today && task.status !== "done") {
+          if (task.dueDate && task.dueDate < today && !isTaskComplete(task.status)) {
             changes.push({
               type: "todo_overdue",
               detail: `Overdue: ${task.title} (due ${task.dueDate})`,

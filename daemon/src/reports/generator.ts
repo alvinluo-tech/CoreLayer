@@ -1,5 +1,6 @@
 import { getRepositories } from "../db/factory.js";
 import { logError } from "../utils/errors.js";
+import { isTaskComplete } from "../task/task-status.js";
 
 /**
  * Report generation — produces daily and weekly markdown reports
@@ -29,7 +30,7 @@ async function gatherReportData(startDate: string, endDate: string): Promise<Rep
     const date = (t.dueDate ?? t.createdAt).split("T")[0];
     return date >= startDate && date <= endDate;
   });
-  const completed = rangeTasks.filter((t) => t.status === "done").length;
+  const completed = rangeTasks.filter((t) => isTaskComplete(t.status)).length;
   const total = rangeTasks.length;
 
   // Articles

@@ -1,4 +1,5 @@
 import { getSupabaseClient } from "./client.js";
+import { isTaskComplete } from "../../task/task-status.js";
 import type {
   ReviewRepository,
   ReviewRow,
@@ -91,7 +92,7 @@ export function createSupabaseReviewRepo(): ReviewRepository {
           t.due_date === targetDate || (t.created_at as string)?.startsWith(targetDate),
       );
 
-      const completed = dayTasks.filter((t: Record<string, unknown>) => t.status === "done").length;
+      const completed = dayTasks.filter((t: Record<string, unknown>) => isTaskComplete(t.status as string)).length;
       const total = dayTasks.length;
 
       // Get articles
@@ -110,7 +111,7 @@ export function createSupabaseReviewRepo(): ReviewRepository {
         completionRate: total > 0 ? Math.round((completed / total) * 100) : 0,
         articlesRead,
         highlights: dayTasks
-          .filter((t: Record<string, unknown>) => t.status === "done")
+          .filter((t: Record<string, unknown>) => isTaskComplete(t.status as string))
           .map((t: Record<string, unknown>) => `✅ ${t.title}`),
       };
     },
@@ -135,7 +136,7 @@ export function createSupabaseReviewRepo(): ReviewRepository {
         return d >= ws && d <= we;
       });
 
-      const completed = weekTasks.filter((t: Record<string, unknown>) => t.status === "done").length;
+      const completed = weekTasks.filter((t: Record<string, unknown>) => isTaskComplete(t.status as string)).length;
       const total = weekTasks.length;
 
       const dailyBreakdown: { date: string; completed: number; total: number }[] = [];
@@ -148,7 +149,7 @@ export function createSupabaseReviewRepo(): ReviewRepository {
         );
         dailyBreakdown.push({
           date: ds,
-          completed: dayTasks.filter((t: Record<string, unknown>) => t.status === "done").length,
+          completed: dayTasks.filter((t: Record<string, unknown>) => isTaskComplete(t.status as string)).length,
           total: dayTasks.length,
         });
       }

@@ -10,9 +10,7 @@
 
 import { getRepositories } from "../db/factory.js";
 import type { TaskRow } from "../db/repository.js";
-
-const COMPLETED_STATUSES = new Set(["completed", "done"]);
-const READY_STATUSES = new Set(["queued", "pending"]);
+import { isTaskComplete, isTaskExecutable } from "./task-status.js";
 
 export class TaskGraph {
   /**
@@ -27,7 +25,7 @@ export class TaskGraph {
     if (deps.length === 0) return true;
 
     const depTasks = await Promise.all(deps.map((id) => tasks.getById(id)));
-    return depTasks.every((dep) => dep && COMPLETED_STATUSES.has(dep.status));
+    return depTasks.every((dep) => dep && isTaskComplete(dep.status));
   }
 
   /**
@@ -41,7 +39,7 @@ export class TaskGraph {
     const incompleteDeps: string[] = [];
     for (const depId of task.dependencies) {
       const dep = await tasks.getById(depId);
-      if (!dep || !COMPLETED_STATUSES.has(dep.status)) {
+      if (!dep || !isTaskComplete(dep.status)) {
         incompleteDeps.push(depId);
       }
     }
@@ -60,7 +58,7 @@ export class TaskGraph {
 
     const executable: TaskRow[] = [];
     for (const task of projectTasks) {
-      if (!READY_STATUSES.has(task.status)) continue;
+      if (!isTaskExecutable(task.status)) continue;
 
       if (await this.canExecute(task.id)) {
         executable.push(task);
@@ -77,7 +75,7 @@ export class TaskGraph {
     const task = await tasks.getById(taskId);
     if (!task) throw new Error(`Task ${taskId} not found`);
 
-    if (COMPLETED_STATUSES.has(task.status)) return;
+    if (isTaskComplete(task.status)) return;
 
     await tasks.update(taskId, { status: "completed" });
 

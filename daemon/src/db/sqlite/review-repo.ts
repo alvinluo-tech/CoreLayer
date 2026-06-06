@@ -7,6 +7,7 @@ import type {
   DailySummaryResult,
   WeeklyStatsResult,
 } from "../repository.js";
+import { isTaskComplete } from "../../task/task-status.js";
 
 function getWeekStart(date: Date): Date {
   const d = new Date(date);
@@ -76,7 +77,7 @@ export function createSqliteReviewRepo(): ReviewRepository {
         (t) => t.dueDate === targetDate || t.createdAt.startsWith(targetDate),
       );
 
-      const completed = dayTasks.filter((t) => t.status === "done").length;
+      const completed = dayTasks.filter((t) => isTaskComplete(t.status)).length;
       const total = dayTasks.length;
 
       const articles = db
@@ -92,7 +93,7 @@ export function createSqliteReviewRepo(): ReviewRepository {
         completionRate: total > 0 ? Math.round((completed / total) * 100) : 0,
         articlesRead: articles.length,
         highlights: dayTasks
-          .filter((t) => t.status === "done")
+          .filter((t) => isTaskComplete(t.status))
           .map((t) => `✅ ${t.title}`),
       };
     },
@@ -118,7 +119,7 @@ export function createSqliteReviewRepo(): ReviewRepository {
         return d >= ws && d <= we;
       });
 
-      const completed = weekTasks.filter((t) => t.status === "done").length;
+      const completed = weekTasks.filter((t) => isTaskComplete(t.status)).length;
       const total = weekTasks.length;
 
       const dailyBreakdown: { date: string; completed: number; total: number }[] = [];
@@ -129,7 +130,7 @@ export function createSqliteReviewRepo(): ReviewRepository {
         const dayTasks = weekTasks.filter((t) => (t.dueDate ?? t.createdAt.split("T")[0]) === ds);
         dailyBreakdown.push({
           date: ds,
-          completed: dayTasks.filter((t) => t.status === "done").length,
+          completed: dayTasks.filter((t) => isTaskComplete(t.status)).length,
           total: dayTasks.length,
         });
       }
