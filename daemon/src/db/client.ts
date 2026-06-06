@@ -207,6 +207,45 @@ try {
   // Column already exists — ignore
 }
 
+// Migration: add missing columns to memories for existing databases
+try { sqlite.exec(`ALTER TABLE memories ADD COLUMN scope_type TEXT NOT NULL DEFAULT 'user'`); } catch {}
+try { sqlite.exec(`ALTER TABLE memories ADD COLUMN scope_id TEXT`); } catch {}
+try { sqlite.exec(`ALTER TABLE memories ADD COLUMN last_injected_at TEXT`); } catch {}
+try { sqlite.exec(`ALTER TABLE memories ADD COLUMN source_run_id TEXT`); } catch {}
+try { sqlite.exec(`ALTER TABLE memories ADD COLUMN source_message_id TEXT`); } catch {}
+try { sqlite.exec(`ALTER TABLE memories ADD COLUMN last_verified_at TEXT`); } catch {}
+
+// Migration: add missing columns to tasks for existing databases
+try { sqlite.exec(`ALTER TABLE tasks ADD COLUMN workspace_id TEXT`); } catch {}
+try { sqlite.exec(`ALTER TABLE tasks ADD COLUMN project_id TEXT`); } catch {}
+try { sqlite.exec(`ALTER TABLE tasks ADD COLUMN objective TEXT`); } catch {}
+try { sqlite.exec(`ALTER TABLE tasks ADD COLUMN assigned_agent_id TEXT`); } catch {}
+try { sqlite.exec(`ALTER TABLE tasks ADD COLUMN parent_task_id TEXT`); } catch {}
+try { sqlite.exec(`ALTER TABLE tasks ADD COLUMN dependencies TEXT DEFAULT '[]'`); } catch {}
+try { sqlite.exec(`ALTER TABLE tasks ADD COLUMN blocked_by TEXT DEFAULT '[]'`); } catch {}
+try { sqlite.exec(`ALTER TABLE tasks ADD COLUMN acceptance_criteria TEXT DEFAULT '[]'`); } catch {}
+try { sqlite.exec(`ALTER TABLE tasks ADD COLUMN artifacts TEXT DEFAULT '[]'`); } catch {}
+try { sqlite.exec(`ALTER TABLE tasks ADD COLUMN run_history TEXT DEFAULT '[]'`); } catch {}
+try { sqlite.exec(`ALTER TABLE tasks ADD COLUMN manual_intervention_required INTEGER DEFAULT 0`); } catch {}
+try { sqlite.exec(`ALTER TABLE tasks ADD COLUMN rollback_plan TEXT`); } catch {}
+
+// Migration: add missing columns to agent_runs for existing databases
+try { sqlite.exec(`ALTER TABLE agent_runs ADD COLUMN workspace_id TEXT`); } catch {}
+try { sqlite.exec(`ALTER TABLE agent_runs ADD COLUMN project_id TEXT`); } catch {}
+try { sqlite.exec(`ALTER TABLE agent_runs ADD COLUMN task_id TEXT`); } catch {}
+try { sqlite.exec(`ALTER TABLE agent_runs ADD COLUMN agent_id TEXT`); } catch {}
+try { sqlite.exec(`ALTER TABLE agent_runs ADD COLUMN mode TEXT NOT NULL DEFAULT 'chat'`); } catch {}
+try { sqlite.exec(`ALTER TABLE agent_runs ADD COLUMN selected_tools TEXT DEFAULT '[]'`); } catch {}
+try { sqlite.exec(`ALTER TABLE agent_runs ADD COLUMN memory_reads TEXT DEFAULT '[]'`); } catch {}
+try { sqlite.exec(`ALTER TABLE agent_runs ADD COLUMN memory_writes TEXT DEFAULT '[]'`); } catch {}
+try { sqlite.exec(`ALTER TABLE agent_runs ADD COLUMN tool_calls TEXT DEFAULT '[]'`); } catch {}
+try { sqlite.exec(`ALTER TABLE agent_runs ADD COLUMN artifacts TEXT DEFAULT '[]'`); } catch {}
+try { sqlite.exec(`ALTER TABLE agent_runs ADD COLUMN approvals TEXT DEFAULT '[]'`); } catch {}
+
+// Migration: add missing columns to conversations for existing databases
+try { sqlite.exec(`ALTER TABLE conversations ADD COLUMN workspace_id TEXT`); } catch {}
+try { sqlite.exec(`ALTER TABLE conversations ADD COLUMN project_id TEXT`); } catch {}
+
 // Migration: FTS5 for message search (Phase 15)
 sqlite.exec(`
   CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(

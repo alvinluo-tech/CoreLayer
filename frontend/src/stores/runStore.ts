@@ -1,47 +1,15 @@
 import { create } from 'zustand';
 import { jarvisClient } from '@/lib/jarvisClient';
+import {
+  runListResponseSchema,
+  runEventsResponseSchema,
+  type AgentRun,
+  type AgentRunEvent,
+  type RunStatus,
+  type RunMode,
+} from '@/lib/apiSchemas';
 
-// ---- Types (mirrors daemon AgentRunRow / AgentRunEventRow) ----
-
-export type RunStatus = 'running' | 'succeeded' | 'failed' | 'cancelled';
-export type RunMode = 'chat' | 'voice' | 'tick' | 'scheduled' | 'workflow' | 'regenerate';
-
-export interface AgentRun {
-  id: string;
-  conversationId: string | null;
-  workspaceId: string | null;
-  projectId: string | null;
-  taskId: string | null;
-  agentId: string | null;
-  userMessageId: string | null;
-  assistantMessageId: string | null;
-  status: RunStatus;
-  mode: RunMode;
-  selectedModel: string | null;
-  routeReason: string | null;
-  selectedTools: string[] | null;
-  memoryReads: string[] | null;
-  memoryWrites: string[] | null;
-  toolCalls: unknown[] | null;
-  toolCallCount: number | null;
-  artifacts: unknown[] | null;
-  approvals: unknown[] | null;
-  startedAt: string;
-  completedAt: string | null;
-  durationMs: number | null;
-  error: string | null;
-}
-
-export interface AgentRunEvent {
-  id: string;
-  runId: string;
-  sequence: number;
-  type: string;
-  payload: unknown;
-  createdAt: string;
-}
-
-// ---- Filters ----
+export type { AgentRun, AgentRunEvent, RunStatus, RunMode };
 
 export type RunFilterStatus = 'all' | RunStatus;
 export type RunFilterMode = 'all' | RunMode;
@@ -50,8 +18,6 @@ interface RunFilters {
   status: RunFilterStatus;
   mode: RunFilterMode;
 }
-
-// ---- State ----
 
 interface RunState {
   runs: AgentRun[];
@@ -62,7 +28,6 @@ interface RunState {
   isLoadingEvents: boolean;
   error: string | null;
 
-  // Actions
   fetchRuns: () => Promise<void>;
   selectRun: (runId: string) => Promise<void>;
   clearSelection: () => void;
@@ -82,8 +47,9 @@ export const useRunStore = create<RunState>((set, get) => ({
   fetchRuns: async () => {
     set({ isLoading: true, error: null });
     try {
-      const data = await jarvisClient.get<AgentRun[]>('/api/runs');
-      set({ runs: data, isLoading: false });
+      const raw = await jarvisClient.get('/api/runs');
+      const parsed = runListResponseSchema.parse(raw);
+      set({ runs: parsed.data, isLoading: false });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load runs';
       set({ error: message, isLoading: false });
@@ -93,8 +59,9 @@ export const useRunStore = create<RunState>((set, get) => ({
   selectRun: async (runId: string) => {
     set({ selectedRunId: runId, events: [], isLoadingEvents: true });
     try {
-      const events = await jarvisClient.get<AgentRunEvent[]>(`/api/runs/${runId}/events`);
-      set({ events, isLoadingEvents: false });
+      const raw = await jarvisClient.get(`/api/runs/${runId}/events`);
+      const parsed = runEventsResponseSchema.parse(raw);
+      set({ events: parsed.data, isLoadingEvents: false });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load run events';
       set({ error: message, isLoadingEvents: false });

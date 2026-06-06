@@ -1,22 +1,8 @@
 import { create } from 'zustand';
 import { jarvisClient } from '@/lib/jarvisClient';
+import { agentProfileListResponseSchema, type AgentProfile } from '@/lib/apiSchemas';
 
-// ---- Types (mirrors daemon AgentProfileRow) ----
-
-export interface AgentProfile {
-  id: string;
-  name: string;
-  description: string | null;
-  modelPolicy: unknown;
-  skills: string[];
-  tools: string[];
-  knowledgeScopes: string[];
-  permissions: string[];
-  memoryScopes: string[];
-  isDefault: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
+export type { AgentProfile };
 
 interface AgentState {
   agents: AgentProfile[];
@@ -24,7 +10,6 @@ interface AgentState {
   isLoading: boolean;
   error: string | null;
 
-  // Actions
   fetchAgents: () => Promise<void>;
   selectAgent: (id: string | null) => void;
 }
@@ -38,8 +23,9 @@ export const useAgentStore = create<AgentState>((set) => ({
   fetchAgents: async () => {
     set({ isLoading: true, error: null });
     try {
-      const data = await jarvisClient.get<AgentProfile[]>('/api/agent-profiles');
-      set({ agents: data, isLoading: false });
+      const raw = await jarvisClient.get('/api/agent-profiles');
+      const parsed = agentProfileListResponseSchema.parse(raw);
+      set({ agents: parsed.data, isLoading: false });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load agents';
       set({ error: message, isLoading: false });

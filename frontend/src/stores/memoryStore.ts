@@ -1,32 +1,14 @@
 import { create } from 'zustand';
 import { jarvisClient } from '@/lib/jarvisClient';
+import {
+  memoryListResponseSchema,
+  type Memory,
+  type MemoryScopeType,
+  type MemoryType,
+  type MemoryTier,
+} from '@/lib/apiSchemas';
 
-// ---- Types (mirrors daemon MemoryRow) ----
-
-export type MemoryScopeType = 'user' | 'workspace' | 'project' | 'agent' | 'task' | 'conversation';
-export type MemoryType = 'fact' | 'preference' | 'context' | 'summary';
-export type MemoryTier = 'preference' | 'context' | 'fact';
-
-export interface Memory {
-  id: string;
-  userId: string;
-  scopeType: MemoryScopeType;
-  scopeId: string | null;
-  type: MemoryType;
-  tier: MemoryTier;
-  key: string;
-  value: string;
-  source: string | null;
-  confidence: number | null;
-  uses: number;
-  lastInjectedAt: string | null;
-  sourceRunId: string | null;
-  sourceMessageId: string | null;
-  lastVerifiedAt: string | null;
-  expiresAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
+export type { Memory, MemoryScopeType, MemoryType, MemoryTier };
 
 export type MemoryFilterScope = 'all' | MemoryScopeType;
 export type MemoryFilterType = 'all' | MemoryType;
@@ -43,7 +25,6 @@ interface MemoryState {
   isLoading: boolean;
   error: string | null;
 
-  // Actions
   fetchMemories: () => Promise<void>;
   selectMemory: (id: string | null) => void;
   updateMemory: (
@@ -65,8 +46,9 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
   fetchMemories: async () => {
     set({ isLoading: true, error: null });
     try {
-      const data = await jarvisClient.get<Memory[]>('/api/memories');
-      set({ memories: data, isLoading: false });
+      const raw = await jarvisClient.get('/api/memories');
+      const parsed = memoryListResponseSchema.parse(raw);
+      set({ memories: parsed.data, isLoading: false });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load memories';
       set({ error: message, isLoading: false });
@@ -90,7 +72,6 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
   deleteMemory: async (id) => {
     try {
       await jarvisClient.del(`/api/memories/${id}`);
-      // Clear selection if deleted
       if (get().selectedId === id) {
         set({ selectedId: null });
       }

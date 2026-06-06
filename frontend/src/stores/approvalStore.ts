@@ -1,29 +1,13 @@
 import { create } from 'zustand';
 import { jarvisClient } from '@/lib/jarvisClient';
+import {
+  approvalListResponseSchema,
+  type ApprovalRequest,
+  type ApprovalStatus,
+} from '@/lib/apiSchemas';
 
-// ---- Types (mirrors daemon ApprovalRequestRow) ----
-
-export type ApprovalStatus = 'pending' | 'approved' | 'denied' | 'expired';
+export type { ApprovalRequest, ApprovalStatus };
 export type ApprovalRisk = 'low' | 'medium' | 'high' | 'critical';
-
-export interface ApprovalRequest {
-  id: string;
-  runId: string;
-  toolId: string;
-  toolName: string;
-  args: unknown;
-  risk: string;
-  status: ApprovalStatus;
-  projectScope: boolean;
-  decidedAt: number | null;
-  createdAt: number;
-  mode: string | null;
-  source: string | null;
-  preview: string | null;
-  toolCallId: string | null;
-  expiresAt: number | null;
-}
-
 export type ApprovalFilterStatus = 'all' | ApprovalStatus;
 
 interface ApprovalState {
@@ -33,7 +17,6 @@ interface ApprovalState {
   isLoading: boolean;
   error: string | null;
 
-  // Actions
   fetchApprovals: () => Promise<void>;
   selectApproval: (id: string | null) => void;
   approve: (id: string) => Promise<void>;
@@ -45,8 +28,6 @@ interface ApprovalState {
     projectId?: string
   ) => Promise<void>;
   setFilterStatus: (status: ApprovalFilterStatus) => void;
-
-  // Derived
   pendingCount: () => number;
 }
 
@@ -60,8 +41,9 @@ export const useApprovalStore = create<ApprovalState>((set, get) => ({
   fetchApprovals: async () => {
     set({ isLoading: true, error: null });
     try {
-      const data = await jarvisClient.get<ApprovalRequest[]>('/api/approvals');
-      set({ approvals: data, isLoading: false });
+      const raw = await jarvisClient.get('/api/approvals');
+      const parsed = approvalListResponseSchema.parse(raw);
+      set({ approvals: parsed.data, isLoading: false });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load approvals';
       set({ error: message, isLoading: false });
@@ -75,7 +57,6 @@ export const useApprovalStore = create<ApprovalState>((set, get) => ({
   approve: async (id) => {
     try {
       await jarvisClient.post(`/api/approvals/${id}/approve`);
-      // Refresh list
       await get().fetchApprovals();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to approve';

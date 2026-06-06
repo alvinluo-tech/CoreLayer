@@ -13,7 +13,7 @@ function validateToolArgs(args: unknown, schema: JSONSchema | undefined): string
     return schema.type === "object" ? "Expected an object argument" : null;
   }
   const obj = args as Record<string, unknown>;
-  if (schema.required) {
+  if (Array.isArray(schema.required)) {
     for (const field of schema.required) {
       if (!(field in obj)) {
         return `Missing required field: ${field}`;

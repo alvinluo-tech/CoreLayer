@@ -205,7 +205,7 @@ function TaskRow({ task, isSelected }: { task: Task; isSelected: boolean }) {
           {statusLabels[task.status]}
         </span>
 
-        {task.tags.length > 0 && (
+        {(task.tags?.length ?? 0) > 0 && (
           <span
             className="flex items-center gap-1"
             style={{
@@ -215,8 +215,8 @@ function TaskRow({ task, isSelected }: { task: Task; isSelected: boolean }) {
             }}
           >
             <Tag size={9} />
-            {task.tags[0]}
-            {task.tags.length > 1 && ` +${task.tags.length - 1}`}
+            {task.tags![0]}
+            {(task.tags?.length ?? 0) > 1 && ` +${task.tags!.length - 1}`}
           </span>
         )}
 
@@ -375,11 +375,11 @@ function TaskDetail({ task }: { task: Task }) {
       </div>
 
       {/* Tags */}
-      {task.tags.length > 0 && (
+      {(task.tags?.length ?? 0) > 0 && (
         <div>
           <SectionHeader>Tags</SectionHeader>
           <div className="flex flex-wrap gap-1.5 mt-1">
-            {task.tags.map((tag) => (
+            {task.tags!.map((tag) => (
               <span
                 key={tag}
                 style={{
@@ -400,11 +400,11 @@ function TaskDetail({ task }: { task: Task }) {
       )}
 
       {/* Dependencies */}
-      {task.dependencies.length > 0 && (
+      {(task.dependencies?.length ?? 0) > 0 && (
         <div>
-          <SectionHeader>Dependencies ({task.dependencies.length})</SectionHeader>
+          <SectionHeader>Dependencies ({task.dependencies!.length})</SectionHeader>
           <div className="space-y-1 mt-1">
-            {task.dependencies.map((dep) => (
+            {task.dependencies!.map((dep) => (
               <div
                 key={dep}
                 className="flex items-center gap-2 px-2 py-1"
@@ -424,11 +424,11 @@ function TaskDetail({ task }: { task: Task }) {
       )}
 
       {/* Blocked by */}
-      {task.blockedBy.length > 0 && (
+      {(task.blockedBy?.length ?? 0) > 0 && (
         <div>
-          <SectionHeader>Blocked By ({task.blockedBy.length})</SectionHeader>
+          <SectionHeader>Blocked By ({task.blockedBy!.length})</SectionHeader>
           <div className="space-y-1 mt-1">
-            {task.blockedBy.map((dep) => (
+            {task.blockedBy!.map((dep) => (
               <div
                 key={dep}
                 className="flex items-center gap-2 px-2 py-1"
@@ -448,11 +448,11 @@ function TaskDetail({ task }: { task: Task }) {
       )}
 
       {/* Acceptance criteria */}
-      {task.acceptanceCriteria.length > 0 && (
+      {(task.acceptanceCriteria?.length ?? 0) > 0 && (
         <div>
-          <SectionHeader>Acceptance Criteria ({task.acceptanceCriteria.length})</SectionHeader>
+          <SectionHeader>Acceptance Criteria ({task.acceptanceCriteria!.length})</SectionHeader>
           <div className="space-y-1 mt-1">
-            {task.acceptanceCriteria.map((ac, i) => (
+            {task.acceptanceCriteria!.map((ac, i) => (
               <div
                 key={i}
                 className="flex items-start gap-2 px-2 py-1"
