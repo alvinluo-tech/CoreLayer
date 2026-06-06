@@ -25,6 +25,8 @@ export type ToolCategory =
   | 'automation'
   | 'other';
 
+export type ToolAction = 'read' | 'write' | 'delete' | 'execute' | 'external_side_effect';
+
 export type ToolDisplayMode = 'inline' | 'card' | 'silent' | 'confirm';
 
 export interface ToolResult {
@@ -51,6 +53,7 @@ export interface JarvisTool {
   idempotent?: boolean;
   cancellable?: boolean;
   category?: ToolCategory;
+  action?: ToolAction;
   displayMode?: ToolDisplayMode;
   dataView?: import('./dataView').DataViewSchema;
 }

@@ -1,7 +1,46 @@
 import { PermissionGuard } from "@jarvis/permission-guard";
-import type { ToolResult } from "@jarvis/types";
+import type { ToolResult, JSONSchema } from "@jarvis/types";
 import { getRegistry } from "../tools/registry.js";
 import { getRepositories } from "../db/factory.js";
+
+/**
+ * Basic validation of tool args against the tool's inputSchema.
+ * Returns null if valid, or an error message string if invalid.
+ */
+function validateToolArgs(args: unknown, schema: JSONSchema | undefined): string | null {
+  if (!schema) return null;
+  if (typeof args !== "object" || args === null) {
+    return schema.type === "object" ? "Expected an object argument" : null;
+  }
+  const obj = args as Record<string, unknown>;
+  if (schema.required) {
+    for (const field of schema.required) {
+      if (!(field in obj)) {
+        return `Missing required field: ${field}`;
+      }
+    }
+  }
+  if (schema.properties) {
+    for (const [key, propSchema] of Object.entries(schema.properties)) {
+      if (key in obj && propSchema.type) {
+        const val = obj[key];
+        if (propSchema.type === "string" && typeof val !== "string") {
+          return `Field '${key}' should be a string`;
+        }
+        if (propSchema.type === "number" && typeof val !== "number") {
+          return `Field '${key}' should be a number`;
+        }
+        if (propSchema.type === "boolean" && typeof val !== "boolean") {
+          return `Field '${key}' should be a boolean`;
+        }
+        if (propSchema.type === "array" && !Array.isArray(val)) {
+          return `Field '${key}' should be an array`;
+        }
+      }
+    }
+  }
+  return null;
+}
 
 export interface ToolExecutionContext {
   /** Who initiated the call: "ai", "skill", "rest-api", "user" */
@@ -32,6 +71,23 @@ export interface ToolExecutionResult {
  * Single execution entry point for all tool calls.
  * Enforces permission checks, audit logging, and timeout.
  */
+/**
+ * Voice mode has a more conservative permission policy:
+ * - write/delete/execute tools -> confirmation required
+ * - external API side effects -> confirmation required
+ * - local read-only queries -> allow with notification
+ */
+function adjustPermissionForMode(
+  requiresConfirmation: boolean,
+  mode: string | undefined,
+  action: string | undefined,
+): boolean {
+  if (mode !== "voice") return requiresConfirmation;
+  // Voice mode: read-only actions are auto-allowed, everything else requires confirmation
+  if (action === "read") return false;
+  return true;
+}
+
 export class ToolRuntime {
   private permissionGuard: PermissionGuard;
 
@@ -56,8 +112,13 @@ export class ToolRuntime {
 
     const startTime = Date.now();
     const permissionCheck = this.permissionGuard.checkPermission(tool);
+    const effectiveRequiresConfirmation = adjustPermissionForMode(
+      permissionCheck.requiresConfirmation,
+      context.mode,
+      (tool as { action?: string }).action,
+    );
 
-    if (permissionCheck.requiresConfirmation && context.runId) {
+    if (effectiveRequiresConfirmation && context.runId) {
       const { permissionMemories } = getRepositories();
       const memory = await permissionMemories.find(
         toolId,
@@ -69,6 +130,22 @@ export class ToolRuntime {
         if (memory.expiresAt !== null && memory.expiresAt < Date.now()) {
           // Memory expired — fall through to confirmation
         } else if (memory.decision === "auto") {
+          // Log auto-allowed decision for audit trail
+          if (context.runId) {
+            const { approvalRequests } = getRepositories();
+            await approvalRequests.create({
+              runId: context.runId,
+              toolId: tool.id,
+              toolName: tool.name,
+              args,
+              risk: tool.risk,
+              projectScope: !!context.projectId,
+              mode: context.mode,
+              source: context.source,
+              preview: `[auto-allowed] ${tool.description}`,
+              toolCallId: context.toolCallId,
+            }).then((r) => approvalRequests.approve(r.id)).catch(() => { /* best-effort */ });
+          }
           const result = await tool.execute(args);
           return {
             result,
@@ -87,7 +164,7 @@ export class ToolRuntime {
 
     if (context.caller === "ai") {
       // Idempotency: if toolCallId provided and a pending approval exists, skip duplicate
-      if (context.toolCallId && context.runId && permissionCheck.requiresConfirmation) {
+      if (context.toolCallId && context.runId && effectiveRequiresConfirmation) {
         const { approvalRequests } = getRepositories();
         const existing = await approvalRequests.findByToolCallId(context.toolCallId);
         if (existing) {
@@ -100,12 +177,16 @@ export class ToolRuntime {
       }
 
       const pending = await this.permissionGuard.executeWithPendingConfirmation(tool, args, {
-        waitForExternalResolution: permissionCheck.requiresConfirmation,
+        waitForExternalResolution: effectiveRequiresConfirmation,
       });
 
-      if (context.runId && permissionCheck.requiresConfirmation) {
+      if (context.runId && effectiveRequiresConfirmation) {
         const { approvalRequests } = getRepositories();
         const expiresInMs = 5 * 60_000; // 5 minutes
+        const validationError = validateToolArgs(args, tool.inputSchema);
+        const preview = validationError
+          ? `[validation warning] ${validationError} — ${tool.description}`
+          : tool.description;
         await approvalRequests.create({
           id: pending.confirmationId,
           runId: context.runId,
@@ -116,7 +197,7 @@ export class ToolRuntime {
           projectScope: !!context.projectId,
           mode: context.mode,
           source: context.source,
-          preview: tool.description,
+          preview,
           toolCallId: context.toolCallId,
           expiresAt: Date.now() + expiresInMs,
         });
@@ -125,7 +206,7 @@ export class ToolRuntime {
       const result = await pending.confirm();
       return {
         result,
-        confirmed: permissionCheck.requiresConfirmation && result.success,
+        confirmed: effectiveRequiresConfirmation && result.success,
         durationMs: Date.now() - startTime,
       };
     }

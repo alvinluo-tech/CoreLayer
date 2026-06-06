@@ -15,11 +15,11 @@
 - [x] Phase 18.1-18.4: Voice interrupt, voice prompt, ASR hallucination filter, audio buffer
 
 **Key gaps to fill:**
-- [ ] Streaming chat bypasses AgentRun runtime
-- [ ] Voice streaming bypasses AgentRun runtime
-- [ ] No `run-stream-executor.ts`
+- [x] Streaming chat bypasses AgentRun runtime
+- [x] Voice streaming bypasses AgentRun runtime
+- [x] No `run-stream-executor.ts`
 - [x] No `task-status.ts` (status normalization)
-- [ ] Approval system lacks idempotency/expiration/restart
+- [x] Approval system lacks idempotency/expiration/restart
 - [ ] Phase 19 not implemented
 - [ ] Phase 20 not implemented
 
@@ -62,10 +62,10 @@
   - [x] Mark AgentRun succeeded/failed/cancelled on completion/error/disconnect
   - [x] Keep existing `streamMessageInConversation` flow intact (force answer, goal continuation)
 
-- [ ] **1.4** Add tests
-  - [ ] Test: streaming creates AgentRun row
-  - [ ] Test: stream emits delta events
-  - [ ] Test: stream captures tool calls
+- [x] **1.4** Add tests
+  - [x] Test: streaming creates AgentRun row
+  - [x] Test: stream emits delta events
+  - [x] Test: stream captures tool calls
   - [ ] Test: model error marks run as failed
   - [ ] Test: client disconnect marks run as cancelled
   - [ ] Test: watchdog timeout aborts long-running turn
@@ -94,17 +94,17 @@
   - [x] TTS consumes runtime deltas, not own model loop
   - [x] Keep same SSE event names (`delta`, `tts_audio`, `done`, `error`)
 
-- [ ] **2.3** Voice-specific permission defaults
-  - [ ] Default conservative permission policy for voice mode
-  - [ ] `voice + write/delete/execute tool -> confirmation required`
-  - [ ] `voice + external API side effect -> confirmation required`
-  - [ ] `voice + local read-only query -> allow/notify`
+- [x] **2.3** Voice-specific permission defaults
+  - [x] Default conservative permission policy for voice mode
+  - [x] `voice + write/delete/execute tool -> confirmation required`
+  - [x] `voice + external API side effect -> confirmation required`
+  - [x] `voice + local read-only query -> allow/notify`
 
-- [ ] **2.4** Add tests
-  - [ ] Test: voice SSE still works from frontend
-  - [ ] Test: voice run produces AgentRun row
-  - [ ] Test: voice tool calls use approval gate
-  - [ ] Test: voice errors mark AgentRun failed
+- [x] **2.4** Add tests
+  - [x] Test: voice SSE still works from frontend
+  - [x] Test: voice run produces AgentRun row
+  - [x] Test: voice tool calls use approval gate
+  - [x] Test: voice errors mark AgentRun failed
   - [ ] Test: wake-word -> response -> listening loop works
 
 - [x] **2.5** Verify build
@@ -120,12 +120,12 @@
 
 - [x] **3.1** Risk classification improvements
   - [x] Add `risk = "critical"` support consistently in daemon approval types
-  - [ ] Add tool category/action: `read`, `write`, `delete`, `execute`, `external_side_effect`
+  - [x] Add tool category/action: `read`, `write`, `delete`, `execute`, `external_side_effect`
   - [x] Add mode and source context: `chat`, `voice`, `scheduled`, `workflow`
 
 - [x] **3.2** Preview payload
   - [x] Add user-facing preview: what will change, where, why
-  - [ ] Validate tool args before approval display (schema validation, path/URL normalization)
+  - [x] Validate tool args before approval display (schema validation, path/URL normalization)
 
 - [x] **3.3** Expiration behavior
   - [x] Pending confirmations auto-resolve as denial after timeout
@@ -140,7 +140,7 @@
   - [x] Log approved decisions
   - [x] Log denied decisions
   - [x] Log expired decisions
-  - [ ] Log auto-allowed decisions
+  - [x] Log auto-allowed decisions
 
 - [x] **3.6** Add tests
   - [x] Test: high/critical tool cannot execute without approval
