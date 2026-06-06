@@ -265,32 +265,32 @@
 
 ## Phase 7: Event Persistence
 
-**Branch:** `feat/agent-run-event-store` — **Status:** `NOT STARTED`
+**Branch:** `feat/agent-run-event-store` — **Status:** `DONE`
 
-- [ ] **7.1** Database schema
-  - [ ] Add `agent_run_events` table to `daemon/src/db/schema.ts`
-  - [ ] Fields: `id`, `run_id`, `sequence`, `type`, `payload`, `created_at`
+- [x] **7.1** Database schema
+  - [x] Add `agent_run_events` table to `daemon/src/db/schema.ts`
+  - [x] Fields: `id`, `run_id`, `sequence`, `type`, `payload`, `created_at`
 
-- [ ] **7.2** Repository interface
-  - [ ] Add `AgentRunEventRepository` to `daemon/src/db/repository.ts`
-  - [ ] Methods: `create(event)`, `getByRunId(runId)`, `getByType(runId, type)`
+- [x] **7.2** Repository interface
+  - [x] Add `AgentRunEventRepository` to `daemon/src/db/repository.ts`
+  - [x] Methods: `create(event)`, `getByRunId(runId)`, `getByType(runId, type)`
 
-- [ ] **7.3** SQLite implementation
-  - [ ] Create `daemon/src/db/sqlite/agent-run-event-repo.ts`
+- [x] **7.3** SQLite implementation
+  - [x] Create `daemon/src/db/sqlite/agent-run-event-repo.ts`
 
-- [ ] **7.4** Wire into runtime
-  - [ ] Persist events in `run-executor.ts` during run
-  - [ ] Persist events in `run-stream-executor.ts` during stream
-  - [ ] Large text deltas persisted compactly or summarized
+- [x] **7.4** Wire into runtime
+  - [x] Persist events in `run-executor.ts` during run
+  - [x] Persist events in `run-stream-executor.ts` during stream
+  - [x] Large text deltas persisted compactly or summarized
 
-- [ ] **7.5** Add tests
-  - [ ] Test: every event has runId and sequence
-  - [ ] Test: events are persisted in order
-  - [ ] Test: event ordering for run with tool call and approval
+- [x] **7.5** Add tests
+  - [x] Test: every event has runId and sequence
+  - [x] Test: events are persisted in order
+  - [x] Test: event ordering for run with tool call and approval
 
-- [ ] **7.6** Verify build
-  - [ ] `pnpm --filter daemon typecheck` passes
-  - [ ] `pnpm --filter daemon test -- --run` passes
+- [x] **7.6** Verify build
+  - [x] `pnpm --filter daemon typecheck` passes
+  - [x] `pnpm --filter daemon test -- --run` passes (865 tests)
 
 ---
 

@@ -44,7 +44,7 @@ export async function runStreamTurn(
   request: AgentRunRequest,
   options?: RunStreamTurnOptions,
 ): Promise<AgentStreamRunResult> {
-  const { agentRuns, conversations } = getRepositories();
+  const { agentRuns, conversations, agentRunEvents } = getRepositories();
 
   // Resolve context (workspace, agent defaults)
   const context = await resolveRunContext({
@@ -105,14 +105,28 @@ export async function runStreamTurn(
   // so we can't yield from it. Instead we buffer and yield on the next iteration.
   const eventBuffer: AgentRunEvent[] = [];
 
+  let eventSequence = 0;
+
   const emit = (event: AgentRunEvent) => {
     options?.onEvent?.(event);
     return event;
   };
 
+  const persistEvent = (runId: string, event: AgentRunEvent) => {
+    const seq = eventSequence++;
+    agentRunEvents.create({
+      runId,
+      sequence: seq,
+      type: event.type,
+      payload: event,
+    }).catch(() => { /* best-effort */ });
+  };
+
   // Build the async iterable that yields AgentRunEvents
   const eventStream = async function* (): AsyncGenerator<AgentRunEvent> {
-    yield emit({ type: "run_started", runId: run.id, mode: request.mode });
+    const startEvent = emit({ type: "run_started", runId: run.id, mode: request.mode });
+    persistEvent(run.id, startEvent);
+    yield startEvent;
 
     let stream: Awaited<ReturnType<typeof streamChat>>;
     try {
@@ -151,7 +165,9 @@ export async function runStreamTurn(
       clearTimeout(watchdogId);
       const errorMsg = err instanceof Error ? err.message : String(err);
       logError("runStreamTurn/streamChat", err);
-      yield emit({ type: "run_failed", error: errorMsg });
+      const failEvent = emit({ type: "run_failed", error: errorMsg });
+      persistEvent(run.id, failEvent);
+      yield failEvent;
       await agentRuns.updateStatus(run.id, "failed", errorMsg);
       return;
     }
@@ -192,10 +208,12 @@ export async function runStreamTurn(
 
       await agentRuns.updateStatus(run.id, "succeeded");
 
-      yield emit({
+      const completeEvent = emit({
         type: "run_completed",
         result: { text: fullText, conversationId },
       });
+      persistEvent(run.id, completeEvent);
+      yield completeEvent;
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       logError("runStreamTurn/stream", err);
@@ -209,6 +227,7 @@ export async function runStreamTurn(
       }
 
       yield emit({ type: "run_failed", error: errorMsg });
+      persistEvent(run.id, { type: "run_failed", error: errorMsg });
       await agentRuns.updateStatus(run.id, "failed", errorMsg);
     } finally {
       clearTimeout(watchdogId);

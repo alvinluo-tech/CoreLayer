@@ -51,7 +51,7 @@ export async function runTurn(
   request: AgentRunRequest,
   options?: RunTurnOptions,
 ): Promise<AgentRunResult> {
-  const { agentRuns, conversations, tasks } = getRepositories();
+  const { agentRuns, conversations, tasks, agentRunEvents } = getRepositories();
   const events: AgentRunEvent[] = [];
 
   // Resolve context (workspace, agent defaults)
@@ -61,10 +61,22 @@ export async function runTurn(
     agentId: request.agentId,
   });
 
+  let eventSequence = 0;
+
   const emit = (event: AgentRunEvent) => {
     events.push(event);
     options?.onEvent?.(event);
     return event;
+  };
+
+  const persistEvent = async (runId: string, event: AgentRunEvent) => {
+    const seq = eventSequence++;
+    await agentRunEvents.create({
+      runId,
+      sequence: seq,
+      type: event.type,
+      payload: event,
+    }).catch(() => { /* best-effort */ });
   };
 
   if (request.taskId) {
@@ -122,6 +134,7 @@ export async function runTurn(
   }
 
   emit({ type: "run_started", runId: run.id, mode: request.mode });
+  await persistEvent(run.id, { type: "run_started", runId: run.id, mode: request.mode });
 
   try {
     const result = await handleMessageInConversation(
@@ -136,6 +149,10 @@ export async function runTurn(
         text: result.assistantMessage.content,
         conversationId,
       },
+    });
+    await persistEvent(run.id, {
+      type: "run_completed",
+      result: { text: result.assistantMessage.content, conversationId },
     });
 
     await agentRuns.updateStatus(run.id, "succeeded");
@@ -168,6 +185,7 @@ export async function runTurn(
     const errorMsg = err instanceof Error ? err.message : String(err);
     logError("runTurn", err);
     emit({ type: "run_failed", error: errorMsg });
+    await persistEvent(run.id, { type: "run_failed", error: errorMsg });
     await agentRuns.updateStatus(run.id, "failed", errorMsg);
 
     if (request.taskId) {

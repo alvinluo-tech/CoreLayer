@@ -532,5 +532,19 @@ try { sqlite.exec(`ALTER TABLE approval_requests ADD COLUMN preview TEXT`); } ca
 try { sqlite.exec(`ALTER TABLE approval_requests ADD COLUMN tool_call_id TEXT`); } catch { /* already exists */ }
 try { sqlite.exec(`ALTER TABLE approval_requests ADD COLUMN expires_at INTEGER`); } catch { /* already exists */ }
 
+// Migration: Phase 7 - Agent Run Event Store
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS agent_run_events (
+    id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL REFERENCES agent_runs(id),
+    sequence INTEGER NOT NULL,
+    type TEXT NOT NULL,
+    payload TEXT,
+    created_at TEXT DEFAULT 'CURRENT_TIMESTAMP'
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_agent_run_events_run ON agent_run_events(run_id, sequence);
+`);
+
 export const db = drizzle(sqlite, { schema });
 export { schema };

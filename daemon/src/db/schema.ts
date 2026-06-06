@@ -263,6 +263,19 @@ export const agentRuns = sqliteTable("agent_runs", {
   error: text("error"),
 });
 
+// ---- Agent Run Events ----
+
+export const agentRunEvents = sqliteTable("agent_run_events", {
+  id: text("id").primaryKey(),
+  runId: text("run_id")
+    .notNull()
+    .references(() => agentRuns.id),
+  sequence: integer("sequence").notNull(),
+  type: text("type").notNull(),
+  payload: text("payload"), // JSON stored as text
+  createdAt: text("created_at").default("CURRENT_TIMESTAMP").notNull(),
+});
+
 // ---- Approval Requests ----
 
 export const approvalRequests = sqliteTable("approval_requests", {

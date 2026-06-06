@@ -669,6 +669,30 @@ export interface AgentProfileRepository {
   delete(id: string): Promise<boolean>;
 }
 
+// ---- Agent Run Events ----
+
+export interface AgentRunEventRow {
+  id: string;
+  runId: string;
+  sequence: number;
+  type: string;
+  payload: unknown;
+  createdAt: string;
+}
+
+export interface CreateAgentRunEventInput {
+  runId: string;
+  sequence: number;
+  type: string;
+  payload?: unknown;
+}
+
+export interface AgentRunEventRepository {
+  create(input: CreateAgentRunEventInput): Promise<AgentRunEventRow>;
+  getByRunId(runId: string): Promise<AgentRunEventRow[]>;
+  getByType(runId: string, type: string): Promise<AgentRunEventRow[]>;
+}
+
 // ---- Approval Requests ----
 
 export interface ApprovalRequestRow {
@@ -766,4 +790,5 @@ export interface Repositories {
   agentProfiles: AgentProfileRepository;
   approvalRequests: ApprovalRequestRepository;
   permissionMemories: PermissionMemoryRepository;
+  agentRunEvents: AgentRunEventRepository;
 }

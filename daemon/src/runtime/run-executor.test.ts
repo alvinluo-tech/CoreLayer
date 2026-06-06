@@ -157,6 +157,14 @@ function createTestDb() {
       created_at TEXT DEFAULT 'CURRENT_TIMESTAMP',
       updated_at TEXT DEFAULT 'CURRENT_TIMESTAMP'
     );
+    CREATE TABLE IF NOT EXISTS agent_run_events (
+      id TEXT PRIMARY KEY,
+      run_id TEXT NOT NULL,
+      sequence INTEGER NOT NULL,
+      type TEXT NOT NULL,
+      payload TEXT,
+      created_at TEXT DEFAULT 'CURRENT_TIMESTAMP'
+    );
   `);
   return drizzle(sqlite, { schema });
 }
@@ -173,6 +181,7 @@ const { createSqliteScheduledTaskRepo } = await import("../db/sqlite/scheduled-t
 const { createSqliteWorkspaceRepo } = await import("../db/sqlite/workspace-repo.js");
 const { createSqliteProjectRepo } = await import("../db/sqlite/project-repo.js");
 const { createSqliteAgentProfileRepo } = await import("../db/sqlite/agent-profile-repo.js");
+const { createSqliteAgentRunEventRepo } = await import("../db/sqlite/agent-run-event-repo.js");
 
 vi.mock("../db/factory.js", () => ({
   getRepositories: () => ({
@@ -185,6 +194,7 @@ vi.mock("../db/factory.js", () => ({
     workspaces: createSqliteWorkspaceRepo(),
     projects: createSqliteProjectRepo(),
     agentProfiles: createSqliteAgentProfileRepo(),
+    agentRunEvents: createSqliteAgentRunEventRepo(),
   }),
 }));
 
