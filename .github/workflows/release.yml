@@ -35,6 +35,10 @@ jobs:
           node-version: 20
           cache: pnpm
 
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:

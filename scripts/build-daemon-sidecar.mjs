@@ -1,104 +1,149 @@
 #!/usr/bin/env node
 /**
- * Build daemon for Tauri bundling.
+ * Build the daemon as a Tauri sidecar executable.
  *
- * Strategy:
- * 1. Compile TypeScript with tsc
- * 2. Bundle with esbuild into a single ESM file (native modules external)
- * 3. Copy native modules from pnpm store
- * 4. Output to Tauri resources directory for the Rust supervisor to spawn
- *
- * The Rust DaemonSupervisor spawns `node` with the bundled script directly.
- * No separate sidecar binary is needed - Node.js is expected on PATH.
- * For production, Node.js can be bundled as a Tauri resource later.
+ * Production packages must not depend on a user's global Node, pnpm, tsx,
+ * TypeScript, or Bun. Bun is a build-time dependency only: this script compiles
+ * daemon/src/index.ts into the target-triple-named binary that Tauri expects
+ * for bundle.externalBin = ["binaries/jarvis-daemon"].
  */
 
-import { mkdirSync, existsSync, cpSync, writeFileSync, readdirSync } from "node:fs";
-import { join } from "node:path";
 import { execFileSync } from "node:child_process";
-import { arch, platform } from "node:os";
+import { existsSync, mkdirSync } from "node:fs";
+import { arch, homedir, platform } from "node:os";
+import { dirname, join } from "node:path";
 
 const root = process.cwd();
-const resourcesDir = join(root, "frontend", "src-tauri", "resources", "daemon");
-const sidecarBuildDir = join(root, ".sidecar-build");
-const isWindows = platform() === "win32";
+const binaryBaseName = "jarvis-daemon";
+const binariesDir = join(root, "frontend", "src-tauri", "binaries");
+const entrypoint = join(root, "daemon", "src", "index.ts");
 
-// Find a pnpm-installed package's actual path
-function findPnpmPackage(name) {
-  const pnpmDir = join(root, "node_modules", ".pnpm");
-  if (!existsSync(pnpmDir)) return null;
-  const escaped = name.replace("/", "+");
-  for (const entry of readdirSync(pnpmDir)) {
-    if (entry.startsWith(escaped + "@")) {
-      const pkgPath = join(pnpmDir, entry, "node_modules", name);
-      if (existsSync(pkgPath)) return pkgPath;
-    }
-  }
-  return null;
-}
-
-console.log("[build-daemon] Building daemon for Tauri bundling...");
-
-// Step 1: Compile TypeScript
-console.log("[build-daemon] Compiling TypeScript...");
-execFileSync("pnpm", ["--filter", "daemon", "build"], {
-  stdio: "inherit",
-  shell: isWindows,
-  cwd: root,
-});
-
-// Step 2: Bundle with esbuild (ESM format to preserve import.meta)
-console.log("[build-daemon] Bundling with esbuild...");
-mkdirSync(sidecarBuildDir, { recursive: true });
-
-const esbuildArgs = [
-  "node_modules/esbuild/bin/esbuild",
-  "daemon/dist/index.js",
-  "--bundle",
-  "--platform=node",
-  "--target=node20",
-  "--format=esm",
-  "--outfile=" + join(sidecarBuildDir, "index.mjs"),
-  "--external:better-sqlite3",
-  "--external:@discordjs/opus",
-  "--external:prism-media",
-];
-
-execFileSync(process.execPath, esbuildArgs, {
-  stdio: "inherit",
-  cwd: root,
-});
-
-// Step 3: Copy native modules from pnpm store
-console.log("[build-daemon] Copying native modules...");
-const nativeModules = ["better-sqlite3", "@discordjs/opus", "prism-media"];
-for (const mod of nativeModules) {
-  const src = findPnpmPackage(mod);
-  if (src) {
-    const dest = join(sidecarBuildDir, "node_modules", mod);
-    cpSync(src, dest, { recursive: true });
-    console.log(`  Copied ${mod}`);
-  } else {
-    console.warn(`  Warning: ${mod} not found in pnpm store`);
-  }
-}
-
-// Step 4: Create package.json for bundled daemon
-writeFileSync(
-  join(sidecarBuildDir, "package.json"),
-  JSON.stringify({ name: "jarvis-daemon-bundle", type: "module", private: true }, null, 2)
+const targetTriple = process.env.JARVIS_SIDECAR_TARGET ?? detectTargetTriple();
+const bunTarget = mapBunCompileTarget(targetTriple);
+const outputPath = join(
+  binariesDir,
+  `${binaryBaseName}-${targetTriple}${targetTriple.includes("windows") ? ".exe" : ""}`,
 );
 
-// Step 5: Copy to Tauri resources directory
-console.log("[build-daemon] Copying to Tauri resources...");
-mkdirSync(resourcesDir, { recursive: true });
-cpSync(sidecarBuildDir, resourcesDir, { recursive: true });
+console.log(`[build-daemon] Target triple: ${targetTriple}`);
+console.log(`[build-daemon] Bun compile target: ${bunTarget}`);
 
-// Verify output
-const scriptPath = join(resourcesDir, "index.mjs");
-if (!existsSync(scriptPath)) {
-  console.error(`[build-daemon] ERROR: Bundled script not found at ${scriptPath}`);
+mkdirSync(dirname(outputPath), { recursive: true });
+
+const bun = resolveBunExecutable();
+execFileSync(
+  bun.path,
+  [
+    "build",
+    entrypoint,
+    "--compile",
+    `--target=${bunTarget}`,
+    "--outfile",
+    outputPath,
+  ],
+  {
+    cwd: root,
+    stdio: "inherit",
+    shell: bun.shell,
+    env: {
+      ...process.env,
+      NODE_ENV: "production",
+    },
+  },
+);
+
+if (!existsSync(outputPath)) {
+  console.error(`[build-daemon] ERROR: sidecar binary was not created: ${outputPath}`);
   process.exit(1);
 }
 
-console.log(`[build-daemon] Done. Resources: ${resourcesDir}`);
+console.log(`[build-daemon] Created sidecar: ${outputPath}`);
+
+function resolveBunExecutable() {
+  const command = platform() === "win32" ? "where.exe" : "which";
+  const commandNames = platform() === "win32" ? ["bun.cmd", "bun.exe", "bun"] : ["bun"];
+  const candidates = [];
+
+  for (const commandName of commandNames) {
+    try {
+      const found = execFileSync(command, [commandName], {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+        shell: false,
+      })
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+
+      candidates.push(...found);
+    } catch {}
+  }
+
+  if (platform() === "win32") {
+    candidates.push(join(homedir(), ".bun", "bin", "bun.exe"));
+  }
+
+  for (const bunPath of candidates) {
+    try {
+      execFileSync(bunPath, ["--version"], {
+        cwd: root,
+        stdio: ["ignore", "pipe", "pipe"],
+        shell: platform() === "win32",
+      });
+      return { path: bunPath, shell: platform() === "win32" };
+    } catch {
+      console.warn(`[build-daemon] Skipping unusable Bun executable: ${bunPath}`);
+    }
+  }
+
+  throw new Error(
+    "Bun is required to build the daemon sidecar. Install Bun in the build environment with: powershell -c \"irm bun.sh/install.ps1|iex\"",
+  );
+}
+
+function detectTargetTriple() {
+  const rustcHost = tryRustcHostTriple();
+  if (rustcHost) return rustcHost;
+
+  if (platform() === "win32" && arch() === "x64") return "x86_64-pc-windows-msvc";
+  if (platform() === "darwin" && arch() === "arm64") return "aarch64-apple-darwin";
+  if (platform() === "darwin" && arch() === "x64") return "x86_64-apple-darwin";
+  if (platform() === "linux" && arch() === "x64") return "x86_64-unknown-linux-gnu";
+
+  throw new Error(`Unsupported sidecar build host: ${platform()} ${arch()}`);
+}
+
+function tryRustcHostTriple() {
+  try {
+    const output = execFileSync("rustc", ["-Vv"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+      shell: platform() === "win32",
+    });
+    const hostLine = output
+      .split(/\r?\n/)
+      .find((line) => line.startsWith("host:"));
+    return hostLine?.replace("host:", "").trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+function mapBunCompileTarget(triple) {
+  switch (triple) {
+    case "x86_64-pc-windows-msvc":
+      return "bun-windows-x64";
+    case "aarch64-pc-windows-msvc":
+      return "bun-windows-arm64";
+    case "x86_64-apple-darwin":
+      return "bun-darwin-x64";
+    case "aarch64-apple-darwin":
+      return "bun-darwin-arm64";
+    case "x86_64-unknown-linux-gnu":
+      return "bun-linux-x64";
+    case "aarch64-unknown-linux-gnu":
+      return "bun-linux-arm64";
+    default:
+      throw new Error(`No Bun compile target mapping for Rust target triple: ${triple}`);
+  }
+}

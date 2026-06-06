@@ -1,5 +1,6 @@
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use std::fs::OpenOptions;
 use std::net::TcpListener;
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
@@ -35,6 +36,7 @@ pub struct DaemonSupervisor {
     restart_attempts: u32,
     selected_port: Option<u16>,
     log_path: Option<String>,
+    sidecar_path: Option<PathBuf>,
     last_health_check: Arc<Mutex<Option<String>>>,
     last_error: Arc<Mutex<Option<String>>>,
     app_data_dir: Option<PathBuf>,
@@ -53,6 +55,7 @@ impl DaemonSupervisor {
             restart_attempts: 0,
             selected_port: None,
             log_path: None,
+            sidecar_path: None,
             last_health_check: Arc::new(Mutex::new(None)),
             last_error: Arc::new(Mutex::new(None)),
             app_data_dir: None,
@@ -72,10 +75,17 @@ impl DaemonSupervisor {
             return;
         }
 
-        // Sidecar mode: allocate port and find daemon script
+        // Sidecar mode: allocate port and find the packaged daemon binary.
         self.owns_process = true;
         self.selected_port = Some(allocate_port());
         self.url = format!("http://127.0.0.1:{}", self.selected_port.unwrap());
+        self.sidecar_path = match find_daemon_sidecar(app_handle) {
+            Ok(path) => Some(path),
+            Err(err) => {
+                log::error!("[DaemonSupervisor] {}", err);
+                None
+            }
+        };
 
         // Resolve app data directory
         let app_data = app_handle
@@ -105,19 +115,23 @@ impl DaemonSupervisor {
         let port = self.selected_port.ok_or("Port not allocated")?;
         let app_data = self.app_data_dir.as_ref().ok_or("App data dir not set")?;
 
-        // Find the bundled daemon script
-        let script_path = find_daemon_script()?;
+        let sidecar_path = self
+            .sidecar_path
+            .clone()
+            .ok_or_else(|| find_daemon_sidecar_error())?;
         log::info!(
-            "[DaemonSupervisor] Starting daemon from: {}",
-            script_path.display()
+            "[DaemonSupervisor] Starting daemon sidecar: {}",
+            sidecar_path.display()
         );
 
         // Set up environment variables
         let app_data_str = app_data.to_string_lossy().to_string();
 
-        let mut cmd = Command::new("node");
-        cmd.arg(&script_path)
-            .env("DAEMON_HOST", "127.0.0.1")
+        let stdout_log = open_daemon_log(self.log_path.as_deref(), "stdout")?;
+        let stderr_log = open_daemon_log(self.log_path.as_deref(), "stderr")?;
+
+        let mut cmd = Command::new(&sidecar_path);
+        cmd.env("DAEMON_HOST", "127.0.0.1")
             .env("DAEMON_PORT", port.to_string())
             .env("JARVIS_RUNTIME_MODE", "sidecar")
             .env("JARVIS_APP_DATA_DIR", &app_data_str)
@@ -125,12 +139,12 @@ impl DaemonSupervisor {
                 "JARVIS_LOG_DIR",
                 app_data.join("logs").to_string_lossy().as_ref(),
             )
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
+            .stdout(Stdio::from(stdout_log))
+            .stderr(Stdio::from(stderr_log));
 
         let child = cmd
             .spawn()
-            .map_err(|e| format!("Failed to spawn daemon: {}. Is Node.js installed?", e))?;
+            .map_err(|e| format!("Failed to spawn daemon sidecar: {}", e))?;
 
         let pid = child.id();
         self.child = Some(child);
@@ -291,47 +305,96 @@ impl Drop for DaemonSupervisor {
     }
 }
 
-/// Find the bundled daemon script in Tauri resources.
-fn find_daemon_script() -> Result<PathBuf, String> {
-    // Check for bundled resources (packaged app)
-    let exe_dir = std::env::current_exe()
-        .map_err(|e| format!("Cannot determine exe path: {}", e))?
-        .parent()
-        .ok_or("Cannot determine exe directory")?
-        .to_path_buf();
+fn open_daemon_log(log_path: Option<&str>, stream: &str) -> Result<std::fs::File, String> {
+    let path = log_path.ok_or("Daemon log path not initialized")?;
+    let file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+        .map_err(|e| format!("Cannot open daemon {} log {}: {}", stream, path, e))?;
+    Ok(file)
+}
 
-    // Try resources/daemon/index.mjs relative to executable
-    let bundled = exe_dir.join("resources").join("daemon").join("index.mjs");
-    if bundled.exists() {
-        return Ok(bundled);
+fn find_daemon_sidecar(app_handle: &tauri::AppHandle) -> Result<PathBuf, String> {
+    use tauri::Manager;
+
+    let packaged_name = sidecar_packaged_name();
+    let source_name = sidecar_source_name();
+    let mut candidates = Vec::new();
+
+    if let Ok(resource_dir) = app_handle.path().resource_dir() {
+        candidates.push(resource_dir.join(&packaged_name));
+        candidates.push(resource_dir.join("binaries").join(&packaged_name));
+        candidates.push(resource_dir.join(&source_name));
+        candidates.push(resource_dir.join("binaries").join(&source_name));
     }
 
-    // Try relative to current working directory (dev mode)
-    let cwd_script = std::env::current_dir()
-        .map_err(|e| format!("Cannot determine cwd: {}", e))?
-        .join("frontend")
-        .join("src-tauri")
-        .join("resources")
-        .join("daemon")
-        .join("index.mjs");
-    if cwd_script.exists() {
-        return Ok(cwd_script);
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(exe_dir) = exe.parent() {
+            candidates.push(exe_dir.join(&packaged_name));
+            candidates.push(exe_dir.join("binaries").join(&packaged_name));
+            candidates.push(exe_dir.join(&source_name));
+            candidates.push(exe_dir.join("binaries").join(&source_name));
+        }
     }
 
-    // Try .sidecar-build/index.mjs (dev build)
-    let sidecar_build = std::env::current_dir()
-        .map_err(|e| format!("Cannot determine cwd: {}", e))?
-        .join(".sidecar-build")
-        .join("index.mjs");
-    if sidecar_build.exists() {
-        return Ok(sidecar_build);
+    if let Ok(cwd) = std::env::current_dir() {
+        candidates.push(
+            cwd.join("frontend")
+                .join("src-tauri")
+                .join("binaries")
+                .join(&source_name),
+        );
+        candidates.push(cwd.join("binaries").join(&source_name));
     }
 
-    Err(
-        "Daemon script not found. Run 'pnpm build:daemon:sidecar' first, \
-         or set DAEMON_URL to use an external daemon."
-            .to_string(),
+    candidates
+        .into_iter()
+        .find(|path| path.exists())
+        .ok_or_else(find_daemon_sidecar_error)
+}
+
+fn find_daemon_sidecar_error() -> String {
+    format!(
+        "Daemon sidecar not found. Run 'pnpm build:daemon:sidecar' first, \
+         or set DAEMON_URL to use an external daemon. Expected source binary like {}.",
+        sidecar_source_name()
     )
+}
+
+fn sidecar_packaged_name() -> String {
+    if cfg!(target_os = "windows") {
+        "jarvis-daemon.exe".to_string()
+    } else {
+        "jarvis-daemon".to_string()
+    }
+}
+
+fn sidecar_source_name() -> String {
+    let ext = if cfg!(target_os = "windows") {
+        ".exe"
+    } else {
+        ""
+    };
+    format!("jarvis-daemon-{}{}", current_target_triple(), ext)
+}
+
+fn current_target_triple() -> &'static str {
+    if cfg!(all(target_os = "windows", target_arch = "x86_64")) {
+        "x86_64-pc-windows-msvc"
+    } else if cfg!(all(target_os = "windows", target_arch = "aarch64")) {
+        "aarch64-pc-windows-msvc"
+    } else if cfg!(all(target_os = "macos", target_arch = "x86_64")) {
+        "x86_64-apple-darwin"
+    } else if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
+        "aarch64-apple-darwin"
+    } else if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
+        "x86_64-unknown-linux-gnu"
+    } else if cfg!(all(target_os = "linux", target_arch = "aarch64")) {
+        "aarch64-unknown-linux-gnu"
+    } else {
+        "unknown-target"
+    }
 }
 
 /// Allocate a free port by binding to port 0.
