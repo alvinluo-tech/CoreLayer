@@ -142,6 +142,8 @@ export async function runTurn(
       request.input,
       {
         modelOverride: request.modelOverride,
+        providerOverride: request.providerOverride,
+        systemPromptOverride: request.systemPromptOverride,
         runtimeContext: {
           runId: run.id,
           projectId: request.projectId,

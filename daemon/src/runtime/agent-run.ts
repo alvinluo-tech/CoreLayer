@@ -16,6 +16,8 @@ export interface AgentRunRequest {
   mode: "chat" | "voice" | "tick" | "scheduled" | "workflow";
   input: string;
   modelOverride?: string;
+  providerOverride?: string;
+  systemPromptOverride?: string;
   constraints?: {
     maxSteps?: number;
     maxTokens?: number;
