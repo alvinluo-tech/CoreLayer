@@ -893,6 +893,114 @@ async fn delete_model_profile(id: String) -> Result<serde_json::Value, String> {
     .await
 }
 
+// ---- Workspace Commands ----
+
+#[tauri::command]
+async fn list_workspaces() -> Result<serde_json::Value, String> {
+    daemon_get(get_daemon_client(), "/api/workspaces").await
+}
+
+#[tauri::command]
+async fn create_workspace(
+    name: String,
+    description: Option<String>,
+) -> Result<serde_json::Value, String> {
+    let body = serde_json::json!({ "name": name, "description": description });
+    daemon_post(get_daemon_client(), "/api/workspaces", body).await
+}
+
+#[tauri::command]
+async fn update_workspace(
+    id: String,
+    name: Option<String>,
+    description: Option<String>,
+) -> Result<serde_json::Value, String> {
+    let mut body = serde_json::json!({});
+    if let Some(n) = name {
+        body["name"] = serde_json::json!(n);
+    }
+    if let Some(d) = description {
+        body["description"] = serde_json::json!(d);
+    }
+    daemon_patch(
+        get_daemon_client(),
+        &format!("/api/workspaces/{}", encode_path_segment(&id)),
+        body,
+    )
+    .await
+}
+
+#[tauri::command]
+async fn delete_workspace(id: String) -> Result<serde_json::Value, String> {
+    daemon_delete(
+        get_daemon_client(),
+        &format!("/api/workspaces/{}", encode_path_segment(&id)),
+    )
+    .await
+}
+
+// ---- Project Commands ----
+
+#[tauri::command]
+async fn list_projects(workspace_id: String) -> Result<serde_json::Value, String> {
+    daemon_get(
+        get_daemon_client(),
+        &format!(
+            "/api/projects?workspaceId={}",
+            encode_path_segment(&workspace_id)
+        ),
+    )
+    .await
+}
+
+#[tauri::command]
+async fn create_project(
+    workspace_id: String,
+    name: String,
+    description: Option<String>,
+) -> Result<serde_json::Value, String> {
+    let body = serde_json::json!({
+        "workspaceId": workspace_id,
+        "name": name,
+        "description": description
+    });
+    daemon_post(get_daemon_client(), "/api/projects", body).await
+}
+
+#[tauri::command]
+async fn update_project(
+    id: String,
+    name: Option<String>,
+    description: Option<String>,
+    status: Option<String>,
+) -> Result<serde_json::Value, String> {
+    let mut body = serde_json::json!({});
+    if let Some(n) = name {
+        body["name"] = serde_json::json!(n);
+    }
+    if let Some(d) = description {
+        body["description"] = serde_json::json!(d);
+    }
+    if let Some(s) = status {
+        body["status"] = serde_json::json!(s);
+    }
+    daemon_patch(
+        get_daemon_client(),
+        &format!("/api/projects/{}", encode_path_segment(&id)),
+        body,
+    )
+    .await
+}
+
+#[tauri::command]
+async fn delete_project(id: String) -> Result<serde_json::Value, String> {
+    daemon_delete(
+        get_daemon_client(),
+        &format!("/api/projects/{}", encode_path_segment(&id)),
+    )
+    .await
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let daemon_url =
@@ -961,6 +1069,14 @@ pub fn run() {
             update_tick_config,
             upsert_model_profile,
             delete_model_profile,
+            list_workspaces,
+            create_workspace,
+            update_workspace,
+            delete_workspace,
+            list_projects,
+            create_project,
+            update_project,
+            delete_project,
             daemon_supervisor::daemon_status,
             daemon_supervisor::start_daemon,
             daemon_supervisor::stop_daemon,

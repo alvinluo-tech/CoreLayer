@@ -24,6 +24,8 @@ import mcpRoutes from "./api/mcp.js";
 import toolRoutes from "./api/tools.js";
 import scheduledTaskRoutes from "./api/scheduled-tasks.js";
 import approvalRoutes from "./api/approval.js";
+import workspaceRoutes from "./api/workspaces.js";
+import projectRoutes from "./api/projects.js";
 import { startScheduler, setIdleCallback, consolidateOnIdle } from "./scheduler.js";
 import { registerDefaultReportSchedules } from "./reports/generator.js";
 import { registerSensor, startSensors, setSensorChangeHandler } from "./sensors/registry.js";
@@ -113,6 +115,10 @@ app.route("/api/tasks/scheduled", scheduledTaskRoutes);
 
 // Approval Inbox routes (Phase 4)
 app.route("/api/approvals", approvalRoutes);
+
+// Workspace & Project routes (Phase 5)
+app.route("/api/workspaces", workspaceRoutes);
+app.route("/api/projects", projectRoutes);
 
 function startServer(port: number) {
   try {
