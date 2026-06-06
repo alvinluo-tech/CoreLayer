@@ -113,7 +113,17 @@ jobs:
         run: cargo fmt --manifest-path frontend/src-tauri/Cargo.toml -- --check
 
       - name: Run cargo clippy
-        run: cargo clippy --manifest-path frontend/src-tauri/Cargo.toml -- -D warnings
+        run: |
+          for i in 1 2 3; do
+            echo "Attempt $i of cargo clippy..."
+            CARGO_HTTP_CHECK_REVOKE=false cargo clippy --manifest-path frontend/src-tauri/Cargo.toml -- -D warnings && break
+            if [ $i -eq 3 ]; then exit 1; fi
+            echo "Attempt $i failed, retrying in 10s..."
+            sleep 10
+          done
+        env:
+          CARGO_HTTP_VERSION: '1.1'
+          CARGO_NET_RETRY: '3'
 
   build:
     name: Build (${{ matrix.os }})
@@ -165,4 +175,14 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build (no bundle)
-        run: pnpm --filter frontend tauri build --no-bundle
+        run: |
+          for i in 1 2 3; do
+            echo "Attempt $i of build..."
+            pnpm --filter frontend tauri build --no-bundle && break
+            if [ $i -eq 3 ]; then exit 1; fi
+            echo "Attempt $i failed, retrying in 10s..."
+            sleep 10
+          done
+        env:
+          CARGO_HTTP_VERSION: '1.1'
+          CARGO_NET_RETRY: '3'
