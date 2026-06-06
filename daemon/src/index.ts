@@ -36,6 +36,22 @@ import { registerSensor, startSensors, setSensorChangeHandler } from "./sensors/
 import { createTodoSensor } from "./sensors/todo-sensor.js";
 import { createReadingSensor } from "./sensors/reading-sensor.js";
 
+// ─── Security helpers ────────────────────────────────────────────────────────
+function isLoopback(addr: string): boolean {
+  // Strip IPv6-mapped IPv4 prefix
+  const clean = addr.replace(/^::ffff:/, "");
+  return clean === "127.0.0.1" || clean === "::1" || clean === "localhost";
+}
+
+// Sidecar mode must not bind to 0.0.0.0 — enforce loopback-only
+let effectiveHost = env.DAEMON_HOST;
+if (env.JARVIS_RUNTIME_MODE === "sidecar" && effectiveHost !== "127.0.0.1" && effectiveHost !== "localhost") {
+  console.error(
+    `[Jarvis] SECURITY: sidecar mode must bind to 127.0.0.1, got DAEMON_HOST="${effectiveHost}". Falling back to 127.0.0.1.`
+  );
+  effectiveHost = "127.0.0.1";
+}
+
 // Run config migration from old locations to ~/.jarvis/
 runMigration();
 
@@ -123,6 +139,14 @@ app.get("/api/runtime/components", (c) => {
 });
 
 app.post("/api/runtime/shutdown", async (c) => {
+  // Only allow shutdown from loopback (127.0.0.1 / ::1)
+  const incoming = (c.env as Record<string, unknown>)?.incoming as
+    | { socket?: { remoteAddress?: string } }
+    | undefined;
+  const peerAddress = incoming?.socket?.remoteAddress;
+  if (peerAddress && !isLoopback(peerAddress)) {
+    return c.json({ error: "Shutdown only allowed from loopback" }, 403);
+  }
   console.log("[Jarvis] Shutdown requested via API");
   // Give the response time to send before exiting
   setTimeout(() => process.exit(0), 200);
@@ -208,7 +232,7 @@ console.log(`[Jarvis] AI: ${aiMode}`);
 console.log(`[Jarvis] 存储: ${getCurrentMode()}`);
 console.log(`[Jarvis] 数据库: ${resolveAppPaths().sqlitePath}`);
 
-startServer(env.DAEMON_PORT, env.DAEMON_HOST);
+startServer(env.DAEMON_PORT, effectiveHost);
 
 // Auto-connect saved MCP servers after server starts
 import("./mcp/client.js")
