@@ -280,6 +280,11 @@ export const approvalRequests = sqliteTable("approval_requests", {
   projectScope: integer("project_scope", { mode: "boolean" }).default(false).notNull(),
   decidedAt: integer("decided_at"), // unix timestamp
   createdAt: integer("created_at").notNull(),
+  mode: text("mode", { enum: ["chat", "voice", "tick", "scheduled", "workflow"] }).default("chat"),
+  source: text("source"), // e.g. "mcp", "native", "skill"
+  preview: text("preview"), // user-facing summary of what will change
+  toolCallId: text("tool_call_id"), // for idempotent dedup
+  expiresAt: integer("expires_at"), // unix timestamp, null = no expiry
 });
 
 // ---- Permission Memories ----

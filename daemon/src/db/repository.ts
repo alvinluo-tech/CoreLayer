@@ -682,6 +682,11 @@ export interface ApprovalRequestRow {
   projectScope: boolean;
   decidedAt: number | null;
   createdAt: number;
+  mode: string | null;
+  source: string | null;
+  preview: string | null;
+  toolCallId: string | null;
+  expiresAt: number | null;
 }
 
 export interface CreateApprovalRequestInput {
@@ -692,6 +697,11 @@ export interface CreateApprovalRequestInput {
   args: unknown;
   risk: string;
   projectScope?: boolean;
+  mode?: string;
+  source?: string;
+  preview?: string;
+  toolCallId?: string;
+  expiresAt?: number;
 }
 
 export interface ApprovalRequestRepository {
@@ -699,6 +709,7 @@ export interface ApprovalRequestRepository {
   getById(id: string): Promise<ApprovalRequestRow | null>;
   getPending(): Promise<ApprovalRequestRow[]>;
   getByRunId(runId: string): Promise<ApprovalRequestRow[]>;
+  findByToolCallId(toolCallId: string): Promise<ApprovalRequestRow | null>;
   approve(id: string): Promise<ApprovalRequestRow>;
   deny(id: string): Promise<ApprovalRequestRow>;
   expireStale(maxAgeMs?: number): Promise<number>;

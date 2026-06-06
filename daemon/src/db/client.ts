@@ -525,5 +525,12 @@ sqlite.exec(`
   CREATE INDEX IF NOT EXISTS idx_permission_memories_project ON permission_memories(project_id, tool_id);
 `);
 
+// Migration: Phase 3 - Approval hardening (mode, source, preview, tool_call_id, expires_at)
+try { sqlite.exec(`ALTER TABLE approval_requests ADD COLUMN mode TEXT DEFAULT 'chat'`); } catch { /* already exists */ }
+try { sqlite.exec(`ALTER TABLE approval_requests ADD COLUMN source TEXT`); } catch { /* already exists */ }
+try { sqlite.exec(`ALTER TABLE approval_requests ADD COLUMN preview TEXT`); } catch { /* already exists */ }
+try { sqlite.exec(`ALTER TABLE approval_requests ADD COLUMN tool_call_id TEXT`); } catch { /* already exists */ }
+try { sqlite.exec(`ALTER TABLE approval_requests ADD COLUMN expires_at INTEGER`); } catch { /* already exists */ }
+
 export const db = drizzle(sqlite, { schema });
 export { schema };

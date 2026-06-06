@@ -1,4 +1,4 @@
-﻿import { eq, desc } from "drizzle-orm";
+import { eq, desc, and, lt } from "drizzle-orm";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import { db as defaultDb, schema } from "../client.js";
 import type {
@@ -21,8 +21,14 @@ function mapRow(row: typeof schema.approvalRequests.$inferSelect): ApprovalReque
     projectScope: row.projectScope,
     decidedAt: row.decidedAt,
     createdAt: row.createdAt,
+    mode: row.mode ?? null,
+    source: row.source ?? null,
+    preview: row.preview ?? null,
+    toolCallId: row.toolCallId ?? null,
+    expiresAt: row.expiresAt ?? null,
   };
 }
+
 export function createSqliteApprovalRepo(database?: DrizzleDb): ApprovalRequestRepository {
   const db = database ?? defaultDb;
   return {
@@ -40,6 +46,11 @@ export function createSqliteApprovalRepo(database?: DrizzleDb): ApprovalRequestR
           status: "pending",
           projectScope: input.projectScope ?? false,
           createdAt: now,
+          mode: (input.mode ?? "chat") as "chat" | "voice" | "tick" | "scheduled" | "workflow",
+          source: input.source ?? null,
+          preview: input.preview ?? null,
+          toolCallId: input.toolCallId ?? null,
+          expiresAt: input.expiresAt ?? null,
         })
         .run();
       const row = db
@@ -79,6 +90,20 @@ export function createSqliteApprovalRepo(database?: DrizzleDb): ApprovalRequestR
       return rows.map(mapRow);
     },
 
+    async findByToolCallId(toolCallId: string): Promise<ApprovalRequestRow | null> {
+      const row = db
+        .select()
+        .from(schema.approvalRequests)
+        .where(
+          and(
+            eq(schema.approvalRequests.toolCallId, toolCallId),
+            eq(schema.approvalRequests.status, "pending"),
+          ),
+        )
+        .get();
+      return row ? mapRow(row) : null;
+    },
+
     async approve(id: string): Promise<ApprovalRequestRow> {
       const now = Date.now();
       db.update(schema.approvalRequests)
@@ -108,14 +133,16 @@ export function createSqliteApprovalRepo(database?: DrizzleDb): ApprovalRequestR
     },
 
     async expireStale(maxAgeMs = 300_000): Promise<number> {
-      // Expire all pending approvals older than maxAgeMs.
-      // SQLite + Drizzle don't support integer timestamp comparison easily,
-      // so we expire all pending and rely on the API layer for precise checks.
-      void maxAgeMs;
+      const cutoff = Date.now() - maxAgeMs;
       const result = db
         .update(schema.approvalRequests)
         .set({ status: "expired", decidedAt: Date.now() })
-        .where(eq(schema.approvalRequests.status, "pending"))
+        .where(
+          and(
+            eq(schema.approvalRequests.status, "pending"),
+            lt(schema.approvalRequests.createdAt, cutoff),
+          ),
+        )
         .run();
       return result.changes;
     },

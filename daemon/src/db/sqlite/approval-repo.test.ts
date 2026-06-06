@@ -82,7 +82,12 @@ function createTestDb() {
       status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'approved', 'denied', 'expired')),
       project_scope INTEGER NOT NULL DEFAULT 0,
       decided_at INTEGER,
-      created_at INTEGER NOT NULL
+      created_at INTEGER NOT NULL,
+      mode TEXT DEFAULT 'chat',
+      source TEXT,
+      preview TEXT,
+      tool_call_id TEXT,
+      expires_at INTEGER
     );
     CREATE TABLE IF NOT EXISTS permission_memories (
       id TEXT PRIMARY KEY,

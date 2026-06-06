@@ -1,4 +1,4 @@
-﻿import { Hono } from "hono";
+import { Hono } from "hono";
 import { getRepositories } from "../db/factory.js";
 import { apiError, extractErrorMessage, logError } from "../utils/errors.js";
 import { toolRuntime } from "../runtime/index.js";
@@ -42,7 +42,7 @@ approvalRoutes.get("/:id", async (c) => {
  */
 approvalRoutes.post("/:id/approve", async (c) => {
   try {
-    const { approvalRequests } = getRepositories();
+    const { approvalRequests, toolCallLogs } = getRepositories();
     const id = c.req.param("id");
     const existing = await approvalRequests.getById(id);
     if (!existing) {
@@ -54,6 +54,18 @@ approvalRoutes.post("/:id/approve", async (c) => {
 
     toolRuntime.getPermissionGuard().resolvePendingConfirmation(id, true);
     const updated = await approvalRequests.approve(id);
+
+    // Audit log: approved decision
+    await toolCallLogs.create({
+      toolId: existing.toolId,
+      toolName: existing.toolName,
+      source: (existing.source as "mcp" | "native" | "skill" | "rest") ?? "rest",
+      args: existing.args,
+      resultSuccess: true,
+      risk: existing.risk,
+      confirmedByUser: true,
+    });
+
     return c.json({ data: updated });
   } catch (err) {
     logError("approvals/approve", err);
@@ -66,7 +78,7 @@ approvalRoutes.post("/:id/approve", async (c) => {
  */
 approvalRoutes.post("/:id/deny", async (c) => {
   try {
-    const { approvalRequests } = getRepositories();
+    const { approvalRequests, toolCallLogs } = getRepositories();
     const id = c.req.param("id");
     const existing = await approvalRequests.getById(id);
     if (!existing) {
@@ -78,6 +90,19 @@ approvalRoutes.post("/:id/deny", async (c) => {
 
     toolRuntime.getPermissionGuard().resolvePendingConfirmation(id, false);
     const updated = await approvalRequests.deny(id);
+
+    // Audit log: denied decision
+    await toolCallLogs.create({
+      toolId: existing.toolId,
+      toolName: existing.toolName,
+      source: (existing.source as "mcp" | "native" | "skill" | "rest") ?? "rest",
+      args: existing.args,
+      resultSuccess: false,
+      resultError: "User denied approval",
+      risk: existing.risk,
+      confirmedByUser: false,
+    });
+
     return c.json({ data: updated });
   } catch (err) {
     logError("approvals/deny", err);
@@ -130,6 +155,23 @@ approvalRoutes.post("/:id/remember", async (c) => {
     return c.json({ success: true });
   } catch (err) {
     logError("approvals/remember", err);
+    return apiError(c, extractErrorMessage(err), 500);
+  }
+});
+
+/**
+ * POST /api/approvals/expire-stale - Expire stale pending approval requests
+ * Called periodically or on startup. Expires approvals older than maxAgeMs.
+ */
+approvalRoutes.post("/expire-stale", async (c) => {
+  try {
+    const { approvalRequests } = getRepositories();
+    const body = (await c.req.json<{ maxAgeMs?: number }>().catch(() => ({}))) as { maxAgeMs?: number };
+    const maxAgeMs = body.maxAgeMs ?? 300_000; // 5 minutes default
+    const expired = await approvalRequests.expireStale(maxAgeMs);
+    return c.json({ expired });
+  } catch (err) {
+    logError("approvals/expire-stale", err);
     return apiError(c, extractErrorMessage(err), 500);
   }
 });

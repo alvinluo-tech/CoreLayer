@@ -411,6 +411,17 @@ async function checkIdle(): Promise<void> {
     }
   }
 
+  // Expire stale pending approvals (5-minute default timeout)
+  try {
+    const { approvalRequests } = getRepositories();
+    const expired = await approvalRequests.expireStale(300_000);
+    if (expired > 0) {
+      logError("Scheduler/idle", `Expired ${expired} stale approval requests`);
+    }
+  } catch (err) {
+    logError("Scheduler/approval-expire", err);
+  }
+
   // Run TICK (autonomous processing) with frequency limiting
   if (canRunTick()) {
     try {
