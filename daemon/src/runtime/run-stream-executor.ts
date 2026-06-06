@@ -111,26 +111,23 @@ export async function runStreamTurn(
 
   let eventSequence = 0;
 
-  const emit = (event: AgentRunEvent) => {
+  const emitAndPersist = (event: AgentRunEvent) => {
     options?.onEvent?.(event);
+    if (event.type !== "delta") {
+      const seq = eventSequence++;
+      agentRunEvents.create({
+        runId: run.id,
+        sequence: seq,
+        type: event.type,
+        payload: event,
+      }).catch((err) => logError("agentRunEvents/create", err));
+    }
     return event;
-  };
-
-  const persistEvent = (runId: string, event: AgentRunEvent) => {
-    const seq = eventSequence++;
-    agentRunEvents.create({
-      runId,
-      sequence: seq,
-      type: event.type,
-      payload: event,
-    }).catch(() => { /* best-effort */ });
   };
 
   // Build the async iterable that yields AgentRunEvents
   const eventStream = async function* (): AsyncGenerator<AgentRunEvent> {
-    const startEvent = emit({ type: "run_started", runId: run.id, mode: request.mode });
-    persistEvent(run.id, startEvent);
-    yield startEvent;
+    yield emitAndPersist({ type: "run_started", runId: run.id, mode: request.mode });
 
     let stream: Awaited<ReturnType<typeof streamChat>>;
     try {
@@ -145,9 +142,9 @@ export async function runStreamTurn(
             toolCallsLog.push({ name: event.name, input: event.args ?? null, output: null });
             toolCallIndexByCallId.set(event.toolCallId, index);
             eventBuffer.push(
-              emit({
+              emitAndPersist({
                 type: "tool_call",
-                toolCall: { name: event.name, args: event.args },
+                toolCall: { id: event.toolCallId, name: event.name, args: event.args },
               }),
             );
           } else if (event.type === "tool-result") {
@@ -156,9 +153,9 @@ export async function runStreamTurn(
               toolCallsLog[index].output = event.result;
             }
             eventBuffer.push(
-              emit({
+              emitAndPersist({
                 type: "tool_call",
-                toolCall: { name: event.name, args: null, result: event.result },
+                toolCall: { id: event.toolCallId, name: event.name, args: null, result: event.result },
               }),
             );
           }
@@ -176,8 +173,7 @@ export async function runStreamTurn(
       logError("runStreamTurn/streamChat", err);
       const isCancelled = abortController.signal.aborted && !abortedByWatchdog;
       const finalStatus = isCancelled ? "cancelled" : "failed";
-      const failEvent = emit({ type: "run_failed", error: errorMsg });
-      persistEvent(run.id, failEvent);
+      const failEvent = emitAndPersist({ type: "run_failed", error: errorMsg });
       yield failEvent;
       await agentRuns.updateStatus(run.id, finalStatus, errorMsg);
       return;
@@ -199,7 +195,7 @@ export async function runStreamTurn(
 
         if (event.type === "delta") {
           fullText += event.text;
-          yield emit({ type: "delta", text: event.text });
+          yield emitAndPersist({ type: "delta", text: event.text });
         }
         // thinking, tool_calls, tool_result from normalizeStream are handled
         // by the onToolEvent callback above; no need to duplicate here
@@ -220,12 +216,10 @@ export async function runStreamTurn(
       await agentRuns.updateStatus(run.id, "succeeded");
 
       const conversation = await conversations.getById(conversationId);
-      const completeEvent = emit({
+      yield emitAndPersist({
         type: "run_completed",
         result: { text: fullText, conversationId, userMessage: savedUserMessage, assistantMessage: savedAssistantMessage, conversation },
       });
-      persistEvent(run.id, completeEvent);
-      yield completeEvent;
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       logError("runStreamTurn/stream", err);
@@ -240,8 +234,7 @@ export async function runStreamTurn(
 
       const isCancelled = abortController.signal.aborted && !abortedByWatchdog;
       const finalStatus = isCancelled ? "cancelled" : "failed";
-      yield emit({ type: "run_failed", error: errorMsg });
-      persistEvent(run.id, { type: "run_failed", error: errorMsg });
+      yield emitAndPersist({ type: "run_failed", error: errorMsg });
       await agentRuns.updateStatus(run.id, finalStatus, errorMsg);
     } finally {
       clearTimeout(watchdogId);

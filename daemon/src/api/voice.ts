@@ -205,12 +205,12 @@ voiceRoutes.post("/converse-stream", async (c) => {
           if (event.toolCall.result !== undefined) {
             await sseStream.writeSSE({
               event: "tool_result",
-              data: JSON.stringify({ name: event.toolCall.name, toolCallId: "", output: event.toolCall.result }),
+              data: JSON.stringify({ name: event.toolCall.name, toolCallId: event.toolCall.id ?? "", output: event.toolCall.result }),
             });
           } else {
             await sseStream.writeSSE({
               event: "tool_calls",
-              data: JSON.stringify({ name: event.toolCall.name, toolCallId: "", input: event.toolCall.args }),
+              data: JSON.stringify({ name: event.toolCall.name, toolCallId: event.toolCall.id ?? "", input: event.toolCall.args }),
             });
           }
         } else if (event.type === "run_completed") {

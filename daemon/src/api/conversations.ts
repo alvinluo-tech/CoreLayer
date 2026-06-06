@@ -204,12 +204,12 @@ app.post("/:id/messages/stream", async (c) => {
           if (tc.result !== undefined) {
             await sseStream.writeSSE({
               event: "tool_result",
-              data: JSON.stringify({ name: tc.name, output: tc.result }),
+              data: JSON.stringify({ name: tc.name, toolCallId: tc.id, output: tc.result }),
             });
           } else {
             await sseStream.writeSSE({
               event: "tool_calls",
-              data: JSON.stringify({ name: tc.name, input: tc.args }),
+              data: JSON.stringify({ name: tc.name, toolCallId: tc.id, input: tc.args }),
             });
           }
         } else if (event.type === "run_completed") {
