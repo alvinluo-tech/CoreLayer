@@ -50,6 +50,7 @@ describe("wrapToolsForAI", () => {
       conversationId: "conv-1",
       projectId: "proj-1",
       mode: "chat",
+      toolCallId: expect.stringMatching(/^tc_[a-f0-9]{16}$/),
     });
   });
 
@@ -80,6 +81,7 @@ describe("wrapToolsForAI", () => {
       conversationId: undefined,
       projectId: undefined,
       mode: undefined,
+      toolCallId: undefined,
     });
   });
 

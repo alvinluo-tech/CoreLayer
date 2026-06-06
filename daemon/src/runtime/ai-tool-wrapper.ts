@@ -1,6 +1,7 @@
 import type { Tool } from "ai";
 import { toolRuntime } from "./index.js";
 import { getRegistry } from "../tools/registry.js";
+import { resolveToolCallId } from "./tool-call-id.js";
 
 /**
  * Runtime context passed through to ToolRuntime for every AI tool call.
@@ -60,12 +61,14 @@ export function wrapToolsForAI(
         ...toolDef,
         execute: async (args: unknown) => {
           const toolId = resolveToolId(name);
+          const toolCallId = resolveToolCallId(undefined, ctx.runId, toolId, args);
           const { result } = await toolRuntime.execute(toolId, args, {
             caller: "ai",
             runId: ctx.runId,
             conversationId: ctx.conversationId,
             projectId: ctx.projectId,
             mode: ctx.mode,
+            toolCallId,
           });
           if (result.success) return trimToolResult(result.data);
           throw new Error(result.error ?? "Tool execution failed");
