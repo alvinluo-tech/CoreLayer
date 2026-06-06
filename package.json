@@ -2,7 +2,7 @@
   "name": "jarvis",
   "private": true,
   "type": "module",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "description": "Jarvis Personal Command Center",
   "scripts": {
     "dev": "concurrently \"pnpm --filter daemon dev\" \"pnpm --filter frontend tauri dev\"",
