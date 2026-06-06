@@ -39,7 +39,7 @@ export function BottomStatusBar() {
         }}
       />
       <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-        <span>JARVIS v0.1.0</span>
+        <span>JARVIS v{__APP_VERSION__}</span>
         <span>·</span>
         <span>TAURI v2</span>
         <span>·</span>

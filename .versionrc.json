@@ -11,6 +11,17 @@
     { "type": "style", "hidden": true },
     { "type": "build", "hidden": true }
   ],
+  "bumpFiles": [
+    { "filename": "package.json", "type": "json" },
+    { "filename": "frontend/package.json", "type": "json" },
+    { "filename": "daemon/package.json", "type": "json" },
+    { "filename": "packages/types/package.json", "type": "json" },
+    { "filename": "packages/tool-registry/package.json", "type": "json" },
+    { "filename": "packages/permission-guard/package.json", "type": "json" },
+    { "filename": "packages/model-gateway/package.json", "type": "json" },
+    { "filename": "packages/mcp-client/package.json", "type": "json" },
+    { "filename": "frontend/src-tauri/tauri.conf.json", "type": "json" }
+  ],
   "commitUrlFormat": "https://github.com/alvinluo-tech/CoreLayer/commit/{{hash}}",
   "compareUrlFormat": "https://github.com/alvinluo-tech/CoreLayer/compare/{{previousTag}}...{{currentTag}}"
 }

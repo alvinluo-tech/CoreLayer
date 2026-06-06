@@ -10,6 +10,7 @@ import type {
   MCPPromptDefinition,
   MCPToolCallResult,
 } from '@jarvis/types';
+import { JARVIS_VERSION } from './version.js';
 
 export interface MCPServerConnection {
   config: MCPServerConfig;
@@ -33,7 +34,7 @@ export class MCPClientManager {
 
     const connection: MCPServerConnection = {
       config,
-      client: new Client({ name: 'jarvis', version: '0.1.0' }, { capabilities: {} }),
+      client: new Client({ name: 'jarvis', version: JARVIS_VERSION }, { capabilities: {} }),
       status: 'connecting',
       tools: [],
       resources: [],
@@ -58,7 +59,10 @@ export class MCPClientManager {
           await connection.client.connect(transport);
         } catch {
           // Fallback to legacy SSE transport for older servers
-          const sseClient = new Client({ name: 'jarvis', version: '0.1.0' }, { capabilities: {} });
+          const sseClient = new Client(
+            { name: 'jarvis', version: JARVIS_VERSION },
+            { capabilities: {} }
+          );
           const sseTransport = new SSEClientTransport(url, { requestInit });
           await sseClient.connect(sseTransport);
           connection.client = sseClient;
