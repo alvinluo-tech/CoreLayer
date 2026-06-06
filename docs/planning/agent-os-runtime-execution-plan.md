@@ -296,32 +296,32 @@
 
 ## Phase 8: Config Validation & Memory Tracking
 
-**Branch:** `feat/config-validation-memory-tracking` — **Status:** `NOT STARTED`
+**Branch:** `feat/config-validation-memory-tracking` — **Status:** `DONE`
 
-- [ ] **8.1** Config schema validation (Zod)
-  - [ ] Introduce Zod dependency
-  - [ ] Define config schema with Zod in `daemon/src/config/config-schema.ts`
-  - [ ] Validate at startup
-  - [ ] Auto-fill defaults for missing fields
-  - [ ] Warn on invalid fields, ignore them
+- [x] **8.1** Config schema validation (Zod)
+  - [x] Introduce Zod dependency
+  - [x] Define config schema with Zod in `daemon/src/config/config-schema.ts`
+  - [x] Validate at startup
+  - [x] Auto-fill defaults for missing fields
+  - [x] Warn on invalid fields, ignore them
 
-- [ ] **8.2** Memory usage tracking
-  - [ ] Add `injectCount` and `lastInjectedAt` to memory records in schema
-  - [ ] Update inject count on each memory injection
-  - [ ] Archive memories unused for 90+ days
-  - [ ] Promote frequently used memories to pinned level
+- [x] **8.2** Memory usage tracking
+  - [x] Add `injectCount` and `lastInjectedAt` to memory records in schema (field named `uses`)
+  - [x] Update inject count on each memory injection (`recordInjection`)
+  - [x] Archive memories unused for 90+ days (`pruneUnusedMemories`)
+  - [x] Promote frequently used memories to pinned level (`promoteHighUsage`)
 
-- [ ] **8.3** Add tests
-  - [ ] Test: valid config passes validation
-  - [ ] Test: missing fields filled with defaults
-  - [ ] Test: invalid fields warn and are ignored
-  - [ ] Test: inject count updates correctly
-  - [ ] Test: long-unused memories are archived
-  - [ ] Test: frequently used memories are promoted
+- [x] **8.3** Add tests
+  - [x] Test: valid config passes validation
+  - [x] Test: missing fields filled with defaults
+  - [x] Test: invalid fields warn and are ignored
+  - [x] Test: inject count updates correctly
+  - [x] Test: long-unused memories are archived
+  - [x] Test: frequently used memories are promoted
 
-- [ ] **8.4** Verify build
-  - [ ] `pnpm --filter daemon typecheck` passes
-  - [ ] `pnpm --filter daemon test -- --run` passes
+- [x] **8.4** Verify build
+  - [x] `pnpm --filter daemon typecheck` passes
+  - [x] `pnpm --filter daemon test -- --run` passes (865 tests)
 
 ---
 
