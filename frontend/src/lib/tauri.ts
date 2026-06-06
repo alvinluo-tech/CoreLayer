@@ -135,6 +135,47 @@ export async function deleteTask(taskId: string): Promise<void> {
   await invoke('delete_task', { taskId });
 }
 
+// ---- Task Graph Management ----
+
+export async function setTaskDependencies(
+  taskId: string,
+  dependencies: string[]
+): Promise<{ task: Task }> {
+  return invoke('set_task_dependencies', { taskId, dependencies });
+}
+
+export async function canExecuteTask(taskId: string): Promise<{ canExecute: boolean }> {
+  return invoke('can_execute_task', { taskId });
+}
+
+export async function completeTask(taskId: string): Promise<{ task: Task }> {
+  return invoke('complete_task', { taskId });
+}
+
+export async function getExecutableTasks(
+  projectId: string
+): Promise<{ tasks: Task[]; count: number }> {
+  return invoke('get_executable_tasks', { projectId });
+}
+
+export async function detectTaskCycles(
+  projectId: string
+): Promise<{ cycles: string[][]; hasCycles: boolean }> {
+  return invoke('detect_task_cycles', { projectId });
+}
+
+export async function decomposeTask(input: {
+  objective: string;
+  projectId: string;
+  agentId?: string;
+}): Promise<{ parentTaskId: string; subtasks: { id: string; title: string }[] }> {
+  return invoke('decompose_task_command', {
+    objective: input.objective,
+    projectId: input.projectId,
+    agentId: input.agentId ?? null,
+  });
+}
+
 // ---- Article Management ----
 
 export async function getReadingList(options?: {

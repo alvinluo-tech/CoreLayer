@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
+import { eq } from "drizzle-orm";
 import * as schema from "../schema.js";
 
 function createTestDb() {
@@ -19,6 +20,16 @@ function createTestDb() {
       due_date TEXT,
       tags TEXT,
       completed_at TEXT,
+      objective TEXT,
+      assigned_agent_id TEXT,
+      parent_task_id TEXT,
+      dependencies JSON DEFAULT '[]',
+      blocked_by JSON DEFAULT '[]',
+      acceptance_criteria JSON DEFAULT '[]',
+      artifacts JSON DEFAULT '[]',
+      run_history JSON DEFAULT '[]',
+      manual_intervention_required BOOLEAN DEFAULT 0,
+      rollback_plan TEXT,
       created_at TEXT DEFAULT 'CURRENT_TIMESTAMP',
       updated_at TEXT DEFAULT 'CURRENT_TIMESTAMP'
     );
@@ -197,6 +208,136 @@ describe("Task Repository", () => {
       const todayTasks = await tasks.getTodayTasks();
       expect(todayTasks.find((t) => t.title === "Done today")).toBeUndefined();
       expect(todayTasks.find((t) => t.title === "Deleted today")).toBeUndefined();
+    });
+  });
+
+  describe("create with task graph fields", () => {
+    it("should create a task with dependencies", async () => {
+      const task = await tasks.create({
+        title: "With deps",
+        dependencies: ["dep-1", "dep-2"],
+      });
+      expect(task.dependencies).toEqual(["dep-1", "dep-2"]);
+    });
+
+    it("should create a task with acceptance criteria", async () => {
+      const task = await tasks.create({
+        title: "With criteria",
+        acceptanceCriteria: ["Passes tests", "Code reviewed"],
+      });
+      expect(task.acceptanceCriteria).toEqual(["Passes tests", "Code reviewed"]);
+    });
+
+    it("should default empty arrays for new fields", async () => {
+      const task = await tasks.create({ title: "Defaults" });
+      expect(task.dependencies).toEqual([]);
+      expect(task.blockedBy).toEqual([]);
+      expect(task.acceptanceCriteria).toEqual([]);
+      expect(task.artifacts).toEqual([]);
+      expect(task.runHistory).toEqual([]);
+      expect(task.manualInterventionRequired).toBe(false);
+    });
+  });
+
+  describe("update with task graph fields", () => {
+    it("should update dependencies", async () => {
+      const task = await tasks.create({ title: "Update deps" });
+      const updated = await tasks.update(task.id, { dependencies: ["a", "b"] });
+      expect(updated.dependencies).toEqual(["a", "b"]);
+    });
+
+    it("should update status to completed", async () => {
+      const task = await tasks.create({ title: "Complete me" });
+      const updated = await tasks.update(task.id, { status: "completed" });
+      expect(updated.status).toBe("completed");
+      expect(updated.completedAt).toBeDefined();
+    });
+
+    it("should update artifacts", async () => {
+      const task = await tasks.create({ title: "Artifacts" });
+      const updated = await tasks.update(task.id, {
+        artifacts: [{ type: "file", path: "/tmp/test.txt" }],
+      });
+      expect(updated.artifacts).toEqual([{ type: "file", path: "/tmp/test.txt" }]);
+    });
+  });
+
+  describe("getByProjectId", () => {
+    it("should return tasks for a project", async () => {
+      const t1 = await tasks.create({ title: "Task 1" });
+      const t2 = await tasks.create({ title: "Task 2" });
+      const t3 = await tasks.create({ title: "Task 3" });
+
+      // Manually set project IDs
+      testDb.update(schema.tasks)
+        .set({ projectId: "proj-1" })
+        .where(eq(schema.tasks.id, t1.id))
+        .run();
+      testDb.update(schema.tasks)
+        .set({ projectId: "proj-1" })
+        .where(eq(schema.tasks.id, t2.id))
+        .run();
+      testDb.update(schema.tasks)
+        .set({ projectId: "proj-2" })
+        .where(eq(schema.tasks.id, t3.id))
+        .run();
+
+      const result = await tasks.getByProjectId("proj-1");
+      expect(result.length).toBe(2);
+      expect(result.map((t) => t.id).sort()).toEqual([t1.id, t2.id].sort());
+    });
+
+    it("should exclude deleted tasks", async () => {
+      const t1 = await tasks.create({ title: "Active" });
+      testDb.update(schema.tasks)
+        .set({ projectId: "proj-1" })
+        .where(eq(schema.tasks.id, t1.id))
+        .run();
+      await tasks.delete(t1.id);
+
+      const result = await tasks.getByProjectId("proj-1");
+      expect(result.length).toBe(0);
+    });
+  });
+
+  describe("getByParentId", () => {
+    it("should return sub-tasks of a parent", async () => {
+      const parent = await tasks.create({ title: "Parent" });
+      const child1 = await tasks.create({
+        title: "Child 1",
+        parentTaskId: parent.id,
+      });
+      const child2 = await tasks.create({
+        title: "Child 2",
+        parentTaskId: parent.id,
+      });
+
+      const result = await tasks.getByParentId(parent.id);
+      expect(result.length).toBe(2);
+      expect(result.map((t) => t.id).sort()).toEqual(
+        [child1.id, child2.id].sort(),
+      );
+    });
+
+    it("should return empty array for task with no children", async () => {
+      const task = await tasks.create({ title: "No children" });
+      const result = await tasks.getByParentId(task.id);
+      expect(result).toEqual([]);
+    });
+  });
+
+  describe("query with projectId filter", () => {
+    it("should filter by projectId", async () => {
+      const t1 = await tasks.create({ title: "Task 1" });
+      await tasks.create({ title: "Task 2" });
+      testDb.update(schema.tasks)
+        .set({ projectId: "proj-1" })
+        .where(eq(schema.tasks.id, t1.id))
+        .run();
+
+      const result = await tasks.query({ projectId: "proj-1" });
+      expect(result.length).toBe(1);
+      expect(result[0]!.id).toBe(t1.id);
     });
   });
 });

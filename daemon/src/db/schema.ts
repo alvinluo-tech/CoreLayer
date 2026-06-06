@@ -54,12 +54,24 @@ export const tasks = sqliteTable("tasks", {
   title: text("title").notNull(),
   description: text("description"),
   priority: integer("priority").default(3).notNull(), // 1-5, 1=highest
-  status: text("status", { enum: ["pending", "in_progress", "done", "deleted"] })
+  status: text("status", {
+    enum: ["draft", "queued", "running", "blocked", "failed", "completed", "cancelled", "pending", "in_progress", "done", "deleted"],
+  })
     .default("pending")
     .notNull(),
   dueDate: text("due_date"), // ISO date
   tags: text("tags"), // JSON array stored as text
   completedAt: text("completed_at"), // ISO datetime
+  objective: text("objective"),
+  assignedAgentId: text("assigned_agent_id").references(() => agentProfiles.id),
+  parentTaskId: text("parent_task_id"),
+  dependencies: text("dependencies").default("[]"), // JSON array of task IDs
+  blockedBy: text("blocked_by").default("[]"), // JSON array of task IDs
+  acceptanceCriteria: text("acceptance_criteria").default("[]"), // JSON array
+  artifacts: text("artifacts").default("[]"), // JSON array of artifact refs
+  runHistory: text("run_history").default("[]"), // JSON array of run refs
+  manualInterventionRequired: integer("manual_intervention_required", { mode: "boolean" }).default(false),
+  rollbackPlan: text("rollback_plan"),
   createdAt: text("created_at").default("CURRENT_TIMESTAMP").notNull(),
   updatedAt: text("updated_at").default("CURRENT_TIMESTAMP").notNull(),
 });

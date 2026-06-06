@@ -396,6 +396,81 @@ async fn delete_task(task_id: String) -> Result<serde_json::Value, String> {
     .await
 }
 
+// ---- Task Graph Commands ----
+
+#[tauri::command]
+async fn set_task_dependencies(
+    task_id: String,
+    dependencies: Vec<String>,
+) -> Result<serde_json::Value, String> {
+    let body = serde_json::json!({ "dependencies": dependencies });
+    daemon_post(
+        get_daemon_client(),
+        &format!("/api/tasks/{}/dependencies", encode_path_segment(&task_id)),
+        body,
+    )
+    .await
+}
+
+#[tauri::command]
+async fn can_execute_task(task_id: String) -> Result<serde_json::Value, String> {
+    daemon_get(
+        get_daemon_client(),
+        &format!("/api/tasks/{}/can-execute", encode_path_segment(&task_id)),
+    )
+    .await
+}
+
+#[tauri::command]
+async fn complete_task(task_id: String) -> Result<serde_json::Value, String> {
+    daemon_post(
+        get_daemon_client(),
+        &format!("/api/tasks/{}/complete", encode_path_segment(&task_id)),
+        serde_json::json!({}),
+    )
+    .await
+}
+
+#[tauri::command]
+async fn get_executable_tasks(project_id: String) -> Result<serde_json::Value, String> {
+    daemon_get(
+        get_daemon_client(),
+        &format!(
+            "/api/tasks/project/{}/executable",
+            encode_path_segment(&project_id)
+        ),
+    )
+    .await
+}
+
+#[tauri::command]
+async fn detect_task_cycles(project_id: String) -> Result<serde_json::Value, String> {
+    daemon_get(
+        get_daemon_client(),
+        &format!(
+            "/api/tasks/project/{}/cycles",
+            encode_path_segment(&project_id)
+        ),
+    )
+    .await
+}
+
+#[tauri::command]
+async fn decompose_task_command(
+    objective: String,
+    project_id: String,
+    agent_id: Option<String>,
+) -> Result<serde_json::Value, String> {
+    let mut body = serde_json::json!({
+        "objective": objective,
+        "projectId": project_id,
+    });
+    if let Some(a) = agent_id {
+        body["agentId"] = serde_json::json!(a);
+    }
+    daemon_post(get_daemon_client(), "/api/tasks/decompose", body).await
+}
+
 // ---- Article Commands ----
 
 #[tauri::command]
@@ -1024,6 +1099,12 @@ pub fn run() {
             create_task,
             update_task,
             delete_task,
+            set_task_dependencies,
+            can_execute_task,
+            complete_task,
+            get_executable_tasks,
+            detect_task_cycles,
+            decompose_task_command,
             get_reading_list,
             add_article,
             update_reading_status,

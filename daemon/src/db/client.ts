@@ -405,6 +405,65 @@ try {
   // Column already exists — ignore
 }
 
+// Migration: Phase 6 - Task Graph
+try {
+  sqlite.exec(`ALTER TABLE tasks ADD COLUMN objective TEXT`);
+} catch {
+  // Column already exists — ignore
+}
+try {
+  sqlite.exec(`ALTER TABLE tasks ADD COLUMN assigned_agent_id TEXT REFERENCES agent_profiles(id)`);
+} catch {
+  // Column already exists — ignore
+}
+try {
+  sqlite.exec(`ALTER TABLE tasks ADD COLUMN parent_task_id TEXT`);
+} catch {
+  // Column already exists — ignore
+}
+try {
+  sqlite.exec(`ALTER TABLE tasks ADD COLUMN dependencies JSON DEFAULT '[]'`);
+} catch {
+  // Column already exists — ignore
+}
+try {
+  sqlite.exec(`ALTER TABLE tasks ADD COLUMN blocked_by JSON DEFAULT '[]'`);
+} catch {
+  // Column already exists — ignore
+}
+try {
+  sqlite.exec(`ALTER TABLE tasks ADD COLUMN acceptance_criteria JSON DEFAULT '[]'`);
+} catch {
+  // Column already exists — ignore
+}
+try {
+  sqlite.exec(`ALTER TABLE tasks ADD COLUMN artifacts JSON DEFAULT '[]'`);
+} catch {
+  // Column already exists — ignore
+}
+try {
+  sqlite.exec(`ALTER TABLE tasks ADD COLUMN run_history JSON DEFAULT '[]'`);
+} catch {
+  // Column already exists — ignore
+}
+try {
+  sqlite.exec(`ALTER TABLE tasks ADD COLUMN manual_intervention_required BOOLEAN DEFAULT 0`);
+} catch {
+  // Column already exists — ignore
+}
+try {
+  sqlite.exec(`ALTER TABLE tasks ADD COLUMN rollback_plan TEXT`);
+} catch {
+  // Column already exists — ignore
+}
+
+// Indexes for task graph queries
+sqlite.exec(`
+  CREATE INDEX IF NOT EXISTS idx_tasks_parent_task ON tasks(parent_task_id);
+  CREATE INDEX IF NOT EXISTS idx_tasks_assigned_agent ON tasks(assigned_agent_id);
+  CREATE INDEX IF NOT EXISTS idx_tasks_project_status ON tasks(project_id, status);
+`);
+
 // Migration: Phase 2 - Memory Scope
 try {
   sqlite.exec(`ALTER TABLE memories ADD COLUMN scope_type TEXT NOT NULL DEFAULT 'user' CHECK(scope_type IN ('user', 'workspace', 'project', 'agent', 'task', 'conversation'))`);

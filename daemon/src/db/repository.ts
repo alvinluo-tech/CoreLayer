@@ -9,10 +9,33 @@ export interface TaskRow {
   title: string;
   description: string | null;
   priority: number;
-  status: "pending" | "in_progress" | "done" | "deleted";
+  status:
+    | "draft"
+    | "queued"
+    | "running"
+    | "blocked"
+    | "failed"
+    | "completed"
+    | "cancelled"
+    | "pending"
+    | "in_progress"
+    | "done"
+    | "deleted";
   dueDate: string | null;
   tags: string[] | null;
   completedAt: string | null;
+  objective: string | null;
+  assignedAgentId: string | null;
+  parentTaskId: string | null;
+  dependencies: string[];
+  blockedBy: string[];
+  acceptanceCriteria: string[];
+  artifacts: unknown[];
+  runHistory: unknown[];
+  manualInterventionRequired: boolean;
+  rollbackPlan: string | null;
+  workspaceId: string | null;
+  projectId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -82,6 +105,12 @@ export interface CreateTaskInput {
   priority?: number;
   dueDate?: string;
   tags?: string[];
+  objective?: string;
+  assignedAgentId?: string;
+  parentTaskId?: string;
+  dependencies?: string[];
+  acceptanceCriteria?: string[];
+  rollbackPlan?: string;
 }
 
 export interface TaskFilters {
@@ -89,6 +118,7 @@ export interface TaskFilters {
   priority?: number;
   dueDateFrom?: string;
   dueDateTo?: string;
+  projectId?: string;
 }
 
 export interface UpdateTaskData {
@@ -98,6 +128,16 @@ export interface UpdateTaskData {
   dueDate?: string;
   tags?: string[];
   completedAt?: string;
+  objective?: string;
+  assignedAgentId?: string;
+  parentTaskId?: string;
+  dependencies?: string[];
+  blockedBy?: string[];
+  acceptanceCriteria?: string[];
+  artifacts?: unknown[];
+  runHistory?: unknown[];
+  manualInterventionRequired?: boolean;
+  rollbackPlan?: string;
 }
 
 export interface CreateArticleInput {
@@ -267,6 +307,8 @@ export interface TaskRepository {
   update(id: string, data: UpdateTaskData): Promise<TaskRow>;
   delete(id: string): Promise<boolean>;
   getTodayTasks(): Promise<TaskRow[]>;
+  getByProjectId(projectId: string): Promise<TaskRow[]>;
+  getByParentId(parentTaskId: string): Promise<TaskRow[]>;
   clear(): Promise<number>;
 }
 

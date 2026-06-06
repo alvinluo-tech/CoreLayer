@@ -12,6 +12,12 @@ function normalizeTask(row: typeof schema.tasks.$inferSelect): TaskRow {
   return {
     ...row,
     tags: row.tags ? JSON.parse(row.tags) : null,
+    dependencies: row.dependencies ? JSON.parse(row.dependencies) : [],
+    blockedBy: row.blockedBy ? JSON.parse(row.blockedBy) : [],
+    acceptanceCriteria: row.acceptanceCriteria ? JSON.parse(row.acceptanceCriteria) : [],
+    artifacts: row.artifacts ? JSON.parse(row.artifacts) : [],
+    runHistory: row.runHistory ? JSON.parse(row.runHistory) : [],
+    manualInterventionRequired: row.manualInterventionRequired ?? false,
   };
 }
 
@@ -30,6 +36,12 @@ export function createSqliteTaskRepo(): TaskRepository {
           status: "pending",
           dueDate: input.dueDate ?? null,
           tags: input.tags ? JSON.stringify(input.tags) : null,
+          objective: input.objective ?? null,
+          assignedAgentId: input.assignedAgentId ?? null,
+          parentTaskId: input.parentTaskId ?? null,
+          dependencies: input.dependencies ? JSON.stringify(input.dependencies) : "[]",
+          acceptanceCriteria: input.acceptanceCriteria ? JSON.stringify(input.acceptanceCriteria) : "[]",
+          rollbackPlan: input.rollbackPlan ?? null,
           createdAt: now,
           updatedAt: now,
         })
@@ -40,10 +52,11 @@ export function createSqliteTaskRepo(): TaskRepository {
 
     async query(filters?: TaskFilters): Promise<TaskRow[]> {
       const conditions = [ne(schema.tasks.status, "deleted" as const)];
-      if (filters?.status) conditions.push(eq(schema.tasks.status, filters.status as "pending" | "in_progress" | "done" | "deleted"));
+      if (filters?.status) conditions.push(eq(schema.tasks.status, filters.status as TaskRow["status"]));
       if (filters?.priority) conditions.push(eq(schema.tasks.priority, filters.priority));
       if (filters?.dueDateFrom) conditions.push(gte(schema.tasks.dueDate, filters.dueDateFrom));
       if (filters?.dueDateTo) conditions.push(lte(schema.tasks.dueDate, filters.dueDateTo));
+      if (filters?.projectId) conditions.push(eq(schema.tasks.projectId, filters.projectId));
 
       const rows = db.select().from(schema.tasks).where(and(...conditions)).all();
       return rows.map(normalizeTask);
@@ -60,10 +73,22 @@ export function createSqliteTaskRepo(): TaskRepository {
       if (data.priority !== undefined) updates.priority = data.priority;
       if (data.status !== undefined) {
         updates.status = data.status;
-        if (data.status === "done") updates.completedAt = new Date().toISOString();
+        if (data.status === "done" || data.status === "completed") {
+          updates.completedAt = new Date().toISOString();
+        }
       }
       if (data.dueDate !== undefined) updates.dueDate = data.dueDate;
       if (data.tags !== undefined) updates.tags = JSON.stringify(data.tags);
+      if (data.objective !== undefined) updates.objective = data.objective;
+      if (data.assignedAgentId !== undefined) updates.assignedAgentId = data.assignedAgentId;
+      if (data.parentTaskId !== undefined) updates.parentTaskId = data.parentTaskId;
+      if (data.dependencies !== undefined) updates.dependencies = JSON.stringify(data.dependencies);
+      if (data.blockedBy !== undefined) updates.blockedBy = JSON.stringify(data.blockedBy);
+      if (data.acceptanceCriteria !== undefined) updates.acceptanceCriteria = JSON.stringify(data.acceptanceCriteria);
+      if (data.artifacts !== undefined) updates.artifacts = JSON.stringify(data.artifacts);
+      if (data.runHistory !== undefined) updates.runHistory = JSON.stringify(data.runHistory);
+      if (data.manualInterventionRequired !== undefined) updates.manualInterventionRequired = data.manualInterventionRequired ? 1 : 0;
+      if (data.rollbackPlan !== undefined) updates.rollbackPlan = data.rollbackPlan;
 
       db.update(schema.tasks).set(updates).where(eq(schema.tasks.id, id)).run();
       const row = db.select().from(schema.tasks).where(eq(schema.tasks.id, id)).get()!;
@@ -89,6 +114,29 @@ export function createSqliteTaskRepo(): TaskRepository {
         (t) => t.dueDate === today || (t.priority <= 2 && t.status !== "done"),
       );
       return todayTasks.map(normalizeTask);
+    },
+
+    async getByProjectId(projectId: string): Promise<TaskRow[]> {
+      const rows = db
+        .select()
+        .from(schema.tasks)
+        .where(
+          and(
+            eq(schema.tasks.projectId, projectId),
+            ne(schema.tasks.status, "deleted" as const),
+          ),
+        )
+        .all();
+      return rows.map(normalizeTask);
+    },
+
+    async getByParentId(parentTaskId: string): Promise<TaskRow[]> {
+      const rows = db
+        .select()
+        .from(schema.tasks)
+        .where(eq(schema.tasks.parentTaskId, parentTaskId))
+        .all();
+      return rows.map(normalizeTask);
     },
 
     async clear(): Promise<number> {

@@ -79,6 +79,16 @@ function createTestDb() {
       due_date TEXT,
       tags TEXT,
       completed_at TEXT,
+      objective TEXT,
+      assigned_agent_id TEXT,
+      parent_task_id TEXT,
+      dependencies JSON DEFAULT '[]',
+      blocked_by JSON DEFAULT '[]',
+      acceptance_criteria JSON DEFAULT '[]',
+      artifacts JSON DEFAULT '[]',
+      run_history JSON DEFAULT '[]',
+      manual_intervention_required BOOLEAN DEFAULT 0,
+      rollback_plan TEXT,
       created_at TEXT DEFAULT 'CURRENT_TIMESTAMP',
       updated_at TEXT DEFAULT 'CURRENT_TIMESTAMP'
     );

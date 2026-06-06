@@ -1,4 +1,15 @@
-export type TaskStatus = 'pending' | 'in_progress' | 'done' | 'deleted';
+export type TaskStatus =
+  | 'draft'
+  | 'queued'
+  | 'running'
+  | 'blocked'
+  | 'failed'
+  | 'completed'
+  | 'cancelled'
+  | 'pending'
+  | 'in_progress'
+  | 'done'
+  | 'deleted';
 
 export interface Task {
   id: string;
@@ -10,6 +21,16 @@ export interface Task {
   dueDate: string | null; // ISO date
   tags: string[];
   completedAt: string | null; // ISO datetime
+  objective: string | null;
+  assignedAgentId: string | null;
+  parentTaskId: string | null;
+  dependencies: string[];
+  blockedBy: string[];
+  acceptanceCriteria: string[];
+  artifacts: unknown[];
+  runHistory: unknown[];
+  manualInterventionRequired: boolean;
+  rollbackPlan: string | null;
   createdAt: string; // ISO datetime
   updatedAt: string; // ISO datetime
 }
