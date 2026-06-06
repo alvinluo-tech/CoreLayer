@@ -70,4 +70,41 @@ describe("Runtime entrypoint guards", () => {
     const source = readFile("runtime/run-stream-executor.ts");
     expect(source).toContain("streamChat");
   });
+
+  it("ai-tool-wrapper.ts should pass toolCallId to toolRuntime.execute", () => {
+    const source = readFile("runtime/ai-tool-wrapper.ts");
+    expect(source).toContain("toolCallId");
+  });
+
+  it("skills/executor.ts should accept optional runtime context", () => {
+    const source = readFile("skills/executor.ts");
+    expect(source).toContain("SkillRuntimeContext");
+    expect(source).toContain("runtimeContext");
+  });
+
+  it("conversations.ts should not import handleMessageInConversation", () => {
+    const source = readFile("api/conversations.ts");
+    const lines = source.split("\n");
+    const violations: string[] = [];
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (line.includes("handleMessageInConversation") && line.includes("import")) {
+        violations.push(`  line ${i + 1}: ${line.trim()}`);
+      }
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it("conversations.ts should not import streamMessageInConversation", () => {
+    const source = readFile("api/conversations.ts");
+    const lines = source.split("\n");
+    const violations: string[] = [];
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (line.includes("streamMessageInConversation") && line.includes("import")) {
+        violations.push(`  line ${i + 1}: ${line.trim()}`);
+      }
+    }
+    expect(violations).toEqual([]);
+  });
 });
