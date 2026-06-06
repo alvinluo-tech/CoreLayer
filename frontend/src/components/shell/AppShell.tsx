@@ -3,7 +3,7 @@ import { JarvisVoiceOverlay } from '@/components/voice/JarvisVoiceOverlay';
 import { DataPanelContainer } from '@/components/data-panel/DataPanelContainer';
 import { ControlCenter } from '@/components/control-center/ControlCenter';
 import type { ControlPage } from '@/components/control-center/ControlCenter';
-import { RightPanel } from '@/components/right-panel/RightPanel';
+import { InspectorPane } from './InspectorPane';
 import { ToastContainer } from '@/components/ui/ToastContainer';
 import { ShortcutsOverlay } from '@/components/ui/ShortcutsOverlay';
 import { CommandPalette } from '@/components/palette/CommandPalette';
@@ -598,7 +598,7 @@ export function AppShell() {
           />
         }
         mainSurface={renderMainContent()}
-        inspector={activeView === 'assistant' ? <RightPanel /> : undefined}
+        inspector={<InspectorPane />}
       />
 
       <CommandPalette
