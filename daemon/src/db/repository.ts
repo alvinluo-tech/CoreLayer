@@ -736,7 +736,7 @@ export interface ApprovalRequestRepository {
   findByToolCallId(toolCallId: string): Promise<ApprovalRequestRow | null>;
   approve(id: string): Promise<ApprovalRequestRow>;
   deny(id: string): Promise<ApprovalRequestRow>;
-  expireStale(maxAgeMs?: number): Promise<number>;
+  expireStale(maxAgeMs?: number): Promise<{ count: number; ids: string[] }>;
 }
 
 // ---- Permission Memories ----

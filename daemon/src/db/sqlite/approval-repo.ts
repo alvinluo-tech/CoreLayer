@@ -132,8 +132,21 @@ export function createSqliteApprovalRepo(database?: DrizzleDb): ApprovalRequestR
       return mapRow(row);
     },
 
-    async expireStale(maxAgeMs = 300_000): Promise<number> {
+    async expireStale(maxAgeMs = 300_000): Promise<{ count: number; ids: string[] }> {
       const cutoff = Date.now() - maxAgeMs;
+      // Select IDs before updating so we can return them
+      const staleRows = db
+        .select({ id: schema.approvalRequests.id })
+        .from(schema.approvalRequests)
+        .where(
+          and(
+            eq(schema.approvalRequests.status, "pending"),
+            lt(schema.approvalRequests.createdAt, cutoff),
+          ),
+        )
+        .all();
+      const ids = staleRows.map((r) => r.id);
+      if (ids.length === 0) return { count: 0, ids: [] };
       const result = db
         .update(schema.approvalRequests)
         .set({ status: "expired", decidedAt: Date.now() })
@@ -144,7 +157,7 @@ export function createSqliteApprovalRepo(database?: DrizzleDb): ApprovalRequestR
           ),
         )
         .run();
-      return result.changes;
+      return { count: result.changes, ids };
     },
   };
 }
