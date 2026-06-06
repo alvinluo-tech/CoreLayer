@@ -102,7 +102,7 @@ chatRoutes.post("/stream", async (c) => {
             await streamWriter.write(`event: delta\ndata: ${JSON.stringify({ text: event.text })}\n\n`);
           } else if (event.type === "tool_call") {
             await streamWriter.write(
-              `event: tool_calls\ndata: ${JSON.stringify({ name: event.toolCall.name, toolCallId: "", input: event.toolCall.args })}\n\n`,
+              `event: tool_calls\ndata: ${JSON.stringify({ name: event.toolCall.name, toolCallId: event.toolCall.id ?? "", input: event.toolCall.args })}\n\n`,
             );
           } else if (event.type === "run_completed") {
             await streamWriter.write(

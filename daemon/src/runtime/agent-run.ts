@@ -29,6 +29,7 @@ export interface AgentRunRequest {
 // ---- Events ----
 
 export interface ToolCallTrace {
+  id?: string;
   name: string;
   args: unknown;
   result?: unknown;

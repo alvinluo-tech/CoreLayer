@@ -62,21 +62,21 @@ export async function runTurn(
   });
 
   let eventSequence = 0;
+  let currentRunId = "";
 
-  const emit = (event: AgentRunEvent) => {
+  const emitAndPersist = (event: AgentRunEvent) => {
     events.push(event);
     options?.onEvent?.(event);
+    if (event.type !== "delta" && currentRunId) {
+      const seq = eventSequence++;
+      agentRunEvents.create({
+        runId: currentRunId,
+        sequence: seq,
+        type: event.type,
+        payload: event,
+      }).catch((err) => logError("agentRunEvents/create", err));
+    }
     return event;
-  };
-
-  const persistEvent = async (runId: string, event: AgentRunEvent) => {
-    const seq = eventSequence++;
-    await agentRunEvents.create({
-      runId,
-      sequence: seq,
-      type: event.type,
-      payload: event,
-    }).catch(() => { /* best-effort */ });
   };
 
   if (request.taskId) {
@@ -85,7 +85,7 @@ export async function runTurn(
       const blockedBy = await taskGraph.getIncompleteDependencies(request.taskId);
       if (blockedBy.length > 0) {
         await tasks.update(request.taskId, { status: "blocked", blockedBy });
-        emit({ type: "task_blocked", taskId: request.taskId, blockedBy });
+        emitAndPersist({ type: "task_blocked", taskId: request.taskId, blockedBy });
         throw new Error(
           `Task ${request.taskId} is blocked by incomplete dependencies`,
         );
@@ -123,6 +123,8 @@ export async function runTurn(
     selectedModel: request.modelOverride ?? undefined,
   });
 
+  currentRunId = run.id;
+
   if (request.taskId) {
     const task = await tasks.getById(request.taskId);
     if (task) {
@@ -133,8 +135,7 @@ export async function runTurn(
     }
   }
 
-  emit({ type: "run_started", runId: run.id, mode: request.mode });
-  await persistEvent(run.id, { type: "run_started", runId: run.id, mode: request.mode });
+  emitAndPersist({ type: "run_started", runId: run.id, mode: request.mode });
 
   try {
     const result = await handleMessageInConversation(
@@ -153,7 +154,7 @@ export async function runTurn(
     );
 
     const conversation = await conversations.getById(conversationId);
-    emit({
+    emitAndPersist({
       type: "run_completed",
       result: {
         text: result.assistantMessage.content,
@@ -162,10 +163,6 @@ export async function runTurn(
         assistantMessage: result.assistantMessage,
         conversation,
       },
-    });
-    await persistEvent(run.id, {
-      type: "run_completed",
-      result: { text: result.assistantMessage.content, conversationId, userMessage: result.userMessage, assistantMessage: result.assistantMessage, conversation },
     });
 
     await agentRuns.updateStatus(run.id, "succeeded");
@@ -200,8 +197,7 @@ export async function runTurn(
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
     logError("runTurn", err);
-    emit({ type: "run_failed", error: errorMsg });
-    await persistEvent(run.id, { type: "run_failed", error: errorMsg });
+    emitAndPersist({ type: "run_failed", error: errorMsg });
     await agentRuns.updateStatus(run.id, "failed", errorMsg);
 
     if (request.taskId) {
