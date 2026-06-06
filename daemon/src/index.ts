@@ -23,6 +23,7 @@ import voiceRoutes from "./api/voice.js";
 import mcpRoutes from "./api/mcp.js";
 import toolRoutes from "./api/tools.js";
 import scheduledTaskRoutes from "./api/scheduled-tasks.js";
+import approvalRoutes from "./api/approval.js";
 import { startScheduler, setIdleCallback, consolidateOnIdle } from "./scheduler.js";
 import { registerDefaultReportSchedules } from "./reports/generator.js";
 import { registerSensor, startSensors, setSensorChangeHandler } from "./sensors/registry.js";
@@ -109,6 +110,9 @@ app.route("/api/tools", toolRoutes);
 
 // Scheduled task routes
 app.route("/api/tasks/scheduled", scheduledTaskRoutes);
+
+// Approval Inbox routes (Phase 4)
+app.route("/api/approvals", approvalRoutes);
 
 function startServer(port: number) {
   try {

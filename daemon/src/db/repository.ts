@@ -627,6 +627,72 @@ export interface AgentProfileRepository {
   delete(id: string): Promise<boolean>;
 }
 
+// ---- Approval Requests ----
+
+export interface ApprovalRequestRow {
+  id: string;
+  runId: string;
+  toolId: string;
+  toolName: string;
+  args: unknown;
+  risk: string;
+  status: "pending" | "approved" | "denied" | "expired";
+  projectScope: boolean;
+  decidedAt: number | null;
+  createdAt: number;
+}
+
+export interface CreateApprovalRequestInput {
+  runId: string;
+  toolId: string;
+  toolName: string;
+  args: unknown;
+  risk: string;
+  projectScope?: boolean;
+}
+
+export interface ApprovalRequestRepository {
+  create(input: CreateApprovalRequestInput): Promise<ApprovalRequestRow>;
+  getById(id: string): Promise<ApprovalRequestRow | null>;
+  getPending(): Promise<ApprovalRequestRow[]>;
+  getByRunId(runId: string): Promise<ApprovalRequestRow[]>;
+  approve(id: string): Promise<ApprovalRequestRow>;
+  deny(id: string): Promise<ApprovalRequestRow>;
+  expireStale(maxAgeMs?: number): Promise<number>;
+}
+
+// ---- Permission Memories ----
+
+export interface PermissionMemoryRow {
+  id: string;
+  userId: string;
+  projectId: string | null;
+  toolId: string;
+  risk: string;
+  decision: "auto" | "confirm" | "deny";
+  scope: "global" | "project" | "session";
+  createdAt: number;
+  expiresAt: number | null;
+}
+
+export interface CreatePermissionMemoryInput {
+  userId?: string;
+  projectId?: string | null;
+  toolId: string;
+  risk: string;
+  decision: "auto" | "confirm" | "deny";
+  scope?: "global" | "project" | "session";
+  expiresAt?: number | null;
+}
+
+export interface PermissionMemoryRepository {
+  create(input: CreatePermissionMemoryInput): Promise<PermissionMemoryRow>;
+  find(toolId: string, userId?: string, projectId?: string): Promise<PermissionMemoryRow | null>;
+  getByUserId(userId: string): Promise<PermissionMemoryRow[]>;
+  getByProjectId(projectId: string): Promise<PermissionMemoryRow[]>;
+  delete(id: string): Promise<boolean>;
+}
+
 // ---- Aggregate ----
 
 export interface Repositories {
@@ -644,4 +710,6 @@ export interface Repositories {
   workspaces: WorkspaceRepository;
   projects: ProjectRepository;
   agentProfiles: AgentProfileRepository;
+  approvalRequests: ApprovalRequestRepository;
+  permissionMemories: PermissionMemoryRepository;
 }

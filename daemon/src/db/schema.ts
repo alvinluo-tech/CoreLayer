@@ -251,6 +251,41 @@ export const agentRuns = sqliteTable("agent_runs", {
   error: text("error"),
 });
 
+// ---- Approval Requests ----
+
+export const approvalRequests = sqliteTable("approval_requests", {
+  id: text("id").primaryKey(),
+  runId: text("run_id")
+    .notNull()
+    .references(() => agentRuns.id),
+  toolId: text("tool_id").notNull(),
+  toolName: text("tool_name").notNull(),
+  args: text("args").notNull(), // JSON stored as text
+  risk: text("risk").notNull(),
+  status: text("status", { enum: ["pending", "approved", "denied", "expired"] })
+    .default("pending")
+    .notNull(),
+  projectScope: integer("project_scope", { mode: "boolean" }).default(false).notNull(),
+  decidedAt: integer("decided_at"), // unix timestamp
+  createdAt: integer("created_at").notNull(),
+});
+
+// ---- Permission Memories ----
+
+export const permissionMemories = sqliteTable("permission_memories", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  projectId: text("project_id").references(() => projects.id),
+  toolId: text("tool_id").notNull(),
+  risk: text("risk").notNull(),
+  decision: text("decision", { enum: ["auto", "confirm", "deny"] }).notNull(),
+  scope: text("scope", { enum: ["global", "project", "session"] })
+    .default("global")
+    .notNull(),
+  createdAt: integer("created_at").notNull(),
+  expiresAt: integer("expires_at"), // unix timestamp, null = never
+});
+
 // ---- Persistent Goals ----
 
 export const goals = sqliteTable("goals", {

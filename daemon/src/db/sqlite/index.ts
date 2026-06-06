@@ -13,6 +13,8 @@ import { createSqliteGoalRepo } from "./goal-repo.js";
 import { createSqliteWorkspaceRepo } from "./workspace-repo.js";
 import { createSqliteProjectRepo } from "./project-repo.js";
 import { createSqliteAgentProfileRepo } from "./agent-profile-repo.js";
+import { createSqliteApprovalRepo } from "./approval-repo.js";
+import { createSqlitePermissionMemoryRepo } from "./permission-memory-repo.js";
 
 export function createSqliteRepositories(): Repositories {
   return {
@@ -30,5 +32,7 @@ export function createSqliteRepositories(): Repositories {
     workspaces: createSqliteWorkspaceRepo(),
     projects: createSqliteProjectRepo(),
     agentProfiles: createSqliteAgentProfileRepo(),
+    approvalRequests: createSqliteApprovalRepo(),
+    permissionMemories: createSqlitePermissionMemoryRepo(),
   };
 }

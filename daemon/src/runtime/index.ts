@@ -15,3 +15,6 @@ export type {
   ApprovalRequest,
   ArtifactRef,
 } from "./agent-run.js";
+
+// Approval Manager (Phase 4)
+export { ApprovalManager } from "./approval-manager.js";
