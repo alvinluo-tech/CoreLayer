@@ -804,7 +804,7 @@ export async function streamMessageInConversation(
         conversationId,
         runId: options?.runtimeContext?.runId,
         projectId: options?.runtimeContext?.projectId,
-        mode: options?.runtimeContext?.mode as "chat" | "voice" | "tick" | "scheduled" | "workflow",
+        mode: options?.runtimeContext?.mode as "chat" | "voice" | "tick" | "scheduled" | "workflow" | "regenerate",
       });
       const { messages: aiMessages, tools: aiTools } = context.cacheEnabled
         ? applyCacheControl(context.messages, rawTools)
@@ -989,7 +989,7 @@ export async function streamChat(
       conversationId,
       runId: runtimeContext?.runId,
       projectId: runtimeContext?.projectId,
-      mode: runtimeContext?.mode as "chat" | "voice" | "tick" | "scheduled" | "workflow",
+      mode: runtimeContext?.mode as "chat" | "voice" | "tick" | "scheduled" | "workflow" | "regenerate",
     });
     const aiTools = context.cacheEnabled
       ? applyCacheControl([], rawTools).tools

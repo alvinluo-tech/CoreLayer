@@ -363,6 +363,42 @@ describe("runTurn", () => {
     expect(result.conversationId).toBe(conv.id);
   });
 
+  it("should record regenerate turns as AgentRuns", async () => {
+    const { conversations } = await import("../db/factory.js").then((m) => m.getRepositories());
+    const conv = await conversations.create("Regenerate Test");
+
+    const result = await runTurn({
+      conversationId: conv.id,
+      input: "regenerate this",
+      mode: "regenerate",
+      workspaceId: "ws-1",
+      agentId: "default",
+    });
+
+    expect(result.runId).toBeDefined();
+    expect(result.conversationId).toBe(conv.id);
+
+    const { agentRuns } = await import("../db/factory.js").then((m) => m.getRepositories());
+    const run = await agentRuns.getById(result.runId);
+    expect(run).not.toBeNull();
+    expect(run!.mode).toBe("regenerate");
+  });
+
+  it("should emit run_started with mode regenerate", async () => {
+    const { conversations } = await import("../db/factory.js").then((m) => m.getRepositories());
+    const conv = await conversations.create("Regenerate Events");
+
+    const events: any[] = [];
+    await runTurn(
+      { conversationId: conv.id, input: "try again", mode: "regenerate", workspaceId: "ws-1", agentId: "default" },
+      { onEvent: (e) => events.push(e) },
+    );
+
+    const started = events.find((e) => e.type === "run_started");
+    expect(started).toBeDefined();
+    expect(started.mode).toBe("regenerate");
+  });
+
   it("should emit memory_read and memory_written events when callbacks fire", async () => {
     const { handleMessageInConversation } = await import("../orchestrator/conversation.js");
     vi.mocked(handleMessageInConversation).mockImplementationOnce(

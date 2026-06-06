@@ -282,7 +282,7 @@ export interface AgentRunRow {
   userMessageId: string | null;
   assistantMessageId: string | null;
   status: "running" | "succeeded" | "failed" | "cancelled";
-  mode: "chat" | "voice" | "tick" | "scheduled" | "workflow";
+  mode: "chat" | "voice" | "tick" | "scheduled" | "workflow" | "regenerate";
   selectedModel: string | null;
   routeReason: string | null;
   selectedTools: string[] | null;

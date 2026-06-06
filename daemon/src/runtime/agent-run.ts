@@ -13,7 +13,7 @@ export interface AgentRunRequest {
   taskId?: string;
   conversationId?: string;
   agentId?: string;
-  mode: "chat" | "voice" | "tick" | "scheduled" | "workflow";
+  mode: "chat" | "voice" | "tick" | "scheduled" | "workflow" | "regenerate";
   input: string;
   modelOverride?: string;
   providerOverride?: string;

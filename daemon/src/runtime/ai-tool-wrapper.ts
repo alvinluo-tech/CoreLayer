@@ -13,7 +13,7 @@ export interface AIToolRuntimeContext {
   projectId?: string;
   taskId?: string;
   agentId?: string;
-  mode?: "chat" | "voice" | "tick" | "scheduled" | "workflow";
+  mode?: "chat" | "voice" | "tick" | "scheduled" | "workflow" | "regenerate";
 }
 
 const MAX_TOOL_RESULT_CHARS = 4000;

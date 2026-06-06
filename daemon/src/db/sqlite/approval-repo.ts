@@ -46,7 +46,7 @@ export function createSqliteApprovalRepo(database?: DrizzleDb): ApprovalRequestR
           status: "pending",
           projectScope: input.projectScope ?? false,
           createdAt: now,
-          mode: (input.mode ?? "chat") as "chat" | "voice" | "tick" | "scheduled" | "workflow",
+          mode: (input.mode ?? "chat") as "chat" | "voice" | "tick" | "scheduled" | "workflow" | "regenerate",
           source: input.source ?? null,
           preview: input.preview ?? null,
           toolCallId: input.toolCallId ?? null,

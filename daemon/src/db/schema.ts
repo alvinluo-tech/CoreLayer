@@ -245,7 +245,7 @@ export const agentRuns = sqliteTable("agent_runs", {
   status: text("status", { enum: ["running", "succeeded", "failed", "cancelled"] })
     .default("running")
     .notNull(),
-  mode: text("mode", { enum: ["chat", "voice", "tick", "scheduled", "workflow"] })
+  mode: text("mode", { enum: ["chat", "voice", "tick", "scheduled", "workflow", "regenerate"] })
     .default("chat")
     .notNull(),
   selectedModel: text("selected_model"),
@@ -293,7 +293,7 @@ export const approvalRequests = sqliteTable("approval_requests", {
   projectScope: integer("project_scope", { mode: "boolean" }).default(false).notNull(),
   decidedAt: integer("decided_at"), // unix timestamp
   createdAt: integer("created_at").notNull(),
-  mode: text("mode", { enum: ["chat", "voice", "tick", "scheduled", "workflow"] }).default("chat"),
+  mode: text("mode", { enum: ["chat", "voice", "tick", "scheduled", "workflow", "regenerate"] }).default("chat"),
   source: text("source"), // e.g. "mcp", "native", "skill"
   preview: text("preview"), // user-facing summary of what will change
   toolCallId: text("tool_call_id"), // for idempotent dedup
