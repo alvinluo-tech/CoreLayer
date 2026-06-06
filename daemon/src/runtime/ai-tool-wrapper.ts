@@ -2,6 +2,20 @@ import type { Tool } from "ai";
 import { toolRuntime } from "./index.js";
 import { getRegistry } from "../tools/registry.js";
 
+/**
+ * Runtime context passed through to ToolRuntime for every AI tool call.
+ * Ensures runId, mode, and scope are available for approval and audit.
+ */
+export interface AIToolRuntimeContext {
+  runId?: string;
+  conversationId?: string;
+  workspaceId?: string;
+  projectId?: string;
+  taskId?: string;
+  agentId?: string;
+  mode?: "chat" | "voice" | "tick" | "scheduled" | "workflow";
+}
+
 const MAX_TOOL_RESULT_CHARS = 4000;
 const TRUNCATION_NOTICE = "\n\n[结果已截断——过长，已保留首尾摘要]";
 
@@ -26,11 +40,18 @@ export function trimToolResult(value: unknown): unknown {
 /**
  * Wrap Vercel AI SDK tools so their execute functions route through ToolRuntime.
  * This adds permission checks and audit logging to AI-driven tool calls.
+ *
+ * When a context with runId is provided, high-risk tools will create
+ * approval_requests rows in the DB for the Approval Inbox.
  */
 export function wrapToolsForAI(
   tools: Record<string, Tool>,
-  conversationId?: string,
+  context?: AIToolRuntimeContext | string,
 ): Record<string, Tool> {
+  // Backward compat: if called with a plain string, treat as conversationId
+  const ctx: AIToolRuntimeContext =
+    typeof context === "string" ? { conversationId: context } : (context ?? {});
+
   const wrapped: Record<string, Tool> = {};
 
   for (const [name, toolDef] of Object.entries(tools)) {
@@ -41,7 +62,10 @@ export function wrapToolsForAI(
           const toolId = resolveToolId(name);
           const { result } = await toolRuntime.execute(toolId, args, {
             caller: "ai",
-            conversationId,
+            runId: ctx.runId,
+            conversationId: ctx.conversationId,
+            projectId: ctx.projectId,
+            mode: ctx.mode,
           });
           if (result.success) return trimToolResult(result.data);
           throw new Error(result.error ?? "Tool execution failed");

@@ -140,7 +140,14 @@ export async function runTurn(
     const result = await handleMessageInConversation(
       conversationId,
       request.input,
-      { modelOverride: request.modelOverride },
+      {
+        modelOverride: request.modelOverride,
+        runtimeContext: {
+          runId: run.id,
+          projectId: request.projectId,
+          mode: request.mode,
+        },
+      },
     );
 
     emit({
