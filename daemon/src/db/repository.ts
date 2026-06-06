@@ -329,7 +329,7 @@ export interface ReviewRepository {
 }
 
 export interface ConversationRepository {
-  create(title?: string): Promise<ConversationRow>;
+  create(title?: string, options?: { workspaceId?: string; projectId?: string }): Promise<ConversationRow>;
   list(): Promise<ConversationRow[]>;
   getById(id: string): Promise<ConversationRow | null>;
   update(id: string, data: { title?: string; modelUsed?: string }): Promise<ConversationRow>;

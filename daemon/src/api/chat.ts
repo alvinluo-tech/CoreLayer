@@ -9,30 +9,6 @@ import { runStreamTurn } from "../runtime/run-stream-executor.js";
 
 const chatRoutes = new Hono();
 
-async function getDefaultRunContext(): Promise<{ workspaceId: string; agentId: string }> {
-  const repos = getRepositories();
-
-  let workspace = await repos.workspaces.getDefault("default");
-  if (!workspace) {
-    workspace = await repos.workspaces.create({
-      ownerId: "default",
-      name: "Personal",
-      description: "Default personal workspace",
-    });
-  }
-
-  let agent = await repos.agentProfiles.getDefault();
-  if (!agent) {
-    agent = await repos.agentProfiles.create({
-      name: "Jarvis",
-      description: "Default personal assistant agent",
-      isDefault: true,
-    });
-  }
-
-  return { workspaceId: workspace.id, agentId: agent.id };
-}
-
 /**
  * Non-streaming chat endpoint.
  * Accepts { message: string, conversationId?: string, modelOverride?: string }
@@ -53,13 +29,12 @@ chatRoutes.post("/", async (c) => {
       return apiError(c, "消息不能为空", 400);
     }
 
-    const defaults = await getDefaultRunContext();
     const result = await runTurn({
-      workspaceId: body.workspaceId ?? defaults.workspaceId,
+      workspaceId: body.workspaceId,
       projectId: body.projectId,
       taskId: body.taskId,
       conversationId: body.conversationId,
-      agentId: body.agentId ?? defaults.agentId,
+      agentId: body.agentId,
       mode: "chat",
       input: body.message,
       modelOverride: body.modelOverride,
@@ -99,7 +74,6 @@ chatRoutes.post("/stream", async (c) => {
       return apiError(c, "消息不能为空", 400);
     }
 
-    const defaults = await getDefaultRunContext();
     const abortController = new AbortController();
 
     // Propagate client disconnect
@@ -110,10 +84,10 @@ chatRoutes.post("/stream", async (c) => {
 
     const result = await runStreamTurn(
       {
-        workspaceId: body.workspaceId ?? defaults.workspaceId,
+        workspaceId: body.workspaceId,
         projectId: body.projectId,
         conversationId: body.conversationId,
-        agentId: body.agentId ?? defaults.agentId,
+        agentId: body.agentId,
         mode: "chat",
         input: body.message,
         modelOverride: body.modelOverride,

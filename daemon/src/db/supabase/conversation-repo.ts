@@ -43,7 +43,7 @@ export function createSupabaseConversationRepo(): ConversationRepository {
   const client = getSupabaseClient();
 
   return {
-    async create(title?: string): Promise<ConversationRow> {
+    async create(title?: string, options?: { workspaceId?: string; projectId?: string }): Promise<ConversationRow> {
       const id = crypto.randomUUID();
       const now = new Date().toISOString();
       const convTitle = title ?? "New Chat";
@@ -54,6 +54,8 @@ export function createSupabaseConversationRepo(): ConversationRepository {
           id,
           user_id: "default",
           title: convTitle,
+          workspace_id: options?.workspaceId ?? null,
+          project_id: options?.projectId ?? null,
           model_used: "mimo-v2.5-pro",
           message_count: 0,
           created_at: now,

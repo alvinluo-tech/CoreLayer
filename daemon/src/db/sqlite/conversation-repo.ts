@@ -27,20 +27,27 @@ function mapConversationRow(row: typeof schema.conversations.$inferSelect): Conv
 
 export function createSqliteConversationRepo(): ConversationRepository {
   return {
-    async create(title?: string): Promise<ConversationRow> {
+    async create(title?: string, options?: { workspaceId?: string; projectId?: string }): Promise<ConversationRow> {
       const id = crypto.randomUUID();
       const now = new Date().toISOString();
       const convTitle = title ?? "New Chat";
 
       db.insert(schema.conversations)
-        .values({ id, title: convTitle, createdAt: now, updatedAt: now })
+        .values({
+          id,
+          title: convTitle,
+          workspaceId: options?.workspaceId ?? null,
+          projectId: options?.projectId ?? null,
+          createdAt: now,
+          updatedAt: now,
+        })
         .run();
 
       return {
         id,
         userId: "default",
-        workspaceId: null,
-        projectId: null,
+        workspaceId: options?.workspaceId ?? null,
+        projectId: options?.projectId ?? null,
         title: convTitle,
         modelUsed: "mimo-v2.5-pro",
         messageCount: 0,

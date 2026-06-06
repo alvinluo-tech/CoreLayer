@@ -21,5 +21,9 @@ export type {
 export { runStreamTurn } from "./run-stream-executor.js";
 export type { RunStreamTurnOptions } from "./run-stream-executor.js";
 
+// Context Resolver (Phase 5)
+export { resolveRunContext } from "./run-context.js";
+export type { RunContext } from "./run-context.js";
+
 // Approval Manager (Phase 4)
 export { ApprovalManager } from "./approval-manager.js";

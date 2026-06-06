@@ -350,12 +350,16 @@ function selectModelForConversation(
  * Fetch relevant memories for context injection.
  * Uses scored search when a query is available for relevance-based retrieval.
  */
-async function fetchRelevantMemories(query?: string, limit = 15): Promise<ScoredMemoryRow[]> {
+async function fetchRelevantMemories(
+  query?: string,
+  limit = 15,
+  scope?: { type: "user" | "workspace" | "project" | "agent" | "task" | "conversation"; id: string } | null,
+): Promise<ScoredMemoryRow[]> {
   try {
     const repo = getRepositories().memories;
     let scored: ScoredMemoryRow[];
     if (query) {
-      scored = await repo.searchScored(query, "default", limit);
+      scored = await repo.fetchRelevantMemories(query, scope ?? null, "default", limit);
     } else {
       const all = await repo.getAll();
       scored = all
@@ -677,7 +681,16 @@ export async function streamMessageInConversation(
 
   // Load message history and assemble context
   const history = await repo.getMessages(conversationId);
-  const memories = await fetchRelevantMemories(userMessage);
+
+  // Build scope for memory retrieval from conversation context
+  let memoryScope: { type: "user" | "workspace" | "project" | "agent" | "task" | "conversation"; id: string } | null = null;
+  if (conversation?.projectId) {
+    memoryScope = { type: "project", id: conversation.projectId };
+  } else if (conversation?.workspaceId) {
+    memoryScope = { type: "workspace", id: conversation.workspaceId };
+  }
+
+  const memories = await fetchRelevantMemories(userMessage, 15, memoryScope);
   const summary = extractSummaryFromHistory(history);
 
   const selectedModel = options?.modelOverride ?? selectModelForConversation(userMessage, true, history.length);
@@ -750,7 +763,13 @@ export async function streamMessageInConversation(
           if (extracted.length > 0) {
             const { memories } = getRepositories();
             for (const mem of extracted) {
-              await memories.upsert({ key: mem.key, value: mem.value, type: mem.type });
+              await memories.upsert({
+                key: mem.key,
+                value: mem.value,
+                type: mem.type,
+                scopeType: memoryScope?.type,
+                scopeId: memoryScope?.id,
+              });
             }
             console.info(`[Memory] extracted ${extracted.length} memories from turn`);
           }

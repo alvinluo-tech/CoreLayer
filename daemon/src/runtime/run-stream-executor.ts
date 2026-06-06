@@ -16,6 +16,7 @@ import { normalizeStream } from "../api/sse-normalizer.js";
 import { withStreamTimeout } from "../api/stream-timeout.js";
 import { configManager } from "../config/config-manager.js";
 import { logError } from "../utils/errors.js";
+import { resolveRunContext } from "./run-context.js";
 import type { ModelMessage } from "ai";
 
 export type RunStreamTurnOptions = {
@@ -45,6 +46,13 @@ export async function runStreamTurn(
 ): Promise<AgentStreamRunResult> {
   const { agentRuns, conversations } = getRepositories();
 
+  // Resolve context (workspace, agent defaults)
+  const context = await resolveRunContext({
+    workspaceId: request.workspaceId,
+    projectId: request.projectId,
+    agentId: request.agentId,
+  });
+
   const abortController = options?.abortController ?? new AbortController();
 
   // Watchdog: abort if turn takes too long
@@ -58,6 +66,7 @@ export async function runStreamTurn(
   if (!conversationId) {
     const conv = await conversations.create(
       request.mode === "voice" ? "Voice Chat" : "New Chat",
+      { workspaceId: context.workspaceId, projectId: context.projectId },
     );
     conversationId = conv.id;
   }
@@ -78,10 +87,10 @@ export async function runStreamTurn(
   // Create AgentRun
   const run = await agentRuns.create({
     conversationId,
-    workspaceId: request.workspaceId,
-    projectId: request.projectId,
+    workspaceId: context.workspaceId,
+    projectId: context.projectId,
     taskId: request.taskId,
-    agentId: request.agentId,
+    agentId: context.agentId,
     mode: request.mode,
     selectedModel: request.modelOverride ?? undefined,
   });

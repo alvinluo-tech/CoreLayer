@@ -14,6 +14,7 @@ import { getRepositories } from "../db/factory.js";
 import { handleMessageInConversation } from "../orchestrator/conversation.js";
 import { logError } from "../utils/errors.js";
 import { TaskGraph } from "../task/task-graph.js";
+import { resolveRunContext } from "./run-context.js";
 
 export type RunTurnOptions = {
   onEvent?: (event: AgentRunEvent) => void;
@@ -53,6 +54,13 @@ export async function runTurn(
   const { agentRuns, conversations, tasks } = getRepositories();
   const events: AgentRunEvent[] = [];
 
+  // Resolve context (workspace, agent defaults)
+  const context = await resolveRunContext({
+    workspaceId: request.workspaceId,
+    projectId: request.projectId,
+    agentId: request.agentId,
+  });
+
   const emit = (event: AgentRunEvent) => {
     events.push(event);
     options?.onEvent?.(event);
@@ -86,16 +94,19 @@ export async function runTurn(
 
   let conversationId = request.conversationId;
   if (!conversationId) {
-    const conv = await conversations.create(request.mode === "voice" ? "Voice Chat" : "New Chat");
+    const conv = await conversations.create(
+      request.mode === "voice" ? "Voice Chat" : "New Chat",
+      { workspaceId: context.workspaceId, projectId: context.projectId },
+    );
     conversationId = conv.id;
   }
 
   const run = await agentRuns.create({
     conversationId,
-    workspaceId: request.workspaceId,
-    projectId: request.projectId,
+    workspaceId: context.workspaceId,
+    projectId: context.projectId,
     taskId: request.taskId,
-    agentId: request.agentId,
+    agentId: context.agentId,
     mode: request.mode,
     selectedModel: request.modelOverride ?? undefined,
   });

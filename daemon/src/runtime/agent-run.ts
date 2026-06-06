@@ -8,11 +8,11 @@
 // ---- Request ----
 
 export interface AgentRunRequest {
-  workspaceId: string;
+  workspaceId?: string;
   projectId?: string;
   taskId?: string;
   conversationId?: string;
-  agentId: string;
+  agentId?: string;
   mode: "chat" | "voice" | "tick" | "scheduled" | "workflow";
   input: string;
   modelOverride?: string;

@@ -4,34 +4,12 @@ import { transcribeWithGroq, isAsrAvailable } from "../voice/asr.js";
 import { synthesizeSpeech, isTtsAvailable, type TTSModel } from "../voice/tts.js";
 import { StreamingTTS } from "../voice/streaming-tts.js";
 import { voiceRegistry } from "../voice/providers.js";
-import { getRepositories } from "../db/factory.js";
 import { env } from "../config/env.js";
 import { getProviderConfig } from "../ai/provider.js";
 import { extractErrorMessage, logError } from "../utils/errors.js";
 import { runStreamTurn } from "../runtime/run-stream-executor.js";
 
 const voiceRoutes = new Hono();
-
-async function getDefaultRunContext(): Promise<{ workspaceId: string; agentId: string }> {
-  const repos = getRepositories();
-  let workspace = await repos.workspaces.getDefault("default");
-  if (!workspace) {
-    workspace = await repos.workspaces.create({
-      ownerId: "default",
-      name: "Personal",
-      description: "Default personal workspace",
-    });
-  }
-  let agent = await repos.agentProfiles.getDefault();
-  if (!agent) {
-    agent = await repos.agentProfiles.create({
-      name: "Jarvis",
-      description: "Default personal assistant agent",
-      isDefault: true,
-    });
-  }
-  return { workspaceId: workspace.id, agentId: agent.id };
-}
 
 /**
  * POST /api/voice/transcribe
@@ -179,12 +157,17 @@ voiceRoutes.get("/status", (c) => {
  * Response: SSE stream with delta/tool_calls/tool_result/done/error events.
  */
 voiceRoutes.post("/converse-stream", async (c) => {
-  const body = await c.req.json<{ message: string; conversationId?: string }>().catch(() => null);
+  const body = await c.req.json<{
+    message: string;
+    conversationId?: string;
+    workspaceId?: string;
+    projectId?: string;
+    agentId?: string;
+  }>().catch(() => null);
   if (!body?.message?.trim()) {
     return c.json({ error: "消息不能为空" }, 400);
   }
 
-  const defaults = await getDefaultRunContext();
   const abortController = new AbortController();
 
   c.req.raw.signal.addEventListener("abort", () => {
@@ -196,9 +179,10 @@ voiceRoutes.post("/converse-stream", async (c) => {
   try {
     result = await runStreamTurn(
       {
-        workspaceId: defaults.workspaceId,
+        workspaceId: body.workspaceId,
+        projectId: body.projectId,
         conversationId: body.conversationId,
-        agentId: defaults.agentId,
+        agentId: body.agentId,
         mode: "voice",
         input: body.message,
       },
@@ -265,6 +249,9 @@ voiceRoutes.post("/converse-voice-stream", async (c) => {
   const body = await c.req.json<{
     message: string;
     conversationId?: string;
+    workspaceId?: string;
+    projectId?: string;
+    agentId?: string;
     voice?: string;
     speed?: number;
   }>().catch(() => null);
@@ -273,7 +260,6 @@ voiceRoutes.post("/converse-voice-stream", async (c) => {
     return c.json({ error: "消息不能为空" }, 400);
   }
 
-  const defaults = await getDefaultRunContext();
   const abortController = new AbortController();
 
   c.req.raw.signal.addEventListener("abort", () => {
@@ -284,9 +270,10 @@ voiceRoutes.post("/converse-voice-stream", async (c) => {
   try {
     result = await runStreamTurn(
       {
-        workspaceId: defaults.workspaceId,
+        workspaceId: body.workspaceId,
+        projectId: body.projectId,
         conversationId: body.conversationId,
-        agentId: defaults.agentId,
+        agentId: body.agentId,
         mode: "voice",
         input: body.message,
       },
