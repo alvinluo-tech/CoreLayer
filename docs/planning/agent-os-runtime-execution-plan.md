@@ -19,7 +19,7 @@
 - [x] Voice streaming bypasses AgentRun runtime
 - [x] No `run-stream-executor.ts`
 - [x] No `task-status.ts` (status normalization)
-- [x] Approval system lacks idempotency/expiration/
+- [x] Approval system lacks idempotency/expiration/validation
 ---
 
 ## Phase 1: Streaming Runtime Unification
@@ -322,17 +322,99 @@
 
 ---
 
+## Phase 9: Tool Runtime Context Closure
+
+**Branch:** `feat/closure-tool-runtime-context` — **Status:** `DONE`
+
+- [x] **9.1** Add `AIToolRuntimeContext` interface in `ai-tool-wrapper.ts`
+- [x] **9.2** Update `wrapToolsForAI` signature for backward compat
+- [x] **9.3** Update callers in `conversation.ts` with `runtimeContext`
+- [x] **9.4** Update `run-executor.ts` to pass runtime context
+- [x] **9.5** Update `run-stream-executor.ts` to pass runtime context
+- [x] **9.6** Add tests (7 tests in `ai-tool-wrapper.test.ts`)
+
+---
+
+## Phase 10: Main Conversation Routes Use Runtime
+
+**Branch:** `feat/closure-conversations-runtime` — **Status:** `DONE`
+
+- [x] **10.1** Extend `AgentRunResult` with userMessage/assistantMessage/conversation
+- [x] **10.2** Extend `run_completed` event type
+- [x] **10.3** Update `run-stream-executor.ts` to emit full rows
+- [x] **10.4** Update `run-executor.ts` to return full rows
+- [x] **10.5** Migrate streaming route in `conversations.ts`
+- [x] **10.6** Migrate non-streaming route in `conversations.ts`
+- [x] **10.7** Remove manual AgentRun from conversations route
+- [x] **10.8** Add tests (`conversations.test.ts`)
+
+---
+
+## Phase 11: Scheduler Uses Runtime
+
+**Branch:** `feat/closure-scheduler-runtime` — **Status:** `DONE`
+
+- [x] **11.1** Extend `AgentRunRequest` with providerOverride/systemPromptOverride
+- [x] **11.2** Thread overrides through `run-executor.ts`
+- [x] **11.3** Migrate `runTick()` in `scheduler.ts`
+- [x] **11.4** Migrate `executeTask()` in `scheduler.ts`
+- [x] **11.5** Update tests (`scheduler.test.ts`)
+
+---
+
+## Phase 12: Event Persistence & toolCallId
+
+**Branch:** `feat/closure-event-persistence-toolcallid` — **Status:** `DONE`
+
+- [x] **12.1** Extend `ToolCallTrace` with `id?: string`
+- [x] **12.2** Update `runStreamTurn` tool event buffering
+- [x] **12.3** Update route adapters for toolCallId in SSE
+- [x] **12.4** Centralize `emitAndPersist` in `run-stream-executor.ts`
+- [x] **12.5** Centralize `emitAndPersist` in `run-executor.ts`
+- [x] **12.6** Fix error swallowing in event persistence
+- [x] **12.7** Add tests (4 tests in `run-stream-executor.test.ts`)
+
+---
+
+## Phase 13: Approval Expiry & Validation Gate
+
+**Branch:** `feat/closure-approval-expiry-validation` — **Status:** `DONE`
+
+- [x] **13.1** Extend `expireStale` to return expired request IDs
+- [x] **13.2** Resolve in-memory state after `expireStale`
+- [x] **13.3** Gate validation in `tool-runtime.ts`
+- [x] **13.4** Add tests (`approval.test.ts`, `tool-runtime.test.ts`, `approval-repo.test.ts`)
+
+---
+
+## Phase 14: Memory Scope & AgentRun Memory Trace
+
+**Branch:** `feat/closure-memory-scope-trace` — **Status:** `DONE`
+
+- [x] **14.1** Verify scope-aware memory retrieval (project > workspace > user)
+- [x] **14.2** Emit `memory_read` events via ConversationOptions callback
+- [x] **14.3** Emit `memory_written` events via ConversationOptions callback
+- [x] **14.4** Add tests (`run-executor.test.ts`)
+
+---
+
 ## Execution Sequence
 
 ```
-Phase 1 (stream-turn)  ──> merge to main
-Phase 2 (voice-unify)  ──> merge to main  (depends on Phase 1)
-Phase 3 (approval)     ──> merge to main  (independent)
-Phase 4 (status-norm)  ──> merge to main  (independent)
-Phase 5 (context)      ──> merge to main  (independent)
-Phase 6 (autonomous)   ──> merge to main  (independent)
-Phase 7 (events)       ──> merge to main  (depends on Phase 1)
-Phase 8 (config/mem)   ──> merge to main  (independent)
+Phase 1  (stream-turn)         ──> merge to main
+Phase 2  (voice-unify)         ──> merge to main  (depends on Phase 1)
+Phase 3  (approval)            ──> merge to main  (independent)
+Phase 4  (status-norm)         ──> merge to main  (independent)
+Phase 5  (context)             ──> merge to main  (independent)
+Phase 6  (autonomous)          ──> merge to main  (independent)
+Phase 7  (events)              ──> merge to main  (depends on Phase 1)
+Phase 8  (config/mem)          ──> merge to main  (independent)
+Phase 9  (tool-runtime-context)──> merge to main  (depends on Phase 1)
+Phase 10 (conversations-runtime)──> merge to main (depends on Phase 9)
+Phase 11 (scheduler-runtime)   ──> merge to main  (depends on Phase 9)
+Phase 12 (event-persistence)   ──> merge to main  (depends on Phase 10)
+Phase 13 (approval-expiry)     ──> merge to main  (independent, after Phase 9)
+Phase 14 (memory-scope-trace)  ──> merge to main  (independent)
 ```
 
 ## Verification After Each Phase
