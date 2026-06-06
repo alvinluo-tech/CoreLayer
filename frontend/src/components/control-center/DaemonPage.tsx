@@ -36,7 +36,7 @@ export function DaemonPage() {
       if (status.status === 'fulfilled') setDaemonStatus(status.value);
       if (health.status === 'fulfilled') setHealthInfo(health.value);
       if (status.status === 'rejected' && health.status === 'rejected') {
-        setError('无法连接到守护进程');
+        setError('无法连接到本地运行时');
       }
     } catch {
       setError('获取状态失败');
@@ -69,8 +69,8 @@ export function DaemonPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold">守护进程</h2>
-          <p className="text-sm text-muted-foreground">Daemon 进程健康监控</p>
+          <h2 className="text-lg font-semibold">本地运行时</h2>
+          <p className="text-sm text-muted-foreground">Jarvis Runtime 健康监控</p>
         </div>
         <div className="flex gap-2">
           <Button
@@ -202,7 +202,7 @@ export function DaemonPage() {
         </div>
         <div className="space-y-3">
           <div className="flex items-center justify-between py-2 px-3 rounded-md bg-muted/50">
-            <span className="text-sm">Daemon URL</span>
+            <span className="text-sm">Runtime URL</span>
             <span className="text-sm font-mono text-muted-foreground">
               {daemonStatus?.url ?? '—'}
             </span>
