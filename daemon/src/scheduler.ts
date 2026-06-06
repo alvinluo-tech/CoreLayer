@@ -91,23 +91,21 @@ export async function runTick(): Promise<{
     // Consolidation is already handled by checkIdle() with proper cooldown.
     // runTick() only handles the autonomous agent processing (TICK conversation).
 
-    // Create a TICK conversation for L2 agent processing
-    const { handleMessageInConversation } = await import("./orchestrator/conversation.js");
+    const { runTurn } = await import("./runtime/run-executor.js");
     const repos = getRepositories();
     const conv = await repos.conversations.create("TICK: autonomous processing");
 
-    await handleMessageInConversation(
-      conv.id,
-      "[TICK] 自主处理：请检查并执行以下任务（如果没有需要处理的，回复 NO_REPLY）：\n" +
+    await runTurn({
+      conversationId: conv.id,
+      input: "[TICK] 自主处理：请检查并执行以下任务（如果没有需要处理的，回复 NO_REPLY）：\n" +
         "1. 检查是否有过期的待办事项\n" +
         "2. 检查阅读列表中是否有长时间未阅读的文章\n" +
         "3. 整理近期对话中的关键信息到记忆",
-      {
-        modelOverride: configManager.getTickModelId(),
-        providerOverride: configManager.getTickProviderId(),
-        systemPromptOverride: buildTickSystemPrompt(),
-      },
-    );
+      mode: "tick",
+      modelOverride: configManager.getTickModelId(),
+      providerOverride: configManager.getTickProviderId(),
+      systemPromptOverride: buildTickSystemPrompt(),
+    });
 
     // Check if agent replied with NO_REPLY — clean up if so
     const messages = await repos.conversations.getMessages(conv.id);
@@ -166,12 +164,16 @@ export type TaskExecutionResult = {
 async function executeTask(row: ScheduledTaskRow): Promise<TaskExecutionResult> {
   const start = Date.now();
 
-  // Prompt-based execution: send prompt through orchestrator
+  // Prompt-based execution: send prompt through runtime
   if (row.prompt) {
     try {
-      const { handleMessageInConversation } = await import("./orchestrator/conversation.js");
+      const { runTurn } = await import("./runtime/run-executor.js");
       const conv = await getRepositories().conversations.create(`Scheduled: ${row.name}`);
-      await handleMessageInConversation(conv.id, row.prompt);
+      await runTurn({
+        conversationId: conv.id,
+        input: row.prompt,
+        mode: "scheduled",
+      });
       return {
         success: true,
         taskName: row.name,

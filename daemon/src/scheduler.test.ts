@@ -146,9 +146,13 @@ vi.mock("./skills/executor.js", () => ({
   }),
 }));
 
-// Mock orchestrator conversation
-vi.mock("./orchestrator/conversation.js", () => ({
-  handleMessageInConversation: vi.fn().mockResolvedValue({
+// Mock runtime run-executor
+vi.mock("./runtime/run-executor.js", () => ({
+  runTurn: vi.fn().mockResolvedValue({
+    runId: "run-1",
+    conversationId: "conv-1",
+    text: "ok",
+    events: [],
     userMessage: {},
     assistantMessage: {},
     conversation: {},
@@ -267,12 +271,7 @@ describe("Scheduler", () => {
     });
 
     it("should execute prompt-based task", async () => {
-      const { handleMessageInConversation } = await import("./orchestrator/conversation.js");
-      vi.mocked(handleMessageInConversation).mockResolvedValueOnce({
-        userMessage: {} as any,
-        assistantMessage: {} as any,
-        conversation: {} as any,
-      });
+      const { runTurn } = await import("./runtime/run-executor.js");
 
       const repo = (await import("./db/factory.js")).getRepositories().scheduledTasks;
       const task = await repo.upsert({
@@ -283,7 +282,7 @@ describe("Scheduler", () => {
 
       const result = await triggerTask(task.id);
       expect(result!.success).toBe(true);
-      expect(handleMessageInConversation).toHaveBeenCalled();
+      expect(runTurn).toHaveBeenCalled();
     });
 
     it("should update lastRun and nextRun after execution", async () => {
@@ -516,8 +515,12 @@ describe("Scheduler", () => {
     });
 
     it("runTick cleans up TICK conversation when agent replies NO_REPLY", async () => {
-      const { handleMessageInConversation } = await import("./orchestrator/conversation.js");
-      vi.mocked(handleMessageInConversation).mockResolvedValueOnce({
+      const { runTurn } = await import("./runtime/run-executor.js");
+      vi.mocked(runTurn).mockResolvedValueOnce({
+        runId: "run-tick",
+        conversationId: "tick-conv",
+        text: "NO_REPLY nothing to do",
+        events: [],
         userMessage: {} as any,
         assistantMessage: { content: "NO_REPLY nothing to do" } as any,
         conversation: { id: "tick-conv" } as any,
