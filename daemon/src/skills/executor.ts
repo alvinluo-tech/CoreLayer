@@ -7,11 +7,25 @@ import { getSkill } from "./loader.js";
 import { toolRuntime } from "../runtime/index.js";
 
 /**
+ * Optional runtime context for skill execution.
+ * When provided, tool calls inside the skill will be attached to
+ * an AgentRun for audit and idempotency.
+ */
+export interface SkillRuntimeContext {
+  runId?: string;
+  mode?: string;
+  conversationId?: string;
+  projectId?: string;
+  taskId?: string;
+}
+
+/**
  * Execute a skill by name with optional input parameters.
  */
 export async function executeSkill(
   skillName: string,
   input: Record<string, unknown> = {},
+  runtimeContext?: SkillRuntimeContext,
 ): Promise<SkillExecutionResult> {
   const loaded = getSkill(skillName);
   if (!loaded) {
@@ -31,7 +45,7 @@ export async function executeSkill(
 
   try {
     for (const step of loaded.manifest.steps) {
-      const stepResult = await executeStep(step, context, skillName);
+      const stepResult = await executeStep(step, context, skillName, runtimeContext);
       steps.push(stepResult);
       context[step.id] = stepResult.output;
 
@@ -74,12 +88,13 @@ async function executeStep(
   step: SkillStep,
   context: Record<string, unknown>,
   skillName: string,
+  runtimeContext?: SkillRuntimeContext,
 ): Promise<StepResult> {
   const startTime = Date.now();
 
   switch (step.type) {
     case "tool_call":
-      return executeToolStep(step, context, startTime, skillName);
+      return executeToolStep(step, context, startTime, skillName, runtimeContext);
     case "condition":
       return executeConditionStep(step, context, startTime);
     case "transform":
@@ -103,6 +118,7 @@ async function executeToolStep(
   context: Record<string, unknown>,
   startTime: number,
   skillName: string,
+  runtimeContext?: SkillRuntimeContext,
 ): Promise<StepResult> {
   if (!step.tool) {
     return {
@@ -120,6 +136,10 @@ async function executeToolStep(
     const { result } = await toolRuntime.execute(step.tool, args, {
       caller: "skill",
       skillName,
+      runId: runtimeContext?.runId,
+      mode: runtimeContext?.mode,
+      conversationId: runtimeContext?.conversationId,
+      projectId: runtimeContext?.projectId,
     });
     return {
       stepId: step.id,

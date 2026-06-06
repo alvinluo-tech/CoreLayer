@@ -434,4 +434,65 @@ describe("tool_call step edge cases", () => {
     expect(result.steps[0].success).toBe(false);
     expect(result.steps[0].error).toBe("permission denied");
   });
+
+  it("should pass runtime context to toolRuntime.execute", async () => {
+    mockGetSkill.mockReturnValue(
+      makeSkill(
+        makeManifest({
+          steps: [{ id: "step1", type: "tool_call", tool: "my_tool", args: { key: "val" } }],
+        }),
+      ),
+    );
+    mockToolExecute.mockResolvedValue({
+      result: { success: true, data: { done: true } },
+      confirmed: true,
+      durationMs: 10,
+    });
+
+    const runtimeContext = {
+      runId: "run-123",
+      mode: "chat",
+      conversationId: "conv-1",
+      projectId: "proj-1",
+    };
+
+    const result = await executeSkill("ctx-skill", {}, runtimeContext);
+
+    expect(result.success).toBe(true);
+    expect(mockToolExecute).toHaveBeenCalledWith("my_tool", { key: "val" }, {
+      caller: "skill",
+      skillName: "ctx-skill",
+      runId: "run-123",
+      mode: "chat",
+      conversationId: "conv-1",
+      projectId: "proj-1",
+    });
+  });
+
+  it("should work without runtime context (backward compat)", async () => {
+    mockGetSkill.mockReturnValue(
+      makeSkill(
+        makeManifest({
+          steps: [{ id: "step1", type: "tool_call", tool: "my_tool", args: {} }],
+        }),
+      ),
+    );
+    mockToolExecute.mockResolvedValue({
+      result: { success: true, data: null },
+      confirmed: true,
+      durationMs: 5,
+    });
+
+    const result = await executeSkill("no-ctx-skill");
+
+    expect(result.success).toBe(true);
+    expect(mockToolExecute).toHaveBeenCalledWith("my_tool", {}, {
+      caller: "skill",
+      skillName: "no-ctx-skill",
+      runId: undefined,
+      mode: undefined,
+      conversationId: undefined,
+      projectId: undefined,
+    });
+  });
 });
