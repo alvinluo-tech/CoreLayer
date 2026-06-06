@@ -150,16 +150,20 @@ export async function runTurn(
       },
     );
 
+    const conversation = await conversations.getById(conversationId);
     emit({
       type: "run_completed",
       result: {
         text: result.assistantMessage.content,
         conversationId,
+        userMessage: result.userMessage,
+        assistantMessage: result.assistantMessage,
+        conversation,
       },
     });
     await persistEvent(run.id, {
       type: "run_completed",
-      result: { text: result.assistantMessage.content, conversationId },
+      result: { text: result.assistantMessage.content, conversationId, userMessage: result.userMessage, assistantMessage: result.assistantMessage, conversation },
     });
 
     await agentRuns.updateStatus(run.id, "succeeded");
@@ -187,6 +191,9 @@ export async function runTurn(
       conversationId,
       text: result.assistantMessage.content,
       events,
+      userMessage: result.userMessage,
+      assistantMessage: result.assistantMessage,
+      conversation,
     };
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);

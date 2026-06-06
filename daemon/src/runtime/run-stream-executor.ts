@@ -76,7 +76,7 @@ export async function runStreamTurn(
   }
 
   // Save user message
-  await conversations.addMessage(conversationId, {
+  const savedUserMessage = await conversations.addMessage(conversationId, {
     role: "user",
     content: request.input,
   });
@@ -211,7 +211,7 @@ export async function runStreamTurn(
       }
 
       // Stream finished — save assistant message
-      await conversations.addMessage(conversationId, {
+      const savedAssistantMessage = await conversations.addMessage(conversationId, {
         role: "assistant",
         content: fullText,
         toolCalls: toolCallsLog.length > 0 ? JSON.stringify(toolCallsLog) : undefined,
@@ -219,9 +219,10 @@ export async function runStreamTurn(
 
       await agentRuns.updateStatus(run.id, "succeeded");
 
+      const conversation = await conversations.getById(conversationId);
       const completeEvent = emit({
         type: "run_completed",
-        result: { text: fullText, conversationId },
+        result: { text: fullText, conversationId, userMessage: savedUserMessage, assistantMessage: savedAssistantMessage, conversation },
       });
       persistEvent(run.id, completeEvent);
       yield completeEvent;

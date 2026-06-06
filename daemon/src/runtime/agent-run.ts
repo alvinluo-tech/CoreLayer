@@ -56,7 +56,7 @@ export type AgentRunEvent =
   | { type: "task_blocked"; taskId: string; blockedBy: string[] }
   | { type: "task_dependency_resolved"; taskId: string; dependencyId: string }
   | { type: "delta"; text: string }
-  | { type: "run_completed"; result: { text: string; conversationId: string } }
+  | { type: "run_completed"; result: { text: string; conversationId: string; userMessage?: unknown; assistantMessage?: unknown; conversation?: unknown } }
   | { type: "run_failed"; error: string };
 
 // ---- Result ----
@@ -66,6 +66,9 @@ export interface AgentRunResult {
   conversationId: string;
   text: string;
   events: AgentRunEvent[];
+  userMessage?: unknown;
+  assistantMessage?: unknown;
+  conversation?: unknown;
 }
 
 // ---- Streaming Result ----
