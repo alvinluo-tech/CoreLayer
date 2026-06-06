@@ -587,5 +587,39 @@ sqlite.exec(`
   CREATE INDEX IF NOT EXISTS idx_agent_run_events_run ON agent_run_events(run_id, sequence);
 `);
 
+// Migration: Phase 9 - EventLog and AuditLog
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS event_log (
+    id TEXT PRIMARY KEY,
+    type TEXT NOT NULL,
+    project_id TEXT,
+    task_id TEXT,
+    agent_run_id TEXT,
+    runtime_id TEXT,
+    payload TEXT,
+    created_at TEXT DEFAULT 'CURRENT_TIMESTAMP'
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_event_log_type ON event_log(type);
+  CREATE INDEX IF NOT EXISTS idx_event_log_created ON event_log(created_at);
+
+  CREATE TABLE IF NOT EXISTS audit_log (
+    id TEXT PRIMARY KEY,
+    actor TEXT NOT NULL,
+    action TEXT NOT NULL,
+    resource TEXT NOT NULL,
+    risk_level TEXT,
+    permission_decision TEXT,
+    confirmed_by_user INTEGER,
+    result TEXT,
+    metadata TEXT,
+    created_at TEXT DEFAULT 'CURRENT_TIMESTAMP'
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_audit_log_action ON audit_log(action);
+  CREATE INDEX IF NOT EXISTS idx_audit_log_risk ON audit_log(risk_level);
+  CREATE INDEX IF NOT EXISTS idx_audit_log_created ON audit_log(created_at);
+`);
+
 export const db = drizzle(sqlite, { schema });
 export { schema };

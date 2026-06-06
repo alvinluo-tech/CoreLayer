@@ -16,6 +16,8 @@ import { createSqliteAgentProfileRepo } from "../sqlite/agent-profile-repo.js";
 import { createSqliteApprovalRepo } from "../sqlite/approval-repo.js";
 import { createSqlitePermissionMemoryRepo } from "../sqlite/permission-memory-repo.js";
 import { createSqliteAgentRunEventRepo } from "../sqlite/agent-run-event-repo.js";
+import { createSqliteEventLogRepo } from "../sqlite/event-log-repo.js";
+import { createSqliteAuditLogRepo } from "../sqlite/audit-log-repo.js";
 
 export function createSupabaseRepositories(): Repositories {
   return {
@@ -36,5 +38,7 @@ export function createSupabaseRepositories(): Repositories {
     approvalRequests: createSqliteApprovalRepo(),
     permissionMemories: createSqlitePermissionMemoryRepo(),
     agentRunEvents: createSqliteAgentRunEventRepo(),
+    eventLog: createSqliteEventLogRepo(),
+    auditLog: createSqliteAuditLogRepo(),
   };
 }

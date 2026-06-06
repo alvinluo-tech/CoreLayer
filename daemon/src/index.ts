@@ -3,7 +3,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { env } from "./config/env.js";
 import { resolveAppPaths } from "./config/app-paths.js";
-import { initializeRepositories, getCurrentMode } from "./db/factory.js";
+import { initializeRepositories, getCurrentMode, getRepositories } from "./db/factory.js";
 import { getStorageMode } from "./config/storage-config.js";
 import { runMigration } from "./config/migration.js";
 import { configManager } from "./config/config-manager.js";
@@ -30,6 +30,8 @@ import projectRoutes from "./api/projects.js";
 import runsRoutes from "./api/runs.js";
 import memoryRoutes from "./api/memories.js";
 import agentProfileRoutes from "./api/agent-profiles.js";
+import eventRoutes from "./api/events.js";
+import auditRoutes from "./api/audit.js";
 import { startScheduler, setIdleCallback, consolidateOnIdle } from "./scheduler.js";
 import { registerDefaultReportSchedules } from "./reports/generator.js";
 import { registerSensor, startSensors, setSensorChangeHandler } from "./sensors/registry.js";
@@ -188,6 +190,8 @@ app.route("/api/projects", projectRoutes);
 app.route("/api/runs", runsRoutes);
 app.route("/api/memories", memoryRoutes);
 app.route("/api/agent-profiles", agentProfileRoutes);
+app.route("/api/events", eventRoutes);
+app.route("/api/audit", auditRoutes);
 
 function startServer(port: number, hostname: string) {
   try {
@@ -233,6 +237,12 @@ console.log(`[Jarvis] 存储: ${getCurrentMode()}`);
 console.log(`[Jarvis] 数据库: ${resolveAppPaths().sqlitePath}`);
 
 startServer(env.DAEMON_PORT, effectiveHost);
+
+// Emit daemon startup event
+getRepositories().eventLog.create({
+  type: "daemon.startup",
+  payload: { port: env.DAEMON_PORT, host: effectiveHost, storageMode: getCurrentMode(), runtimeMode: env.JARVIS_RUNTIME_MODE },
+}).catch((err: unknown) => console.error("[Jarvis] Failed to log startup event:", err));
 
 // Auto-connect saved MCP servers after server starts
 import("./mcp/client.js")
