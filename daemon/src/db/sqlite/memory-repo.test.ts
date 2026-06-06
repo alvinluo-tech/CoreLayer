@@ -13,6 +13,8 @@ function createTestDb() {
       user_id TEXT NOT NULL DEFAULT 'default',
       type TEXT NOT NULL CHECK(type IN ('fact', 'preference', 'context', 'summary')),
       tier TEXT NOT NULL DEFAULT 'context' CHECK(tier IN ('preference', 'context', 'fact')),
+      scope_type TEXT NOT NULL DEFAULT 'user' CHECK(scope_type IN ('user', 'workspace', 'project', 'agent', 'task', 'conversation')),
+      scope_id TEXT,
       key TEXT NOT NULL,
       value TEXT NOT NULL,
       source TEXT,
@@ -20,6 +22,9 @@ function createTestDb() {
       uses INTEGER DEFAULT 0,
       last_injected_at TEXT,
       expires_at TEXT,
+      source_run_id TEXT,
+      source_message_id TEXT,
+      last_verified_at TEXT,
       created_at TEXT DEFAULT 'CURRENT_TIMESTAMP',
       updated_at TEXT DEFAULT 'CURRENT_TIMESTAMP'
     );
@@ -569,6 +574,235 @@ describe("Memory Repository", () => {
 
       const promoted = await memories.promoteHighUsage(5);
       expect(promoted).toBe(0);
+    });
+  });
+
+  // ---- Scope support (Phase 2) ----
+
+  describe("scope support", () => {
+    it("should default scopeType to 'user' when not specified", async () => {
+      const mem = await memories.upsert({ type: "fact", key: "k", value: "v" });
+      expect(mem.scopeType).toBe("user");
+      expect(mem.scopeId).toBeNull();
+    });
+
+    it("should store workspace-scoped memory", async () => {
+      const mem = await memories.upsert({
+        type: "context",
+        key: "ws_pref",
+        value: "workspace setting",
+        scopeType: "workspace",
+        scopeId: "ws-123",
+      });
+      expect(mem.scopeType).toBe("workspace");
+      expect(mem.scopeId).toBe("ws-123");
+    });
+
+    it("should store project-scoped memory", async () => {
+      const mem = await memories.upsert({
+        type: "context",
+        key: "proj_note",
+        value: "project specific",
+        scopeType: "project",
+        scopeId: "proj-456",
+      });
+      expect(mem.scopeType).toBe("project");
+      expect(mem.scopeId).toBe("proj-456");
+    });
+
+    it("should deduplicate by key + scope (different scopes = different memories)", async () => {
+      await memories.upsert({
+        type: "context",
+        key: "shared_key",
+        value: "user level",
+        scopeType: "user",
+      });
+      await memories.upsert({
+        type: "context",
+        key: "shared_key",
+        value: "workspace level",
+        scopeType: "workspace",
+        scopeId: "ws-1",
+      });
+
+      const all = await memories.getAll();
+      expect(all).toHaveLength(2);
+    });
+
+    it("should deduplicate by key + scope (same scope = update)", async () => {
+      await memories.upsert({
+        type: "context",
+        key: "dup_key",
+        value: "first",
+        scopeType: "workspace",
+        scopeId: "ws-1",
+      });
+      await memories.upsert({
+        type: "context",
+        key: "dup_key",
+        value: "second",
+        scopeType: "workspace",
+        scopeId: "ws-1",
+      });
+
+      const all = await memories.getAll();
+      expect(all).toHaveLength(1);
+      expect(all[0].value).toBe("second");
+    });
+  });
+
+  // ---- fetchByScope ----
+
+  describe("fetchByScope", () => {
+    it("should return memories for a specific scope", async () => {
+      await memories.upsert({ type: "fact", key: "user_k", value: "uv" });
+      await memories.upsert({
+        type: "context",
+        key: "ws_k",
+        value: "wv",
+        scopeType: "workspace",
+        scopeId: "ws-1",
+      });
+      await memories.upsert({
+        type: "context",
+        key: "ws_k2",
+        value: "wv2",
+        scopeType: "workspace",
+        scopeId: "ws-2",
+      });
+
+      const ws1Memories = await memories.fetchByScope("workspace", "ws-1");
+      expect(ws1Memories).toHaveLength(1);
+      expect(ws1Memories[0].key).toBe("ws_k");
+    });
+
+    it("should return empty array for scope with no memories", async () => {
+      await memories.upsert({ type: "fact", key: "k", value: "v" });
+      const results = await memories.fetchByScope("project", "nonexistent");
+      expect(results).toHaveLength(0);
+    });
+  });
+
+  // ---- fetchRelevantMemories ----
+
+  describe("fetchRelevantMemories", () => {
+    it("should return user-level memories when no scope provided", async () => {
+      await memories.upsert({ type: "fact", key: "user_pref", value: "dark mode" });
+      await memories.upsert({
+        type: "context",
+        key: "ws_only",
+        value: "workspace thing",
+        scopeType: "workspace",
+        scopeId: "ws-1",
+      });
+
+      const results = await memories.fetchRelevantMemories("dark");
+      expect(results.length).toBeGreaterThanOrEqual(1);
+      expect(results.some((r) => r.key === "user_pref")).toBe(true);
+      expect(results.some((r) => r.key === "ws_only")).toBe(false);
+    });
+
+    it("should return user + scope memories when scope provided", async () => {
+      await memories.upsert({ type: "fact", key: "user_k", value: "user value" });
+      await memories.upsert({
+        type: "context",
+        key: "ws_k",
+        value: "workspace value",
+        scopeType: "workspace",
+        scopeId: "ws-1",
+      });
+      await memories.upsert({
+        type: "context",
+        key: "other_ws",
+        value: "other workspace",
+        scopeType: "workspace",
+        scopeId: "ws-2",
+      });
+
+      const results = await memories.fetchRelevantMemories(
+        "value",
+        { type: "workspace", id: "ws-1" },
+      );
+      // Should include user_k and ws_k, but NOT other_ws
+      expect(results.some((r) => r.key === "user_k")).toBe(true);
+      expect(results.some((r) => r.key === "ws_k")).toBe(true);
+      expect(results.some((r) => r.key === "other_ws")).toBe(false);
+    });
+
+    it("should exclude expired memories", async () => {
+      const pastDate = "2020-01-01T00:00:00.000Z";
+      await memories.upsert({ type: "fact", key: "expired", value: "old", expiresAt: pastDate });
+      await memories.upsert({ type: "fact", key: "active", value: "new" });
+
+      const results = await memories.fetchRelevantMemories("old new");
+      expect(results.every((r) => r.key !== "expired")).toBe(true);
+    });
+
+    it("should respect limit parameter", async () => {
+      for (let i = 0; i < 20; i++) {
+        await memories.upsert({ type: "fact", key: `item_${i}`, value: "test value" });
+      }
+      const results = await memories.fetchRelevantMemories("test value", null, "default", 5);
+      expect(results).toHaveLength(5);
+    });
+
+    it("should boost scope-specific memories", async () => {
+      await memories.upsert({
+        type: "context",
+        key: "proj_mem",
+        value: "project knowledge",
+        scopeType: "project",
+        scopeId: "proj-1",
+      });
+      await memories.upsert({ type: "fact", key: "user_mem", value: "project knowledge" });
+
+      const results = await memories.fetchRelevantMemories(
+        "project knowledge",
+        { type: "project", id: "proj-1" },
+      );
+      expect(results.length).toBe(2);
+      // Project-scoped memory should score higher due to scope boost
+      expect(results[0].key).toBe("proj_mem");
+    });
+  });
+
+  // ---- upsertPreferences with scope ----
+
+  describe("upsertPreferences with scope", () => {
+    it("should insert preferences with scope", async () => {
+      const prefs = [{ key: "ws_style", value: "tab indentation" }];
+      const results = await memories.upsertPreferences(prefs, "default", "workspace", "ws-1");
+      expect(results).toHaveLength(1);
+      expect(results[0].scopeType).toBe("workspace");
+      expect(results[0].scopeId).toBe("ws-1");
+    });
+
+    it("should deduplicate by key + scope in upsertPreferences", async () => {
+      const prefs = [{ key: "shared", value: "first" }];
+      await memories.upsertPreferences(prefs, "default", "workspace", "ws-1");
+      await memories.upsertPreferences([{ key: "shared", value: "second" }], "default", "workspace", "ws-1");
+
+      const all = await memories.fetchByScope("workspace", "ws-1");
+      expect(all).toHaveLength(1);
+      expect(all[0].value).toBe("second");
+    });
+
+    it("should allow same key in different scopes via upsertPreferences", async () => {
+      await memories.upsertPreferences(
+        [{ key: "style", value: "spaces" }],
+        "default", "workspace", "ws-1",
+      );
+      await memories.upsertPreferences(
+        [{ key: "style", value: "tabs" }],
+        "default", "workspace", "ws-2",
+      );
+
+      const ws1 = await memories.fetchByScope("workspace", "ws-1");
+      const ws2 = await memories.fetchByScope("workspace", "ws-2");
+      expect(ws1).toHaveLength(1);
+      expect(ws2).toHaveLength(1);
+      expect(ws1[0].value).toBe("spaces");
+      expect(ws2[0].value).toBe("tabs");
     });
   });
 });

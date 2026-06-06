@@ -184,6 +184,8 @@ export const modelProfiles = sqliteTable("model_profiles", {
 export const memories = sqliteTable("memories", {
   id: text("id").primaryKey(),
   userId: text("user_id").notNull().default("default"),
+  scopeType: text("scope_type", { enum: ["user", "workspace", "project", "agent", "task", "conversation"] }).notNull().default("user"),
+  scopeId: text("scope_id"),
   type: text("type", { enum: ["fact", "preference", "context", "summary"] }).notNull(),
   tier: text("tier", { enum: ["preference", "context", "fact"] }).notNull().default("context"),
   key: text("key").notNull(),
@@ -192,6 +194,9 @@ export const memories = sqliteTable("memories", {
   confidence: real("confidence"),
   uses: integer("uses").default(0).notNull(),
   lastInjectedAt: text("last_injected_at"),
+  sourceRunId: text("source_run_id"),
+  sourceMessageId: text("source_message_id"),
+  lastVerifiedAt: text("last_verified_at"),
   expiresAt: text("expires_at"),
   createdAt: text("created_at").default("CURRENT_TIMESTAMP").notNull(),
   updatedAt: text("updated_at").default("CURRENT_TIMESTAMP").notNull(),

@@ -28,7 +28,13 @@ export function createSupabaseMemoryRepo(): MemoryRepository {
     async upsert(_input: UpsertMemoryInput): Promise<MemoryRow> {
       throw new Error("Supabase MemoryRepository not implemented — use SQLite mode");
     },
-    async upsertPreferences(_prefs: { key: string; value: string }[], _userId?: string): Promise<MemoryRow[]> {
+    async fetchByScope(_scopeType: MemoryRow["scopeType"], _scopeId: string, _userId?: string): Promise<MemoryRow[]> {
+      throw new Error("Supabase MemoryRepository not implemented — use SQLite mode");
+    },
+    async fetchRelevantMemories(_query: string, _scope?: { type: MemoryRow["scopeType"]; id: string } | null, _userId?: string, _limit?: number): Promise<ScoredMemoryRow[]> {
+      throw new Error("Supabase MemoryRepository not implemented — use SQLite mode");
+    },
+    async upsertPreferences(_prefs: { key: string; value: string }[], _userId?: string, _scopeType?: MemoryRow["scopeType"], _scopeId?: string | null): Promise<MemoryRow[]> {
       throw new Error("Supabase MemoryRepository not implemented — use SQLite mode");
     },
     async incrementUses(_id: string): Promise<void> {

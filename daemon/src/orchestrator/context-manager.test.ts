@@ -261,6 +261,8 @@ describe("assembleContext", () => {
     return {
       id: crypto.randomUUID(),
       userId: "default",
+      scopeType: "user",
+      scopeId: null,
       type: "fact",
       tier: "fact",
       key,
@@ -269,6 +271,9 @@ describe("assembleContext", () => {
       confidence: null,
       uses: 0,
       lastInjectedAt: null,
+      sourceRunId: null,
+      sourceMessageId: null,
+      lastVerifiedAt: null,
       expiresAt: null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),

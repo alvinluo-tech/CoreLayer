@@ -302,11 +302,16 @@ app.post("/db-config/migrate", async (c) => {
         id TEXT PRIMARY KEY,
         user_id TEXT DEFAULT 'default' NOT NULL,
         type TEXT NOT NULL,
+        scope_type TEXT NOT NULL DEFAULT 'user' CHECK(scope_type IN ('user', 'workspace', 'project', 'agent', 'task', 'conversation')),
+        scope_id TEXT,
         key TEXT NOT NULL,
         value TEXT NOT NULL,
         source TEXT,
         confidence REAL,
         expires_at TEXT,
+        source_run_id TEXT,
+        source_message_id TEXT,
+        last_verified_at TEXT,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL,
         updated_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL
       );

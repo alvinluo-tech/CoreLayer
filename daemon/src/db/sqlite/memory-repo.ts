@@ -131,6 +131,91 @@ export function createSqliteMemoryRepo(database?: DrizzleDb): MemoryRepository {
       return row ? normalize(row) : null;
     },
 
+    async fetchByScope(scopeType: MemoryRow["scopeType"], scopeId: string, userId = "default"): Promise<MemoryRow[]> {
+      const rows = db
+        .select()
+        .from(schema.memories)
+        .where(
+          and(
+            eq(schema.memories.userId, userId),
+            eq(schema.memories.scopeType, scopeType),
+            eq(schema.memories.scopeId, scopeId),
+          ),
+        )
+        .all();
+      return rows.map(normalize);
+    },
+
+    async fetchRelevantMemories(
+      query: string,
+      scope: { type: MemoryRow["scopeType"]; id: string } | null = null,
+      userId = "default",
+      limit = 10,
+    ): Promise<ScoredMemoryRow[]> {
+      // Build scope conditions: user-level memories always included,
+      // plus memories matching the given scope
+      const scopeConditions = scope
+        ? or(
+            eq(schema.memories.scopeType, "user"),
+            and(
+              eq(schema.memories.scopeType, scope.type),
+              eq(schema.memories.scopeId, scope.id),
+            ),
+          )
+        : eq(schema.memories.scopeType, "user");
+
+      const now = new Date().toISOString();
+      const rows = db
+        .select()
+        .from(schema.memories)
+        .where(
+          and(
+            eq(schema.memories.userId, userId),
+            scopeConditions,
+            or(isNull(schema.memories.expiresAt), gt(schema.memories.expiresAt, now)),
+          ),
+        )
+        .all()
+        .map(normalize);
+
+      // Simple relevance scoring: match query against key and value
+      const queryLower = query.toLowerCase();
+      const scored: ScoredMemoryRow[] = rows
+        .map((m) => {
+          let score = 0;
+          const keyLower = m.key.toLowerCase();
+          const valueLower = m.value.toLowerCase();
+
+          // Exact key match
+          if (keyLower === queryLower) score += 1.0;
+          // Key contains query
+          else if (keyLower.includes(queryLower)) score += 0.7;
+          // Value contains query
+          else if (valueLower.includes(queryLower)) score += 0.5;
+
+          // Scope-level boost: more specific scope = higher relevance
+          if (scope && m.scopeType === scope.type && m.scopeId === scope.id) {
+            score += 0.3;
+          }
+
+          // Category boost
+          const boost = CATEGORY_BOOSTS[m.type] ?? 1.0;
+          score *= boost;
+
+          // Confidence boost
+          if (m.confidence != null) {
+            score *= 0.8 + 0.4 * m.confidence;
+          }
+
+          return { ...m, score };
+        })
+        .filter((m) => m.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, limit);
+
+      return scored;
+    },
+
     async search(query: string, userId = "default"): Promise<MemoryRow[]> {
       const pattern = `%${query}%`;
       const rows = db
@@ -249,17 +334,23 @@ export function createSqliteMemoryRepo(database?: DrizzleDb): MemoryRepository {
 
       const now = new Date().toISOString();
       const userId = input.userId ?? "default";
+      const scopeType = input.scopeType ?? "user";
+      const scopeId = input.scopeId ?? null;
 
       // Auto-classify tier if not explicitly provided
       const tier = input.tier ?? classifyTier(input.type, input.key, input.value);
 
-      // Deduplication: case-insensitive exact match on key via SQL LOWER()
+      // Deduplication: case-insensitive exact match on key + scope
       const duplicate = db
         .select()
         .from(schema.memories)
         .where(
           and(
             eq(schema.memories.userId, userId),
+            eq(schema.memories.scopeType, scopeType),
+            scopeId === null
+              ? isNull(schema.memories.scopeId)
+              : eq(schema.memories.scopeId, scopeId),
             sql`lower(${schema.memories.key}) = lower(${input.key})`,
           ),
         )
@@ -273,6 +364,8 @@ export function createSqliteMemoryRepo(database?: DrizzleDb): MemoryRepository {
             tier,
             source: input.source ?? duplicate.source,
             confidence: input.confidence ?? duplicate.confidence,
+            sourceRunId: input.sourceRunId ?? duplicate.sourceRunId,
+            sourceMessageId: input.sourceMessageId ?? duplicate.sourceMessageId,
             expiresAt: input.expiresAt ?? duplicate.expiresAt,
             updatedAt: now,
           })
@@ -292,6 +385,8 @@ export function createSqliteMemoryRepo(database?: DrizzleDb): MemoryRepository {
         .values({
           id: crypto.randomUUID(),
           userId,
+          scopeType,
+          scopeId,
           type: input.type,
           tier,
           key: input.key,
@@ -299,6 +394,8 @@ export function createSqliteMemoryRepo(database?: DrizzleDb): MemoryRepository {
           source: input.source ?? null,
           confidence: input.confidence ?? null,
           uses: 0,
+          sourceRunId: input.sourceRunId ?? null,
+          sourceMessageId: input.sourceMessageId ?? null,
           expiresAt: input.expiresAt ?? null,
           createdAt: now,
           updatedAt: now,
@@ -308,12 +405,26 @@ export function createSqliteMemoryRepo(database?: DrizzleDb): MemoryRepository {
       const row = db
         .select()
         .from(schema.memories)
-        .where(and(eq(schema.memories.userId, userId), eq(schema.memories.key, input.key)))
+        .where(
+          and(
+            eq(schema.memories.userId, userId),
+            eq(schema.memories.scopeType, scopeType),
+            scopeId === null
+              ? isNull(schema.memories.scopeId)
+              : eq(schema.memories.scopeId, scopeId),
+            eq(schema.memories.key, input.key),
+          ),
+        )
         .get()!;
       return normalize(row);
     },
 
-    async upsertPreferences(prefs: { key: string; value: string }[], userId = "default"): Promise<MemoryRow[]> {
+    async upsertPreferences(
+      prefs: { key: string; value: string }[],
+      userId = "default",
+      scopeType: MemoryRow["scopeType"] = "user",
+      scopeId: string | null = null,
+    ): Promise<MemoryRow[]> {
       const results: MemoryRow[] = [];
       const now = new Date().toISOString();
       for (const pref of prefs) {
@@ -321,13 +432,17 @@ export function createSqliteMemoryRepo(database?: DrizzleDb): MemoryRepository {
 
         const tier = classifyTier("preference", pref.key, pref.value);
 
-        // Dedup: check for existing preference with same key
+        // Dedup: check for existing preference with same key + scope
         const duplicate = db
           .select()
           .from(schema.memories)
           .where(
             and(
               eq(schema.memories.userId, userId),
+              eq(schema.memories.scopeType, scopeType),
+              scopeId === null
+                ? isNull(schema.memories.scopeId)
+                : eq(schema.memories.scopeId, scopeId),
               sql`lower(${schema.memories.key}) = lower(${pref.key})`,
             ),
           )
@@ -351,6 +466,8 @@ export function createSqliteMemoryRepo(database?: DrizzleDb): MemoryRepository {
             .values({
               id: crypto.randomUUID(),
               userId,
+              scopeType,
+              scopeId,
               type: "preference",
               tier,
               key: pref.key,
@@ -365,7 +482,16 @@ export function createSqliteMemoryRepo(database?: DrizzleDb): MemoryRepository {
           const row = db
             .select()
             .from(schema.memories)
-            .where(and(eq(schema.memories.userId, userId), eq(schema.memories.key, pref.key)))
+            .where(
+              and(
+                eq(schema.memories.userId, userId),
+                eq(schema.memories.scopeType, scopeType),
+                scopeId === null
+                  ? isNull(schema.memories.scopeId)
+                  : eq(schema.memories.scopeId, scopeId),
+                eq(schema.memories.key, pref.key),
+              ),
+            )
             .get()!;
           results.push(normalize(row));
         }

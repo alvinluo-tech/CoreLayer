@@ -405,5 +405,32 @@ try {
   // Column already exists — ignore
 }
 
+// Migration: Phase 2 - Memory Scope
+try {
+  sqlite.exec(`ALTER TABLE memories ADD COLUMN scope_type TEXT NOT NULL DEFAULT 'user' CHECK(scope_type IN ('user', 'workspace', 'project', 'agent', 'task', 'conversation'))`);
+} catch {
+  // Column already exists — ignore
+}
+try {
+  sqlite.exec(`ALTER TABLE memories ADD COLUMN scope_id TEXT`);
+} catch {
+  // Column already exists — ignore
+}
+try {
+  sqlite.exec(`ALTER TABLE memories ADD COLUMN source_run_id TEXT`);
+} catch {
+  // Column already exists — ignore
+}
+try {
+  sqlite.exec(`ALTER TABLE memories ADD COLUMN source_message_id TEXT`);
+} catch {
+  // Column already exists — ignore
+}
+try {
+  sqlite.exec(`ALTER TABLE memories ADD COLUMN last_verified_at TEXT`);
+} catch {
+  // Column already exists — ignore
+}
+
 export const db = drizzle(sqlite, { schema });
 export { schema };

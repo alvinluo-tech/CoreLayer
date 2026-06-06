@@ -13,6 +13,8 @@ function createTestDb() {
       user_id TEXT NOT NULL DEFAULT 'default',
       type TEXT NOT NULL CHECK(type IN ('fact', 'preference', 'context', 'summary')),
       tier TEXT NOT NULL DEFAULT 'context',
+      scope_type TEXT NOT NULL DEFAULT 'user' CHECK(scope_type IN ('user', 'workspace', 'project', 'agent', 'task', 'conversation')),
+      scope_id TEXT,
       key TEXT NOT NULL,
       value TEXT NOT NULL,
       source TEXT,
@@ -20,6 +22,9 @@ function createTestDb() {
       uses INTEGER DEFAULT 0,
       last_injected_at TEXT,
       expires_at TEXT,
+      source_run_id TEXT,
+      source_message_id TEXT,
+      last_verified_at TEXT,
       created_at TEXT DEFAULT 'CURRENT_TIMESTAMP',
       updated_at TEXT DEFAULT 'CURRENT_TIMESTAMP'
     );

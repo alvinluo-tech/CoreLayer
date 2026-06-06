@@ -72,6 +72,8 @@ function makeMemory(
   return {
     id: `mem-${key}`,
     userId: "default",
+    scopeType: "user",
+    scopeId: null,
     key,
     value,
     type: type as ScoredMemoryRow["type"],
@@ -80,6 +82,9 @@ function makeMemory(
     confidence: 1.0,
     uses: 0,
     lastInjectedAt: null,
+    sourceRunId: null,
+    sourceMessageId: null,
+    lastVerifiedAt: null,
     expiresAt: null,
     createdAt: "2026-01-01",
     updatedAt: "2026-01-01",
