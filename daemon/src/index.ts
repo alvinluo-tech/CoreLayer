@@ -109,6 +109,19 @@ app.get("/api/runtime/status", (c) => {
   });
 });
 
+app.get("/api/runtime/components", (c) => {
+  const paths = resolveAppPaths();
+  const isHealthy = true; // If we can respond, we're healthy
+  const components = [
+    { kind: "agent-runtime", status: isHealthy ? "running" : "failed", pid: process.pid, healthUrl: "/health", logDir: paths.logDir },
+    { kind: "tool-runtime", status: isHealthy ? "running" : "failed", pid: process.pid, healthUrl: "/health", logDir: paths.logDir },
+    { kind: "voice-runtime", status: isHealthy ? "running" : "failed", pid: process.pid, healthUrl: "/health", logDir: paths.logDir },
+    { kind: "memory-runtime", status: isHealthy ? "running" : "failed", pid: process.pid, healthUrl: "/health", logDir: paths.logDir },
+    { kind: "scheduler-runtime", status: isHealthy ? "running" : "failed", pid: process.pid, healthUrl: "/health", logDir: paths.logDir },
+  ];
+  return c.json({ components });
+});
+
 app.post("/api/runtime/shutdown", async (c) => {
   console.log("[Jarvis] Shutdown requested via API");
   // Give the response time to send before exiting

@@ -1,4 +1,5 @@
 mod daemon_supervisor;
+mod runtime_registry;
 
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -766,6 +767,51 @@ async fn get_daemon_url_command(
     Ok(get_daemon_url().await)
 }
 
+// ---- Runtime Registry Commands ----
+
+#[tauri::command]
+async fn get_runtime_components(
+    state: State<'_, daemon_supervisor::DaemonSupervisorState>,
+) -> Result<Vec<runtime_registry::RuntimeComponent>, String> {
+    let supervisor = state.0.lock().await;
+    let status = supervisor.get_status().await;
+
+    // Currently all components map to the same daemon process.
+    // Future phases can split into separate processes.
+    let component_status = if status.healthy {
+        runtime_registry::RuntimeStatus::Running
+    } else if status.running {
+        runtime_registry::RuntimeStatus::Degraded
+    } else {
+        runtime_registry::RuntimeStatus::Failed
+    };
+
+    let kinds = vec![
+        runtime_registry::RuntimeKind::AgentRuntime,
+        runtime_registry::RuntimeKind::ToolRuntime,
+        runtime_registry::RuntimeKind::VoiceRuntime,
+        runtime_registry::RuntimeKind::MemoryRuntime,
+        runtime_registry::RuntimeKind::SchedulerRuntime,
+    ];
+
+    let components = kinds
+        .into_iter()
+        .map(|kind| runtime_registry::RuntimeComponent {
+            kind,
+            status: component_status.clone(),
+            pid: status.pid,
+            port: status.port,
+            health_url: Some(format!("{}/health", status.url)),
+            log_path: status.log_path.clone(),
+            restart_policy: runtime_registry::RestartPolicy::MaxAttempts(3),
+            last_health_check: status.last_health_check.clone(),
+            last_error: status.last_error.clone(),
+        })
+        .collect();
+
+    Ok(components)
+}
+
 // ---- MCP Server Commands ----
 
 #[tauri::command]
@@ -1176,7 +1222,8 @@ pub fn run() {
             daemon_supervisor::daemon_status,
             daemon_supervisor::start_daemon,
             daemon_supervisor::stop_daemon,
-            daemon_supervisor::restart_daemon
+            daemon_supervisor::restart_daemon,
+            get_runtime_components
         ])
         .setup(|app| {
             // Set window icon from default window icon (embedded via tauri.conf.json bundle)

@@ -671,6 +671,37 @@ export async function restartDaemon(): Promise<DaemonStatus> {
   return invoke('restart_daemon');
 }
 
+// ---- Runtime Registry ----
+
+export type RuntimeKind =
+  | 'agent-runtime'
+  | 'tool-runtime'
+  | 'coding-runtime'
+  | 'voice-runtime'
+  | 'memory-runtime'
+  | 'scheduler-runtime'
+  | 'computer-control-runtime';
+
+export type RuntimeStatus = 'pending' | 'starting' | 'running' | 'degraded' | 'stopped' | 'failed';
+
+export type RestartPolicy = 'never' | { maxAttempts: number } | 'always';
+
+export interface RuntimeComponent {
+  kind: RuntimeKind;
+  status: RuntimeStatus;
+  pid: number | null;
+  port: number | null;
+  healthUrl: string | null;
+  logPath: string | null;
+  restartPolicy: RestartPolicy;
+  lastHealthCheck: string | null;
+  lastError: string | null;
+}
+
+export async function getRuntimeComponents(): Promise<RuntimeComponent[]> {
+  return invoke('get_runtime_components');
+}
+
 // ---- Tool Call Audit Logs ----
 
 export interface ToolCallLogEntry {
