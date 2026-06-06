@@ -120,12 +120,10 @@ export function CommandPalette({ onChat, onNavigate, onVoiceToggle }: CommandPal
       )
     : commands;
 
-  // Reset selected index when filtered results change
   useEffect(() => {
     setSelectedIndex(0);
   }, [query, setSelectedIndex]);
 
-  // Focus input when opened
   useEffect(() => {
     if (isOpen) {
       setTimeout(() => inputRef.current?.focus(), 50);
@@ -166,17 +164,30 @@ export function CommandPalette({ onChat, onNavigate, onVoiceToggle }: CommandPal
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-[20vh]" onClick={close}>
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+      {/* Glass backdrop */}
+      <div
+        className="absolute inset-0"
+        style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }}
+      />
 
       {/* Palette */}
       <div
-        className="relative w-full max-w-lg bg-card border border-border rounded-xl shadow-2xl overflow-hidden"
+        className="relative w-full max-w-lg overflow-hidden"
         onClick={(e) => e.stopPropagation()}
+        style={{
+          background: 'var(--glass-bg)',
+          border: '1px solid var(--glass-border)',
+          borderRadius: 16,
+          backdropFilter: 'blur(24px)',
+          boxShadow: '0 0 24px rgba(0,212,255,0.08), 0 24px 48px rgba(0,0,0,0.4)',
+        }}
       >
         {/* Search Input */}
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
-          <Search className="h-5 w-5 text-muted-foreground shrink-0" />
+        <div
+          className="flex items-center gap-3 px-4 py-3"
+          style={{ borderBottom: '1px solid var(--glass-border)' }}
+        >
+          <Search className="h-5 w-5 shrink-0" style={{ color: 'var(--text-tertiary)' }} />
           <input
             ref={inputRef}
             type="text"
@@ -184,48 +195,98 @@ export function CommandPalette({ onChat, onNavigate, onVoiceToggle }: CommandPal
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="输入命令或搜索..."
-            className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+            className="flex-1 bg-transparent text-sm outline-none"
+            style={{
+              color: 'var(--text-primary)',
+              fontFamily: 'var(--font-body)',
+            }}
           />
-          <kbd className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">ESC</kbd>
+          <kbd
+            style={{
+              fontFamily: 'var(--font-data)',
+              fontSize: 10,
+              color: 'var(--text-tertiary)',
+              background: 'rgba(255,255,255,0.04)',
+              padding: '2px 6px',
+              borderRadius: 4,
+              border: '1px solid var(--glass-border)',
+            }}
+          >
+            ESC
+          </kbd>
         </div>
 
         {/* Results */}
         <div className="max-h-80 overflow-y-auto py-2">
           {filtered.length === 0 ? (
-            <div className="px-4 py-8 text-center text-sm text-muted-foreground">
-              没有匹配的命令
+            <div className="px-4 py-8 text-center" style={{ color: 'var(--text-tertiary)' }}>
+              <p style={{ fontFamily: 'var(--font-data)', fontSize: 11 }}>没有匹配的命令</p>
             </div>
           ) : (
-            filtered.map((item, index) => (
-              <button
-                key={item.id}
-                className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
-                  index === selectedIndex ? 'bg-primary/10 text-primary' : 'hover:bg-accent'
-                }`}
-                onClick={() => item.action()}
-                onMouseEnter={() => setSelectedIndex(index)}
-              >
-                <div
-                  className={`shrink-0 ${index === selectedIndex ? 'text-primary' : 'text-muted-foreground'}`}
+            filtered.map((item, index) => {
+              const isSelected = index === selectedIndex;
+              return (
+                <button
+                  key={item.id}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-left transition-all duration-150"
+                  style={{
+                    background: isSelected ? 'rgba(0,212,255,0.06)' : 'transparent',
+                    borderLeft: isSelected ? '2px solid var(--cyan)' : '2px solid transparent',
+                  }}
+                  onClick={() => item.action()}
+                  onMouseEnter={() => setSelectedIndex(index)}
                 >
-                  {item.icon}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{item.label}</p>
-                  <p className="text-xs text-muted-foreground truncate">{item.description}</p>
-                </div>
-                {index === selectedIndex && (
-                  <kbd className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded shrink-0">
-                    Enter
-                  </kbd>
-                )}
-              </button>
-            ))
+                  <div
+                    className="shrink-0"
+                    style={{ color: isSelected ? 'var(--cyan)' : 'var(--text-tertiary)' }}
+                  >
+                    {item.icon}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p
+                      className="text-sm font-medium truncate"
+                      style={{
+                        color: isSelected ? 'var(--text-primary)' : 'var(--text-secondary)',
+                      }}
+                    >
+                      {item.label}
+                    </p>
+                    <p className="text-xs truncate" style={{ color: 'var(--text-tertiary)' }}>
+                      {item.description}
+                    </p>
+                  </div>
+                  {isSelected && (
+                    <kbd
+                      style={{
+                        fontFamily: 'var(--font-data)',
+                        fontSize: 10,
+                        color: 'var(--cyan)',
+                        background: 'rgba(0,212,255,0.06)',
+                        padding: '2px 6px',
+                        borderRadius: 4,
+                        border: '1px solid rgba(0,212,255,0.15)',
+                      }}
+                    >
+                      Enter
+                    </kbd>
+                  )}
+                </button>
+              );
+            })
           )}
         </div>
 
         {/* Footer */}
-        <div className="flex items-center gap-4 px-4 py-2 border-t border-border text-xs text-muted-foreground">
+        <div
+          className="flex items-center gap-4 px-4 py-2"
+          style={{
+            borderTop: '1px solid var(--glass-border)',
+            fontFamily: 'var(--font-data)',
+            fontSize: 10,
+            color: 'var(--text-tertiary)',
+            letterSpacing: 0.5,
+          }}
+        >
           <span>↑↓ 导航</span>
           <span>↵ 执行</span>
           <span>ESC 关闭</span>

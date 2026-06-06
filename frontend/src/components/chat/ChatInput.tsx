@@ -1,7 +1,5 @@
 import { useState, type KeyboardEvent } from 'react';
 import { Send } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
 
 const MAX_MESSAGE_LENGTH = 4000;
 
@@ -30,44 +28,55 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
   const isTextEmpty = !text.trim();
 
   return (
-    <div className="flex items-center gap-2.5 w-full">
-      <div
-        className={cn(
-          'flex-1 flex items-center h-11 px-4 rounded-xl border transition-all duration-300 shadow-sm',
-          disabled
-            ? 'opacity-50 bg-accent/5 border-border/30'
-            : 'bg-accent/15 border-border/40 hover:border-border/60 focus-within:border-primary/45 focus-within:bg-background/90 focus-within:ring-2 focus-within:ring-primary/10 focus-within:shadow-md'
-        )}
-      >
-        <input
-          type="text"
-          value={text}
-          onChange={(e) => setText(e.target.value.slice(0, MAX_MESSAGE_LENGTH))}
-          onKeyDown={handleKeyDown}
-          placeholder={disabled ? 'Jarvis 正在思考中...' : '给 Jarvis 发送消息...'}
-          disabled={disabled}
-          maxLength={MAX_MESSAGE_LENGTH}
-          className="w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none disabled:cursor-not-allowed"
-        />
-      </div>
-      <Button
-        size="icon"
+    <div
+      className="flex items-center gap-2.5 w-full h-11 px-4 rounded-xl transition-all duration-300"
+      style={{
+        border: '1px solid var(--glass-border)',
+        background: 'var(--glass-bg)',
+        backdropFilter: 'blur(12px)',
+      }}
+    >
+      <input
+        type="text"
+        value={text}
+        onChange={(e) => setText(e.target.value.slice(0, MAX_MESSAGE_LENGTH))}
+        onKeyDown={handleKeyDown}
+        placeholder={disabled ? 'Jarvis is processing...' : 'Send a message...'}
+        disabled={disabled}
+        maxLength={MAX_MESSAGE_LENGTH}
+        className="w-full bg-transparent text-sm focus:outline-none disabled:cursor-not-allowed"
+        style={{
+          color: 'var(--text-primary)',
+          fontFamily: 'var(--font-body)',
+          letterSpacing: 0.3,
+        }}
+      />
+      <button
         onClick={handleSend}
         disabled={isTextEmpty || disabled}
-        className={cn(
-          'h-11 w-11 rounded-xl shadow-sm transition-all duration-300 select-none cursor-pointer flex items-center justify-center',
-          isTextEmpty || disabled
-            ? 'bg-muted text-muted-foreground/40 border border-border/10 cursor-not-allowed'
-            : 'bg-primary text-primary-foreground hover:bg-primary/90 hover:scale-[1.03] active:scale-95 shadow-md shadow-primary/10 hover:shadow-lg hover:shadow-primary/20'
-        )}
+        className="flex items-center justify-center w-8 h-8 rounded-lg transition-all duration-200 shrink-0 disabled:cursor-not-allowed"
+        style={{
+          border: `1px solid ${isTextEmpty || disabled ? 'var(--glass-border)' : 'rgba(0,212,255,0.15)'}`,
+          background: isTextEmpty || disabled ? 'transparent' : 'rgba(0,212,255,0.06)',
+          color: isTextEmpty || disabled ? 'var(--text-tertiary)' : 'var(--cyan)',
+        }}
+        onMouseEnter={(e) => {
+          if (!isTextEmpty && !disabled) {
+            e.currentTarget.style.borderColor = 'var(--cyan)';
+            e.currentTarget.style.background = 'rgba(0,212,255,0.12)';
+            e.currentTarget.style.boxShadow = '0 0 12px var(--cyan-glow)';
+          }
+        }}
+        onMouseLeave={(e) => {
+          if (!isTextEmpty && !disabled) {
+            e.currentTarget.style.borderColor = 'rgba(0,212,255,0.15)';
+            e.currentTarget.style.background = 'rgba(0,212,255,0.06)';
+            e.currentTarget.style.boxShadow = 'none';
+          }
+        }}
       >
-        <Send
-          className={cn(
-            'h-4 w-4 transition-transform duration-300',
-            !isTextEmpty && !disabled && 'group-hover:translate-x-0.5 group-hover:-translate-y-0.5'
-          )}
-        />
-      </Button>
+        <Send className="h-3.5 w-3.5" />
+      </button>
     </div>
   );
 }

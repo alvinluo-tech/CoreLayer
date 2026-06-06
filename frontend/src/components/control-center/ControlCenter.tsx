@@ -11,6 +11,7 @@ import {
   Mic,
   Activity,
   Database,
+  Palette,
 } from 'lucide-react';
 import { OverviewPage } from './OverviewPage';
 import { SystemPage } from './SystemPage';
@@ -21,6 +22,7 @@ import { PermissionPage } from './PermissionPage';
 import { VoicePage } from './VoicePage';
 import { DaemonPage } from './DaemonPage';
 import { DbPage } from './DbPage';
+import { AppearancePage } from './AppearancePage';
 
 export type ControlPage =
   | 'overview'
@@ -31,7 +33,8 @@ export type ControlPage =
   | 'permission'
   | 'voice'
   | 'daemon'
-  | 'db';
+  | 'db'
+  | 'appearance';
 
 interface ControlCenterProps {
   onBack: () => void;
@@ -39,15 +42,16 @@ interface ControlCenterProps {
 }
 
 const navItems: { id: ControlPage; label: string; icon: typeof LayoutDashboard }[] = [
-  { id: 'overview', label: '总览', icon: LayoutDashboard },
-  { id: 'system', label: '系统', icon: Server },
-  { id: 'models', label: '模型', icon: Brain },
-  { id: 'apps', label: '应用 & MCP', icon: Plug },
-  { id: 'tools', label: '工具', icon: Wrench },
-  { id: 'permission', label: '权限', icon: Shield },
-  { id: 'voice', label: '语音', icon: Mic },
-  { id: 'daemon', label: '守护进程', icon: Activity },
-  { id: 'db', label: '数据管理', icon: Database },
+  { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+  { id: 'system', label: 'System', icon: Server },
+  { id: 'models', label: 'Models', icon: Brain },
+  { id: 'apps', label: 'Apps & MCP', icon: Plug },
+  { id: 'tools', label: 'Tools', icon: Wrench },
+  { id: 'permission', label: 'Permissions', icon: Shield },
+  { id: 'voice', label: 'Voice', icon: Mic },
+  { id: 'daemon', label: 'Daemon', icon: Activity },
+  { id: 'db', label: 'Database', icon: Database },
+  { id: 'appearance', label: 'Appearance', icon: Palette },
 ];
 
 const pages: Record<ControlPage, React.ComponentType> = {
@@ -60,6 +64,7 @@ const pages: Record<ControlPage, React.ComponentType> = {
   voice: VoicePage,
   daemon: DaemonPage,
   db: DbPage,
+  appearance: AppearancePage,
 };
 
 export function ControlCenter({ onBack, initialPage }: ControlCenterProps) {
@@ -67,21 +72,52 @@ export function ControlCenter({ onBack, initialPage }: ControlCenterProps) {
   const PageComponent = pages[activePage];
 
   return (
-    <div className="flex h-full bg-background">
-      {/* Left sidebar nav */}
-      <aside className="w-56 border-r border-border flex flex-col overflow-hidden">
-        <header className="p-4 border-b border-border">
+    <div className="flex h-full" style={{ background: 'var(--bg-void)' }}>
+      {/* Left sidebar nav — glass panel */}
+      <aside
+        className="w-52 flex flex-col overflow-hidden"
+        style={{
+          background: 'rgba(4,6,14,0.6)',
+          backdropFilter: 'blur(12px)',
+          borderRight: '1px solid var(--glass-border)',
+        }}
+      >
+        <header className="p-4" style={{ borderBottom: '1px solid var(--glass-border)' }}>
           <Button
             variant="ghost"
             size="sm"
             onClick={onBack}
-            className="gap-1.5 text-muted-foreground hover:text-foreground -ml-1 mb-2"
+            className="gap-1.5 -ml-1 mb-2"
+            style={{ color: 'var(--text-tertiary)' }}
           >
             <ArrowLeft className="h-4 w-4" />
-            返回
+            <span style={{ fontFamily: 'var(--font-data)', fontSize: 10, letterSpacing: 1 }}>
+              BACK
+            </span>
           </Button>
-          <h1 className="text-lg font-bold tracking-tight">控制中心</h1>
-          <p className="text-xs text-muted-foreground">Jarvis 系统管理</p>
+          <h1
+            style={{
+              fontFamily: 'var(--font-hud)',
+              fontSize: 16,
+              fontWeight: 700,
+              letterSpacing: 2,
+              color: 'var(--text-primary)',
+              textTransform: 'uppercase',
+            }}
+          >
+            Control Center
+          </h1>
+          <p
+            style={{
+              fontFamily: 'var(--font-data)',
+              fontSize: 9,
+              letterSpacing: 1,
+              color: 'var(--text-tertiary)',
+              marginTop: 4,
+            }}
+          >
+            JARVIS SYSTEM MANAGEMENT
+          </p>
         </header>
 
         <nav className="flex-1 overflow-y-auto p-2 space-y-0.5">
@@ -92,14 +128,24 @@ export function ControlCenter({ onBack, initialPage }: ControlCenterProps) {
               <button
                 key={item.id}
                 onClick={() => setActivePage(item.id)}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors ${
-                  isActive
-                    ? 'bg-accent text-accent-foreground font-medium'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                }`}
+                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-md transition-all duration-200 text-left"
+                style={{
+                  background: isActive ? 'var(--glass-bg)' : 'transparent',
+                  border: `1px solid ${isActive ? 'rgba(0,212,255,0.12)' : 'transparent'}`,
+                  color: isActive ? 'var(--text-primary)' : 'var(--text-tertiary)',
+                }}
               >
                 <Icon className="h-4 w-4" />
-                {item.label}
+                <span
+                  style={{
+                    fontFamily: 'var(--font-hud)',
+                    fontSize: 11,
+                    fontWeight: isActive ? 600 : 400,
+                    letterSpacing: 0.5,
+                  }}
+                >
+                  {item.label}
+                </span>
               </button>
             );
           })}

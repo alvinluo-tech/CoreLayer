@@ -1,6 +1,4 @@
 import { useEffect } from 'react';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { TrendingUp, CheckCircle2, BookOpen, Target } from 'lucide-react';
 import { useReviewStore } from '@/stores/reviewStore';
 
 export function DailySummary() {
@@ -17,51 +15,108 @@ export function DailySummary() {
     articlesRead: 0,
   };
 
+  const statItems = [
+    {
+      label: 'TASKS',
+      value: `${stats.tasksCompleted}/${stats.tasksTotal}`,
+      color: 'var(--emerald)',
+    },
+    { label: 'RATE', value: `${stats.completionRate}%`, color: 'var(--cyan)' },
+    { label: 'READ', value: `${stats.articlesRead}`, color: 'var(--violet)' },
+    { label: 'STREAK', value: '-', color: 'var(--amber)' },
+  ];
+
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium">今日总结</CardTitle>
-      </CardHeader>
-      <CardContent>
+    <div
+      className="rounded-xl overflow-hidden"
+      style={{
+        background: 'var(--glass-bg)',
+        border: '1px solid var(--glass-border)',
+      }}
+    >
+      {/* Header */}
+      <div
+        className="px-3 py-2.5 flex items-center gap-2"
+        style={{ borderBottom: '1px solid var(--glass-border)' }}
+      >
+        <span className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--emerald)' }} />
+        <h4
+          style={{
+            fontFamily: 'var(--font-hud)',
+            fontSize: 11,
+            fontWeight: 600,
+            letterSpacing: 1,
+            color: 'var(--text-secondary)',
+            textTransform: 'uppercase',
+          }}
+        >
+          Summary
+        </h4>
+      </div>
+
+      {/* Body */}
+      <div className="px-3 py-2">
         {error ? (
-          <p className="text-xs text-destructive text-center py-4">{error}</p>
+          <p
+            style={{
+              fontFamily: 'var(--font-data)',
+              fontSize: 10,
+              color: 'var(--rose)',
+              textAlign: 'center',
+              padding: '12px 0',
+            }}
+          >
+            {error}
+          </p>
         ) : isLoading && !dailySummary ? (
-          <p className="text-xs text-muted-foreground text-center py-4">加载中...</p>
+          <p
+            style={{
+              fontFamily: 'var(--font-data)',
+              fontSize: 10,
+              color: 'var(--text-tertiary)',
+              textAlign: 'center',
+              padding: '12px 0',
+            }}
+          >
+            LOADING...
+          </p>
         ) : (
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex items-center gap-2 text-sm">
-              <CheckCircle2 className="h-4 w-4 text-green-500" />
-              <div>
-                <p className="text-muted-foreground text-xs">任务完成</p>
-                <p className="font-medium">
-                  {stats.tasksCompleted}/{stats.tasksTotal}
-                </p>
+          <div className="grid grid-cols-2 gap-2">
+            {statItems.map((item) => (
+              <div
+                key={item.label}
+                className="flex flex-col items-center py-2 rounded-lg"
+                style={{
+                  background: 'rgba(255,255,255,0.02)',
+                  border: '1px solid var(--glass-border)',
+                }}
+              >
+                <span
+                  style={{
+                    fontFamily: 'var(--font-data)',
+                    fontSize: 9,
+                    letterSpacing: 1,
+                    color: 'var(--text-tertiary)',
+                    marginBottom: 2,
+                  }}
+                >
+                  {item.label}
+                </span>
+                <span
+                  style={{
+                    fontFamily: 'var(--font-hud)',
+                    fontSize: 16,
+                    fontWeight: 700,
+                    color: item.color,
+                  }}
+                >
+                  {item.value}
+                </span>
               </div>
-            </div>
-            <div className="flex items-center gap-2 text-sm">
-              <TrendingUp className="h-4 w-4 text-blue-500" />
-              <div>
-                <p className="text-muted-foreground text-xs">完成率</p>
-                <p className="font-medium">{stats.completionRate}%</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 text-sm">
-              <BookOpen className="h-4 w-4 text-purple-500" />
-              <div>
-                <p className="text-muted-foreground text-xs">阅读</p>
-                <p className="font-medium">{stats.articlesRead} 篇</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 text-sm">
-              <Target className="h-4 w-4 text-orange-500" />
-              <div>
-                <p className="text-muted-foreground text-xs">连续天数</p>
-                <p className="font-medium">-</p>
-              </div>
-            </div>
+            ))}
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

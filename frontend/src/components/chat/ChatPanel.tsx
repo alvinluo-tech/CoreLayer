@@ -49,7 +49,6 @@ export function ChatPanel({
     el.scrollTo({ top: el.scrollHeight, behavior });
   }, []);
 
-  // Track scroll position
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
@@ -73,13 +72,11 @@ export function ChatPanel({
     return () => el.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Snap to bottom when switching conversations
   useEffect(() => {
     if (conversationId !== prevConversationIdRef.current) {
       prevConversationIdRef.current = conversationId;
       setHasNewMessage(false);
 
-      // Perform initial snap and double-run after DOM rendering paints to ensure 100% bottom lock
       scrollToBottom('instant');
       const timer = setTimeout(() => {
         scrollToBottom('instant');
@@ -88,7 +85,6 @@ export function ChatPanel({
     }
   }, [conversationId, scrollToBottom]);
 
-  // Auto-scroll on new messages / streaming when user is at bottom
   useEffect(() => {
     const lastMessage = messages[messages.length - 1];
     const isUserMessage = lastMessage && lastMessage.role === 'user';
@@ -96,7 +92,6 @@ export function ChatPanel({
     if (isNearBottomRef.current || isUserMessage) {
       const behavior = isLoading || isVoiceStreaming ? 'instant' : 'smooth';
 
-      // Immediate scroll, followed by a layout-paint delay retry to capture new browser size mutations
       scrollToBottom(behavior);
       const timer = setTimeout(() => {
         scrollToBottom(behavior);
@@ -110,127 +105,227 @@ export function ChatPanel({
 
   if (!hasActiveConversation) {
     return (
-      <div className="flex flex-col h-full items-center justify-center text-muted-foreground">
-        <MessageSquarePlus className="h-16 w-16 mb-4 opacity-30" />
-        <h2 className="text-lg font-medium mb-2">开始新对话</h2>
-        <p className="text-sm mb-6">选择一个对话或创建新对话开始</p>
-        <Button onClick={() => createConversation().catch(console.error)} className="gap-2">
-          新建对话
+      <div
+        className="flex flex-col h-full items-center justify-center"
+        style={{ color: 'var(--text-tertiary)' }}
+      >
+        <MessageSquarePlus className="h-16 w-16 mb-4 opacity-20" />
+        <h2
+          className="text-lg font-medium mb-2"
+          style={{ fontFamily: 'var(--font-hud)', color: 'var(--text-secondary)' }}
+        >
+          Start New Session
+        </h2>
+        <p className="text-sm mb-6" style={{ color: 'var(--text-tertiary)' }}>
+          Select a conversation or create a new one
+        </p>
+        <Button
+          onClick={() => createConversation().catch(console.error)}
+          variant="glass"
+          className="gap-2"
+        >
+          New Conversation
         </Button>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full bg-gradient-to-b from-indigo-500/[0.015] via-transparent to-transparent">
-      {/* Token usage header */}
+    <div className="flex flex-col h-full">
+      {/* Token usage header — HUD label style */}
       {activeConversation &&
         (activeConversation.promptTokens > 0 || activeConversation.completionTokens > 0) && (
-          <div className="flex items-center justify-end px-4 py-1.5 border-b border-border/40">
-            <span className="font-mono text-[10px] text-muted-foreground/60 tracking-wider">
+          <div
+            className="flex items-center justify-between px-5 py-1.5"
+            style={{ borderBottom: '1px solid var(--glass-border)' }}
+          >
+            <span
+              style={{
+                fontFamily: 'var(--font-hud)',
+                fontSize: 11,
+                fontWeight: 600,
+                letterSpacing: 2,
+                color: 'var(--text-tertiary)',
+                textTransform: 'uppercase',
+              }}
+            >
+              // Active Session
+            </span>
+            <span
+              style={{
+                fontFamily: 'var(--font-data)',
+                fontSize: 10,
+                letterSpacing: 0.5,
+                color: 'var(--text-tertiary)',
+              }}
+            >
               {activeConversation.promptTokens.toLocaleString()} prompt ·{' '}
               {activeConversation.completionTokens.toLocaleString()} completion
             </span>
           </div>
         )}
-      {/* Messages area with scroll-to-bottom overlay */}
+
+      {/* Messages area */}
       <div className="flex-1 overflow-hidden relative">
-        <div ref={scrollRef} className="h-full overflow-y-auto p-4 space-y-4">
+        <div ref={scrollRef} className="h-full overflow-y-auto px-6 py-4 space-y-3.5">
           {messages.map((msg) => (
             <MessageBubble key={msg.id} message={msg} />
           ))}
 
-          {/* Voice conversation: user message */}
+          {/* Voice: user message */}
           {voiceUserText && (
-            <div className="flex justify-end my-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-              <div className="bg-gradient-to-br from-indigo-600 to-blue-600 dark:from-indigo-500 dark:to-blue-600 text-primary-foreground border border-primary/20 rounded-2xl rounded-tr-sm px-4 py-3 text-sm max-w-[80%] shadow-[0_4px_12px_rgba(99,102,241,0.15)]">
+            <div className="flex justify-end my-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div
+                className="rounded-2xl rounded-tr-sm px-4 py-3 text-sm max-w-[80%]"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(0,212,255,0.1), rgba(61,122,255,0.08))',
+                  border: '1px solid rgba(0,212,255,0.12)',
+                  color: 'var(--text-primary)',
+                }}
+              >
                 {voiceUserText}
               </div>
             </div>
           )}
 
-          {/* Voice conversation: AI response (visible until persisted messages load) */}
+          {/* Voice: AI response */}
           {voiceAssistantText && (
-            <div className="flex justify-start my-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-              <div className="bg-card/60 backdrop-blur-md text-card-foreground border border-border/60 rounded-2xl rounded-tl-sm px-4 py-3.5 text-sm max-w-[80%] hover:shadow-[0_4px_20px_rgba(0,0,0,0.03)] dark:hover:shadow-[0_4px_20px_rgba(0,0,0,0.15)]">
+            <div className="flex justify-start my-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div
+                className="rounded-2xl rounded-tl-sm px-4 py-3.5 text-sm max-w-[80%]"
+                style={{
+                  background: 'var(--glass-bg)',
+                  border: '1px solid var(--glass-border)',
+                  backdropFilter: 'blur(12px)',
+                  color: 'var(--text-primary)',
+                }}
+              >
                 <Streamdown
                   mode={isVoiceStreaming ? 'streaming' : 'static'}
                   parseIncompleteMarkdown
-                  className="prose prose-sm dark:prose-invert max-w-none text-foreground/90"
+                  className="prose prose-sm dark:prose-invert max-w-none"
                 >
                   {voiceAssistantText}
                 </Streamdown>
                 {isVoiceStreaming && (
-                  <span className="inline-block w-1.5 h-4 bg-foreground/50 animate-pulse ml-0.5 align-text-bottom" />
+                  <span
+                    className="inline-block w-1.5 h-4 animate-pulse ml-0.5 align-text-bottom"
+                    style={{ background: 'var(--violet)' }}
+                  />
                 )}
               </div>
             </div>
           )}
 
+          {/* Loading state — Holo style */}
           {isLoading && (
             <div className="flex justify-start animate-in fade-in slide-in-from-bottom-2 duration-300">
-              <div className="rounded-xl border border-cyan-500/25 bg-cyan-950/5 backdrop-blur-md px-4.5 py-3.5 space-y-2.5 max-w-[80%] shadow-lg shadow-cyan-950/5 relative overflow-hidden">
-                {/* Glowing neon cyber line */}
-                <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-cyan-400 to-transparent" />
+              <div
+                className="rounded-xl px-4 py-3.5 space-y-2.5 max-w-[80%] relative overflow-hidden"
+                style={{
+                  border: '1px solid rgba(167,139,250,0.12)',
+                  background: 'var(--glass-bg)',
+                  backdropFilter: 'blur(12px)',
+                }}
+              >
+                {/* Top glow line */}
+                <div
+                  className="absolute top-0 left-0 w-full h-px"
+                  style={{
+                    background: 'linear-gradient(90deg, transparent, var(--violet), transparent)',
+                  }}
+                />
                 <div className="flex items-center gap-2">
-                  <div className="relative flex items-center justify-center">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin text-cyan-400" />
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-20"></span>
-                  </div>
-                  <span className="font-mono text-[10px] font-bold text-cyan-400/90 tracking-wider">
-                    JARVIS COGNITIVE DECRYPTING...
+                  <Loader2
+                    className="h-3.5 w-3.5 animate-spin"
+                    style={{ color: 'var(--violet)' }}
+                  />
+                  <span
+                    style={{
+                      fontFamily: 'var(--font-hud)',
+                      fontSize: 10,
+                      fontWeight: 600,
+                      letterSpacing: 2,
+                      color: 'var(--violet)',
+                    }}
+                  >
+                    JARVIS PROCESSING...
                   </span>
                 </div>
-                <div className="flex items-center gap-1.5 pl-5.5">
-                  <span
-                    className="h-1.5 w-1.5 rounded-full bg-cyan-400 animate-bounce"
-                    style={{ animationDelay: '0ms' }}
-                  />
-                  <span
-                    className="h-1.5 w-1.5 rounded-full bg-cyan-400 animate-bounce"
-                    style={{ animationDelay: '150ms' }}
-                  />
-                  <span
-                    className="h-1.5 w-1.5 rounded-full bg-cyan-400 animate-bounce"
-                    style={{ animationDelay: '300ms' }}
-                  />
+                {/* Wave bars */}
+                <div className="flex items-center gap-0.5 pl-5">
+                  {[6, 12, 18, 12, 6, 14, 8].map((h, i) => (
+                    <span
+                      key={i}
+                      className="w-0.5 rounded-full"
+                      style={{
+                        height: h,
+                        background: 'var(--violet)',
+                        animation: `waveBar 1s ease-in-out infinite`,
+                        animationDelay: `${i * 0.1}s`,
+                      }}
+                    />
+                  ))}
                 </div>
               </div>
             </div>
           )}
+
           {error && (
             <div className="flex justify-start">
-              <div className="bg-destructive/10 text-destructive border border-destructive/20 rounded-lg px-4 py-2 text-sm">
+              <div
+                className="rounded-lg px-4 py-2 text-sm"
+                style={{
+                  background: 'rgba(255,61,90,0.1)',
+                  border: '1px solid rgba(255,61,90,0.2)',
+                  color: 'var(--rose)',
+                }}
+              >
                 {error}
               </div>
             </div>
           )}
         </div>
 
-        {/* Scroll to bottom button — centered pill above the input area */}
+        {/* Scroll to bottom button — glass pill */}
         {showScrollButton && (
           <button
             onClick={() => {
               scrollToBottom('smooth');
               setHasNewMessage(false);
             }}
-            className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 px-4 py-2 rounded-full bg-background/80 backdrop-blur-md border border-border/60 hover:bg-background/95 hover:border-border shadow-lg hover:shadow-xl text-[11px] font-mono font-bold tracking-wider text-muted-foreground hover:text-foreground transition-all duration-300 transform scale-100 hover:scale-105 active:scale-95 animate-in fade-in slide-in-from-bottom-3 cursor-pointer group"
-            title="回到底部"
+            className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 px-4 py-2 rounded-full transition-all duration-200 cursor-pointer"
+            style={{
+              background: 'rgba(8,12,24,0.9)',
+              border: '1px solid var(--glass-border)',
+              backdropFilter: 'blur(12px)',
+              color: 'var(--text-secondary)',
+              fontFamily: 'var(--font-data)',
+              fontSize: 11,
+              letterSpacing: 1,
+            }}
+            title="Scroll to bottom"
           >
-            <ArrowDown className="h-3.5 w-3.5 group-hover:translate-y-0.5 transition-transform duration-200" />
-            <span>回到底部</span>
+            <ArrowDown className="h-3.5 w-3.5" />
+            <span>Bottom</span>
             {hasNewMessage && (
               <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
+                <span
+                  className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75"
+                  style={{ background: 'var(--cyan)' }}
+                />
+                <span
+                  className="relative inline-flex rounded-full h-2 w-2"
+                  style={{ background: 'var(--cyan)' }}
+                />
               </span>
             )}
           </button>
         )}
       </div>
 
-      {/* Input area */}
-      <div className="border-t border-border p-4">
+      {/* Input area — glass border top */}
+      <div className="p-4" style={{ borderTop: '1px solid var(--glass-border)' }}>
         <ChatInput onSend={onSend} disabled={isLoading} />
       </div>
     </div>

@@ -2,6 +2,18 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useVoiceFSM } from './useVoiceFSM';
 
+const asrMock = vi.hoisted(() => ({
+  start: vi.fn(),
+  stop: vi.fn(() => ''),
+  transcribeWithWhisper: vi.fn(),
+  state: {
+    interimTranscript: '',
+    finalTranscript: '',
+    isListening: false,
+    error: null as string | null,
+  },
+}));
+
 // Mock all dependencies
 vi.mock('@/lib/tauri', () => ({
   getDaemonUrl: vi.fn(() => Promise.resolve('http://localhost:3001')),
@@ -49,13 +61,10 @@ vi.mock('./voiceRealtimeSession', () => ({
 
 vi.mock('./useASR', () => ({
   useASR: vi.fn(() => ({
-    interimTranscript: '',
-    finalTranscript: '',
-    isListening: false,
-    error: null,
-    start: vi.fn(),
-    stop: vi.fn(() => ''),
-    transcribeWithWhisper: vi.fn(),
+    ...asrMock.state,
+    start: asrMock.start,
+    stop: asrMock.stop,
+    transcribeWithWhisper: asrMock.transcribeWithWhisper,
   })),
 }));
 
@@ -106,6 +115,11 @@ vi.mock('./useConnectionHealth', () => ({
 describe('useVoiceFSM', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    asrMock.state.interimTranscript = '';
+    asrMock.state.finalTranscript = '';
+    asrMock.state.isListening = false;
+    asrMock.state.error = null;
+    asrMock.stop.mockReturnValue('');
   });
 
   it('initializes with idle state', () => {
@@ -136,6 +150,23 @@ describe('useVoiceFSM', () => {
       result.current.startListening();
     });
 
+    expect(result.current.state).toBe('listening');
+  });
+
+  it('does not stop ASR on window blur while actively listening after wake', () => {
+    asrMock.state.isListening = true;
+    const { result } = renderHook(() => useVoiceFSM({ conversationId: null }));
+
+    act(() => {
+      result.current.startListening();
+    });
+    expect(result.current.state).toBe('listening');
+
+    act(() => {
+      result.current.handleWindowBlur();
+    });
+
+    expect(asrMock.stop).not.toHaveBeenCalled();
     expect(result.current.state).toBe('listening');
   });
 

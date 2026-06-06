@@ -165,7 +165,15 @@ function DataPanelFloat({ entry, isVisible, onDismiss }: DataPanelViewProps) {
     setIsDismissing(false);
   }, [entry?.id]);
 
-  if (!entry || !isVisible) return null;
+  if (!entry || !isVisible) {
+    return (
+      <div className="dp-empty-state">
+        <div className="dp-empty-icon">◇</div>
+        <p className="dp-empty-title">NO ACTIVE DATA</p>
+        <p className="dp-empty-desc">Tool results will appear here</p>
+      </div>
+    );
+  }
 
   // Normalize raw data into ViewModel
   const viewModel = normalizeDataPanelPayload({

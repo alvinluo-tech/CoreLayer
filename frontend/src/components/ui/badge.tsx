@@ -11,6 +11,12 @@ const badgeVariants = cva(
         secondary: 'border-transparent bg-secondary text-secondary-foreground',
         destructive: 'border-transparent bg-destructive text-destructive-foreground shadow',
         outline: 'text-foreground',
+        // HUD status badges
+        ok: 'border-[rgba(0,230,138,0.15)] bg-[rgba(0,230,138,0.08)] text-[var(--emerald)]',
+        warn: 'border-[rgba(255,184,0,0.15)] bg-[rgba(255,184,0,0.08)] text-[var(--amber)]',
+        err: 'border-[rgba(255,61,90,0.15)] bg-[rgba(255,61,90,0.08)] text-[var(--rose)]',
+        ai: 'border-[rgba(167,139,250,0.15)] bg-[rgba(167,139,250,0.08)] text-[var(--violet)]',
+        cyan: 'border-[rgba(0,212,255,0.1)] bg-[var(--cyan-subtle)] text-[var(--cyan)]',
       },
     },
     defaultVariants: {

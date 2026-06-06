@@ -13,8 +13,8 @@ export function Dialog({ open, onClose, children }: DialogProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Backdrop */}
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      {/* Backdrop — glass effect, stronger blur in Holo */}
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-md" onClick={onClose} />
       {/* Content */}
       <div className="relative z-50 w-full max-w-md mx-4">{children}</div>
     </div>
@@ -29,13 +29,16 @@ export const DialogContent = React.forwardRef<HTMLDivElement, DialogContentProps
   ({ className, children, onClose, ...props }, ref) => (
     <div
       ref={ref}
-      className={cn('rounded-lg border border-border bg-background p-6 shadow-lg', className)}
+      className={cn(
+        'rounded-lg border border-[var(--glass-border)] bg-[var(--glass-bg)] backdrop-blur-xl p-6 shadow-2xl',
+        className
+      )}
       {...props}
     >
       {onClose && (
         <button
           onClick={onClose}
-          className="absolute right-4 top-4 rounded-sm opacity-70 hover:opacity-100 transition-opacity"
+          className="absolute right-4 top-4 rounded-sm opacity-70 hover:opacity-100 transition-opacity text-[var(--text-tertiary)] hover:text-[var(--rose)]"
         >
           <X className="h-4 w-4" />
         </button>
@@ -51,12 +54,17 @@ export function DialogHeader({ className, ...props }: React.HTMLAttributes<HTMLD
 }
 
 export function DialogTitle({ className, ...props }: React.HTMLAttributes<HTMLHeadingElement>) {
-  return <h2 className={cn('text-lg font-semibold', className)} {...props} />;
+  return (
+    <h2
+      className={cn('text-lg font-semibold font-[var(--font-hud)] tracking-wide', className)}
+      {...props}
+    />
+  );
 }
 
 export function DialogDescription({
   className,
   ...props
 }: React.HTMLAttributes<HTMLParagraphElement>) {
-  return <p className={cn('text-sm text-muted-foreground', className)} {...props} />;
+  return <p className={cn('text-sm text-[var(--text-tertiary)]', className)} {...props} />;
 }

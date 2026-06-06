@@ -1,22 +1,31 @@
 import type React from 'react';
 import { useEffect } from 'react';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { CheckCircle2, Circle, Clock } from 'lucide-react';
 import { useTaskStore } from '@/stores/taskStore';
 
-const statusIcon = {
-  done: <CheckCircle2 className="h-4 w-4 text-green-500" />,
-  in_progress: <Clock className="h-4 w-4 text-yellow-500" />,
-  pending: <Circle className="h-4 w-4 text-muted-foreground" />,
+type TaskStatus = 'done' | 'in_progress' | 'pending';
+type TaskPriority = 1 | 2 | 3 | 4 | 5;
+
+const statusConfig: Record<TaskStatus, { icon: React.ReactNode; color: string }> = {
+  done: { icon: <CheckCircle2 className="h-3 w-3" />, color: 'var(--emerald)' },
+  in_progress: { icon: <Clock className="h-3 w-3" />, color: 'var(--amber)' },
+  pending: { icon: <Circle className="h-3 w-3" />, color: 'var(--text-tertiary)' },
 };
 
-const priorityLabel: Record<number, React.ReactNode> = {
-  1: <Badge variant="destructive">紧急</Badge>,
-  2: <Badge variant="default">高</Badge>,
-  3: <Badge variant="secondary">中</Badge>,
-  4: <Badge variant="outline">低</Badge>,
-  5: <Badge variant="outline">最低</Badge>,
+function getStatus(key: string): { icon: React.ReactNode; color: string } {
+  return statusConfig[key as TaskStatus] ?? statusConfig.pending;
+}
+
+function getPriority(key: number): { label: string; color: string } {
+  return priorityConfig[key as TaskPriority] ?? priorityConfig[3];
+}
+
+const priorityConfig: Record<TaskPriority, { label: string; color: string }> = {
+  1: { label: 'P1', color: 'var(--rose)' },
+  2: { label: 'P2', color: 'var(--amber)' },
+  3: { label: 'P3', color: 'var(--text-tertiary)' },
+  4: { label: 'P4', color: 'var(--text-tertiary)' },
+  5: { label: 'P5', color: 'var(--text-tertiary)' },
 };
 
 export function TodayView() {
@@ -34,37 +43,134 @@ export function TodayView() {
   const completed = todayTasks.filter((t) => t.status === 'done').length;
 
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-sm font-medium">今日任务</CardTitle>
-          <span className="text-xs text-muted-foreground">
-            {completed}/{todayTasks.length} 完成
-          </span>
+    <div
+      className="rounded-xl overflow-hidden"
+      style={{
+        background: 'var(--glass-bg)',
+        border: '1px solid var(--glass-border)',
+      }}
+    >
+      {/* Header */}
+      <div
+        className="px-3 py-2.5 flex items-center justify-between"
+        style={{ borderBottom: '1px solid var(--glass-border)' }}
+      >
+        <div className="flex items-center gap-2">
+          <span className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--cyan)' }} />
+          <h4
+            style={{
+              fontFamily: 'var(--font-hud)',
+              fontSize: 11,
+              fontWeight: 600,
+              letterSpacing: 1,
+              color: 'var(--text-secondary)',
+              textTransform: 'uppercase',
+            }}
+          >
+            Today
+          </h4>
         </div>
-      </CardHeader>
-      <CardContent>
+        <span
+          style={{
+            fontFamily: 'var(--font-data)',
+            fontSize: 10,
+            color: 'var(--text-tertiary)',
+          }}
+        >
+          {completed}/{todayTasks.length}
+        </span>
+      </div>
+
+      {/* Body */}
+      <div className="px-3 py-2">
         {error && !isLoading ? (
-          <p className="text-xs text-destructive text-center py-4">⚠️ {error}—请尝试刷新页面</p>
+          <p
+            style={{
+              fontFamily: 'var(--font-data)',
+              fontSize: 10,
+              color: 'var(--rose)',
+              textAlign: 'center',
+              padding: '12px 0',
+            }}
+          >
+            {error}
+          </p>
         ) : isLoading && tasks.length === 0 ? (
-          <p className="text-xs text-muted-foreground text-center py-4">加载中...</p>
+          <p
+            style={{
+              fontFamily: 'var(--font-data)',
+              fontSize: 10,
+              color: 'var(--text-tertiary)',
+              textAlign: 'center',
+              padding: '12px 0',
+            }}
+          >
+            LOADING...
+          </p>
         ) : todayTasks.length === 0 ? (
-          <p className="text-xs text-muted-foreground text-center py-4">暂无今日任务</p>
+          <p
+            style={{
+              fontFamily: 'var(--font-data)',
+              fontSize: 10,
+              color: 'var(--text-tertiary)',
+              textAlign: 'center',
+              padding: '12px 0',
+            }}
+          >
+            NO TASKS TODAY
+          </p>
         ) : (
-          <div className="space-y-2">
-            {todayTasks.map((task) => (
-              <div
-                key={task.id}
-                className="flex items-center gap-2 text-sm p-2 rounded-md hover:bg-accent/50 transition-colors"
+          <div className="space-y-1">
+            {todayTasks.slice(0, 6).map((task) => {
+              const s = getStatus(task.status);
+              const p = getPriority(task.priority);
+              return (
+                <div
+                  key={task.id}
+                  className="flex items-center gap-2 px-2 py-1.5 rounded-md transition-colors"
+                  style={{ cursor: 'default' }}
+                >
+                  <span style={{ color: s.color }}>{s.icon}</span>
+                  <span
+                    className="flex-1 truncate"
+                    style={{
+                      fontFamily: 'var(--font-body)',
+                      fontSize: 12,
+                      color:
+                        task.status === 'done' ? 'var(--text-tertiary)' : 'var(--text-primary)',
+                      textDecoration: task.status === 'done' ? 'line-through' : 'none',
+                    }}
+                  >
+                    {task.title}
+                  </span>
+                  <span
+                    style={{
+                      fontFamily: 'var(--font-data)',
+                      fontSize: 9,
+                      color: p.color,
+                      opacity: 0.7,
+                    }}
+                  >
+                    {p.label}
+                  </span>
+                </div>
+              );
+            })}
+            {todayTasks.length > 6 && (
+              <p
+                className="text-center pt-1"
+                style={{
+                  fontFamily: 'var(--font-data)',
+                  fontSize: 9,
+                  color: 'var(--text-tertiary)',
+                }}
               >
-                {statusIcon[task.status as keyof typeof statusIcon]}
-                <span className="flex-1 truncate">{task.title}</span>
-                {priorityLabel[task.priority]}
-              </div>
-            ))}
+                +{todayTasks.length - 6} more
+              </p>
+            )}
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

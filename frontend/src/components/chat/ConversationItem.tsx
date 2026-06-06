@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Trash2, Pencil, Check, X, Sparkles } from 'lucide-react';
+import { Trash2, Pencil, Check, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Conversation } from '@/lib/tauri';
 
@@ -27,9 +27,9 @@ function formatRelativeTime(dateStr: string): string {
 }
 
 function formatTokenCount(tokens: number): string {
-  if (tokens < 1000) return `${tokens} tokens`;
-  if (tokens < 1000000) return `${(tokens / 1000).toFixed(1)}k tokens`;
-  return `${(tokens / 1000000).toFixed(1)}M tokens`;
+  if (tokens < 1000) return `${tokens}t`;
+  if (tokens < 1000000) return `${(tokens / 1000).toFixed(1)}k`;
+  return `${(tokens / 1000000).toFixed(1)}M`;
 }
 
 export function ConversationItem({
@@ -41,7 +41,6 @@ export function ConversationItem({
 }: ConversationItemProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(conversation.title);
-  const [showDelete, setShowDelete] = useState(false);
 
   const isDefault = conversation.title === '默认对话';
 
@@ -63,21 +62,42 @@ export function ConversationItem({
   return (
     <div
       className={cn(
-        'group relative flex items-center gap-3 px-3.5 py-2.5 rounded-lg cursor-pointer transition-all duration-300 select-none overflow-hidden',
+        'group relative flex items-center gap-2.5 px-3 py-2.5 rounded-lg cursor-pointer transition-all duration-200 select-none overflow-hidden',
         isActive
-          ? 'bg-accent/60 text-accent-foreground shadow-sm border border-border/40 backdrop-blur-md'
-          : 'hover:bg-accent/30 border border-transparent hover:border-border/10'
+          ? 'border border-[rgba(0,212,255,0.15)]'
+          : 'border border-transparent hover:border-[var(--glass-border)]'
       )}
+      style={{
+        background: isActive ? 'var(--glass-bg)' : 'transparent',
+      }}
       onClick={() => onSelect(conversation.id)}
-      onMouseEnter={() => setShowDelete(true)}
-      onMouseLeave={() => setShowDelete(false)}
     >
-      {/* Active state indicator pill */}
+      {/* Active indicator — left bar (cyan glow in Holo, white in Focus) */}
       {isActive && (
-        <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-6 rounded-r-full bg-gradient-to-b from-cyan-500 to-indigo-500 shadow-[0_0_10px_rgba(6,182,212,0.4)] animate-in fade-in zoom-in-50 duration-300" />
+        <span
+          className="absolute left-0 top-2 bottom-2 w-0.5 rounded-r-full"
+          style={{
+            background: 'var(--cyan)',
+            boxShadow: '0 0 8px var(--cyan-dim)',
+          }}
+        />
       )}
 
-      <div className="flex-1 min-w-0 z-10">
+      {/* Icon container */}
+      <div
+        className="flex items-center justify-center w-7 h-7 rounded shrink-0"
+        style={{
+          border: `1px solid ${isActive ? 'rgba(0,212,255,0.15)' : 'var(--glass-border)'}`,
+          background: 'rgba(0,212,255,0.04)',
+        }}
+      >
+        <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+          {isDefault ? '✦' : '▸'}
+        </span>
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 min-w-0">
         {isEditing ? (
           <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
             <input
@@ -85,61 +105,59 @@ export function ConversationItem({
               value={editTitle}
               onChange={(e) => setEditTitle(e.target.value)}
               onKeyDown={handleKeyDown}
-              className="flex-1 h-7 text-xs bg-background/50 border border-primary/45 rounded px-2 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary shadow-inner text-foreground"
+              className="flex-1 h-6 text-xs rounded px-2 focus:outline-none"
+              style={{
+                background: 'var(--glass-bg)',
+                border: '1px solid var(--cyan)',
+                color: 'var(--text-primary)',
+                fontFamily: 'var(--font-body)',
+              }}
               autoFocus
             />
             <button
               onClick={handleRename}
-              className="p-1 hover:bg-emerald-500/20 text-emerald-500 rounded-md transition-colors"
+              className="p-0.5 rounded transition-colors"
+              style={{ color: 'var(--emerald)' }}
               title="确定"
             >
-              <Check className="h-3.5 w-3.5" />
+              <Check className="h-3 w-3" />
             </button>
             <button
               onClick={() => {
                 setIsEditing(false);
                 setEditTitle(conversation.title);
               }}
-              className="p-1 hover:bg-rose-500/20 text-rose-500 rounded-md transition-colors"
+              className="p-0.5 rounded transition-colors"
+              style={{ color: 'var(--rose)' }}
               title="取消"
             >
-              <X className="h-3.5 w-3.5" />
+              <X className="h-3 w-3" />
             </button>
           </div>
         ) : (
           <div className="space-y-0.5">
-            <div className="flex items-center gap-2">
-              <p
-                className={cn(
-                  'text-sm font-medium truncate tracking-tight transition-colors duration-200',
-                  isActive
-                    ? 'text-foreground font-semibold'
-                    : 'text-foreground/80 group-hover:text-foreground'
-                )}
-              >
-                {conversation.title}
-              </p>
-
-              {/* Premium indicator badge for the Default Chat */}
-              {isDefault && (
-                <span className="flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-gradient-to-r from-cyan-500/10 to-indigo-500/10 text-cyan-400 border border-cyan-500/20 shadow-[0_0_8px_rgba(6,182,212,0.05)]">
-                  <Sparkles className="h-2.5 w-2.5 animate-pulse" />
-                  <span>核心</span>
-                  <span className="relative flex h-1.5 w-1.5">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-cyan-500"></span>
-                  </span>
-                </span>
-              )}
-            </div>
-
-            <p className="text-[11px] text-muted-foreground/75 font-mono tracking-tight flex items-center gap-1.5">
+            <p
+              className="text-xs font-medium truncate transition-colors duration-200"
+              style={{
+                color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
+              }}
+            >
+              {conversation.title}
+            </p>
+            <p
+              className="text-[10px] flex items-center gap-1.5"
+              style={{
+                fontFamily: 'var(--font-data)',
+                letterSpacing: 0.5,
+                color: 'var(--text-tertiary)',
+              }}
+            >
               <span>{formatRelativeTime(conversation.updatedAt)}</span>
-              <span className="text-muted-foreground/30">•</span>
-              <span>{conversation.messageCount} 消息</span>
+              <span style={{ color: 'var(--glass-border)' }}>·</span>
+              <span>{conversation.messageCount} msgs</span>
               {(conversation.promptTokens ?? 0) + (conversation.completionTokens ?? 0) > 0 && (
                 <>
-                  <span className="text-muted-foreground/30">•</span>
+                  <span style={{ color: 'var(--glass-border)' }}>·</span>
                   <span>
                     {formatTokenCount(
                       (conversation.promptTokens ?? 0) + (conversation.completionTokens ?? 0)
@@ -152,26 +170,43 @@ export function ConversationItem({
         )}
       </div>
 
-      {/* Modern floating operations menu */}
-      {!isEditing && showDelete && (
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all duration-300 z-10 scale-95 group-hover:scale-100 pr-0.5">
+      {/* Action buttons — visible on hover */}
+      {!isEditing && (
+        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
           <button
             onClick={(e) => {
               e.stopPropagation();
               setIsEditing(true);
             }}
-            className="p-1.5 hover:bg-background/80 dark:hover:bg-zinc-800 text-muted-foreground hover:text-foreground rounded-full shadow-sm hover:shadow-md border border-transparent hover:border-border/30 transition-all duration-200 cursor-pointer"
+            className="p-1 rounded transition-colors"
+            style={{
+              color: 'var(--text-tertiary)',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = 'var(--cyan)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = 'var(--text-tertiary)';
+            }}
             title="重命名"
           >
             <Pencil className="h-3 w-3" />
           </button>
-
           <button
             onClick={(e) => {
               e.stopPropagation();
               onDelete(conversation.id);
             }}
-            className="p-1.5 hover:bg-rose-500/15 dark:hover:bg-rose-950/30 text-muted-foreground hover:text-rose-500 rounded-full shadow-sm hover:shadow-md border border-transparent hover:border-rose-500/20 transition-all duration-200 cursor-pointer"
+            className="p-1 rounded transition-colors"
+            style={{
+              color: 'var(--text-tertiary)',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = 'var(--rose)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = 'var(--text-tertiary)';
+            }}
             title="删除"
           >
             <Trash2 className="h-3 w-3" />

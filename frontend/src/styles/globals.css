@@ -3,6 +3,9 @@
 @import "streamdown/styles.css";
 @source "../../node_modules/streamdown/dist/*.js";
 
+/* ============================================================
+   TAILWIND THEME — shadcn-compatible base tokens (OKLCH)
+   ============================================================ */
 @theme {
   --color-background: oklch(0.145 0 0);
   --color-foreground: oklch(0.93 0 0);
@@ -28,27 +31,319 @@
   --radius-md: 0.375rem;
   --radius-lg: 0.5rem;
   --radius-xl: 0.75rem;
+
+  /* HUD font families */
+  --font-hud: "Chakra Petch", sans-serif;
+  --font-body: "Exo 2", sans-serif;
+  --font-data: "Share Tech Mono", monospace;
+  --font-code: "JetBrains Mono", "Fira Code", monospace;
 }
+
+/* ============================================================
+   HUD DESIGN TOKENS — Dual-mode system (Holo / Focus)
+   ============================================================
+   Switch mode via: <html class="theme-holo"> or <html class="theme-focus">
+   Components reference these tokens for mode-aware styling.
+   ============================================================ */
+
+:root {
+  /* — Background — */
+  --bg-void: #04060e;
+  --bg-deep: #080c18;
+
+  /* — Accent palette — */
+  --cyan: #00d4ff;
+  --cyan-mid: #0099cc;
+  --cyan-dim: rgba(0, 212, 255, 0.4);
+  --cyan-glow: rgba(0, 212, 255, 0.15);
+  --cyan-subtle: rgba(0, 212, 255, 0.06);
+
+  --violet: #a78bfa;
+  --violet-deep: #7c3aed;
+  --violet-glow: rgba(167, 139, 250, 0.15);
+  --violet-dim: rgba(167, 139, 250, 0.4);
+
+  --amber: #ffb800;
+  --amber-glow: rgba(255, 184, 0, 0.15);
+
+  --emerald: #00e68a;
+  --emerald-glow: rgba(0, 230, 138, 0.15);
+
+  --rose: #ff3d5a;
+  --rose-glow: rgba(255, 61, 90, 0.15);
+
+  --blue: #3d7aff;
+
+  /* — Text hierarchy — */
+  --text-primary: rgba(255, 255, 255, 0.92);
+  --text-secondary: rgba(255, 255, 255, 0.5);
+  --text-tertiary: rgba(255, 255, 255, 0.25);
+  --text-cyan: var(--cyan);
+
+  /* — Glass panels — */
+  --glass-bg: rgba(8, 12, 24, 0.7);
+  --glass-border: rgba(0, 212, 255, 0.08);
+  --glass-border-hover: rgba(0, 212, 255, 0.2);
+
+  /* — Border radius — */
+  --r-sm: 4px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-xl: 16px;
+
+  /* — Shadows (Holo mode defaults) — */
+  --shadow-glow-cyan: 0 0 12px var(--cyan-glow);
+  --shadow-glow-violet: 0 0 12px var(--violet-glow);
+  --shadow-glow-strong: 0 0 24px var(--cyan-glow), inset 0 0 24px rgba(0, 212, 255, 0.02);
+}
+
+/* — Focus Mode Overrides — */
+.theme-focus {
+  --bg-void: #050810;
+  --glass-bg: rgba(8, 12, 24, 0.9);
+  --glass-border: rgba(255, 255, 255, 0.06);
+  --glass-border-hover: rgba(255, 255, 255, 0.1);
+  --cyan-glow: rgba(0, 212, 255, 0.04);
+  --violet-glow: rgba(167, 139, 250, 0.04);
+  --shadow-glow-cyan: none;
+  --shadow-glow-violet: none;
+  --shadow-glow-strong: none;
+}
+
+/* ============================================================
+   GLOBAL RESETS & BASE
+   ============================================================ */
 
 * {
   border-color: var(--color-border);
 }
 
 body {
-  background-color: var(--color-background);
-  color: var(--color-foreground);
-  font-family:
-    "Inter",
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    Roboto,
-    sans-serif;
+  background-color: var(--bg-void);
+  color: var(--text-primary);
+  font-family: "Exo 2", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Markdown styling for AI responses */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ============================================================
+   GRID BACKGROUND — Holo only
+   ============================================================ */
+
+.grid-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: radial-gradient(circle, rgba(0, 212, 255, 0.04) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+.theme-focus .grid-bg {
+  display: none;
+}
+
+/* ============================================================
+   SCANLINE OVERLAY — Holo only
+   ============================================================ */
+
+.scanline-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.scanline-overlay::before {
+  content: "";
+  position: absolute;
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(0, 212, 255, 0.06),
+    rgba(0, 212, 255, 0.12),
+    rgba(0, 212, 255, 0.06),
+    transparent
+  );
+  animation: scanMove 8s linear infinite;
+  box-shadow: 0 0 30px 6px rgba(0, 212, 255, 0.02);
+}
+
+.theme-focus .scanline-overlay::before {
+  display: none;
+}
+
+/* ============================================================
+   HUD CORNERS — Holo only
+   ============================================================ */
+
+.hud-corner {
+  position: fixed;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.hud-corner svg {
+  width: 100%;
+  height: 100%;
+}
+
+.hud-corner.tl { top: 0; left: 0; }
+.hud-corner.tr { top: 0; right: 0; transform: scaleX(-1); }
+.hud-corner.bl { bottom: 0; left: 0; transform: scaleY(-1); }
+.hud-corner.br { bottom: 0; right: 0; transform: scale(-1); }
+
+.theme-focus .hud-corner {
+  display: none;
+}
+
+/* ============================================================
+   ANIMATIONS
+   ============================================================ */
+
+@keyframes scanMove {
+  0% { top: -1px; }
+  100% { top: 100vh; }
+}
+
+@keyframes logoPulse {
+  0%, 100% { box-shadow: 0 0 8px var(--cyan-glow); }
+  50% { box-shadow: 0 0 16px var(--cyan-glow), 0 0 24px rgba(0, 212, 255, 0.05); }
+}
+
+@keyframes ctxPulse {
+  0%, 100% { transform: scale(1); opacity: 0.6; }
+  50% { transform: scale(1.6); opacity: 0; }
+}
+
+@keyframes railPulse {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
+}
+
+@keyframes waveBar {
+  0%, 100% { transform: scaleY(0.4); opacity: 0.4; }
+  50% { transform: scaleY(1); opacity: 1; }
+}
+
+@keyframes cursorBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+@keyframes msgFadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes menuSlideUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes toastOut {
+  to { opacity: 0; transform: translateX(20px); }
+}
+
+@keyframes staggerFadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes ringRotate {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes overlayFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pulse-slow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.8; }
+}
+
+.animate-spin-slow {
+  animation: spin-slow 8s linear infinite;
+}
+
+.animate-pulse-slow {
+  animation: pulse-slow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* ============================================================
+   GLASSMORPHISM UTILITY CLASSES
+   ============================================================ */
+
+.glass {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(12px);
+}
+
+.glass-hover:hover {
+  border-color: var(--glass-border-hover);
+}
+
+.theme-holo .glass-hover:hover {
+  box-shadow: var(--shadow-glow-cyan);
+}
+
+.glass-card {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
+  backdrop-filter: blur(16px);
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+.glass-card:hover {
+  border-color: var(--glass-border-hover);
+}
+
+.theme-holo .glass-card:hover {
+  box-shadow: var(--shadow-glow-cyan);
+}
+
+/* ============================================================
+   HUD LABEL — uppercase instrument-style labels
+   ============================================================ */
+
+.hud-label {
+  font-family: var(--font-hud);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+/* ============================================================
+   MARKDOWN BODY — AI response formatting
+   ============================================================ */
+
 .markdown-body {
   line-height: 1.6;
 }
@@ -77,6 +372,7 @@ body {
 
 .markdown-body strong {
   font-weight: 600;
+  color: var(--text-primary);
 }
 
 .markdown-body em {
@@ -84,11 +380,12 @@ body {
 }
 
 .markdown-body code {
-  background-color: rgba(255, 255, 255, 0.1);
+  background-color: rgba(0, 212, 255, 0.08);
   padding: 0.125rem 0.375rem;
-  border-radius: 0.25rem;
+  border-radius: 3px;
   font-size: 0.875em;
-  font-family: "JetBrains Mono", "Fira Code", monospace;
+  font-family: var(--font-data);
+  color: var(--cyan-dim);
 }
 
 .markdown-body pre {
@@ -106,7 +403,7 @@ body {
 }
 
 .markdown-body blockquote {
-  border-left: 3px solid var(--color-primary);
+  border-left: 3px solid var(--cyan);
   padding-left: 0.75rem;
   margin: 0.5rem 0;
   opacity: 0.9;
@@ -120,21 +417,13 @@ body {
   margin: 0.75rem 0 0.25rem;
 }
 
-.markdown-body h1 {
-  font-size: 1.25em;
-}
-
-.markdown-body h2 {
-  font-size: 1.125em;
-}
-
-.markdown-body h3 {
-  font-size: 1em;
-}
+.markdown-body h1 { font-size: 1.25em; }
+.markdown-body h2 { font-size: 1.125em; }
+.markdown-body h3 { font-size: 1em; }
 
 .markdown-body hr {
   border: none;
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid var(--glass-border);
   margin: 0.75rem 0;
 }
 
@@ -146,7 +435,7 @@ body {
 
 .markdown-body th,
 .markdown-body td {
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--glass-border);
   padding: 0.25rem 0.5rem;
   text-align: left;
 }
@@ -157,7 +446,7 @@ body {
 }
 
 .markdown-body a {
-  color: var(--color-primary);
+  color: var(--cyan);
   text-decoration: underline;
   text-underline-offset: 2px;
 }
@@ -166,37 +455,13 @@ body {
   opacity: 0.8;
 }
 
-/* Custom premium animations */
-@keyframes spin-slow {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
+/* ============================================================
+   SCROLLBAR
+   ============================================================ */
 
-.animate-spin-slow {
-  animation: spin-slow 8s linear infinite;
-}
-
-@keyframes pulse-slow {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.8;
-  }
-}
-
-.animate-pulse-slow {
-  animation: pulse-slow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-
-/* Premium Global Scrollbar Styling */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 4px;
+  height: 4px;
 }
 
 ::-webkit-scrollbar-track {
@@ -204,22 +469,15 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(156, 163, 175, 0.15);
+  background: rgba(0, 212, 255, 0.1);
   border-radius: 9999px;
-  border: 1px solid transparent;
-  background-clip: padding-box;
-  transition: background-color 0.2s ease;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(156, 163, 175, 0.35);
-  border: 1px solid transparent;
-  background-clip: padding-box;
+  background: rgba(0, 212, 255, 0.2);
 }
 
-/* Firefox scrollbar compatibility */
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(156, 163, 175, 0.15) transparent;
+  scrollbar-color: rgba(0, 212, 255, 0.1) transparent;
 }
-

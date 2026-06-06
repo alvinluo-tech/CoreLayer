@@ -10,6 +10,9 @@ import { DataPanelContainer } from '@/components/data-panel/DataPanelContainer';
 import { AssistantMirror } from '@/components/voice/AssistantMirror';
 import { ControlCenter } from '@/components/control-center/ControlCenter';
 import type { ControlPage } from '@/components/control-center/ControlCenter';
+import { RightPanel } from '@/components/right-panel/RightPanel';
+import { ToastContainer } from '@/components/ui/ToastContainer';
+import { ShortcutsOverlay } from '@/components/ui/ShortcutsOverlay';
 import { logger } from '@/lib/logger';
 import { CommandPalette } from '@/components/palette/CommandPalette';
 import { useChat } from '@/hooks/useChat';
@@ -588,33 +591,80 @@ function MainApp() {
   }
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-background">
+    <div
+      className="flex flex-col h-screen overflow-hidden"
+      style={{ background: 'var(--bg-void)' }}
+    >
+      {/* Background effects — rendered behind everything */}
+      <div className="grid-bg" />
+      <div className="scanline-overlay" />
+
+      {/* HUD corner decorations — Holo only (hidden via CSS in Focus mode) */}
+      <div className="hud-corner tl" style={{ width: 60, height: 60 }}>
+        <svg viewBox="0 0 60 60" fill="none">
+          <path d="M0 20 L0 0 L20 0" stroke="rgba(0,212,255,0.15)" strokeWidth="1" />
+        </svg>
+      </div>
+      <div className="hud-corner tr" style={{ width: 60, height: 60 }}>
+        <svg viewBox="0 0 60 60" fill="none">
+          <path d="M0 20 L0 0 L20 0" stroke="rgba(0,212,255,0.15)" strokeWidth="1" />
+        </svg>
+      </div>
+      <div className="hud-corner bl" style={{ width: 60, height: 60 }}>
+        <svg viewBox="0 0 60 60" fill="none">
+          <path d="M0 20 L0 0 L20 0" stroke="rgba(0,212,255,0.15)" strokeWidth="1" />
+        </svg>
+      </div>
+      <div className="hud-corner br" style={{ width: 60, height: 60 }}>
+        <svg viewBox="0 0 60 60" fill="none">
+          <path d="M0 20 L0 0 L20 0" stroke="rgba(0,212,255,0.15)" strokeWidth="1" />
+        </svg>
+      </div>
+
       <TitleBar />
-      <div className="flex flex-1 overflow-hidden">
-        {/* Left sidebar */}
-        <aside className="w-80 border-r border-border flex flex-col overflow-hidden">
-          <header className="p-4 border-b border-border flex items-center justify-between">
-            <div>
-              <h1 className="text-xl font-bold tracking-tight">Jarvis</h1>
-              <p className="text-sm text-muted-foreground">Personal Command Center</p>
-            </div>
+
+      <div className="flex flex-1 overflow-hidden relative z-10">
+        {/* Left sidebar — glass panel */}
+        <aside
+          className="w-[260px] flex flex-col overflow-hidden"
+          style={{
+            background: 'rgba(4,6,14,0.6)',
+            backdropFilter: 'blur(12px)',
+            borderRight: '1px solid var(--glass-border)',
+          }}
+        >
+          {/* Sidebar header */}
+          <div
+            className="px-4 py-3 flex items-center justify-end relative"
+            style={{ borderBottom: '1px solid var(--glass-border)' }}
+          >
             <Button
               variant="ghost"
               size="icon"
               onClick={() => setCurrentView('control-center')}
-              className="h-8 w-8"
+              className="h-7 w-7"
+              style={{
+                color: 'var(--text-secondary)',
+                border: '1px solid var(--glass-border)',
+              }}
             >
-              <Settings className="h-4 w-4" />
+              <Settings className="h-3.5 w-3.5" />
             </Button>
-          </header>
+            {/* Bottom gradient line */}
+            <div
+              className="absolute bottom-0 left-3.5 right-3.5 h-px"
+              style={{
+                background: 'linear-gradient(90deg, transparent, var(--cyan-glow), transparent)',
+              }}
+            />
+          </div>
 
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            {/* Conversation list */}
+          {/* Sidebar content */}
+          <div className="flex-1 overflow-y-auto p-3 space-y-3">
             <ConversationList />
 
-            <Separator />
+            <Separator variant="gradient" />
 
-            {/* Voice control */}
             <VoicePanel
               state={panelState}
               transcript={panelTranscript}
@@ -629,7 +679,7 @@ function MainApp() {
               onStop={voiceConv.stopConversation}
             />
 
-            <Separator />
+            <Separator variant="gradient" />
 
             {/* Module views */}
             <TodayView />
@@ -638,8 +688,8 @@ function MainApp() {
           </div>
         </aside>
 
-        {/* Main area - Chat */}
-        <main className="flex-1 flex flex-col overflow-hidden">
+        {/* Main area — Chat */}
+        <main className="flex-1 flex flex-col overflow-hidden relative">
           <ChatPanel
             messages={messages}
             onSend={sendMessage}
@@ -656,6 +706,18 @@ function MainApp() {
             isVoiceStreaming={voiceConv.state === 'streaming'}
           />
         </main>
+
+        {/* Right panel — session, context, actions */}
+        <aside
+          className="w-[340px] flex flex-col overflow-hidden"
+          style={{
+            background: 'rgba(4,6,14,0.6)',
+            backdropFilter: 'blur(12px)',
+            borderLeft: '1px solid var(--glass-border)',
+          }}
+        >
+          <RightPanel />
+        </aside>
       </div>
 
       {/* Command Palette (Alt+Space) */}
@@ -664,9 +726,6 @@ function MainApp() {
         onNavigate={handlePaletteNavigate}
         onVoiceToggle={handleVoiceToggle}
       />
-
-      {/* Dynamic Data Panel */}
-      <DataPanelContainer />
 
       {/* Futuristic Sci-Fi Voice Overlay */}
       {isMainWindowFocused && (
@@ -687,6 +746,58 @@ function MainApp() {
           layoutMode="centered"
         />
       )}
+
+      {/* Toast notifications */}
+      <ToastContainer />
+
+      {/* Keyboard shortcuts overlay */}
+      <ShortcutsOverlay />
+
+      {/* Bottom status bar */}
+      <div
+        style={{
+          position: 'fixed',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          zIndex: 10,
+          height: 28,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '0 20px',
+          background: 'rgba(4,6,14,0.85)',
+          backdropFilter: 'blur(12px)',
+          borderTop: '1px solid var(--glass-border)',
+          fontFamily: 'var(--font-data)',
+          fontSize: 9,
+          color: 'var(--text-tertiary)',
+          letterSpacing: 1,
+        }}
+      >
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 1,
+            background: 'linear-gradient(90deg, transparent, var(--cyan-glow), transparent)',
+          }}
+        />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <span>JARVIS v0.1.0</span>
+          <span>·</span>
+          <span>TAURI v2</span>
+          <span>·</span>
+          <span>REACT 19</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <span>ENCRYPTED</span>
+          <span>·</span>
+          <span>SESSION: {activeConversationId?.slice(0, 4).toUpperCase() ?? '—'}</span>
+        </div>
+      </div>
     </div>
   );
 }

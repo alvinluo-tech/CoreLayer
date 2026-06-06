@@ -705,10 +705,15 @@ export function useVoiceFSM(options: UseVoiceFSMOptions) {
 
   // --- Window blur/focus ---
   const handleWindowBlur = useCallback(() => {
+    if (state !== 'idle' && state !== 'error') {
+      logger.debug('[VoiceFSM] Ignoring window blur during active voice session');
+      return;
+    }
+
     if (asr.isListening) {
       asr.stop();
     }
-  }, [asr]);
+  }, [asr, state]);
 
   const handleWindowFocus = useCallback(() => {
     if (state === 'listening') {
