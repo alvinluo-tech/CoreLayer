@@ -24,8 +24,6 @@ import { useTaskStore } from '@/stores/taskStore';
 import { useArticleStore } from '@/stores/articleStore';
 import { useReviewStore } from '@/stores/reviewStore';
 import { Separator } from '@/components/ui/separator';
-import { Button } from '@/components/ui/button';
-import { Settings } from 'lucide-react';
 import { TitleBar } from '@/components/layout/TitleBar';
 
 const isAssistantWindow =
@@ -621,7 +619,7 @@ function MainApp() {
         </svg>
       </div>
 
-      <TitleBar />
+      <TitleBar onSettings={() => setCurrentView('control-center')} />
 
       <div className="flex flex-1 overflow-hidden relative z-10">
         {/* Left sidebar — glass panel */}
@@ -635,21 +633,9 @@ function MainApp() {
         >
           {/* Sidebar header */}
           <div
-            className="px-4 py-3 flex items-center justify-end relative"
+            className="px-4 py-3 relative"
             style={{ borderBottom: '1px solid var(--glass-border)' }}
           >
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setCurrentView('control-center')}
-              className="h-7 w-7"
-              style={{
-                color: 'var(--text-secondary)',
-                border: '1px solid var(--glass-border)',
-              }}
-            >
-              <Settings className="h-3.5 w-3.5" />
-            </Button>
             {/* Bottom gradient line */}
             <div
               className="absolute bottom-0 left-3.5 right-3.5 h-px"

@@ -1,7 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { Minus, Square, X, Copy } from 'lucide-react';
+import { Minus, Square, X, Copy, Settings } from 'lucide-react';
 
-export function TitleBar() {
+interface TitleBarProps {
+  onSettings?: () => void;
+}
+
+export function TitleBar({ onSettings }: TitleBarProps) {
   const [isMaximized, setIsMaximized] = useState(false);
   const [clock, setClock] = useState('');
 
@@ -132,18 +136,16 @@ export function TitleBar() {
         className="flex items-center gap-3.5 px-5 h-full select-none cursor-default"
       >
         {/* Logo icon */}
-        <div
-          className="flex items-center justify-center w-7 h-7 rounded-full"
+        <img
+          src="/src/assets/icon.png"
+          alt="Jarvis"
+          className="w-7 h-7 shrink-0"
           style={{
-            border: '1px solid var(--cyan-dim)',
+            borderRadius: '50%',
             animation: 'logoPulse 3s ease-in-out infinite',
           }}
-        >
-          <div
-            className="w-2.5 h-2.5 rounded-full"
-            style={{ background: 'var(--cyan)', boxShadow: '0 0 12px var(--cyan-dim)' }}
-          />
-        </div>
+          draggable={false}
+        />
 
         {/* App name */}
         <span
@@ -158,28 +160,6 @@ export function TitleBar() {
         >
           JARVIS
         </span>
-
-        {/* User avatar */}
-        <div
-          className="flex items-center justify-center w-6 h-6 rounded-full shrink-0"
-          style={{
-            border: '1px solid var(--cyan-dim)',
-            background: 'rgba(0,212,255,0.08)',
-          }}
-          title="Alvin"
-        >
-          <span
-            style={{
-              fontFamily: 'var(--font-hud)',
-              fontSize: 10,
-              fontWeight: 700,
-              color: 'var(--cyan)',
-              letterSpacing: 0,
-            }}
-          >
-            A
-          </span>
-        </div>
 
         {/* Separator */}
         <div
@@ -265,6 +245,35 @@ export function TitleBar() {
             background: 'linear-gradient(180deg, transparent, var(--glass-border), transparent)',
           }}
         />
+
+        {/* Settings button */}
+        {onSettings && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onSettings();
+            }}
+            className="flex items-center justify-center w-7 h-7 rounded transition-all duration-150"
+            style={{
+              border: '1px solid var(--glass-border)',
+              background: 'var(--glass-bg)',
+              color: 'var(--text-secondary)',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = 'var(--cyan)';
+              e.currentTarget.style.color = 'var(--cyan)';
+              e.currentTarget.style.boxShadow = '0 0 12px var(--cyan-glow)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = 'var(--glass-border)';
+              e.currentTarget.style.color = 'var(--text-secondary)';
+              e.currentTarget.style.boxShadow = 'none';
+            }}
+            title="Settings"
+          >
+            <Settings className="h-3.5 w-3.5 stroke-[1.5]" />
+          </button>
+        )}
 
         {/* Window controls */}
         <button
