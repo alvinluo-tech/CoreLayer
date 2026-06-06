@@ -573,6 +573,12 @@ export interface ConversationOptions {
   modelOverride?: string;
   providerOverride?: string;
   systemPromptOverride?: string;
+  /** Runtime context for tool approval and audit */
+  runtimeContext?: {
+    runId?: string;
+    projectId?: string;
+    mode?: string;
+  };
 }
 
 /**
@@ -784,7 +790,12 @@ export async function streamMessageInConversation(
 
   if (isAiConfigured()) {
     try {
-      const rawTools = wrapToolsForAI(getAllTools(), conversationId);
+      const rawTools = wrapToolsForAI(getAllTools(), {
+        conversationId,
+        runId: options?.runtimeContext?.runId,
+        projectId: options?.runtimeContext?.projectId,
+        mode: options?.runtimeContext?.mode as "chat" | "voice" | "tick" | "scheduled" | "workflow",
+      });
       const { messages: aiMessages, tools: aiTools } = context.cacheEnabled
         ? applyCacheControl(context.messages, rawTools)
         : { messages: context.messages, tools: rawTools };
@@ -951,6 +962,7 @@ export async function streamChat(
   conversationId?: string,
   onToolEvent?: (event: { type: 'tool-call' | 'tool-result'; name: string; toolCallId: string; args?: unknown; result?: unknown }) => void | Promise<void>,
   abortController?: AbortController,
+  runtimeContext?: { runId?: string; projectId?: string; mode?: string },
 ): Promise<{ stream: ReturnType<typeof streamText>; abortController: AbortController }> {
   try {
     const selectedModel = selectModelForConversation(messages[0]?.content?.toString() ?? "", false, 0);
@@ -963,7 +975,12 @@ export async function streamChat(
     // streamChat doesn't have history or memories — build minimal context
     const context = await builder.build([], []);
 
-    const rawTools = wrapToolsForAI(getAllTools(), conversationId);
+    const rawTools = wrapToolsForAI(getAllTools(), {
+      conversationId,
+      runId: runtimeContext?.runId,
+      projectId: runtimeContext?.projectId,
+      mode: runtimeContext?.mode as "chat" | "voice" | "tick" | "scheduled" | "workflow",
+    });
     const aiTools = context.cacheEnabled
       ? applyCacheControl([], rawTools).tools
       : rawTools;

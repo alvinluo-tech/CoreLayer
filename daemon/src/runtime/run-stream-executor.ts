@@ -164,6 +164,11 @@ export async function runStreamTurn(
           }
         },
         abortController,
+        {
+          runId: run.id,
+          projectId: request.projectId,
+          mode: request.mode,
+        },
       );
     } catch (err) {
       clearTimeout(watchdogId);

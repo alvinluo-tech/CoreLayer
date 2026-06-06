@@ -19,10 +19,7 @@
 - [x] Voice streaming bypasses AgentRun runtime
 - [x] No `run-stream-executor.ts`
 - [x] No `task-status.ts` (status normalization)
-- [x] Approval system lacks idempotency/expiration/restart
-- [ ] Phase 19 not implemented
-- [ ] Phase 20 not implemented
-
+- [x] Approval system lacks idempotency/expiration/
 ---
 
 ## Phase 1: Streaming Runtime Unification
