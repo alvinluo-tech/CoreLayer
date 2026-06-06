@@ -1,14 +1,11 @@
-﻿import { Hono } from "hono";
+import { Hono } from "hono";
 import { stream } from "hono/streaming";
-import { streamChat } from "../orchestrator/conversation.js";
 import { ContextBuilder } from "../orchestrator/context-builder.js";
 import { getRepositories } from "../db/factory.js";
 import { configManager } from "../config/config-manager.js";
 import { apiError, extractErrorMessage, classifyError, logError } from "../utils/errors.js";
-import { normalizeStream } from "./sse-normalizer.js";
-import { withStreamTimeout } from "./stream-timeout.js";
 import { runTurn } from "../runtime/run-executor.js";
-import type { ModelMessage } from "ai";
+import { runStreamTurn } from "../runtime/run-stream-executor.js";
 
 const chatRoutes = new Hono();
 
@@ -84,41 +81,64 @@ chatRoutes.post("/", async (c) => {
 
 /**
  * Streaming chat endpoint.
- * Accepts { messages: ModelMessage[] } and returns SSE stream.
- * Uses Vercel AI SDK streamText with automatic tool calling.
+ * Accepts { message: string, conversationId?: string } and returns SSE stream.
+ * Routes through the AgentRun runtime backbone for full lifecycle tracking.
  */
 chatRoutes.post("/stream", async (c) => {
   try {
-    const body = await c.req.json<{ messages: ModelMessage[] }>();
+    const body = await c.req.json<{
+      message: string;
+      conversationId?: string;
+      workspaceId?: string;
+      projectId?: string;
+      agentId?: string;
+      modelOverride?: string;
+    }>();
 
-    if (!body.messages?.length) {
+    if (!body.message?.trim()) {
       return apiError(c, "消息不能为空", 400);
     }
 
-    // streamChat may throw immediately if the model is not configured
-    const { stream: result, abortController: controller } = await streamChat(body.messages);
+    const defaults = await getDefaultRunContext();
+    const abortController = new AbortController();
+
+    // Propagate client disconnect
+    c.req.raw.signal.addEventListener("abort", () => {
+      logError("[Stream] client disconnected, aborting upstream", new Error("client disconnect"));
+      abortController.abort();
+    });
+
+    const result = await runStreamTurn(
+      {
+        workspaceId: body.workspaceId ?? defaults.workspaceId,
+        projectId: body.projectId,
+        conversationId: body.conversationId,
+        agentId: body.agentId ?? defaults.agentId,
+        mode: "chat",
+        input: body.message,
+        modelOverride: body.modelOverride,
+      },
+      { abortController },
+    );
 
     return stream(c, async (streamWriter) => {
-      // Propagate client disconnect to upstream stream
-      c.req.raw.signal.addEventListener("abort", () => {
-        logError("[Stream] client disconnected, aborting upstream", new Error("client disconnect"));
-        controller.abort();
-      });
-
       try {
-        const timeoutMs = configManager.getStreamTimeout();
-        const normalized = withStreamTimeout(
-          normalizeStream(result.fullStream),
-          timeoutMs,
-        );
-
-        for await (const event of normalized) {
+        for await (const event of result.stream) {
           if (event.type === "delta") {
             await streamWriter.write(`event: delta\ndata: ${JSON.stringify({ text: event.text })}\n\n`);
-          } else if (event.type === "thinking") {
-            await streamWriter.write(`event: thinking\ndata: ${JSON.stringify({ text: event.text })}\n\n`);
+          } else if (event.type === "tool_call") {
+            await streamWriter.write(
+              `event: tool_calls\ndata: ${JSON.stringify({ name: event.toolCall.name, toolCallId: "", input: event.toolCall.args })}\n\n`,
+            );
+          } else if (event.type === "run_completed") {
+            await streamWriter.write(
+              `event: done\ndata: ${JSON.stringify({ fullText: event.result.text, conversationId: event.result.conversationId, runId: result.runId })}\n\n`,
+            );
+          } else if (event.type === "run_failed") {
+            await streamWriter.write(
+              `event: error\ndata: ${JSON.stringify({ error: event.error })}\n\n`,
+            );
           }
-          // tool_calls / tool_result not surfaced here — chat.ts has no onToolEvent
         }
       } catch (streamErr) {
         logError("chat/stream[mid-stream]", streamErr);

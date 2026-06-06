@@ -8,6 +8,27 @@ import { configManager } from "../config/config-manager.js";
 import { normalizeStream } from "./sse-normalizer.js";
 import { withStreamTimeout } from "./stream-timeout.js";
 
+async function getDefaultRunContext(): Promise<{ workspaceId: string; agentId: string }> {
+  const repos = getRepositories();
+  let workspace = await repos.workspaces.getDefault("default");
+  if (!workspace) {
+    workspace = await repos.workspaces.create({
+      ownerId: "default",
+      name: "Personal",
+      description: "Default personal workspace",
+    });
+  }
+  let agent = await repos.agentProfiles.getDefault();
+  if (!agent) {
+    agent = await repos.agentProfiles.create({
+      name: "Jarvis",
+      description: "Default personal assistant agent",
+      isDefault: true,
+    });
+  }
+  return { workspaceId: workspace.id, agentId: agent.id };
+}
+
 const app = new Hono();
 
 // GET / - List all conversations
@@ -138,13 +159,24 @@ app.post("/:id/messages/stream", async (c) => {
   }
 
   try {
+    // Create AgentRun for audit trail
+    const defaults = await getDefaultRunContext();
+    const agentRuns = getRepositories().agentRuns;
+    const run = await agentRuns.create({
+      conversationId: id,
+      workspaceId: defaults.workspaceId,
+      agentId: defaults.agentId,
+      mode: "chat",
+    });
+
     return streamSSE(c, async (sseStream) => {
       const streamAbortController = new AbortController();
 
       // Propagate client disconnect to upstream stream
-      c.req.raw.signal.addEventListener("abort", () => {
+      c.req.raw.signal.addEventListener("abort", async () => {
         logError("[Stream] client disconnected, aborting upstream", new Error("client disconnect"));
         streamAbortController.abort();
+        await agentRuns.updateStatus(run.id, "cancelled");
       });
 
       const streamResult = await streamMessageInConversation(id, body.content, async (event) => {
@@ -204,6 +236,9 @@ app.post("/:id/messages/stream", async (c) => {
           const savedAssistantMsg = await streamResult.saveAssistantMessage(fullText, streamResult.toolCallsLog ?? []);
           const updatedConv = await getRepositories().conversations.getById(id);
 
+          // Mark AgentRun as succeeded
+          await agentRuns.updateStatus(run.id, "succeeded");
+
           // Goal auto-continuation: check if active goals need more work
           const { GoalJudge } = await import("../orchestrator/goal-handler.js");
           const goalJudge = new GoalJudge();
@@ -215,6 +250,7 @@ app.post("/:id/messages/stream", async (c) => {
               userMessage: streamResult.userMessage,
               assistantMessage: savedAssistantMsg,
               conversation: updatedConv,
+              runId: run.id,
               goalContinuation: goalCheck.needsContinuation ? goalCheck.continuationPrompt : undefined,
             }),
           });
@@ -226,18 +262,21 @@ app.post("/:id/messages/stream", async (c) => {
             try {
               const savedAssistantMsg = await streamResult.saveAssistantMessage(fullText, streamResult.toolCallsLog ?? []);
               const updatedConv = await getRepositories().conversations.getById(id);
+              await agentRuns.updateStatus(run.id, "succeeded");
               await sseStream.writeSSE({
                 event: "done",
                 data: JSON.stringify({
                   userMessage: streamResult.userMessage,
                   assistantMessage: savedAssistantMsg,
                   conversation: updatedConv,
+                  runId: run.id,
                   partial: true,
                 }),
               });
             } catch (saveErr) {
               logError("conversations/stream/ai/partial-save", saveErr);
               const message = extractErrorMessage(err);
+              await agentRuns.updateStatus(run.id, "failed", message);
               await sseStream.writeSSE({
                 event: "error",
                 data: JSON.stringify({ error: message }),
@@ -245,6 +284,7 @@ app.post("/:id/messages/stream", async (c) => {
             }
           } else {
             const message = extractErrorMessage(err);
+            await agentRuns.updateStatus(run.id, "failed", message);
             await sseStream.writeSSE({
               event: "error",
               data: JSON.stringify({ error: message }),
@@ -265,17 +305,20 @@ app.post("/:id/messages/stream", async (c) => {
           );
           const updatedConv = await getRepositories().conversations.getById(id);
 
+          await agentRuns.updateStatus(run.id, "succeeded");
           await sseStream.writeSSE({
             event: "done",
             data: JSON.stringify({
               userMessage: streamResult.userMessage,
               assistantMessage: savedAssistantMsg,
               conversation: updatedConv,
+              runId: run.id,
             }),
           });
         } catch (err) {
           logError("conversations/stream/local", err);
           const message = extractErrorMessage(err);
+          await agentRuns.updateStatus(run.id, "failed", message);
           await sseStream.writeSSE({
             event: "error",
             data: JSON.stringify({ error: message }),

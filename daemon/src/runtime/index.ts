@@ -11,10 +11,15 @@ export type {
   AgentRunRequest,
   AgentRunEvent,
   AgentRunResult,
+  AgentStreamRunResult,
   ToolCallTrace,
   ApprovalRequest,
   ArtifactRef,
 } from "./agent-run.js";
+
+// Streaming Agent Run (Phase 1)
+export { runStreamTurn } from "./run-stream-executor.js";
+export type { RunStreamTurnOptions } from "./run-stream-executor.js";
 
 // Approval Manager (Phase 4)
 export { ApprovalManager } from "./approval-manager.js";

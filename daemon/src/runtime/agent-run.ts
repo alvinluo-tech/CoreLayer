@@ -68,13 +68,31 @@ export interface AgentRunResult {
   events: AgentRunEvent[];
 }
 
-// ---- Entry point ----
+// ---- Streaming Result ----
+
+export interface AgentStreamRunResult {
+  runId: string;
+  conversationId: string;
+  stream: AsyncIterable<AgentRunEvent>;
+  abortController: AbortController;
+}
+
+// ---- Entry points ----
 
 /**
- * Unified entry point for all agent execution.
+ * Non-streaming entry point for all agent execution.
  * Defined in run-executor.ts.
  */
 export declare function runTurn(
   request: AgentRunRequest,
   options?: { onEvent?: (event: AgentRunEvent) => void },
 ): Promise<AgentRunResult>;
+
+/**
+ * Streaming entry point for all agent execution.
+ * Defined in run-stream-executor.ts.
+ */
+export declare function runStreamTurn(
+  request: AgentRunRequest,
+  options?: { onEvent?: (event: AgentRunEvent) => void; abortController?: AbortController },
+): Promise<AgentStreamRunResult>;
