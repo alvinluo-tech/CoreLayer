@@ -11,7 +11,14 @@ import { TitleBar } from '@/components/layout/TitleBar';
 import { HudDecorations } from './HudDecorations';
 import { BottomStatusBar } from './BottomStatusBar';
 import { ShellLayout } from './ShellLayout';
+import { GlobalRail } from './GlobalRail';
 import { AssistantView } from './views/AssistantView';
+import { TasksView } from './views/TasksView';
+import { RunsView } from './views/RunsView';
+import { MemoryView } from './views/MemoryView';
+import { ApprovalsView } from './views/ApprovalsView';
+import { ProjectsView } from './views/ProjectsView';
+import { AgentsView } from './views/AgentsView';
 import { logger } from '@/lib/logger';
 import { useChat } from '@/hooks/useChat';
 import { useVoice } from '@/hooks/useVoice';
@@ -522,6 +529,18 @@ export function AppShell() {
 
   const renderMainContent = () => {
     switch (activeView) {
+      case 'tasks':
+        return <TasksView />;
+      case 'runs':
+        return <RunsView />;
+      case 'memory':
+        return <MemoryView />;
+      case 'approvals':
+        return <ApprovalsView />;
+      case 'projects':
+        return <ProjectsView />;
+      case 'agents':
+        return <AgentsView />;
       case 'assistant':
       default:
         return (
@@ -559,7 +578,11 @@ export function AppShell() {
         }}
       />
 
-      <ShellLayout mainSurface={renderMainContent()} inspector={<RightPanel />} />
+      <ShellLayout
+        rail={<GlobalRail activeView={activeView} onViewChange={setActiveView} />}
+        mainSurface={renderMainContent()}
+        inspector={activeView === 'assistant' ? <RightPanel /> : undefined}
+      />
 
       <CommandPalette
         onChat={handlePaletteChat}

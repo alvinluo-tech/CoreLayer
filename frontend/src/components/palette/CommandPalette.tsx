@@ -9,6 +9,11 @@ import {
   Mic,
   Settings,
   HelpCircle,
+  Activity,
+  Brain,
+  ShieldCheck,
+  FolderKanban,
+  Bot,
 } from 'lucide-react';
 
 interface CommandItem {
@@ -97,6 +102,84 @@ export function CommandPalette({ onChat, onNavigate, onVoiceToggle }: CommandPal
         close();
       },
       keywords: ['设置', 'settings', '配置', '控制', 'control'],
+    },
+    // Navigation commands
+    {
+      id: 'nav-assistant',
+      label: 'Go to Assistant',
+      description: '切换到助手对话界面',
+      icon: <MessageSquare className="h-4 w-4" />,
+      action: () => {
+        onNavigate('assistant');
+        close();
+      },
+      keywords: ['assistant', '助手', '对话', 'chat'],
+    },
+    {
+      id: 'nav-tasks',
+      label: 'Go to Tasks',
+      description: '切换到任务中心',
+      icon: <ListTodo className="h-4 w-4" />,
+      action: () => {
+        onNavigate('tasks');
+        close();
+      },
+      keywords: ['tasks', '任务', '待办', 'todo'],
+    },
+    {
+      id: 'nav-runs',
+      label: 'Go to Runs',
+      description: '查看 AgentRun 执行记录',
+      icon: <Activity className="h-4 w-4" />,
+      action: () => {
+        onNavigate('runs');
+        close();
+      },
+      keywords: ['runs', '执行', '运行', 'agent run', '历史'],
+    },
+    {
+      id: 'nav-memory',
+      label: 'Go to Memory',
+      description: '管理记忆',
+      icon: <Brain className="h-4 w-4" />,
+      action: () => {
+        onNavigate('memory');
+        close();
+      },
+      keywords: ['memory', '记忆', 'brain'],
+    },
+    {
+      id: 'nav-approvals',
+      label: 'Go to Approvals',
+      description: '查看待审批工具调用',
+      icon: <ShieldCheck className="h-4 w-4" />,
+      action: () => {
+        onNavigate('approvals');
+        close();
+      },
+      keywords: ['approvals', '审批', 'permission', '权限'],
+    },
+    {
+      id: 'nav-projects',
+      label: 'Go to Projects',
+      description: '管理工作区和项目',
+      icon: <FolderKanban className="h-4 w-4" />,
+      action: () => {
+        onNavigate('projects');
+        close();
+      },
+      keywords: ['projects', '项目', 'workspace', '工作区'],
+    },
+    {
+      id: 'nav-agents',
+      label: 'Go to Agents',
+      description: '查看 Agent 状态和配置',
+      icon: <Bot className="h-4 w-4" />,
+      action: () => {
+        onNavigate('agents');
+        close();
+      },
+      keywords: ['agents', '代理', 'agent', 'bot'],
     },
     {
       id: 'help',
