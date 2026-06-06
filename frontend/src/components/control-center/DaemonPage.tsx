@@ -163,6 +163,37 @@ export function DaemonPage() {
         </div>
       </Card>
 
+      {/* Runtime Info */}
+      <Card className="p-5">
+        <div className="flex items-center gap-3 mb-4">
+          <Server className="h-5 w-5 text-muted-foreground" />
+          <h3 className="text-sm font-medium">运行时信息</h3>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="flex items-center justify-between py-2 px-3 rounded-md bg-muted/50">
+            <span className="text-sm">运行模式</span>
+            <span className="text-sm font-mono">{daemonStatus?.runtimeMode ?? '—'}</span>
+          </div>
+          <div className="flex items-center justify-between py-2 px-3 rounded-md bg-muted/50">
+            <span className="text-sm">PID</span>
+            <span className="text-sm font-mono">{daemonStatus?.pid ?? '—'}</span>
+          </div>
+          <div className="flex items-center justify-between py-2 px-3 rounded-md bg-muted/50">
+            <span className="text-sm">端口</span>
+            <span className="text-sm font-mono">{daemonStatus?.port ?? '—'}</span>
+          </div>
+          <div className="flex items-center justify-between py-2 px-3 rounded-md bg-muted/50">
+            <span className="text-sm">日志路径</span>
+            <span
+              className="text-xs font-mono truncate max-w-48"
+              title={daemonStatus?.logPath ?? ''}
+            >
+              {daemonStatus?.logPath ?? '—'}
+            </span>
+          </div>
+        </div>
+      </Card>
+
       {/* Connection Info */}
       <Card className="p-5">
         <div className="flex items-center gap-3 mb-4">

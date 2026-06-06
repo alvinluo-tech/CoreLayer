@@ -657,6 +657,10 @@ export interface DaemonStatus {
   restartAttempts: number;
   lastHealthCheck: string | null;
   lastError: string | null;
+  pid: number | null;
+  port: number | null;
+  logPath: string | null;
+  runtimeMode: string;
 }
 
 export async function getDaemonStatus(): Promise<DaemonStatus> {
