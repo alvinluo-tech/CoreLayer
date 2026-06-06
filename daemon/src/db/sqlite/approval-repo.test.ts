@@ -291,8 +291,14 @@ describe("ApprovalRequest Repository", () => {
       // Approve one so it's not stale
       await approvalRepo.approve(b.id);
 
-      // Use maxAge=0 to make everything stale
-      const result = await approvalRepo.expireStale(0);
+      // Backdate createdAt so they are clearly stale
+      const past = Date.now() - 600_000;
+      testDb
+        .update(schema.approvalRequests)
+        .set({ createdAt: past })
+        .run();
+
+      const result = await approvalRepo.expireStale(300_000);
       expect(result.count).toBe(1);
       expect(result.ids).toEqual([a.id]);
 
