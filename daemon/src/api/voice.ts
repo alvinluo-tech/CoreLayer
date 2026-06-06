@@ -4,17 +4,34 @@ import { transcribeWithGroq, isAsrAvailable } from "../voice/asr.js";
 import { synthesizeSpeech, isTtsAvailable, type TTSModel } from "../voice/tts.js";
 import { StreamingTTS } from "../voice/streaming-tts.js";
 import { voiceRegistry } from "../voice/providers.js";
-import { streamChat } from "../orchestrator/conversation.js";
 import { getRepositories } from "../db/factory.js";
 import { env } from "../config/env.js";
 import { getProviderConfig } from "../ai/provider.js";
-import { configManager } from "../config/config-manager.js";
 import { extractErrorMessage, logError } from "../utils/errors.js";
-import { normalizeStream } from "./sse-normalizer.js";
-import { withStreamTimeout } from "./stream-timeout.js";
-import type { ModelMessage } from "ai";
+import { runStreamTurn } from "../runtime/run-stream-executor.js";
 
 const voiceRoutes = new Hono();
+
+async function getDefaultRunContext(): Promise<{ workspaceId: string; agentId: string }> {
+  const repos = getRepositories();
+  let workspace = await repos.workspaces.getDefault("default");
+  if (!workspace) {
+    workspace = await repos.workspaces.create({
+      ownerId: "default",
+      name: "Personal",
+      description: "Default personal workspace",
+    });
+  }
+  let agent = await repos.agentProfiles.getDefault();
+  if (!agent) {
+    agent = await repos.agentProfiles.create({
+      name: "Jarvis",
+      description: "Default personal assistant agent",
+      isDefault: true,
+    });
+  }
+  return { workspaceId: workspace.id, agentId: agent.id };
+}
 
 /**
  * POST /api/voice/transcribe
@@ -157,8 +174,9 @@ voiceRoutes.get("/status", (c) => {
 /**
  * POST /api/voice/converse-stream
  * Streaming voice conversation: LLM streams text, frontend handles TTS chunking.
+ * Routes through runStreamTurn for AgentRun lifecycle tracking.
  * Body: { message: string, conversationId?: string }
- * Response: SSE stream with token/done/error events.
+ * Response: SSE stream with delta/tool_calls/tool_result/done/error events.
  */
 voiceRoutes.post("/converse-stream", async (c) => {
   const body = await c.req.json<{ message: string; conversationId?: string }>().catch(() => null);
@@ -166,94 +184,63 @@ voiceRoutes.post("/converse-stream", async (c) => {
     return c.json({ error: "消息不能为空" }, 400);
   }
 
-  const repo = getRepositories().conversations;
-  let conversationId = body.conversationId;
-  let messages: ModelMessage[];
+  const defaults = await getDefaultRunContext();
+  const abortController = new AbortController();
 
+  c.req.raw.signal.addEventListener("abort", () => {
+    logError("[VoiceStream] client disconnected, aborting upstream", new Error("client disconnect"));
+    abortController.abort();
+  });
+
+  let result;
   try {
-    if (!conversationId) {
-      const conv = await repo.create("Voice Chat");
-      conversationId = conv.id;
-    }
-
-    await repo.addMessage(conversationId, {
-      role: "user",
-      content: body.message,
-    });
-
-    const history = await repo.getMessages(conversationId);
-    messages = history.slice(-20).map((msg) => ({
-      role: msg.role as "user" | "assistant",
-      content: msg.content,
-    }));
+    result = await runStreamTurn(
+      {
+        workspaceId: defaults.workspaceId,
+        conversationId: body.conversationId,
+        agentId: defaults.agentId,
+        mode: "voice",
+        input: body.message,
+      },
+      { abortController },
+    );
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return c.json({ error: `Failed to initialize conversation: ${message}` }, 500);
+    return c.json({ error: `Failed to initialize voice run: ${message}` }, 500);
   }
 
   return streamSSE(c, async (sseStream) => {
-    let fullText = "";
-    const toolCallsLog: { name: string; input: unknown; output: unknown }[] = [];
-    const toolCallIndexByCallId = new Map<string, number>();
-
-    const { stream: result, abortController: streamController } = await streamChat(messages, "voice", conversationId, async (event) => {
-      if (event.type === 'tool-call') {
-        const index = toolCallsLog.length;
-        toolCallsLog.push({ name: event.name, input: event.args ?? null, output: null });
-        toolCallIndexByCallId.set(event.toolCallId, index);
-        await sseStream.writeSSE({
-          event: 'tool_calls',
-          data: JSON.stringify({ name: event.name, toolCallId: event.toolCallId, input: event.args }),
-        });
-      } else if (event.type === 'tool-result') {
-        const index = toolCallIndexByCallId.get(event.toolCallId);
-        if (index !== undefined && toolCallsLog[index]) {
-          toolCallsLog[index].output = event.result;
-        }
-        await sseStream.writeSSE({
-          event: 'tool_result',
-          data: JSON.stringify({ name: event.name, toolCallId: event.toolCallId, output: event.result }),
-        });
-      }
-    });
-
-    // Propagate client disconnect to upstream stream
-    c.req.raw.signal.addEventListener("abort", () => {
-      logError("[Stream] client disconnected, aborting upstream", new Error("client disconnect"));
-      streamController.abort();
-    });
-
     try {
-      const timeoutMs = configManager.getStreamTimeout();
-      const normalized = withStreamTimeout(
-        normalizeStream(result.fullStream),
-        timeoutMs,
-      );
-
-      for await (const event of normalized) {
+      for await (const event of result.stream) {
         if (event.type === "delta") {
-          fullText += event.text;
           await sseStream.writeSSE({
             event: "delta",
             data: JSON.stringify({ text: event.text }),
           });
-        } else if (event.type === "thinking") {
+        } else if (event.type === "tool_call") {
+          if (event.toolCall.result !== undefined) {
+            await sseStream.writeSSE({
+              event: "tool_result",
+              data: JSON.stringify({ name: event.toolCall.name, toolCallId: "", output: event.toolCall.result }),
+            });
+          } else {
+            await sseStream.writeSSE({
+              event: "tool_calls",
+              data: JSON.stringify({ name: event.toolCall.name, toolCallId: "", input: event.toolCall.args }),
+            });
+          }
+        } else if (event.type === "run_completed") {
           await sseStream.writeSSE({
-            event: "thinking",
-            data: JSON.stringify({ text: event.text }),
+            event: "done",
+            data: JSON.stringify({ fullText: event.result.text, conversationId: event.result.conversationId, runId: result.runId }),
+          });
+        } else if (event.type === "run_failed") {
+          await sseStream.writeSSE({
+            event: "error",
+            data: JSON.stringify({ error: event.error }),
           });
         }
       }
-
-      await repo.addMessage(conversationId!, {
-        role: "assistant",
-        content: fullText,
-      });
-
-      await sseStream.writeSSE({
-        event: "done",
-        data: JSON.stringify({ fullText, conversationId }),
-      });
     } catch (error) {
       logError("voice/converse-stream", error);
       const message = extractErrorMessage(error);
@@ -268,6 +255,7 @@ voiceRoutes.post("/converse-stream", async (c) => {
 /**
  * POST /api/voice/converse-voice-stream
  * Streaming voice conversation with server-side TTS.
+ * Routes through runStreamTurn for AgentRun lifecycle tracking.
  * LLM streams text → server splits into sentences → synthesizes audio in parallel →
  * SSE events: delta (text), tts_audio (base64 WAV), done, error.
  *
@@ -285,41 +273,36 @@ voiceRoutes.post("/converse-voice-stream", async (c) => {
     return c.json({ error: "消息不能为空" }, 400);
   }
 
-  const repo = getRepositories().conversations;
-  let conversationId = body.conversationId;
-  let messages: ModelMessage[];
+  const defaults = await getDefaultRunContext();
+  const abortController = new AbortController();
 
+  c.req.raw.signal.addEventListener("abort", () => {
+    abortController.abort();
+  });
+
+  let result;
   try {
-    if (!conversationId) {
-      const conv = await repo.create("Voice Chat");
-      conversationId = conv.id;
-    }
-
-    await repo.addMessage(conversationId, {
-      role: "user",
-      content: body.message,
-    });
-
-    const history = await repo.getMessages(conversationId);
-    messages = history.slice(-20).map((msg) => ({
-      role: msg.role as "user" | "assistant",
-      content: msg.content,
-    }));
+    result = await runStreamTurn(
+      {
+        workspaceId: defaults.workspaceId,
+        conversationId: body.conversationId,
+        agentId: defaults.agentId,
+        mode: "voice",
+        input: body.message,
+      },
+      { abortController },
+    );
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return c.json({ error: `Failed to initialize conversation: ${message}` }, 500);
+    return c.json({ error: `Failed to initialize voice run: ${message}` }, 500);
   }
 
   return streamSSE(c, async (sseStream) => {
-    let fullText = "";
-
-    // Initialize streaming TTS
     const streamingTTS = new StreamingTTS({
       voice: body.voice,
       speed: body.speed,
     });
 
-    // Send audio chunks to client as they're synthesized
     streamingTTS.onAudio(async (chunk) => {
       try {
         await sseStream.writeSSE({
@@ -335,60 +318,33 @@ voiceRoutes.post("/converse-voice-stream", async (c) => {
       }
     });
 
-    const { stream: result, abortController: streamController } = await streamChat(
-      messages,
-      "voice",
-      conversationId,
-      async () => {}, // no tool events needed for voice
-    );
-
-    c.req.raw.signal.addEventListener("abort", () => {
-      streamController.abort();
-    });
-
     try {
-      const timeoutMs = configManager.getStreamTimeout();
-      const normalized = withStreamTimeout(
-        normalizeStream(result.fullStream),
-        timeoutMs,
-      );
-
-      for await (const event of normalized) {
+      for await (const event of result.stream) {
         if (event.type === "delta") {
-          fullText += event.text;
           // Feed text to streaming TTS for sentence detection
           streamingTTS.feed(event.text);
-          // Also send text delta for client-side display
           await sseStream.writeSSE({
             event: "delta",
             data: JSON.stringify({ text: event.text }),
           });
-        } else if (event.type === "thinking") {
+        } else if (event.type === "run_completed") {
+          const ttsChunks = await streamingTTS.flush();
           await sseStream.writeSSE({
-            event: "thinking",
-            data: JSON.stringify({ text: event.text }),
+            event: "done",
+            data: JSON.stringify({
+              fullText: event.result.text,
+              conversationId: event.result.conversationId,
+              runId: result.runId,
+              ttsChunks: ttsChunks.length,
+            }),
+          });
+        } else if (event.type === "run_failed") {
+          await sseStream.writeSSE({
+            event: "error",
+            data: JSON.stringify({ error: event.error }),
           });
         }
       }
-
-      // Flush remaining text for TTS
-      const ttsChunks = await streamingTTS.flush();
-
-      // Save assistant message
-      await repo.addMessage(conversationId!, {
-        role: "assistant",
-        content: fullText,
-      });
-
-      // Send done event with metadata
-      await sseStream.writeSSE({
-        event: "done",
-        data: JSON.stringify({
-          fullText,
-          conversationId,
-          ttsChunks: ttsChunks.length,
-        }),
-      });
     } catch (error) {
       logError("voice/converse-voice-stream", error);
       const message = extractErrorMessage(error);
@@ -412,7 +368,7 @@ voiceRoutes.post("/realtime-session", async (c) => {
       apiKey = config.apiKey;
     } catch {
       // Fallback to environment variables
-      apiKey = process.env.OPENAI_API_KEY || env.GROQ_API_KEY || ""; 
+      apiKey = process.env.OPENAI_API_KEY || env.GROQ_API_KEY || "";
     }
 
     if (!apiKey) {
