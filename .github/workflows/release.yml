@@ -9,8 +9,27 @@ permissions:
   contents: write
 
 jobs:
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-22.04
+    outputs:
+      release_id: ${{ steps.create.outputs.id }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Create release
+        id: create
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: 'CoreLayer ${{ github.ref_name }}'
+          body: 'See the assets below to download and install.'
+          draft: true
+          prerelease: false
+
   publish:
     name: Build & Release (${{ matrix.platform }})
+    needs: create-release
     strategy:
       fail-fast: false
       matrix:
@@ -63,7 +82,7 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build and release
+      - name: Build and upload
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -72,10 +91,5 @@ jobs:
           CARGO_HTTP_VERSION: '1.1'
           CARGO_NET_RETRY: '3'
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: 'CoreLayer ${{ github.ref_name }}'
-          releaseBody: 'See the assets below to download and install.'
-          releaseDraft: true
-          prerelease: false
+          releaseId: ${{ needs.create-release.outputs.release_id }}
           args: --target ${{ matrix.target }}
-          upsertRelease: true
