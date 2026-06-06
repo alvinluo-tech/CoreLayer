@@ -14,7 +14,7 @@ import { getRepositories } from "../db/factory.js";
 import { handleMessageInConversation } from "../orchestrator/conversation.js";
 import { logError } from "../utils/errors.js";
 import { TaskGraph } from "../task/task-graph.js";
-import { resolveRunContext } from "./run-context.js";
+import { resolveConversationScope } from "./run-context.js";
 
 export type RunTurnOptions = {
   onEvent?: (event: AgentRunEvent) => void;
@@ -54,10 +54,12 @@ export async function runTurn(
   const { agentRuns, conversations, tasks, agentRunEvents } = getRepositories();
   const events: AgentRunEvent[] = [];
 
-  // Resolve context (workspace, agent defaults)
-  const context = await resolveRunContext({
+  // Resolve context from conversation scope (existing conversation fields win)
+  const context = await resolveConversationScope({
+    conversationId: request.conversationId,
     workspaceId: request.workspaceId,
     projectId: request.projectId,
+    taskId: request.taskId,
     agentId: request.agentId,
   });
 
@@ -147,7 +149,7 @@ export async function runTurn(
         systemPromptOverride: request.systemPromptOverride,
         runtimeContext: {
           runId: run.id,
-          projectId: request.projectId,
+          projectId: context.projectId,
           mode: request.mode,
         },
         onMemoryRead: (memoryIds) => emitAndPersist({ type: "memory_read", memoryIds }),

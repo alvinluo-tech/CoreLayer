@@ -218,6 +218,13 @@ vi.mock("./run-context.js", () => ({
     workspaceId: "ws-test",
     agentId: "agent-test",
   }),
+  resolveConversationScope: vi.fn().mockResolvedValue({
+    conversationId: undefined,
+    workspaceId: "ws-test",
+    projectId: undefined,
+    taskId: undefined,
+    agentId: "agent-test",
+  }),
 }));
 
 const { runStreamTurn } = await import("./run-stream-executor.js");

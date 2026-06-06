@@ -16,7 +16,7 @@ import { normalizeStream } from "../api/sse-normalizer.js";
 import { withStreamTimeout } from "../api/stream-timeout.js";
 import { configManager } from "../config/config-manager.js";
 import { logError } from "../utils/errors.js";
-import { resolveRunContext } from "./run-context.js";
+import { resolveConversationScope } from "./run-context.js";
 import type { ModelMessage } from "ai";
 
 export type RunStreamTurnOptions = {
@@ -46,10 +46,12 @@ export async function runStreamTurn(
 ): Promise<AgentStreamRunResult> {
   const { agentRuns, conversations, agentRunEvents } = getRepositories();
 
-  // Resolve context (workspace, agent defaults)
-  const context = await resolveRunContext({
+  // Resolve context from conversation scope (existing conversation fields win)
+  const context = await resolveConversationScope({
+    conversationId: request.conversationId,
     workspaceId: request.workspaceId,
     projectId: request.projectId,
+    taskId: request.taskId,
     agentId: request.agentId,
   });
 
@@ -163,7 +165,7 @@ export async function runStreamTurn(
         abortController,
         {
           runId: run.id,
-          projectId: request.projectId,
+          projectId: context.projectId,
           mode: request.mode,
         },
       );

@@ -6,27 +6,6 @@ import { apiError, extractErrorMessage, logError } from "../utils/errors.js";
 import { runStreamTurn } from "../runtime/run-stream-executor.js";
 import { runTurn } from "../runtime/run-executor.js";
 
-async function getDefaultRunContext(): Promise<{ workspaceId: string; agentId: string }> {
-  const repos = getRepositories();
-  let workspace = await repos.workspaces.getDefault("default");
-  if (!workspace) {
-    workspace = await repos.workspaces.create({
-      ownerId: "default",
-      name: "Personal",
-      description: "Default personal workspace",
-    });
-  }
-  let agent = await repos.agentProfiles.getDefault();
-  if (!agent) {
-    agent = await repos.agentProfiles.create({
-      name: "Jarvis",
-      description: "Default personal assistant agent",
-      isDefault: true,
-    });
-  }
-  return { workspaceId: workspace.id, agentId: agent.id };
-}
-
 const app = new Hono();
 
 // GET / - List all conversations
@@ -113,13 +92,10 @@ app.post("/:id/messages", async (c) => {
   }
 
   try {
-    const defaults = await getDefaultRunContext();
     const result = await runTurn({
       conversationId: id,
       input: body.content,
       mode: "chat",
-      workspaceId: defaults.workspaceId,
-      agentId: defaults.agentId,
     });
     return c.json({
       userMessage: result.userMessage,
@@ -168,15 +144,12 @@ app.post("/:id/messages/stream", async (c) => {
   }
 
   try {
-    const defaults = await getDefaultRunContext();
     const abortController = new AbortController();
 
     const { runId, stream } = await runStreamTurn({
       conversationId: id,
       input: body.content,
       mode: "chat",
-      workspaceId: defaults.workspaceId,
-      agentId: defaults.agentId,
     }, { abortController });
 
     return streamSSE(c, async (sseStream) => {
