@@ -1,12 +1,11 @@
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { getRepositories } from "../db/factory.js";
-import { handleMessageInConversation, streamMessageInConversation } from "../orchestrator/conversation.js";
+import { handleMessageInConversation } from "../orchestrator/conversation.js";
 import { isGoalCommand, handleGoalCommand } from "../orchestrator/goal-handler.js";
 import { apiError, extractErrorMessage, logError } from "../utils/errors.js";
-import { configManager } from "../config/config-manager.js";
-import { normalizeStream } from "./sse-normalizer.js";
-import { withStreamTimeout } from "./stream-timeout.js";
+import { runStreamTurn } from "../runtime/run-stream-executor.js";
+import { runTurn } from "../runtime/run-executor.js";
 
 async function getDefaultRunContext(): Promise<{ workspaceId: string; agentId: string }> {
   const repos = getRepositories();
@@ -115,8 +114,19 @@ app.post("/:id/messages", async (c) => {
   }
 
   try {
-    const result = await handleMessageInConversation(id, body.content);
-    return c.json(result);
+    const defaults = await getDefaultRunContext();
+    const result = await runTurn({
+      conversationId: id,
+      input: body.content,
+      mode: "chat",
+      workspaceId: defaults.workspaceId,
+      agentId: defaults.agentId,
+    });
+    return c.json({
+      userMessage: result.userMessage,
+      assistantMessage: result.assistantMessage,
+      conversation: result.conversation,
+    });
   } catch (err) {
     logError("conversations/handleMessage", err);
     const message = err instanceof Error ? err.message : String(err);
@@ -159,85 +169,53 @@ app.post("/:id/messages/stream", async (c) => {
   }
 
   try {
-    // Create AgentRun for audit trail
     const defaults = await getDefaultRunContext();
-    const agentRuns = getRepositories().agentRuns;
-    const run = await agentRuns.create({
+    const abortController = new AbortController();
+
+    const { runId, stream } = await runStreamTurn({
       conversationId: id,
+      input: body.content,
+      mode: "chat",
       workspaceId: defaults.workspaceId,
       agentId: defaults.agentId,
-      mode: "chat",
-    });
+    }, { abortController });
 
     return streamSSE(c, async (sseStream) => {
-      const streamAbortController = new AbortController();
-
       // Propagate client disconnect to upstream stream
-      c.req.raw.signal.addEventListener("abort", async () => {
+      c.req.raw.signal.addEventListener("abort", () => {
         logError("[Stream] client disconnected, aborting upstream", new Error("client disconnect"));
-        streamAbortController.abort();
-        await agentRuns.updateStatus(run.id, "cancelled");
+        abortController.abort();
       });
 
-      const streamResult = await streamMessageInConversation(id, body.content, async (event) => {
-        if (event.type === 'tool-call') {
+      let fullText = "";
+      let lastUserMessage: unknown;
+      let lastAssistantMessage: unknown;
+      let lastConversation: unknown;
+
+      for await (const event of stream) {
+        if (event.type === "delta") {
+          fullText += event.text;
           await sseStream.writeSSE({
-            event: 'tool_calls',
-            data: JSON.stringify({ name: event.name, toolCallId: event.toolCallId, input: event.args }),
+            event: "delta",
+            data: JSON.stringify({ text: event.text }),
           });
-        } else if (event.type === 'tool-result') {
-          await sseStream.writeSSE({
-            event: 'tool_result',
-            data: JSON.stringify({ name: event.name, toolCallId: event.toolCallId, output: event.result }),
-          });
-        }
-      }, streamAbortController);
-
-      // If it's AI-enabled, stream the LLM response via normalized fullStream
-      if (streamResult.isAi && streamResult.result) {
-        let fullText = "";
-        const timeoutMs = configManager.getStreamTimeout();
-
-        try {
-          const normalized = withStreamTimeout(
-            normalizeStream(streamResult.result.fullStream),
-            timeoutMs,
-          );
-
-          for await (const event of normalized) {
-            if (event.type === "delta") {
-              fullText += event.text;
-              await sseStream.writeSSE({
-                event: "delta",
-                data: JSON.stringify({ text: event.text }),
-              });
-            } else if (event.type === "thinking") {
-              await sseStream.writeSSE({
-                event: "thinking",
-                data: JSON.stringify({ text: event.text }),
-              });
-            }
-            // tool_calls and tool_result are handled by onToolEvent callback above
+        } else if (event.type === "tool_call") {
+          const tc = event.toolCall;
+          if (tc.result !== undefined) {
+            await sseStream.writeSSE({
+              event: "tool_result",
+              data: JSON.stringify({ name: tc.name, output: tc.result }),
+            });
+          } else {
+            await sseStream.writeSSE({
+              event: "tool_calls",
+              data: JSON.stringify({ name: tc.name, input: tc.args }),
+            });
           }
-
-          // Force answer: if model was stuck in tool loop, do a follow-up text-only call
-          if (streamResult.needsForceAnswer && streamResult.forceAnswerFollowUp) {
-            const forcedText = await streamResult.forceAnswerFollowUp();
-            if (forcedText) {
-              fullText = forcedText;
-              await sseStream.writeSSE({
-                event: "delta",
-                data: JSON.stringify({ text: forcedText }),
-              });
-            }
-          }
-
-          // Save assistant message to database when complete
-          const savedAssistantMsg = await streamResult.saveAssistantMessage(fullText, streamResult.toolCallsLog ?? []);
-          const updatedConv = await getRepositories().conversations.getById(id);
-
-          // Mark AgentRun as succeeded
-          await agentRuns.updateStatus(run.id, "succeeded");
+        } else if (event.type === "run_completed") {
+          lastUserMessage = event.result.userMessage;
+          lastAssistantMessage = event.result.assistantMessage;
+          lastConversation = event.result.conversation;
 
           // Goal auto-continuation: check if active goals need more work
           const { GoalJudge } = await import("../orchestrator/goal-handler.js");
@@ -247,81 +225,17 @@ app.post("/:id/messages/stream", async (c) => {
           await sseStream.writeSSE({
             event: "done",
             data: JSON.stringify({
-              userMessage: streamResult.userMessage,
-              assistantMessage: savedAssistantMsg,
-              conversation: updatedConv,
-              runId: run.id,
+              userMessage: lastUserMessage,
+              assistantMessage: lastAssistantMessage,
+              conversation: lastConversation,
+              runId,
               goalContinuation: goalCheck.needsContinuation ? goalCheck.continuationPrompt : undefined,
             }),
           });
-        } catch (err) {
-          logError("conversations/stream/ai", err);
-          // Preserve partial results on timeout: if we have accumulated text,
-          // save it as a partial response instead of discarding
-          if (fullText) {
-            try {
-              const savedAssistantMsg = await streamResult.saveAssistantMessage(fullText, streamResult.toolCallsLog ?? []);
-              const updatedConv = await getRepositories().conversations.getById(id);
-              await agentRuns.updateStatus(run.id, "succeeded");
-              await sseStream.writeSSE({
-                event: "done",
-                data: JSON.stringify({
-                  userMessage: streamResult.userMessage,
-                  assistantMessage: savedAssistantMsg,
-                  conversation: updatedConv,
-                  runId: run.id,
-                  partial: true,
-                }),
-              });
-            } catch (saveErr) {
-              logError("conversations/stream/ai/partial-save", saveErr);
-              const message = extractErrorMessage(err);
-              await agentRuns.updateStatus(run.id, "failed", message);
-              await sseStream.writeSSE({
-                event: "error",
-                data: JSON.stringify({ error: message }),
-              });
-            }
-          } else {
-            const message = extractErrorMessage(err);
-            await agentRuns.updateStatus(run.id, "failed", message);
-            await sseStream.writeSSE({
-              event: "error",
-              data: JSON.stringify({ error: message }),
-            });
-          }
-        }
-      } else {
-        // Non-AI fallback: stream local response in one chunk
-        try {
-          await sseStream.writeSSE({
-            event: "delta",
-            data: JSON.stringify({ text: streamResult.reply || "" }),
-          });
-
-          const savedAssistantMsg = await streamResult.saveAssistantMessage(
-            streamResult.reply || "",
-            streamResult.toolCalls || [],
-          );
-          const updatedConv = await getRepositories().conversations.getById(id);
-
-          await agentRuns.updateStatus(run.id, "succeeded");
-          await sseStream.writeSSE({
-            event: "done",
-            data: JSON.stringify({
-              userMessage: streamResult.userMessage,
-              assistantMessage: savedAssistantMsg,
-              conversation: updatedConv,
-              runId: run.id,
-            }),
-          });
-        } catch (err) {
-          logError("conversations/stream/local", err);
-          const message = extractErrorMessage(err);
-          await agentRuns.updateStatus(run.id, "failed", message);
+        } else if (event.type === "run_failed") {
           await sseStream.writeSSE({
             event: "error",
-            data: JSON.stringify({ error: message }),
+            data: JSON.stringify({ error: event.error }),
           });
         }
       }
