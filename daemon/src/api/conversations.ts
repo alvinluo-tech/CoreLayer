@@ -1,7 +1,6 @@
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { getRepositories } from "../db/factory.js";
-import { handleMessageInConversation } from "../orchestrator/conversation.js";
 import { isGoalCommand, handleGoalCommand } from "../orchestrator/goal-handler.js";
 import { apiError, extractErrorMessage, logError } from "../utils/errors.js";
 import { runStreamTurn } from "../runtime/run-stream-executor.js";
@@ -309,7 +308,14 @@ app.post("/:id/messages/:msgId/regenerate", async (c) => {
       await getRepositories().conversations.deleteMessage(nextMsg.id);
     }
 
-    const result = await handleMessageInConversation(id, targetMsg.content);
+    const result = await runTurn({
+      conversationId: id,
+      input: targetMsg.content,
+      mode: "regenerate",
+      workspaceId: conversation.workspaceId ?? undefined,
+      projectId: conversation.projectId ?? undefined,
+      agentId: (await getRepositories().agentProfiles.getDefault())?.id ?? "default",
+    });
     return c.json({
       message: result.assistantMessage,
       conversation: result.conversation,
