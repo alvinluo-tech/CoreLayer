@@ -226,7 +226,7 @@ describe('PermissionGuard', () => {
   it('cancels all pending confirmations', async () => {
     const guard = new PermissionGuard();
     const tool1 = createTestTool({ id: 't1', risk: 'high' });
-    const tool2 = createTestTool({ id: 't2', risk: 'critical' });
+    const tool2 = createTestTool({ id: 't2', risk: 'high' });
 
     await guard.executeWithPendingConfirmation(tool1, {});
     await guard.executeWithPendingConfirmation(tool2, {});

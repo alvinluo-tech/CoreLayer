@@ -87,8 +87,8 @@ describe('getRiskAction', () => {
     expect(getRiskAction('high', defaultConfig)).toBe('confirm');
   });
 
-  it('returns confirm for critical risk with default config', () => {
-    expect(getRiskAction('critical', defaultConfig)).toBe('confirm');
+  it('returns deny for critical risk with default config', () => {
+    expect(getRiskAction('critical', defaultConfig)).toBe('deny');
   });
 
   it('uses app-specific permission override when appId matches', () => {

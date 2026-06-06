@@ -1,5 +1,5 @@
 import { ToolRegistry as BaseToolRegistry } from "@jarvis/tool-registry";
-import type { JarvisTool, ToolResult } from "@jarvis/types";
+import type { JarvisTool, RiskLevel, ToolResult } from "@jarvis/types";
 import type { Tool } from "ai";
 
 /**
@@ -11,8 +11,9 @@ const registry = new BaseToolRegistry();
 /**
  * Register a tool from Vercel AI SDK format.
  * Backward compatible with existing tool connectors.
+ * @param riskOverride - Override risk level (default: inferred from tool name, fallback "low")
  */
-export function registerTool(name: string, toolDef: Tool): void {
+export function registerTool(name: string, toolDef: Tool, riskOverride?: RiskLevel): void {
   const jarvisTool: JarvisTool = {
     id: `native:${name}`,
     appId: "jarvis",
@@ -21,7 +22,7 @@ export function registerTool(name: string, toolDef: Tool): void {
     title: name,
     description: "description" in toolDef ? String(toolDef.description) : "",
     inputSchema: ("parameters" in toolDef ? toolDef.parameters : { type: "object" }) as JarvisTool["inputSchema"] as any,
-    risk: "low",
+    risk: riskOverride ?? inferRisk(name),
     permissions: [],
     requiresConfirmation: false,
     execute: async (args: unknown) => {
@@ -84,4 +85,35 @@ export function getAllToolNames(): string[] {
 
 export function getRegistry(): BaseToolRegistry {
   return registry;
+}
+
+/**
+ * Infer risk level from tool name.
+ * Maps destructive / write operations to higher risk levels.
+ */
+function inferRisk(name: string): RiskLevel {
+  const n = name.toLowerCase();
+
+  // Critical: shell execution, system commands
+  if (n.includes("shell") || n.includes("exec") || n.includes("command") || n.includes("run_command")) {
+    return "critical";
+  }
+
+  // High: delete, remove, drop, push, force, install
+  if (n.includes("delete") || n.includes("remove") || n.includes("drop") ||
+      n.includes("push") || n.includes("force") || n.includes("install") ||
+      n.includes("uninstall")) {
+    return "high";
+  }
+
+  // Medium: create, update, write, add, modify, rename, move
+  if (n.includes("create") || n.includes("update") || n.includes("write") ||
+      n.includes("add") || n.includes("modify") || n.includes("rename") ||
+      n.includes("move") || n.includes("set") || n.includes("mark") ||
+      n.includes("toggle") || n.includes("complete")) {
+    return "medium";
+  }
+
+  // Default: low (read-only operations)
+  return "low";
 }
