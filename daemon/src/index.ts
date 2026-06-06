@@ -26,6 +26,7 @@ import scheduledTaskRoutes from "./api/scheduled-tasks.js";
 import approvalRoutes from "./api/approval.js";
 import workspaceRoutes from "./api/workspaces.js";
 import projectRoutes from "./api/projects.js";
+import runsRoutes from "./api/runs.js";
 import { startScheduler, setIdleCallback, consolidateOnIdle } from "./scheduler.js";
 import { registerDefaultReportSchedules } from "./reports/generator.js";
 import { registerSensor, startSensors, setSensorChangeHandler } from "./sensors/registry.js";
@@ -119,6 +120,7 @@ app.route("/api/approvals", approvalRoutes);
 // Workspace & Project routes (Phase 5)
 app.route("/api/workspaces", workspaceRoutes);
 app.route("/api/projects", projectRoutes);
+app.route("/api/runs", runsRoutes);
 
 function startServer(port: number) {
   try {
