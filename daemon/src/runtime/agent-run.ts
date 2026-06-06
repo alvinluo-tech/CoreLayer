@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Unified Agent Run interface for Agent OS Task-Centric architecture.
  *
  * All execution paths (chat, voice, tick, scheduled, workflow) converge
@@ -20,6 +20,7 @@ export interface AgentRunRequest {
     maxSteps?: number;
     maxTokens?: number;
     requireApproval?: boolean;
+    autoCompleteTask?: boolean;
   };
 }
 
@@ -35,7 +36,7 @@ export interface ToolCallTrace {
 export interface ApprovalRequest {
   toolName: string;
   args: unknown;
-  risk: "low" | "medium" | "high";
+  risk: "low" | "medium" | "high" | "critical";
 }
 
 export interface ArtifactRef {
@@ -52,6 +53,8 @@ export type AgentRunEvent =
   | { type: "approval_required"; approval: ApprovalRequest }
   | { type: "artifact_created"; artifact: ArtifactRef }
   | { type: "memory_written"; memoryIds: string[] }
+  | { type: "task_blocked"; taskId: string; blockedBy: string[] }
+  | { type: "task_dependency_resolved"; taskId: string; dependencyId: string }
   | { type: "delta"; text: string }
   | { type: "run_completed"; result: { text: string; conversationId: string } }
   | { type: "run_failed"; error: string };

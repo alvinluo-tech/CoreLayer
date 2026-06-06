@@ -1,6 +1,7 @@
-import { Hono } from "hono";
+﻿import { Hono } from "hono";
 import { getRepositories } from "../db/factory.js";
 import { apiError, extractErrorMessage, logError } from "../utils/errors.js";
+import { toolRuntime } from "../runtime/index.js";
 
 const approvalRoutes = new Hono();
 
@@ -50,6 +51,8 @@ approvalRoutes.post("/:id/approve", async (c) => {
     if (existing.status !== "pending") {
       return apiError(c, `Approval request is already ${existing.status}`, 400);
     }
+
+    toolRuntime.getPermissionGuard().resolvePendingConfirmation(id, true);
     const updated = await approvalRequests.approve(id);
     return c.json({ data: updated });
   } catch (err) {
@@ -72,6 +75,8 @@ approvalRoutes.post("/:id/deny", async (c) => {
     if (existing.status !== "pending") {
       return apiError(c, `Approval request is already ${existing.status}`, 400);
     }
+
+    toolRuntime.getPermissionGuard().resolvePendingConfirmation(id, false);
     const updated = await approvalRequests.deny(id);
     return c.json({ data: updated });
   } catch (err) {
@@ -104,10 +109,6 @@ approvalRoutes.post("/:id/remember", async (c) => {
       return apiError(c, "Approval request not found", 404);
     }
 
-    // Resolve the pending in-memory confirmation if one exists
-    // The ToolRuntime holds these; approval-manager handles the DB side
-
-    // Create permission memory
     await permissionMemories.create({
       toolId: existing.toolId,
       risk: existing.risk,
@@ -116,9 +117,14 @@ approvalRoutes.post("/:id/remember", async (c) => {
       projectId: body.projectId ?? null,
     });
 
-    // Also approve the current request
     if (existing.status === "pending") {
-      await approvalRequests.approve(id);
+      const approved = body.decision !== "deny";
+      toolRuntime.getPermissionGuard().resolvePendingConfirmation(id, approved);
+      if (approved) {
+        await approvalRequests.approve(id);
+      } else {
+        await approvalRequests.deny(id);
+      }
     }
 
     return c.json({ success: true });

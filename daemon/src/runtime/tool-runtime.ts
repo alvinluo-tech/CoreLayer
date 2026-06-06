@@ -1,4 +1,4 @@
-import { PermissionGuard } from "@jarvis/permission-guard";
+﻿import { PermissionGuard } from "@jarvis/permission-guard";
 import type { ToolResult } from "@jarvis/types";
 import { getRegistry } from "../tools/registry.js";
 import { getRepositories } from "../db/factory.js";
@@ -25,11 +25,6 @@ export interface ToolExecutionResult {
 /**
  * Single execution entry point for all tool calls.
  * Enforces permission checks, audit logging, and timeout.
- *
- * For high-risk tools (Phase 4):
- * - Creates an approval_requests DB record
- * - Checks permission_memories for auto-decision
- * - Falls back to in-memory pending confirmation
  */
 export class ToolRuntime {
   private permissionGuard: PermissionGuard;
@@ -54,9 +49,8 @@ export class ToolRuntime {
     }
 
     const startTime = Date.now();
-
-    // Check permission memory for auto-decision (Phase 4)
     const permissionCheck = this.permissionGuard.checkPermission(tool);
+
     if (permissionCheck.requiresConfirmation && context.runId) {
       const { permissionMemories } = getRepositories();
       const memory = await permissionMemories.find(
@@ -66,7 +60,6 @@ export class ToolRuntime {
       );
       if (memory) {
         if (memory.decision === "auto") {
-          // User previously said "always allow" — execute directly
           const result = await tool.execute(args);
           return {
             result,
@@ -81,19 +74,18 @@ export class ToolRuntime {
             durationMs: Date.now() - startTime,
           };
         }
-        // "confirm" — fall through to normal confirmation flow
       }
     }
 
-    // For AI-driven calls, use executeWithPendingConfirmation
-    // so high-risk tools create a pending confirmation that the UI can resolve
     if (context.caller === "ai") {
-      const pending = await this.permissionGuard.executeWithPendingConfirmation(tool, args);
+      const pending = await this.permissionGuard.executeWithPendingConfirmation(tool, args, {
+        waitForExternalResolution: permissionCheck.requiresConfirmation,
+      });
 
-      // Create approval request in DB (Phase 4)
       if (context.runId && permissionCheck.requiresConfirmation) {
         const { approvalRequests } = getRepositories();
         await approvalRequests.create({
+          id: pending.confirmationId,
           runId: context.runId,
           toolId: tool.id,
           toolName: tool.name,
@@ -103,17 +95,14 @@ export class ToolRuntime {
         });
       }
 
-      // Low/medium risk: already auto-executed by executeWithPendingConfirmation
-      // The confirm() call returns the result immediately
       const result = await pending.confirm();
       return {
         result,
-        confirmed: false,
+        confirmed: permissionCheck.requiresConfirmation && result.success,
         durationMs: Date.now() - startTime,
       };
     }
 
-    // For non-AI callers (skill, rest-api), use executeWithGuard directly
     const { result, confirmed } = await this.permissionGuard.executeWithGuard(tool, args);
     return {
       result,

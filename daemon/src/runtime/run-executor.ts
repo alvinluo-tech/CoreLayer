@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Unified Agent Run executor.
  *
  * Wraps the existing conversation.ts functions to provide a single `runTurn`
@@ -21,6 +21,25 @@ export type RunTurnOptions = {
 
 const taskGraph = new TaskGraph();
 
+function appendRunHistory(
+  runHistory: unknown[],
+  entry: Record<string, unknown>,
+): unknown[] {
+  return [...runHistory, entry];
+}
+
+function updateLastRunHistoryEntry(
+  runHistory: unknown[],
+  patch: Record<string, unknown>,
+): unknown[] {
+  const next = [...runHistory];
+  const last = next[next.length - 1];
+  if (last && typeof last === "object") {
+    next[next.length - 1] = { ...(last as Record<string, unknown>), ...patch };
+  }
+  return next;
+}
+
 /**
  * Unified entry point for all agent execution.
  *
@@ -34,36 +53,43 @@ export async function runTurn(
   const { agentRuns, conversations, tasks } = getRepositories();
   const events: AgentRunEvent[] = [];
 
-  // If a taskId is provided, check if the task can execute
+  const emit = (event: AgentRunEvent) => {
+    events.push(event);
+    options?.onEvent?.(event);
+    return event;
+  };
+
   if (request.taskId) {
     const task = await tasks.getById(request.taskId);
     if (task) {
-      const canExecute = await taskGraph.canExecute(request.taskId);
-      if (!canExecute) {
+      const blockedBy = await taskGraph.getIncompleteDependencies(request.taskId);
+      if (blockedBy.length > 0) {
+        await tasks.update(request.taskId, { status: "blocked", blockedBy });
+        emit({ type: "task_blocked", taskId: request.taskId, blockedBy });
         throw new Error(
           `Task ${request.taskId} is blocked by incomplete dependencies`,
         );
       }
 
-      // Update task status to running
-      await tasks.update(request.taskId, { status: "running" });
+      await tasks.update(request.taskId, { status: "running", blockedBy: [] });
 
-      // Append this run to the task's run history
       const runHistory = Array.isArray(task.runHistory) ? task.runHistory : [];
       await tasks.update(request.taskId, {
-        runHistory: [...runHistory, { runId: "pending", startedAt: new Date().toISOString() }],
+        runHistory: appendRunHistory(runHistory, {
+          runId: "pending",
+          status: "running",
+          startedAt: new Date().toISOString(),
+        }),
       });
     }
   }
 
-  // Ensure conversation exists (create if needed)
   let conversationId = request.conversationId;
   if (!conversationId) {
-    const conv = await conversations.create("New Chat");
+    const conv = await conversations.create(request.mode === "voice" ? "Voice Chat" : "New Chat");
     conversationId = conv.id;
   }
 
-  // Create AgentRun record
   const run = await agentRuns.create({
     conversationId,
     workspaceId: request.workspaceId,
@@ -74,29 +100,19 @@ export async function runTurn(
     selectedModel: request.modelOverride ?? undefined,
   });
 
-  // Update the run history entry with the actual run ID
   if (request.taskId) {
     const task = await tasks.getById(request.taskId);
     if (task) {
-      const runHistory = Array.isArray(task.runHistory) ? [...task.runHistory] : [];
-      if (runHistory.length > 0) {
-        const lastEntry = runHistory[runHistory.length - 1] as Record<string, unknown>;
-        lastEntry.runId = run.id;
-        await tasks.update(request.taskId, { runHistory });
-      }
+      const runHistory = Array.isArray(task.runHistory) ? task.runHistory : [];
+      await tasks.update(request.taskId, {
+        runHistory: updateLastRunHistoryEntry(runHistory, { runId: run.id }),
+      });
     }
   }
-
-  const emit = (event: AgentRunEvent) => {
-    events.push(event);
-    options?.onEvent?.(event);
-    return event;
-  };
 
   emit({ type: "run_started", runId: run.id, mode: request.mode });
 
   try {
-    // Delegate to existing conversation handler
     const result = await handleMessageInConversation(
       conversationId,
       request.input,
@@ -111,12 +127,24 @@ export async function runTurn(
       },
     });
 
-    // Update AgentRun to succeeded
     await agentRuns.updateStatus(run.id, "succeeded");
 
-    // If this was a task-level run, mark the task as completed
     if (request.taskId) {
-      await taskGraph.completeTask(request.taskId);
+      if (request.constraints?.autoCompleteTask) {
+        await taskGraph.completeTask(request.taskId);
+      } else {
+        const task = await tasks.getById(request.taskId);
+        if (task) {
+          const runHistory = Array.isArray(task.runHistory) ? task.runHistory : [];
+          await tasks.update(request.taskId, {
+            status: "running",
+            runHistory: updateLastRunHistoryEntry(runHistory, {
+              status: "succeeded",
+              completedAt: new Date().toISOString(),
+            }),
+          });
+        }
+      }
     }
 
     return {
@@ -131,11 +159,18 @@ export async function runTurn(
     emit({ type: "run_failed", error: errorMsg });
     await agentRuns.updateStatus(run.id, "failed", errorMsg);
 
-    // If this was a task-level run, mark the task as failed
     if (request.taskId) {
       const task = await tasks.getById(request.taskId);
       if (task) {
-        await tasks.update(request.taskId, { status: "failed" });
+        const runHistory = Array.isArray(task.runHistory) ? task.runHistory : [];
+        await tasks.update(request.taskId, {
+          status: "failed",
+          runHistory: updateLastRunHistoryEntry(runHistory, {
+            status: "failed",
+            error: errorMsg,
+            completedAt: new Date().toISOString(),
+          }),
+        });
       }
     }
 

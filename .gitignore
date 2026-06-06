@@ -56,3 +56,6 @@ docs/
 
 # Design mockups
 frontend/mockups/
+
+# Codex config
+.codex/

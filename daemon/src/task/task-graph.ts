@@ -1,4 +1,4 @@
-/**
+﻿/**
  * TaskGraph — dependency resolution and execution tracking for the task graph.
  *
  * Responsibilities:
@@ -10,6 +10,9 @@
 
 import { getRepositories } from "../db/factory.js";
 import type { TaskRow } from "../db/repository.js";
+
+const COMPLETED_STATUSES = new Set(["completed", "done"]);
+const READY_STATUSES = new Set(["queued", "pending"]);
 
 export class TaskGraph {
   /**
@@ -24,11 +27,25 @@ export class TaskGraph {
     if (deps.length === 0) return true;
 
     const depTasks = await Promise.all(deps.map((id) => tasks.getById(id)));
-    return depTasks.every((dep) => {
-      if (!dep) return false;
-      const completedStatuses = ["completed", "done"];
-      return completedStatuses.includes(dep.status);
-    });
+    return depTasks.every((dep) => dep && COMPLETED_STATUSES.has(dep.status));
+  }
+
+  /**
+   * Return incomplete dependency IDs for the current task.
+   */
+  async getIncompleteDependencies(taskId: string): Promise<string[]> {
+    const { tasks } = getRepositories();
+    const task = await tasks.getById(taskId);
+    if (!task) return [];
+
+    const incompleteDeps: string[] = [];
+    for (const depId of task.dependencies) {
+      const dep = await tasks.getById(depId);
+      if (!dep || !COMPLETED_STATUSES.has(dep.status)) {
+        incompleteDeps.push(depId);
+      }
+    }
+    return incompleteDeps;
   }
 
   /**
@@ -43,8 +60,7 @@ export class TaskGraph {
 
     const executable: TaskRow[] = [];
     for (const task of projectTasks) {
-      const readyStatuses = ["queued", "pending"];
-      if (!readyStatuses.includes(task.status)) continue;
+      if (!READY_STATUSES.has(task.status)) continue;
 
       if (await this.canExecute(task.id)) {
         executable.push(task);
@@ -61,13 +77,10 @@ export class TaskGraph {
     const task = await tasks.getById(taskId);
     if (!task) throw new Error(`Task ${taskId} not found`);
 
-    const completedStatuses = ["completed", "done"];
-    if (completedStatuses.includes(task.status)) return;
+    if (COMPLETED_STATUSES.has(task.status)) return;
 
-    // Mark this task as completed
     await tasks.update(taskId, { status: "completed" });
 
-    // Find tasks that have this task as a dependency
     const projectTasks = task.projectId
       ? await tasks.getByProjectId(task.projectId)
       : [];
@@ -75,20 +88,15 @@ export class TaskGraph {
     for (const dependent of projectTasks) {
       if (!dependent.dependencies.includes(taskId)) continue;
 
-      // Remove this taskId from blocked_by
-      const newBlockedBy = dependent.blockedBy.filter((id) => id !== taskId);
-
-      // Check if all dependencies are now completed
-      const allDepsComplete = await this.canExecute(dependent.id);
-
-      if (allDepsComplete && dependent.status === "blocked") {
-        // Unblock the task
+      const blockedBy = await this.getIncompleteDependencies(dependent.id);
+      if (blockedBy.length === 0 && dependent.status === "blocked") {
         await tasks.update(dependent.id, {
           status: "queued",
-          blockedBy: newBlockedBy,
+          blockedBy: [],
         });
-      } else if (newBlockedBy.length !== dependent.blockedBy.length) {
-        await tasks.update(dependent.id, { blockedBy: newBlockedBy });
+      } else if (blockedBy.length !== dependent.blockedBy.length ||
+        blockedBy.some((id, index) => id !== dependent.blockedBy[index])) {
+        await tasks.update(dependent.id, { blockedBy });
       }
     }
   }
@@ -109,7 +117,6 @@ export class TaskGraph {
 
     const dfs = (taskId: string) => {
       if (inStack.has(taskId)) {
-        // Found a cycle — extract it
         const cycleStart = path.indexOf(taskId);
         if (cycleStart !== -1) {
           cycles.push([...path.slice(cycleStart), taskId]);
@@ -145,68 +152,39 @@ export class TaskGraph {
   }
 
   /**
-   * Set dependencies for a task. Updates both the task's dependencies
-   * and the blocked_by field on each dependency.
+   * Set dependencies for a task. `dependencies` is the source of truth;
+   * `blockedBy` only stores incomplete dependencies for the current task.
    */
   async setDependencies(taskId: string, dependencyIds: string[]): Promise<void> {
     const { tasks } = getRepositories();
     const task = await tasks.getById(taskId);
     if (!task) throw new Error(`Task ${taskId} not found`);
 
-    // Check for self-dependency
-    if (dependencyIds.includes(taskId)) {
+    const uniqueDependencyIds = Array.from(new Set(dependencyIds));
+    if (uniqueDependencyIds.includes(taskId)) {
       throw new Error("Task cannot depend on itself");
     }
 
-    // Check for cycles
-    await tasks.update(taskId, { dependencies: dependencyIds });
+    await tasks.update(taskId, { dependencies: uniqueDependencyIds });
 
-    // Rebuild blocked_by for all dependency tasks
-    const projectTasks = task.projectId
-      ? await tasks.getByProjectId(task.projectId)
-      : [];
-    const taskMap = new Map(projectTasks.map((t) => [t.id, t]));
-
-    // First, remove taskId from all old dependencies' blocked_by
-    for (const depId of task.dependencies) {
-      if (dependencyIds.includes(depId)) continue;
-      const depTask = taskMap.get(depId) ?? await tasks.getById(depId);
-      if (depTask) {
-        const newBlockedBy = depTask.blockedBy.filter((id) => id !== taskId);
-        await tasks.update(depId, { blockedBy: newBlockedBy });
+    if (task.projectId) {
+      const cycles = await this.detectCycles(task.projectId);
+      if (cycles.length > 0) {
+        await tasks.update(taskId, { dependencies: task.dependencies, blockedBy: task.blockedBy });
+        throw new Error(`Task dependency cycle detected: ${cycles[0]?.join(" -> ")}`);
       }
     }
 
-    // Then, add taskId to new dependencies' blocked_by
-    for (const depId of dependencyIds) {
-      const depTask = taskMap.get(depId) ?? await tasks.getById(depId);
-      if (depTask && !depTask.blockedBy.includes(taskId)) {
-        await tasks.update(depId, {
-          blockedBy: [...depTask.blockedBy, taskId],
-        });
-      }
-    }
-
-    // Determine initial status
-    if (dependencyIds.length > 0) {
-      const allComplete = await this.canExecute(taskId);
-      if (!allComplete && task.status !== "blocked") {
-        // Find which dependencies are incomplete
-        const incompleteDeps: string[] = [];
-        for (const depId of dependencyIds) {
-          const dep = await tasks.getById(depId);
-          if (dep && !["completed", "done"].includes(dep.status)) {
-            incompleteDeps.push(depId);
-          }
-        }
-        await tasks.update(taskId, {
-          status: "blocked",
-          blockedBy: incompleteDeps,
-        });
-      }
-    } else if (task.status === "blocked" && task.dependencies.length > 0) {
-      // Dependencies removed — unblock if was blocked
+    const blockedBy = await this.getIncompleteDependencies(taskId);
+    if (blockedBy.length > 0) {
+      await tasks.update(taskId, {
+        status: "blocked",
+        blockedBy,
+      });
+    } else if (task.status === "blocked") {
       await tasks.update(taskId, { status: "queued", blockedBy: [] });
+    } else {
+      await tasks.update(taskId, { blockedBy: [] });
     }
   }
 }

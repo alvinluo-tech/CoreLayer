@@ -1,28 +1,80 @@
-import { Hono } from "hono";
+﻿import { Hono } from "hono";
 import { stream } from "hono/streaming";
-import { handleMessage, streamChat } from "../orchestrator/conversation.js";
+import { streamChat } from "../orchestrator/conversation.js";
 import { ContextBuilder } from "../orchestrator/context-builder.js";
 import { getRepositories } from "../db/factory.js";
 import { configManager } from "../config/config-manager.js";
 import { apiError, extractErrorMessage, classifyError, logError } from "../utils/errors.js";
 import { normalizeStream } from "./sse-normalizer.js";
 import { withStreamTimeout } from "./stream-timeout.js";
+import { runTurn } from "../runtime/run-executor.js";
 import type { ModelMessage } from "ai";
 
 const chatRoutes = new Hono();
 
+async function getDefaultRunContext(): Promise<{ workspaceId: string; agentId: string }> {
+  const repos = getRepositories();
+
+  let workspace = await repos.workspaces.getDefault("default");
+  if (!workspace) {
+    workspace = await repos.workspaces.create({
+      ownerId: "default",
+      name: "Personal",
+      description: "Default personal workspace",
+    });
+  }
+
+  let agent = await repos.agentProfiles.getDefault();
+  if (!agent) {
+    agent = await repos.agentProfiles.create({
+      name: "Jarvis",
+      description: "Default personal assistant agent",
+      isDefault: true,
+    });
+  }
+
+  return { workspaceId: workspace.id, agentId: agent.id };
+}
+
 /**
- * Non-streaming chat endpoint (legacy).
- * Accepts { message: string } and returns full response.
+ * Non-streaming chat endpoint.
+ * Accepts { message: string, conversationId?: string, modelOverride?: string }
+ * and routes through the AgentRun runtime backbone.
  */
 chatRoutes.post("/", async (c) => {
   try {
-    const body = await c.req.json<{ message: string }>();
+    const body = await c.req.json<{
+      message: string;
+      conversationId?: string;
+      workspaceId?: string;
+      projectId?: string;
+      taskId?: string;
+      agentId?: string;
+      modelOverride?: string;
+    }>();
     if (!body.message?.trim()) {
       return apiError(c, "消息不能为空", 400);
     }
-    const result = await handleMessage(body.message);
-    return c.json(result);
+
+    const defaults = await getDefaultRunContext();
+    const result = await runTurn({
+      workspaceId: body.workspaceId ?? defaults.workspaceId,
+      projectId: body.projectId,
+      taskId: body.taskId,
+      conversationId: body.conversationId,
+      agentId: body.agentId ?? defaults.agentId,
+      mode: "chat",
+      input: body.message,
+      modelOverride: body.modelOverride,
+    });
+
+    return c.json({
+      reply: result.text,
+      toolCalls: [],
+      runId: result.runId,
+      conversationId: result.conversationId,
+      events: result.events,
+    });
   } catch (err) {
     logError("chat/send", err);
     const { status, code } = classifyError(err);

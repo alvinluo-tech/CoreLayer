@@ -1,4 +1,4 @@
-// Repository interfaces for storage abstraction
+﻿// Repository interfaces for storage abstraction
 // Both SQLite and Supabase implementations conform to these interfaces
 
 // ---- Row Types (normalized, no storage-specific types leak through) ----
@@ -685,6 +685,7 @@ export interface ApprovalRequestRow {
 }
 
 export interface CreateApprovalRequestInput {
+  id?: string;
   runId: string;
   toolId: string;
   toolName: string;

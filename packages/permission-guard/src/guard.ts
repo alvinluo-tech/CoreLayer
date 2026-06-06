@@ -1,4 +1,4 @@
-import type {
+﻿import type {
   JarvisTool,
   PermissionCheckResult,
   PermissionGuardConfig,
@@ -162,12 +162,33 @@ export class PermissionGuard {
   async executeWithPendingConfirmation(
     tool: JarvisTool,
     args: unknown,
-    options?: { timeoutMs?: number }
+    options?: { timeoutMs?: number; waitForExternalResolution?: boolean }
   ): Promise<PendingExecution> {
     const check = this.checkPermission(tool);
     const now = new Date();
     const timeoutMs = options?.timeoutMs ?? PENDING_CONFIRMATION_TIMEOUT_MS;
     const confirmationId = crypto.randomUUID();
+
+    if (!check.allowed) {
+      const confirmation: PendingConfirmation = {
+        confirmationId,
+        toolId: tool.id,
+        toolName: tool.name,
+        appId: tool.appId,
+        args,
+        riskLevel: tool.risk,
+        reason: check.reason,
+        createdAt: now.toISOString(),
+        expiresAt: new Date(now.getTime() + timeoutMs).toISOString(),
+      };
+      return {
+        confirmationId,
+        confirmation,
+        confirm: async () => ({ success: false, error: check.reason }),
+        deny: async () => ({ success: false, error: check.reason }),
+        isExpired: false,
+      };
+    }
 
     // Auto-execute for low/medium risk (no confirmation needed)
     if (!check.requiresConfirmation) {
@@ -205,7 +226,6 @@ export class PermissionGuard {
       };
     }
 
-    // High/critical risk — create pending confirmation
     const confirmation: PendingConfirmation = {
       confirmationId,
       toolId: tool.id,
@@ -220,32 +240,57 @@ export class PermissionGuard {
 
     let resolved = false;
     let expired = false;
-
-    // Store resolve so confirm/deny can signal the pending promise
     let storedResolve: (value: boolean) => void = () => {};
-    new Promise<boolean>((resolve) => {
+
+    const approvalPromise = new Promise<boolean>((resolve) => {
       storedResolve = resolve;
       this.pendingConfirmations.set(confirmationId, {
         ...confirmation,
         resolve,
       });
 
-      // Auto-expire after timeout
       setTimeout(() => {
         if (!resolved) {
           expired = true;
+          resolved = true;
           this.pendingConfirmations.delete(confirmationId);
           resolve(false);
         }
       }, timeoutMs);
     });
 
+    const logDenied = () => {
+      this.auditLog.log({
+        action: 'execute',
+        toolId: tool.id,
+        toolName: tool.name,
+        appId: tool.appId,
+        args,
+        result: 'cancelled',
+        riskLevel: tool.risk,
+        confirmedByUser: false,
+      });
+    };
+
     const confirm = async (): Promise<ToolResult> => {
+      let approved = true;
+      if (options?.waitForExternalResolution) {
+        approved = await approvalPromise;
+      } else {
+        resolved = true;
+        storedResolve(true);
+        this.pendingConfirmations.delete(confirmationId);
+      }
+
       if (expired) {
         return { success: false, error: '确认已过期' };
       }
+      if (!approved) {
+        logDenied();
+        return { success: false, error: '用户拒绝执行' };
+      }
+
       resolved = true;
-      storedResolve(true);
       this.pendingConfirmations.delete(confirmationId);
 
       const result = await tool.execute(args);
@@ -270,17 +315,7 @@ export class PermissionGuard {
       resolved = true;
       storedResolve(false);
       this.pendingConfirmations.delete(confirmationId);
-
-      this.auditLog.log({
-        action: 'execute',
-        toolId: tool.id,
-        toolName: tool.name,
-        appId: tool.appId,
-        args,
-        result: 'cancelled',
-        riskLevel: tool.risk,
-        confirmedByUser: false,
-      });
+      logDenied();
       return { success: false, error: '用户拒绝执行' };
     };
 

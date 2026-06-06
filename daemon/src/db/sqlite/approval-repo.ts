@@ -1,4 +1,4 @@
-import { eq, desc } from "drizzle-orm";
+﻿import { eq, desc } from "drizzle-orm";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import { db as defaultDb, schema } from "../client.js";
 import type {
@@ -23,12 +23,11 @@ function mapRow(row: typeof schema.approvalRequests.$inferSelect): ApprovalReque
     createdAt: row.createdAt,
   };
 }
-
 export function createSqliteApprovalRepo(database?: DrizzleDb): ApprovalRequestRepository {
   const db = database ?? defaultDb;
   return {
     async create(input: CreateApprovalRequestInput): Promise<ApprovalRequestRow> {
-      const id = crypto.randomUUID();
+      const id = input.id ?? crypto.randomUUID();
       const now = Date.now();
       db.insert(schema.approvalRequests)
         .values({

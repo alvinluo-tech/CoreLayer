@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { PermissionGuard } from '../guard.js';
 import type { JarvisTool } from '@jarvis/types';
 
@@ -261,6 +261,53 @@ describe('PermissionGuard', () => {
     expect(entries).toHaveLength(1);
     expect(entries[0].result).toBe('cancelled');
     expect(entries[0].confirmedByUser).toBe(false);
+  });
+
+  it('waits for external approval before executing a high risk tool', async () => {
+    const guard = new PermissionGuard();
+    const execute = vi.fn(async () => ({ success: true, data: 'approved' }));
+    const tool = createTestTool({ risk: 'high', execute });
+
+    const pending = await guard.executeWithPendingConfirmation(
+      tool,
+      {},
+      {
+        waitForExternalResolution: true,
+      }
+    );
+    const resultPromise = pending.confirm();
+
+    await Promise.resolve();
+    expect(execute).not.toHaveBeenCalled();
+
+    const resolved = guard.resolvePendingConfirmation(pending.confirmationId, true);
+    expect(resolved).toBe(true);
+
+    const result = await resultPromise;
+    expect(result.success).toBe(true);
+    expect(execute).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not execute a high risk tool after external denial', async () => {
+    const guard = new PermissionGuard();
+    const execute = vi.fn(async () => ({ success: true, data: 'approved' }));
+    const tool = createTestTool({ risk: 'high', execute });
+
+    const pending = await guard.executeWithPendingConfirmation(
+      tool,
+      {},
+      {
+        waitForExternalResolution: true,
+      }
+    );
+    const resultPromise = pending.confirm();
+
+    guard.resolvePendingConfirmation(pending.confirmationId, false);
+
+    const result = await resultPromise;
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('拒绝');
+    expect(execute).not.toHaveBeenCalled();
   });
 });
 

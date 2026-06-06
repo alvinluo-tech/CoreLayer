@@ -322,14 +322,34 @@ describe("TaskGraph", () => {
       expect(updated?.status).not.toBe("blocked");
     });
 
-    it("should update blocked_by on dependency tasks", async () => {
+    it("should only update blockedBy on the blocked task", async () => {
       const dep = await tasks.create({ title: "Dep" });
       const task = await tasks.create({ title: "Main" });
 
       await graph.setDependencies(task.id, [dep.id]);
 
+      const taskUpdated = await tasks.getById(task.id);
       const depUpdated = await tasks.getById(dep.id);
-      expect(depUpdated?.blockedBy).toContain(task.id);
+      expect(taskUpdated?.blockedBy).toEqual([dep.id]);
+      expect(depUpdated?.blockedBy).toEqual([]);
+    });
+
+    it("should reject cycles and restore previous dependencies", async () => {
+      const wsId = "test-ws";
+      const projId = "test-proj";
+      testDb.insert(schema.workspaces).values({ id: wsId, name: "Test", ownerId: "user" }).run();
+      testDb.insert(schema.projects).values({ id: projId, workspaceId: wsId, name: "Test" }).run();
+
+      const t1 = await tasks.create({ title: "T1" });
+      const t2 = await tasks.create({ title: "T2" });
+      testDb.update(schema.tasks).set({ projectId: projId }).where(eq(schema.tasks.id, t1.id)).run();
+      testDb.update(schema.tasks).set({ projectId: projId }).where(eq(schema.tasks.id, t2.id)).run();
+
+      await graph.setDependencies(t2.id, [t1.id]);
+      await expect(graph.setDependencies(t1.id, [t2.id])).rejects.toThrow("cycle");
+
+      const restored = await tasks.getById(t1.id);
+      expect(restored?.dependencies).toEqual([]);
     });
 
     it("should unblock task when dependencies are removed", async () => {

@@ -236,6 +236,7 @@ const { runTurn } = await import("./run-executor.js");
 describe("runTurn", () => {
   beforeEach(() => {
     testDb.delete(schema.agentRuns).run();
+    testDb.delete(schema.tasks).run();
     testDb.delete(schema.messages).run();
     testDb.delete(schema.conversations).run();
   });
@@ -317,6 +318,24 @@ describe("runTurn", () => {
     const runs = await agentRuns.getRecent(1);
     expect(runs[0].status).toBe("failed");
     expect(runs[0].error).toContain("LLM unavailable");
+  });
+
+  it("should not auto-complete task runs by default", async () => {
+    const { tasks } = await import("../db/factory.js").then((m) => m.getRepositories());
+    const task = await tasks.create({ title: "Review required" });
+
+    await runTurn({
+      workspaceId: "ws-1",
+      agentId: "default",
+      mode: "chat",
+      input: "work on task",
+      taskId: task.id,
+    });
+
+    const updated = await tasks.getById(task.id);
+    expect(updated?.status).toBe("running");
+    expect(updated?.runHistory).toHaveLength(1);
+    expect((updated?.runHistory[0] as { status?: string }).status).toBe("succeeded");
   });
 
   it("should use existing conversation when conversationId provided", async () => {
