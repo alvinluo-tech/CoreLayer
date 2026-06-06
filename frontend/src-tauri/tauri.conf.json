@@ -19,7 +19,7 @@
         "resizable": true,
         "fullscreen": false,
         "decorations": false,
-        "transparent": true,
+        "transparent": false,
         "shadow": true,
         "additionalBrowserArgs": "--autoplay-policy=no-user-gesture-required"
       },
@@ -32,7 +32,7 @@
         "visible": false,
         "decorations": false,
         "resizable": false,
-        "alwaysOnTop": true,
+        "alwaysOnTop": false,
         "skipTaskbar": true,
         "transparent": true,
         "shadow": true,
