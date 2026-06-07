@@ -14,6 +14,8 @@ import { registerConversationTools } from "./tools/conversation/connector.js";
 import { registerMemoryTools } from "./tools/memory/connector.js";
 import { logError } from "./utils/errors.js";
 import { registerAllAdapters } from "./mcp/adapters/index.js";
+import type { RuntimeComponent, RuntimeKind } from "./runtime/contract.js";
+import { ALL_RUNTIME_KINDS } from "./runtime/contract.js";
 import conversationRoutes from "./api/conversations.js";
 import taskRoutes from "./api/tasks.js";
 import articleRoutes from "./api/articles.js";
@@ -130,13 +132,15 @@ app.get("/api/runtime/status", (c) => {
 app.get("/api/runtime/components", (c) => {
   const paths = resolveAppPaths();
   const isHealthy = true; // If we can respond, we're healthy
-  const components = [
-    { kind: "agent-runtime", status: isHealthy ? "running" : "failed", pid: process.pid, healthUrl: "/health", logDir: paths.logDir },
-    { kind: "tool-runtime", status: isHealthy ? "running" : "failed", pid: process.pid, healthUrl: "/health", logDir: paths.logDir },
-    { kind: "voice-runtime", status: isHealthy ? "running" : "failed", pid: process.pid, healthUrl: "/health", logDir: paths.logDir },
-    { kind: "memory-runtime", status: isHealthy ? "running" : "failed", pid: process.pid, healthUrl: "/health", logDir: paths.logDir },
-    { kind: "scheduler-runtime", status: isHealthy ? "running" : "failed", pid: process.pid, healthUrl: "/health", logDir: paths.logDir },
-  ];
+  const status: RuntimeComponent["status"] = isHealthy ? "running" : "failed";
+  const components: RuntimeComponent[] = ALL_RUNTIME_KINDS.map((kind: RuntimeKind) => ({
+    kind,
+    status,
+    pid: process.pid,
+    healthUrl: "/health",
+    logPath: paths.logDir,
+    restartPolicy: { type: "maxAttempts" as const, maxAttempts: 3 },
+  }));
   return c.json({ components });
 });
 

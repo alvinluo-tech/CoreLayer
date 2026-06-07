@@ -7,8 +7,9 @@ use std::time::Duration;
 use tauri::{Manager, State};
 use tokio::sync::Mutex;
 
-/// Runtime daemon URL, set by the supervisor during initialization.
-/// Falls back to DAEMON_URL env var or default.
+/// Compatibility fallback for daemon URL. The primary source of truth is
+/// `DaemonSupervisorState`. This static exists so proxy helpers that lack
+/// Tauri state access can still resolve the URL.
 static DAEMON_URL: std::sync::OnceLock<String> = std::sync::OnceLock::new();
 
 /// Shared HTTP client with connection pooling and timeout.
@@ -789,9 +790,11 @@ async fn get_runtime_components(
     let kinds = vec![
         runtime_registry::RuntimeKind::AgentRuntime,
         runtime_registry::RuntimeKind::ToolRuntime,
+        runtime_registry::RuntimeKind::CodingRuntime,
         runtime_registry::RuntimeKind::VoiceRuntime,
         runtime_registry::RuntimeKind::MemoryRuntime,
         runtime_registry::RuntimeKind::SchedulerRuntime,
+        runtime_registry::RuntimeKind::ComputerControlRuntime,
     ];
 
     let components = kinds
@@ -1261,7 +1264,12 @@ pub fn run() {
                 tauri::async_runtime::spawn(async move {
                     let mut sup = state_clone.lock().await;
                     match sup.start_owned_daemon().await {
-                        Ok(()) => log::info!("[App] Daemon started successfully"),
+                        Ok(()) => {
+                            // Update the compat static with the actual URL
+                            // (port may have changed during allocation)
+                            let _ = DAEMON_URL.set(sup.url().to_string());
+                            log::info!("[App] Daemon started successfully");
+                        }
                         Err(e) => log::error!("[App] Failed to start daemon: {}", e),
                     }
                 });

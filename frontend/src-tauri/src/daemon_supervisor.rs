@@ -94,10 +94,10 @@ impl DaemonSupervisor {
             .unwrap_or_else(|_| PathBuf::from("."));
         self.app_data_dir = Some(app_data.clone());
 
-        // Set up log path
+        // Set up log directory (separate files for stdout/stderr)
         let log_dir = app_data.join("logs");
         let _ = std::fs::create_dir_all(&log_dir);
-        self.log_path = Some(log_dir.join("daemon.log").to_string_lossy().to_string());
+        self.log_path = Some(log_dir.to_string_lossy().to_string());
 
         log::info!(
             "[DaemonSupervisor] Sidecar mode: port={}, data={}",
@@ -305,13 +305,21 @@ impl Drop for DaemonSupervisor {
     }
 }
 
-fn open_daemon_log(log_path: Option<&str>, stream: &str) -> Result<std::fs::File, String> {
-    let path = log_path.ok_or("Daemon log path not initialized")?;
+fn open_daemon_log(log_dir: Option<&str>, stream: &str) -> Result<std::fs::File, String> {
+    let dir = log_dir.ok_or("Daemon log directory not initialized")?;
+    let path = PathBuf::from(dir).join(format!("daemon-{}.log", stream));
     let file = OpenOptions::new()
         .create(true)
         .append(true)
-        .open(path)
-        .map_err(|e| format!("Cannot open daemon {} log {}: {}", stream, path, e))?;
+        .open(&path)
+        .map_err(|e| {
+            format!(
+                "Cannot open daemon {} log {}: {}",
+                stream,
+                path.display(),
+                e
+            )
+        })?;
     Ok(file)
 }
 
