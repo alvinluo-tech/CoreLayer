@@ -1,7 +1,7 @@
-﻿/**
+/**
  * Computer Control Runtime — manages direct OS interactions.
  *
- * This runtime wraps the existing computer-control/ modules,
+ * This runtime wraps the existing computer control modules,
  * exposing them through the RuntimeProtocol HTTP endpoints.
  * All operations go through OSCapabilityBroker for permission checks.
  */
@@ -234,7 +234,7 @@ export class ComputerControlRuntime implements ManagedRuntime {
     reason?: string;
   }): Promise<unknown> {
     const { requestComputerControl } = await import(
-      "../../computer-control/computer-control-runtime.js"
+      "./computer-control-runtime.js"
     );
 
     return requestComputerControl(
@@ -346,7 +346,7 @@ export class ComputerControlRuntime implements ManagedRuntime {
    */
   async getPermissionStatuses(): Promise<unknown> {
     const { getPermissionStatuses } = await import(
-      "../../computer-control/computer-control-runtime.js"
+      "./computer-control-runtime.js"
     );
     return getPermissionStatuses();
   }
@@ -356,7 +356,7 @@ export class ComputerControlRuntime implements ManagedRuntime {
    */
   async getControlStatus(): Promise<unknown> {
     const { getComputerControlStatus } = await import(
-      "../../computer-control/computer-control-runtime.js"
+      "./computer-control-runtime.js"
     );
     return getComputerControlStatus();
   }

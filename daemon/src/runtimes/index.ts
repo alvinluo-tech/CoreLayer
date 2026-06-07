@@ -10,7 +10,7 @@ import { registerRuntime } from "../runtime-host/registry.js";
 import { AgentRuntime } from "./agent-runtime/index.js";
 import { VoiceRuntime } from "./voice-runtime/index.js";
 import { SchedulerRuntime } from "./scheduler-runtime/index.js";
-import { ComputerControlRuntime } from "./computer-control-runtime/index.js";
+import { ComputerControlRuntime } from "./computer-control/computer-control-runtime-facade.js";
 import { ToolRuntime as ToolExecutor } from "./tool/application/execute-tool.js";
 
 // Default config for in-process runtimes (no separate process, no HTTP port)

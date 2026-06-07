@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Computer Control Runtime — manages direct OS interactions.
  *
  * All operations go through OSCapabilityBroker for permission checks.
@@ -15,8 +15,8 @@ import type {
   ComputerControlPermissionStatus,
 } from "./types.js";
 import { COMPUTER_CONTROL_RISK } from "./types.js";
-import { getCapabilityBroker } from "../capabilities/os-capability-broker.js";
-import { getRepositories } from "../db/factory.js";
+import { getCapabilityBroker } from "../../capabilities/os-capability-broker.js";
+import { getRepositories } from "../../db/factory.js";
 
 /**
  * In-memory permission overrides.

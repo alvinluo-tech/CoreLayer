@@ -1,4 +1,4 @@
-﻿import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import {
   requestComputerControl,
   setComputerControlPermission,
@@ -7,12 +7,12 @@ import {
   getPermissionStatuses,
   getComputerControlStatus,
   resetComputerControlState,
-} from "./index.js";
-import { COMPUTER_CONTROL_RISK } from "./types.js";
+} from "../computer-control-runtime.js";
+import { COMPUTER_CONTROL_RISK } from "../types.js";
 
 // Mock OSCapabilityBroker
 const mockRequestCapability = vi.fn();
-vi.mock("../capabilities/os-capability-broker.js", () => ({
+vi.mock("../../../capabilities/os-capability-broker.js", () => ({
   getCapabilityBroker: () => ({
     requestCapability: mockRequestCapability,
   }),
@@ -20,7 +20,7 @@ vi.mock("../capabilities/os-capability-broker.js", () => ({
 
 // Mock repositories
 const mockAuditLogCreate = vi.fn();
-vi.mock("../db/factory.js", () => ({
+vi.mock("../../../db/factory.js", () => ({
   getRepositories: () => ({
     auditLog: { create: mockAuditLogCreate },
   }),
