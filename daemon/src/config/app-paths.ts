@@ -31,18 +31,23 @@ export function resolveAppPaths(): AppPaths {
     ? (process.env.JARVIS_LOG_DIR ?? path.join(appDataDir, "logs"))
     : path.join(appDataDir, "logs");
 
-  // SQLite path: use env var if set, otherwise under data dir
+  // SQLite path: keep relative env paths relative to the daemon process cwd.
+  // This preserves the existing dev .env value "./data/jarvis.db".
   const envSqlitePath = process.env.SQLITE_DB_PATH;
-  const sqlitePath = envSqlitePath && !envSqlitePath.startsWith("./")
-    ? envSqlitePath
-    : path.join(dataDir, "jarvis.db");
+  const sqlitePath = envSqlitePath
+    ? path.resolve(process.cwd(), envSqlitePath)
+    : path.join(isSidecar ? dataDir : appDataDir, "jarvis.db");
 
   return { appDataDir, configDir, dataDir, logDir, sqlitePath };
 }
 
 function getDefaultAppDataDir(): string {
-  // Dev mode: use repo-relative path
-  return path.resolve(process.cwd(), "daemon", "data");
+  // Dev mode can run with cwd at repo root or at the daemon package root.
+  // Keep both cases pointed at the historical daemon/data directory.
+  const cwd = process.cwd();
+  return path.basename(cwd) === "daemon"
+    ? path.resolve(cwd, "data")
+    : path.resolve(cwd, "daemon", "data");
 }
 
 /**
