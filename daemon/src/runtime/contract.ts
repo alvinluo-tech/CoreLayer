@@ -5,15 +5,20 @@
  * the /api/runtime/components endpoint and the Control Center UI.
  */
 
-/** Kinds of runtime components that Jarvis can manage. */
-export type RuntimeKind =
-  | "agent-runtime"
-  | "tool-runtime"
-  | "coding-runtime"
-  | "voice-runtime"
-  | "memory-runtime"
-  | "scheduler-runtime"
-  | "computer-control-runtime";
+/**
+ * Kinds of runtime components that Jarvis can manage.
+ *
+ * Canonical short-form names matching @jarvis/runtime-protocol RuntimeKind.
+ * These are the wire-format identifiers used in /api/runtime/components.
+ */
+export type RuntimeComponentKind =
+  | "agent"
+  | "tool"
+  | "coding"
+  | "voice"
+  | "memory"
+  | "scheduler"
+  | "computer-control";
 
 /** Status of a managed runtime component. */
 export type RuntimeStatus =
@@ -32,7 +37,7 @@ export type RestartPolicy =
 
 /** Describes a single managed runtime component. */
 export interface RuntimeComponent {
-  kind: RuntimeKind;
+  kind: RuntimeComponentKind;
   status: RuntimeStatus;
   pid?: number;
   port?: number;
@@ -44,12 +49,12 @@ export interface RuntimeComponent {
 }
 
 /** All defined runtime kinds. */
-export const ALL_RUNTIME_KINDS: RuntimeKind[] = [
-  "agent-runtime",
-  "tool-runtime",
-  "coding-runtime",
-  "voice-runtime",
-  "memory-runtime",
-  "scheduler-runtime",
-  "computer-control-runtime",
+export const ALL_RUNTIME_KINDS: RuntimeComponentKind[] = [
+  "agent",
+  "tool",
+  "coding",
+  "voice",
+  "memory",
+  "scheduler",
+  "computer-control",
 ];

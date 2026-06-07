@@ -92,5 +92,5 @@ export { apiError, extractErrorMessage, classifyError, logError } from "../utils
 
 // ─── Runtime Contract Types ───────────────────────────────────────────────────
 
-export type { RuntimeComponent, RuntimeKind, RuntimeStatus, RestartPolicy } from "../runtime/contract.js";
+export type { RuntimeComponent, RuntimeComponentKind, RuntimeStatus, RestartPolicy } from "../runtime/contract.js";
 export { ALL_RUNTIME_KINDS } from "../runtime/contract.js";

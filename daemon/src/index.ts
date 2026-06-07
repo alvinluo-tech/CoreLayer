@@ -14,7 +14,7 @@ import { registerConversationTools } from "./tools/conversation/connector.js";
 import { registerMemoryTools } from "./tools/memory/connector.js";
 import { logError } from "./utils/errors.js";
 import { registerAllAdapters } from "./mcp/adapters/index.js";
-import type { RuntimeComponent, RuntimeKind } from "./runtimes/index.js";
+import type { RuntimeComponent, RuntimeComponentKind } from "./runtimes/index.js";
 import { ALL_RUNTIME_KINDS } from "./runtimes/index.js";
 import conversationRoutes from "./api/conversations.js";
 import taskRoutes from "./api/tasks.js";
@@ -133,7 +133,7 @@ app.get("/api/runtime/components", (c) => {
   const paths = resolveAppPaths();
   const isHealthy = true; // If we can respond, we're healthy
   const status: RuntimeComponent["status"] = isHealthy ? "running" : "failed";
-  const components: RuntimeComponent[] = ALL_RUNTIME_KINDS.map((kind: RuntimeKind) => ({
+  const components: RuntimeComponent[] = ALL_RUNTIME_KINDS.map((kind: RuntimeComponentKind) => ({
     kind,
     status,
     pid: process.pid,

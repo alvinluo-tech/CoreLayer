@@ -1,3 +1,5 @@
+import type { RuntimeKind, RuntimeHealth } from './runtime-info.js';
+
 /**
  * Standard HTTP endpoints that every managed runtime must implement.
  */
@@ -16,10 +18,10 @@ export interface HealthResponse {
  */
 export interface RuntimeStatusResponse {
   id: string;
-  kind: string;
+  kind: RuntimeKind;
   version: string;
   protocolVersion: number;
-  health: string;
+  health: RuntimeHealth;
   activeRun: boolean;
   activeRunId?: string;
   completedRuns: number;

@@ -674,13 +674,13 @@ export async function restartDaemon(): Promise<DaemonStatus> {
 // ---- Runtime Registry ----
 
 export type RuntimeKind =
-  | 'agent-runtime'
-  | 'tool-runtime'
-  | 'coding-runtime'
-  | 'voice-runtime'
-  | 'memory-runtime'
-  | 'scheduler-runtime'
-  | 'computer-control-runtime';
+  | 'agent'
+  | 'tool'
+  | 'coding'
+  | 'voice'
+  | 'memory'
+  | 'scheduler'
+  | 'computer-control';
 
 export type RuntimeStatus = 'pending' | 'starting' | 'running' | 'degraded' | 'stopped' | 'failed';
 

@@ -888,13 +888,13 @@ async fn get_runtime_components(
     };
 
     let kinds = vec![
-        runtime_registry::RuntimeKind::AgentRuntime,
-        runtime_registry::RuntimeKind::ToolRuntime,
-        runtime_registry::RuntimeKind::CodingRuntime,
-        runtime_registry::RuntimeKind::VoiceRuntime,
-        runtime_registry::RuntimeKind::MemoryRuntime,
-        runtime_registry::RuntimeKind::SchedulerRuntime,
-        runtime_registry::RuntimeKind::ComputerControlRuntime,
+        runtime_registry::RuntimeKind::Agent,
+        runtime_registry::RuntimeKind::Tool,
+        runtime_registry::RuntimeKind::Coding,
+        runtime_registry::RuntimeKind::Voice,
+        runtime_registry::RuntimeKind::Memory,
+        runtime_registry::RuntimeKind::Scheduler,
+        runtime_registry::RuntimeKind::ComputerControl,
     ];
 
     let components = kinds

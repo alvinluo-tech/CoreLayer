@@ -30,7 +30,7 @@ export { ApprovalManager } from "./approval-manager.js";
 
 // Runtime Component Contract (Phase 8)
 export type {
-  RuntimeKind,
+  RuntimeComponentKind,
   RuntimeStatus,
   RestartPolicy,
   RuntimeComponent,

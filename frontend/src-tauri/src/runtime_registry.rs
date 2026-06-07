@@ -5,18 +5,23 @@ use tokio::sync::Mutex;
 
 /// Kinds of runtime components that Jarvis can manage.
 ///
-/// Currently only `AgentRuntime` (the single daemon) is implemented.
-/// Future phases may add dedicated runtimes for tools, voice, coding, etc.
+/// Short-form canonical names matching @jarvis/runtime-protocol RuntimeKind.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
-#[serde(rename_all = "kebab-case")]
 pub enum RuntimeKind {
-    AgentRuntime,
-    ToolRuntime,
-    CodingRuntime,
-    VoiceRuntime,
-    MemoryRuntime,
-    SchedulerRuntime,
-    ComputerControlRuntime,
+    #[serde(rename = "agent")]
+    Agent,
+    #[serde(rename = "tool")]
+    Tool,
+    #[serde(rename = "coding")]
+    Coding,
+    #[serde(rename = "voice")]
+    Voice,
+    #[serde(rename = "memory")]
+    Memory,
+    #[serde(rename = "scheduler")]
+    Scheduler,
+    #[serde(rename = "computer-control")]
+    ComputerControl,
 }
 
 /// Status of a managed runtime component.

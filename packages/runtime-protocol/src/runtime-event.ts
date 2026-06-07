@@ -1,3 +1,5 @@
+import type { RuntimeKind } from './runtime-info.js';
+
 /**
  * Events emitted by managed runtimes.
  */
@@ -16,7 +18,7 @@ export interface RuntimeStartedEvent {
   type: 'runtime:started';
   payload: {
     runtimeId: string;
-    kind: string;
+    kind: RuntimeKind;
     timestamp: string;
   };
 }
