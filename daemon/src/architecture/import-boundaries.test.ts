@@ -277,6 +277,22 @@ describe("Runtime modules must not directly import node:child_process", () => {
   }
 });
 
+describe("Non-adapter daemon source must not import node:child_process", () => {
+  const allDaemonFiles = listTsFiles(srcDir).filter(
+    (f) =>
+      !f.includes("__tests__") &&
+      !f.includes(".test.") &&
+      !f.includes("capabilities/adapters/"),
+  );
+
+  for (const file of allDaemonFiles) {
+    it(`${file} must not import node:child_process`, () => {
+      const source = readFile(file);
+      expect(source).not.toMatch(/import.*from\s+["']node:child_process/);
+    });
+  }
+});
+
 describe("packages/* must not import daemon/* or frontend/*", () => {
   const packagesDir = resolve(rootDir, "packages");
   if (!existsSync(packagesDir)) return;

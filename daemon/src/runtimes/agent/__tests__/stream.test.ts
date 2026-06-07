@@ -170,7 +170,7 @@ vi.mock("../../../persistence/factory.js", () => ({
   }),
 }));
 
-// Mock streamChat to return a fake stream with delta events
+// Mock streamChat to return a fake stream with text-delta events (AI SDK shape)
 vi.mock("../application/conversation.js", () => ({
   streamChat: vi.fn().mockImplementation(
     (
@@ -186,13 +186,15 @@ vi.mock("../application/conversation.js", () => ({
             [Symbol.asyncIterator]() {
               let i = 0;
               const chunks = [
-                { type: "delta", text: "Hello " },
-                { type: "delta", text: "world" },
+                { type: "text-delta", text: "Hello " },
+                { type: "text-delta", text: "world" },
               ];
               return {
                 async next() {
                   if (abortController?.signal.aborted) {
-                    throw new Error("The operation was aborted");
+                    const err = new Error("The operation was aborted");
+                    err.name = "AbortError";
+                    throw err;
                   }
                   if (i < chunks.length) {
                     return { value: chunks[i++], done: false };
@@ -206,11 +208,6 @@ vi.mock("../application/conversation.js", () => ({
         abortController: abortController ?? new AbortController(),
       }),
   ),
-}));
-
-// Mock normalizeStream to pass through delta events
-vi.mock("../../shared/stream/sse-normalizer.js", () => ({
-  normalizeStream: vi.fn((stream: AsyncIterable<unknown>) => stream),
 }));
 
 vi.mock("../../shared/stream/stream-timeout.js", () => ({
@@ -452,7 +449,7 @@ describe("runStreamTurn", () => {
   it("client disconnect marks run as cancelled", async () => {
     const abortController = new AbortController();
 
-    // Mock a stream that yields one delta then checks abort signal on next call
+    // Mock a stream that yields one text-delta then throws AbortError on next call
     let streamStep = 0;
     vi.mocked(streamChat).mockImplementationOnce(async () => ({
       stream: {
@@ -462,10 +459,12 @@ describe("runStreamTurn", () => {
               async next() {
                 streamStep++;
                 if (streamStep === 1) {
-                  return { value: { type: "delta", text: "partial " }, done: false };
+                  return { value: { type: "text-delta", text: "partial " }, done: false };
                 }
                 if (abortController.signal.aborted) {
-                  throw new Error("The operation was aborted");
+                  const err = new Error("The operation was aborted");
+                  err.name = "AbortError";
+                  throw err;
                 }
                 return { value: undefined, done: true };
               },
@@ -516,7 +515,7 @@ describe("runStreamTurn", () => {
   });
 
   it("saves partial assistant text on stream error", async () => {
-    // Mock a stream that yields one delta then throws
+    // Mock a stream that yields one text-delta then throws
     vi.mocked(streamChat).mockResolvedValueOnce({
       stream: {
         fullStream: {
@@ -526,7 +525,7 @@ describe("runStreamTurn", () => {
               async next() {
                 if (!called) {
                   called = true;
-                  return { value: { type: "delta", text: "partial" }, done: false };
+                  return { value: { type: "text-delta", text: "partial" }, done: false };
                 }
                 throw new Error("stream broke");
               },

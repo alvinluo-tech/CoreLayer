@@ -12,47 +12,13 @@ import type {
   CreateAgentRunWorkspaceInput,
   FileConflict,
 } from "./types.js";
-import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { getCapabilityBroker } from "../capabilities/os-capability-broker.js";
+import { execGit, allowGitRoot } from "../capabilities/adapters/git-command-adapter.js";
 
 /** In-memory store (will be replaced with DB-backed store) */
 const projectWorkspaces = new Map<string, ProjectWorkspace>();
 const agentWorkspaces = new Map<string, AgentRunWorkspace>();
-
-/**
- * Execute a git command through the capability broker for permission enforcement.
- */
-async function execGitWithCapability(
-  args: string[],
-  cwd: string,
-  actorId: string,
-  opts?: { agentRunId?: string; projectId?: string },
-): Promise<string> {
-  const command = `git ${args.join(" ")}`;
-  const broker = getCapabilityBroker();
-  const decision = await broker.requestShellExec(actorId, command, {
-    reason: `Git worktree operation: ${args[0]}`,
-    ...opts,
-  });
-
-  if (decision.decision === "deny") {
-    throw new Error(`Permission denied for git command: ${decision.reason}`);
-  }
-
-  // For approval_required, we'd need to wait for user approval
-  // For now, treat approval_required as deny (skeleton implementation)
-  if (decision.decision === "approval_required") {
-    throw new Error(`Git command requires approval: ${command}`);
-  }
-
-  return execFileSync("git", args, {
-    cwd,
-    stdio: "pipe",
-    encoding: "utf-8",
-  });
-}
 
 /**
  * Create a project workspace from an existing git repo.
@@ -69,6 +35,10 @@ export function createProjectWorkspace(
   }
 
   mkdirSync(workspaceRoot, { recursive: true });
+
+  // Register repo and workspace root as allowed git execution dirs
+  allowGitRoot(input.repoPath);
+  allowGitRoot(workspaceRoot);
 
   const workspace: ProjectWorkspace = {
     id,
@@ -101,7 +71,7 @@ export async function createAgentRunWorkspace(
   const worktreePath = join(projectWs.workspaceRoot, `run-${id.slice(0, 8)}`);
 
   try {
-    await execGitWithCapability(
+    await execGit(
       ["worktree", "add", "-b", branchName, worktreePath, "HEAD"],
       projectWs.repoPath,
       "worktree-manager",
@@ -110,7 +80,7 @@ export async function createAgentRunWorkspace(
   } catch {
     // If branch already exists, try without -b
     try {
-      await execGitWithCapability(
+      await execGit(
         ["worktree", "add", worktreePath, branchName],
         projectWs.repoPath,
         "worktree-manager",
@@ -145,7 +115,7 @@ export async function getChangedFiles(workspaceId: string): Promise<string[]> {
   if (!ws) throw new Error(`Workspace not found: ${workspaceId}`);
 
   try {
-    const output = await execGitWithCapability(
+    const output = await execGit(
       ["diff", "--name-only", "HEAD"],
       ws.worktreePath,
       "worktree-manager",
@@ -185,7 +155,7 @@ export async function removeWorkspace(workspaceId: string): Promise<void> {
 
   if (projectWs) {
     try {
-      await execGitWithCapability(
+      await execGit(
         ["worktree", "remove", ws.worktreePath, "--force"],
         projectWs.repoPath,
         "worktree-manager",
