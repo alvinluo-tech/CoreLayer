@@ -1,4 +1,5 @@
 import path from "path";
+import { mkdirSync } from "fs";
 
 export interface AppPaths {
   appDataDir: string;
@@ -48,7 +49,6 @@ function getDefaultAppDataDir(): string {
  * Ensure all required directories exist.
  */
 export function ensureAppDirs(paths: AppPaths): void {
-  const { mkdirSync } = require("fs");
   mkdirSync(paths.configDir, { recursive: true });
   mkdirSync(paths.dataDir, { recursive: true });
   mkdirSync(paths.logDir, { recursive: true });
