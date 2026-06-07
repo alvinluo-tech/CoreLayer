@@ -5,7 +5,7 @@ import { getRepositories } from "../../persistence/factory.js";
 import type { ScheduledTaskRow } from "../../persistence/repository.js";
 import { logError } from "../../utils/errors.js";
 import { configManager } from "../../config/config-manager.js";
-import { buildTickSystemPrompt } from "../../orchestrator/prompt-builder.js";
+import { buildTickSystemPrompt } from "../agent/application/prompt-builder.js";
 
 /**
  * Scheduler for recurring task execution.
@@ -469,7 +469,7 @@ export async function consolidateOnIdle(): Promise<{
   );
 
   // 2. Compress each conversation
-  const { compressConversation } = await import("../../orchestrator/compressor.js");
+  const { compressConversation } = await import("../agent/application/compressor.js");
 
   for (const conv of recentConversations) {
     try {

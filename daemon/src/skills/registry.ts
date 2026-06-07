@@ -1,5 +1,5 @@
 import type { JarvisTool, ToolResult } from "@jarvis/types";
-import { registerJarvisTool } from "../tools/registry.js";
+import { registerJarvisTool } from "../runtimes/tool/adapters/native-tools/registry.js";
 import { getAllSkills, loadSkillsFromDirectory } from "./loader.js";
 import { executeSkill } from "./executor.js";
 import type { LoadedSkill } from "./types.js";

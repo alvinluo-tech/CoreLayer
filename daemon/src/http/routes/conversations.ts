@@ -1,15 +1,10 @@
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
-import {
-  getRepositories,
-  isGoalCommand,
-  handleGoalCommand,
-  apiError,
-  extractErrorMessage,
-  logError,
-  runStreamTurn,
-  runTurn,
-} from "../../runtimes/index.js";
+import { getRepositories } from "../../persistence/factory.js";
+import { runStreamTurn } from "../../runtimes/agent/stream.js";
+import { runTurn } from "../../runtimes/agent/run.js";
+import { isGoalCommand, handleGoalCommand } from "../../runtimes/agent/application/goal-handler.js";
+import { apiError, extractErrorMessage, logError } from "../../utils/errors.js";
 
 const app = new Hono();
 
@@ -195,7 +190,7 @@ app.post("/:id/messages/stream", async (c) => {
           lastConversation = event.result.conversation;
 
           // Goal auto-continuation: check if active goals need more work
-          const { GoalJudge } = await import("../../orchestrator/goal-handler.js");
+          const { GoalJudge } = await import("../../runtimes/agent/application/goal-handler.js");
           const goalJudge = new GoalJudge();
           const goalCheck = await goalJudge.checkAfterTurn(fullText);
 

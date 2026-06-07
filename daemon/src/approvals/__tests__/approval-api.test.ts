@@ -13,12 +13,15 @@ const mockConversationsAddMessage = vi.fn();
 const mockConversationsGetById = vi.fn();
 
 const mockResolvePendingConfirmation = vi.fn().mockReturnValue(true);
-vi.mock("../../runtimes/index.js", () => ({
+vi.mock("../../runtimes/tool/application/execute-tool.js", () => ({
   toolRuntime: {
     getPermissionGuard: () => ({
       resolvePendingConfirmation: mockResolvePendingConfirmation,
     }),
   },
+}));
+
+vi.mock("../../persistence/factory.js", () => ({
   getRepositories: () => ({
     approvalRequests: {
       expireStale: mockExpireStale,
@@ -40,6 +43,9 @@ vi.mock("../../runtimes/index.js", () => ({
       getById: mockConversationsGetById,
     },
   }),
+}));
+
+vi.mock("../../utils/errors.js", () => ({
   apiError: (c: unknown, msg: string, status = 500) => (c as { json: (body: unknown, s?: number) => unknown }).json({ error: msg }, status),
   extractErrorMessage: (err: unknown) => err instanceof Error ? err.message : String(err),
   logError: vi.fn(),
@@ -55,7 +61,7 @@ vi.mock("../resume-service.js", () => ({
   }),
 }));
 
-vi.mock("../../orchestrator/conversation.js", () => ({
+vi.mock("../../runtimes/agent/application/conversation.js", () => ({
   handleMessageInConversation: vi.fn().mockResolvedValue({
     userMessage: { id: "msg-1" },
     assistantMessage: { id: "msg-2", content: "Done" },

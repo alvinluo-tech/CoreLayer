@@ -164,7 +164,7 @@ const compressorMocks = vi.hoisted(() => ({
   extractPreferences: vi.fn(),
 }));
 
-vi.mock("../../../orchestrator/compressor.js", () => compressorMocks);
+vi.mock("../../agent/application/compressor.js", () => compressorMocks);
 
 const {
   computeNextRun,

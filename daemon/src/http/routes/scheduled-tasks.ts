@@ -1,13 +1,8 @@
 import { Hono } from "hono";
-import {
-  getRepositories,
-  apiError,
-  extractErrorMessage,
-  logError,
-  triggerTask,
-  computeNextRun,
-  parseNlTimeToCron,
-} from "../../runtimes/index.js";
+import { getRepositories } from "../../persistence/factory.js";
+import { apiError, extractErrorMessage, logError } from "../../utils/errors.js";
+import { triggerTask, computeNextRun } from "../../runtimes/scheduler/scheduler.js";
+import { parseNlTimeToCron } from "../../utils/nl-time-parse.js";
 
 const app = new Hono();
 

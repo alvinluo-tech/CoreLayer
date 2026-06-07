@@ -5,7 +5,7 @@
  */
 
 import type { JarvisTool, ToolResult } from "@jarvis/types";
-import { registerJarvisTool } from "../../tools/registry.js";
+import { registerJarvisTool } from "../../runtimes/tool/adapters/native-tools/registry.js";
 import type { AppConfig, AdapterToolDef } from "./types.js";
 
 /**

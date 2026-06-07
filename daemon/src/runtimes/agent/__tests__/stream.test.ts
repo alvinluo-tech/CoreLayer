@@ -171,46 +171,59 @@ vi.mock("../../../persistence/factory.js", () => ({
 }));
 
 // Mock streamChat to return a fake stream with delta events
-vi.mock("../../../orchestrator/conversation.js", () => ({
-  streamChat: vi.fn().mockResolvedValue({
-    stream: {
-      fullStream: {
-        [Symbol.asyncIterator]() {
-          let i = 0;
-          const chunks = [
-            { type: "delta", text: "Hello " },
-            { type: "delta", text: "world" },
-          ];
-          return {
-            async next() {
-              if (i < chunks.length) {
-                return { value: chunks[i++], done: false };
-              }
-              return { value: undefined, done: true };
+vi.mock("../application/conversation.js", () => ({
+  streamChat: vi.fn().mockImplementation(
+    (
+      _messages: unknown,
+      _mode: unknown,
+      _conversationId: unknown,
+      _onToolEvent: unknown,
+      abortController?: AbortController,
+    ) =>
+      Promise.resolve({
+        stream: {
+          fullStream: {
+            [Symbol.asyncIterator]() {
+              let i = 0;
+              const chunks = [
+                { type: "delta", text: "Hello " },
+                { type: "delta", text: "world" },
+              ];
+              return {
+                async next() {
+                  if (abortController?.signal.aborted) {
+                    throw new Error("The operation was aborted");
+                  }
+                  if (i < chunks.length) {
+                    return { value: chunks[i++], done: false };
+                  }
+                  return { value: undefined, done: true };
+                },
+              };
             },
-          };
+          },
         },
-      },
-    },
-  }),
+        abortController: abortController ?? new AbortController(),
+      }),
+  ),
 }));
 
 // Mock normalizeStream to pass through delta events
-vi.mock("../../../api/sse-normalizer.js", () => ({
+vi.mock("../../shared/stream/sse-normalizer.js", () => ({
   normalizeStream: vi.fn((stream: AsyncIterable<unknown>) => stream),
 }));
 
-vi.mock("../../../api/stream-timeout.js", () => ({
+vi.mock("../../shared/stream/stream-timeout.js", () => ({
   withStreamTimeout: vi.fn((stream: AsyncIterable<unknown>) => stream),
 }));
 
-vi.mock("../../../config/config-manager.js", () => ({
+vi.mock("../../config/config-manager.js", () => ({
   configManager: {
     getStreamTimeout: () => 120_000,
   },
 }));
 
-vi.mock("../../../utils/errors.js", () => ({
+vi.mock("../../utils/errors.js", () => ({
   logError: vi.fn(),
 }));
 
@@ -229,7 +242,7 @@ vi.mock("../run-context.js", () => ({
 }));
 
 const { runStreamTurn } = await import("../stream.js");
-const { streamChat } = await import("../../../orchestrator/conversation.js");
+const { streamChat } = await import("../application/conversation.js");
 
 describe("runStreamTurn", () => {
   beforeEach(() => {

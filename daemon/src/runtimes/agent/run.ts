@@ -11,7 +11,7 @@ import type {
   AgentRunResult,
 } from "./domain/agent-run.js";
 import { getRepositories } from "../../persistence/factory.js";
-import { handleMessageInConversation } from "../../orchestrator/conversation.js";
+import { handleMessageInConversation } from "./application/conversation.js";
 import { logError } from "../../utils/errors.js";
 import { TaskGraph } from "../../task/task-graph.js";
 import { resolveConversationScope } from "./run-context.js";

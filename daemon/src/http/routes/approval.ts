@@ -1,7 +1,9 @@
 import { Hono } from "hono";
-import { getRepositories, apiError, extractErrorMessage, logError, toolRuntime } from "../../runtimes/index.js";
+import { getRepositories } from "../../persistence/factory.js";
+import { apiError, extractErrorMessage, logError } from "../../utils/errors.js";
+import { toolRuntime } from "../../runtimes/tool/application/execute-tool.js";
 import { executeApprovedTool } from "../../approvals/resume-service.js";
-import { handleMessageInConversation } from "../../orchestrator/conversation.js";
+import { handleMessageInConversation } from "../../runtimes/agent/application/conversation.js";
 
 const approvalRoutes = new Hono();
 

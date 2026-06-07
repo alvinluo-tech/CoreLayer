@@ -54,7 +54,7 @@ describe("TaskFlow Adapter — Repository Pattern", () => {
     mockQuery.mockResolvedValue(mockTasks);
 
     const { registerTaskFlowAdapter: register } = await import("../../gateways/mcp/adapters/taskflow.js");
-    const { getRegistry } = await import("../../tools/registry.js");
+    const { getRegistry } = await import("../../runtimes/tool/adapters/native-tools/registry.js");
     register();
 
     const registry = getRegistry();
@@ -72,7 +72,7 @@ describe("TaskFlow Adapter — Repository Pattern", () => {
     mockCreate.mockResolvedValue(mockTask);
 
     const { registerTaskFlowAdapter: register } = await import("../../gateways/mcp/adapters/taskflow.js");
-    const { getRegistry } = await import("../../tools/registry.js");
+    const { getRegistry } = await import("../../runtimes/tool/adapters/native-tools/registry.js");
     register();
 
     const registry = getRegistry();
@@ -101,7 +101,7 @@ describe("TaskFlow Adapter — Repository Pattern", () => {
     mockCreate.mockResolvedValue({ id: "1", title: "Minimal" });
 
     const { registerTaskFlowAdapter: register } = await import("../../gateways/mcp/adapters/taskflow.js");
-    const { getRegistry } = await import("../../tools/registry.js");
+    const { getRegistry } = await import("../../runtimes/tool/adapters/native-tools/registry.js");
     register();
 
     const registry = getRegistry();
@@ -123,7 +123,7 @@ describe("TaskFlow Adapter — Repository Pattern", () => {
     mockQuery.mockRejectedValue(new Error("DB connection failed"));
 
     const { registerTaskFlowAdapter: register } = await import("../../gateways/mcp/adapters/taskflow.js");
-    const { getRegistry } = await import("../../tools/registry.js");
+    const { getRegistry } = await import("../../runtimes/tool/adapters/native-tools/registry.js");
     register();
 
     const registry = getRegistry();

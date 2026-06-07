@@ -199,7 +199,7 @@ vi.mock("../../../persistence/factory.js", () => ({
 }));
 
 // Mock conversation handler to avoid LLM calls
-vi.mock("../../../orchestrator/conversation.js", () => ({
+vi.mock("../application/conversation.js", () => ({
   handleMessageInConversation: vi.fn().mockResolvedValue({
     userMessage: {
       id: "user-msg-1",
@@ -312,7 +312,7 @@ describe("runTurn", () => {
   });
 
   it("should handle errors and mark run as failed", async () => {
-    const { handleMessageInConversation } = await import("../../../orchestrator/conversation.js");
+    const { handleMessageInConversation } = await import("../application/conversation.js");
     vi.mocked(handleMessageInConversation).mockRejectedValueOnce(new Error("LLM unavailable"));
 
     await expect(
@@ -400,7 +400,7 @@ describe("runTurn", () => {
   });
 
   it("should emit memory_read and memory_written events when callbacks fire", async () => {
-    const { handleMessageInConversation } = await import("../../../orchestrator/conversation.js");
+    const { handleMessageInConversation } = await import("../application/conversation.js");
     vi.mocked(handleMessageInConversation).mockImplementationOnce(
       async (_convId, _input, options) => {
         // Simulate the conversation handler calling memory callbacks

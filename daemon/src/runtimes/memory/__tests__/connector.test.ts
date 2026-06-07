@@ -41,7 +41,7 @@ vi.mock("../../../persistence/factory.js", () => ({
 
 // Import after mock setup
 const { registerMemoryTools } = await import("../connector.js");
-const { getTool } = await import("../../../tools/registry.js");
+const { getTool } = await import("../../tool/adapters/native-tools/registry.js");
 
 /** Call a tool and unwrap the registry wrapper { success, data } */
 async function callTool(name: string, args: Record<string, unknown>) {

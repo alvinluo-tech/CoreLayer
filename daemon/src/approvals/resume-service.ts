@@ -11,7 +11,7 @@
  */
 
 import { getRepositories } from "../persistence/factory.js";
-import { getRegistry } from "../tools/registry.js";
+import { getRegistry } from "../runtimes/tool/adapters/native-tools/registry.js";
 import type { ToolResult } from "@jarvis/types";
 
 export interface ResumeResult {

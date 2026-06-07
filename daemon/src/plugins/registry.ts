@@ -1,6 +1,6 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { registerJarvisTool } from "../tools/registry.js";
+import { registerJarvisTool } from "../runtimes/tool/adapters/native-tools/registry.js";
 import type { Plugin, PluginMetadata, PluginContext } from "./types.js";
 
 /**

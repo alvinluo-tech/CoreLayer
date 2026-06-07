@@ -1,7 +1,7 @@
 import { MCPClientManager } from "@jarvis/mcp-client";
 import { ToolRegistry } from "@jarvis/tool-registry";
 import type { MCPServerConfig } from "@jarvis/types";
-import { getRegistry } from "../../tools/registry.js";
+import { getRegistry } from "../../runtimes/tool/adapters/native-tools/registry.js";
 import { loadMCPServers } from "../../config/mcp-config.js";
 
 let mcpManager: MCPClientManager | null = null;

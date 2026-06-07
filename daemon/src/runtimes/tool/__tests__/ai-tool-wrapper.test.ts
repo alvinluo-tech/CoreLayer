@@ -9,7 +9,7 @@ vi.mock("../../index.js", () => ({
   toolRuntime: { execute: (...args: unknown[]) => mockExecute(...args) },
 }));
 
-vi.mock("../../../tools/registry.js", () => ({
+vi.mock("../adapters/native-tools/registry.js", () => ({
   getRegistry: () => ({
     getTool: (name: string) => mockGetTool(name),
   }),

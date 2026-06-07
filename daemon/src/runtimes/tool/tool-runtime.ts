@@ -1,7 +1,7 @@
 /**
  * Tool Runtime — manages tool registry, execution, and permission enforcement.
  *
- * This runtime wraps the existing runtime/application/execute-tool.ts and tools/registry.ts,
+ * This runtime wraps the existing runtime/application/execute-tool.ts and native-tools/registry.ts,
  * exposing them through the RuntimeProtocol HTTP endpoints.
  */
 
@@ -254,7 +254,7 @@ export class ToolRuntime implements ManagedRuntime {
   async listTools(): Promise<
     Array<{ id: string; name: string; description: string; risk: string }>
   > {
-    const { getRegistry } = await import("../../tools/registry.js");
+    const { getRegistry } = await import("./adapters/native-tools/registry.js");
     const registry = getRegistry();
     const tools = registry.getAllTools();
 

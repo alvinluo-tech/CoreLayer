@@ -43,7 +43,7 @@ const mockRegistry = {
   getTool: vi.fn(() => undefined),
 };
 
-vi.mock("../../../tools/registry.js", () => ({
+vi.mock("../adapters/native-tools/registry.js", () => ({
   getRegistry: () => mockRegistry,
 }));
 

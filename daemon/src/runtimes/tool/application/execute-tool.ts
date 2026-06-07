@@ -1,7 +1,7 @@
 import { PermissionGuard } from "@jarvis/permission-guard";
 import type { ToolResult, JSONSchema } from "@jarvis/types";
 import type { ApprovalRequiredResult } from "@jarvis/runtime-protocol";
-import { getRegistry } from "../../../tools/registry.js";
+import { getRegistry } from "../adapters/native-tools/registry.js";
 import { getRepositories } from "../../../persistence/factory.js";
 
 /**
@@ -289,3 +289,6 @@ export class ToolRuntime {
     return this.permissionGuard;
   }
 }
+
+/** Module-level singleton for tool execution (permission guard, audit, etc.) */
+export const toolRuntime = new ToolRuntime();

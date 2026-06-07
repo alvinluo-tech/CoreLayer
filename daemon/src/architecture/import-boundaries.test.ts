@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "fs";
+import { readFileSync, existsSync } from "fs";
 import { resolve } from "path";
 
 const srcDir = resolve(import.meta.dirname, "..");
@@ -107,4 +107,77 @@ describe("Runtime entrypoint guards", () => {
     }
     expect(violations).toEqual([]);
   });
+});
+
+describe("runtimes/index.ts boundary guards", () => {
+  it("runtimes/index.ts must not import from orchestrator", () => {
+    const source = readFile("runtimes/index.ts");
+    expect(source).not.toContain('"../orchestrator/');
+    expect(source).not.toContain("'../orchestrator/");
+  });
+
+  it("runtimes/index.ts must not import from tools/", () => {
+    const source = readFile("runtimes/index.ts");
+    expect(source).not.toContain('"../tools/');
+    expect(source).not.toContain("'../tools/");
+  });
+
+  it("runtimes/index.ts must not import from persistence/", () => {
+    const source = readFile("runtimes/index.ts");
+    expect(source).not.toContain('"../persistence/');
+    expect(source).not.toContain("'../persistence/");
+  });
+
+  it("runtimes/index.ts must not import from utils/", () => {
+    const source = readFile("runtimes/index.ts");
+    expect(source).not.toContain('"../utils/');
+    expect(source).not.toContain("'../utils/");
+  });
+
+  it("runtimes/index.ts must not import from config/", () => {
+    const source = readFile("runtimes/index.ts");
+    expect(source).not.toContain('"../config/');
+    expect(source).not.toContain("'../config/");
+  });
+
+  it("http/routes must not import from runtimes/index.ts", () => {
+    const routeFiles = [
+      "http/routes/chat.ts",
+      "http/routes/voice.ts",
+      "http/routes/tools.ts",
+      "http/routes/approval.ts",
+      "http/routes/scheduled-tasks.ts",
+      "http/routes/conversations.ts",
+    ];
+    for (const file of routeFiles) {
+      const source = readFile(file);
+      const violations: string[] = [];
+      const lines = source.split("\n");
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        if (line.includes("import") && line.includes("runtimes/index")) {
+          violations.push(`  ${file}:${i + 1}: ${line.trim()}`);
+        }
+      }
+      expect(violations).toEqual([]);
+    }
+  });
+});
+
+describe("Runtime directory naming guards", () => {
+  const forbiddenDirs = [
+    "runtimes/agent-runtime",
+    "runtimes/tool-runtime",
+    "runtimes/coding-runtime",
+    "runtimes/computer-control-runtime",
+    "runtimes/voice-runtime",
+    "runtimes/scheduler-runtime",
+  ];
+
+  for (const dir of forbiddenDirs) {
+    it(`${dir} must not exist`, () => {
+      const fullPath = resolve(srcDir, dir);
+      expect(existsSync(fullPath)).toBe(false);
+    });
+  }
 });

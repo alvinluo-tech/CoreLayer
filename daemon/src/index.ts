@@ -7,10 +7,10 @@ import { initializeRepositories, getCurrentMode, getRepositories } from "./persi
 import { getStorageMode } from "./config/storage-config.js";
 import { runMigration } from "./config/migration.js";
 import { configManager } from "./config/config-manager.js";
-import { registerTodoTools } from "./tools/todo/connector.js";
-import { registerReadingTools } from "./tools/reading/connector.js";
-import { registerReviewTools } from "./tools/review/connector.js";
-import { registerConversationTools } from "./tools/conversation/connector.js";
+import { registerTodoTools } from "./runtimes/tool/adapters/native-tools/todo/connector.js";
+import { registerReadingTools } from "./runtimes/tool/adapters/native-tools/reading/connector.js";
+import { registerReviewTools } from "./runtimes/tool/adapters/native-tools/review/connector.js";
+import { registerConversationTools } from "./runtimes/tool/adapters/native-tools/conversation.js";
 import { registerMemoryTools } from "./runtimes/memory/connector.js";
 import { logError } from "./utils/errors.js";
 import { registerAllAdapters } from "./gateways/mcp/adapters/index.js";

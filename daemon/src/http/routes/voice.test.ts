@@ -1,33 +1,54 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
-// Mock all external dependencies via the barrel import
+// Mock all external dependencies via direct imports
 const mockTranscribeWithGroq = vi.fn();
 const mockIsAsrAvailable = vi.fn().mockReturnValue(false);
 const mockSynthesizeSpeech = vi.fn();
 const mockIsTtsAvailable = vi.fn().mockReturnValue(false);
 const mockRunStreamTurn = vi.fn();
 
-vi.mock("../../runtimes/index.js", () => ({
+vi.mock("../../runtimes/voice/asr.js", () => ({
   transcribeWithGroq: (...args: unknown[]) => mockTranscribeWithGroq(...args),
   isAsrAvailable: () => mockIsAsrAvailable(),
+}));
+
+vi.mock("../../runtimes/voice/tts.js", () => ({
   synthesizeSpeech: (...args: unknown[]) => mockSynthesizeSpeech(...args),
   isTtsAvailable: () => mockIsTtsAvailable(),
+}));
+
+vi.mock("../../runtimes/voice/streaming-tts.js", () => ({
   StreamingTTS: vi.fn().mockImplementation(() => ({
     feed: vi.fn(),
     flush: vi.fn().mockResolvedValue([]),
     onAudio: vi.fn(),
   })),
+}));
+
+vi.mock("../../runtimes/voice/providers.js", () => ({
   voiceRegistry: {
     getAvailableASR: vi.fn().mockReturnValue([]),
     getAvailableTTS: vi.fn().mockReturnValue([]),
   },
+}));
+
+vi.mock("../../gateways/ai-provider/provider.js", () => ({
   getProviderConfig: vi.fn().mockReturnValue({ apiKey: "" }),
+}));
+
+vi.mock("../../config/config-manager.js", () => ({
   configManager: {
     getCredentials: vi.fn(() => ({})),
     getProviderConfig: vi.fn(() => ({ baseURL: "", apiKey: "" })),
   },
+}));
+
+vi.mock("../../utils/errors.js", () => ({
   extractErrorMessage: vi.fn((e: unknown) => (e instanceof Error ? e.message : String(e))),
   logError: vi.fn(),
+}));
+
+vi.mock("../../runtimes/agent/stream.js", () => ({
   runStreamTurn: (...args: unknown[]) => mockRunStreamTurn(...args),
 }));
 

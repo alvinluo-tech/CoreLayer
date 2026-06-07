@@ -17,15 +17,15 @@ const { mockRunStreamTurn, mockRunTurn, mockGetById, mockAddMessage, mockList, m
   mockDeleteMessage: vi.fn(),
 }));
 
-vi.mock("../runtimes/agent/stream.js", () => ({
+vi.mock("../../runtimes/agent/stream.js", () => ({
   runStreamTurn: (...args: unknown[]) => mockRunStreamTurn(...args),
 }));
 
-vi.mock("../runtimes/agent/run.js", () => ({
+vi.mock("../../runtimes/agent/run.js", () => ({
   runTurn: (...args: unknown[]) => mockRunTurn(...args),
 }));
 
-vi.mock("../persistence/factory.js", () => ({
+vi.mock("../../persistence/factory.js", () => ({
   getRepositories: () => ({
     conversations: {
       getById: (...args: unknown[]) => mockGetById(...args),
@@ -52,12 +52,20 @@ vi.mock("../persistence/factory.js", () => ({
   }),
 }));
 
-vi.mock("../orchestrator/goal-handler.js", () => ({
+vi.mock("../../runtimes/agent/application/goal-handler.js", () => ({
   isGoalCommand: vi.fn().mockReturnValue(false),
   handleGoalCommand: vi.fn(),
   GoalJudge: vi.fn().mockImplementation(() => ({
     checkAfterTurn: vi.fn().mockResolvedValue({ needsContinuation: false }),
   })),
+}));
+
+vi.mock("../../utils/errors.js", () => ({
+  apiError: vi.fn((_c: unknown, message: string, status: number) => {
+    return new Response(JSON.stringify({ error: message }), { status });
+  }),
+  extractErrorMessage: vi.fn((err: unknown) => err instanceof Error ? err.message : String(err)),
+  logError: vi.fn(),
 }));
 
 import app from "./conversations.js";
