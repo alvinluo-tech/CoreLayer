@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
 
-vi.mock("../config/env.js", () => ({
+vi.mock("../../../config/env.js", () => ({
   env: {
     MIMO_API_URL: "https://api.test.com/v1",
   },
@@ -8,7 +8,7 @@ vi.mock("../config/env.js", () => ({
 
 const mockCredentials: Record<string, string> = {};
 
-vi.mock("../config/config-manager.js", () => ({
+vi.mock("../../../config/config-manager.js", () => ({
   configManager: {
     getCredentials: vi.fn(() => mockCredentials),
     getConfig: vi.fn(() => ({ providers: [] })),
@@ -16,7 +16,7 @@ vi.mock("../config/config-manager.js", () => ({
   },
 }));
 
-import { isTtsAvailable, synthesizeSpeech } from "./tts.js";
+import { isTtsAvailable, synthesizeSpeech } from "../tts.js";
 
 // Helper to build a minimal valid TTS JSON response
 function ttsResponse(audioData: string) {

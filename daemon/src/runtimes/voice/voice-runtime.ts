@@ -1,7 +1,7 @@
 /**
  * Voice Runtime — manages voice sessions, transcription, and TTS.
  *
- * This runtime wraps the existing voice/ modules,
+ * This runtime wraps the existing voice modules,
  * exposing them through the RuntimeProtocol HTTP endpoints.
  */
 
@@ -216,9 +216,7 @@ export class VoiceRuntime implements ManagedRuntime {
     audioData: Buffer,
     options?: { language?: string; filename?: string },
   ): Promise<{ text: string; language?: string; duration?: number }> {
-    const { transcribeWithGroq } = await import(
-      "../../voice/asr.js"
-    );
+    const { transcribeWithGroq } = await import("./asr.js");
 
     const result = await transcribeWithGroq(
       audioData,
@@ -239,9 +237,7 @@ export class VoiceRuntime implements ManagedRuntime {
     text: string,
     options?: { voice?: string; speed?: number },
   ): Promise<{ audioData: Buffer; format: string }> {
-    const { synthesizeSpeech } = await import(
-      "../../voice/tts.js"
-    );
+    const { synthesizeSpeech } = await import("./tts.js");
 
     const audioData = await synthesizeSpeech({
       text,

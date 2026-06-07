@@ -1,15 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("./tts.js", () => ({
+vi.mock("../tts.js", () => ({
   synthesizeSpeech: vi.fn().mockResolvedValue(Buffer.from("fake-audio")),
 }));
 
-vi.mock("../utils/errors.js", () => ({
+vi.mock("../../../utils/errors.js", () => ({
   logError: vi.fn(),
 }));
 
-import { StreamingTTS, splitIntoSentences } from "./streaming-tts.js";
-import { synthesizeSpeech } from "./tts.js";
+import { StreamingTTS, splitIntoSentences } from "../streaming-tts.js";
+import { synthesizeSpeech } from "../tts.js";
 
 const mockSynthesize = vi.mocked(synthesizeSpeech);
 

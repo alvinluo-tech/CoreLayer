@@ -2,8 +2,8 @@ import { describe, it, expect } from "vitest";
 
 describe("ProviderRegistry", () => {
   it("should have registered Groq ASR provider", async () => {
-    const { voiceRegistry } = await import("./providers.js");
-    await import("./asr.js");
+    const { voiceRegistry } = await import("../providers.js");
+    await import("../asr.js");
 
     const all = voiceRegistry.getAvailableASR();
     if (process.env.GROQ_API_KEY) {
@@ -12,8 +12,8 @@ describe("ProviderRegistry", () => {
   });
 
   it("should have registered MiMo TTS provider", async () => {
-    const { voiceRegistry } = await import("./providers.js");
-    await import("./tts.js");
+    const { voiceRegistry } = await import("../providers.js");
+    await import("../tts.js");
 
     if (process.env.MIMO_API_KEY) {
       const all = voiceRegistry.getAvailableTTS();
@@ -22,8 +22,8 @@ describe("ProviderRegistry", () => {
   });
 
   it("should get default ASR provider", async () => {
-    const { voiceRegistry } = await import("./providers.js");
-    await import("./asr.js");
+    const { voiceRegistry } = await import("../providers.js");
+    await import("../asr.js");
 
     const provider = voiceRegistry.getDefaultASR();
     if (process.env.GROQ_API_KEY) {
@@ -33,8 +33,8 @@ describe("ProviderRegistry", () => {
   });
 
   it("should get default TTS provider", async () => {
-    const { voiceRegistry } = await import("./providers.js");
-    await import("./tts.js");
+    const { voiceRegistry } = await import("../providers.js");
+    await import("../tts.js");
 
     const provider = voiceRegistry.getDefaultTTS();
     if (process.env.MIMO_API_KEY) {
@@ -44,8 +44,8 @@ describe("ProviderRegistry", () => {
   });
 
   it("should prefer specified provider when available", async () => {
-    const { voiceRegistry } = await import("./providers.js");
-    await import("./asr.js");
+    const { voiceRegistry } = await import("../providers.js");
+    await import("../asr.js");
 
     // Requesting a non-existent provider should fall back to available ones
     const provider = voiceRegistry.getDefaultASR("nonexistent");
@@ -56,7 +56,7 @@ describe("ProviderRegistry", () => {
   });
 
   it("should return null when no providers available", async () => {
-    const { voiceRegistry } = await import("./providers.js");
+    const { voiceRegistry } = await import("../providers.js");
 
     // Without any providers registered for a fake name
     const provider = voiceRegistry.getASR("fake-provider");

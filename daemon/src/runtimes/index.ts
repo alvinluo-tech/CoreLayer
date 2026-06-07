@@ -8,7 +8,7 @@
 
 import { registerRuntime } from "../runtime-host/registry.js";
 import { AgentRuntime } from "./agent-runtime/index.js";
-import { VoiceRuntime } from "./voice-runtime/index.js";
+import { VoiceRuntime } from "./voice/voice-runtime.js";
 import { SchedulerRuntime } from "./scheduler-runtime/index.js";
 import { ComputerControlRuntime } from "./computer-control/computer-control-runtime-facade.js";
 import { ToolRuntime as ToolExecutor } from "./tool/application/execute-tool.js";
@@ -58,11 +58,11 @@ export const voiceRuntime = new VoiceRuntime({
 registerRuntime("voice", voiceRuntime);
 
 // Re-export voice domain functions
-export { transcribeWithGroq, isAsrAvailable } from "../voice/asr.js";
-export { synthesizeSpeech, isTtsAvailable } from "../voice/tts.js";
-export type { TTSModel } from "../voice/tts.js";
-export { StreamingTTS } from "../voice/streaming-tts.js";
-export { voiceRegistry } from "../voice/providers.js";
+export { transcribeWithGroq, isAsrAvailable } from "./voice/asr.js";
+export { synthesizeSpeech, isTtsAvailable } from "./voice/tts.js";
+export type { TTSModel } from "./voice/tts.js";
+export { StreamingTTS } from "./voice/streaming-tts.js";
+export { voiceRegistry } from "./voice/providers.js";
 export { getProviderConfig } from "../ai/provider.js";
 
 // ─── Scheduler Runtime ────────────────────────────────────────────────────────

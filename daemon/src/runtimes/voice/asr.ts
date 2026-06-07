@@ -1,5 +1,5 @@
 import Groq from "groq-sdk";
-import { configManager } from "../config/config-manager.js";
+import { configManager } from "../../config/config-manager.js";
 import { writeFile, unlink } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";

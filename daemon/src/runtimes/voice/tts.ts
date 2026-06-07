@@ -1,4 +1,4 @@
-import { configManager } from "../config/config-manager.js";
+import { configManager } from "../../config/config-manager.js";
 import type { TTSProvider, TTSOptions as ProviderTTSOptions, TTSResult } from "./providers.js";
 import { voiceRegistry } from "./providers.js";
 
