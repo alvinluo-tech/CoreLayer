@@ -13,7 +13,7 @@ const mockConversationsAddMessage = vi.fn();
 const mockConversationsGetById = vi.fn();
 
 const mockResolvePendingConfirmation = vi.fn().mockReturnValue(true);
-vi.mock("../runtimes/index.js", () => ({
+vi.mock("../../runtimes/index.js", () => ({
   toolRuntime: {
     getPermissionGuard: () => ({
       resolvePendingConfirmation: mockResolvePendingConfirmation,
@@ -45,7 +45,7 @@ vi.mock("../runtimes/index.js", () => ({
   logError: vi.fn(),
 }));
 
-vi.mock("../approvals/resume-service.js", () => ({
+vi.mock("../resume-service.js", () => ({
   executeApprovedTool: vi.fn().mockResolvedValue({
     approvalRequestId: "id-1",
     toolResult: { success: true, data: "output" },
@@ -55,7 +55,7 @@ vi.mock("../approvals/resume-service.js", () => ({
   }),
 }));
 
-vi.mock("../orchestrator/conversation.js", () => ({
+vi.mock("../../orchestrator/conversation.js", () => ({
   handleMessageInConversation: vi.fn().mockResolvedValue({
     userMessage: { id: "msg-1" },
     assistantMessage: { id: "msg-2", content: "Done" },
@@ -64,7 +64,7 @@ vi.mock("../orchestrator/conversation.js", () => ({
 }));
 
 // Import after mocks
-const { default: approvalRoutes } = await import("./approval.js");
+const { default: approvalRoutes } = await import("../../api/approval.js");
 
 import { Hono } from "hono";
 

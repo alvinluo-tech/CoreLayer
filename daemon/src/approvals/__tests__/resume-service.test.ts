@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { executeApprovedTool } from "./resume-service.js";
+import { executeApprovedTool } from "../resume-service.js";
 
 const mockTool = {
   id: "shell:exec",
@@ -12,7 +12,7 @@ const mockRegistry = {
   getTool: vi.fn(() => undefined),
 };
 
-vi.mock("../tools/registry.js", () => ({
+vi.mock("../../tools/registry.js", () => ({
   getRegistry: () => mockRegistry,
 }));
 
@@ -20,7 +20,7 @@ const mockApprovalRequests = {
   getById: vi.fn(),
 };
 
-vi.mock("../db/factory.js", () => ({
+vi.mock("../../db/factory.js", () => ({
   getRepositories: () => ({
     approvalRequests: mockApprovalRequests,
   }),
