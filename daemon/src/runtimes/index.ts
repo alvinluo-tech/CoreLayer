@@ -1,13 +1,12 @@
 /**
- * Central runtime registry.
+ * Runtime facades and domain re-exports.
  *
  * Instantiates all runtime singletons and re-exports business functions
- * that API routes need. This is the single import point for API routes —
- * they should NOT import from internal modules directly.
+ * that API routes need. Registry/lifecycle/status logic lives in
+ * runtime-host/ — this file only creates instances and re-exports.
  */
 
-import type { ManagedRuntime } from "@jarvis/runtime-core";
-import type { RuntimeComponentKind } from "../runtime/contract.js";
+import { registerRuntime } from "../runtime-host/registry.js";
 import { AgentRuntime } from "./agent-runtime/index.js";
 import { VoiceRuntime } from "./voice-runtime/index.js";
 import { SchedulerRuntime } from "./scheduler-runtime/index.js";
@@ -28,6 +27,7 @@ export const agentRuntime = new AgentRuntime({
   version: "1.0.0",
   ...runtimeDefaults,
 });
+registerRuntime("agent", agentRuntime);
 
 // Re-export agent domain functions (delegated to existing modules)
 export { runTurn } from "../runtime/run-executor.js";
@@ -55,6 +55,7 @@ export const voiceRuntime = new VoiceRuntime({
   version: "1.0.0",
   ...runtimeDefaults,
 });
+registerRuntime("voice", voiceRuntime);
 
 // Re-export voice domain functions
 export { transcribeWithGroq, isAsrAvailable } from "../voice/asr.js";
@@ -72,6 +73,7 @@ export const schedulerRuntime = new SchedulerRuntime({
   version: "1.0.0",
   ...runtimeDefaults,
 });
+registerRuntime("scheduler", schedulerRuntime);
 
 // Re-export scheduler domain functions
 export { triggerTask, computeNextRun } from "../scheduler.js";
@@ -85,6 +87,7 @@ export const computerControlRuntime = new ComputerControlRuntime({
   version: "1.0.0",
   ...runtimeDefaults,
 });
+registerRuntime("computer-control", computerControlRuntime);
 
 // ─── Shared ───────────────────────────────────────────────────────────────────
 
@@ -96,50 +99,3 @@ export { apiError, extractErrorMessage, classifyError, logError } from "../utils
 
 export type { RuntimeComponent, RuntimeComponentKind, RuntimeStatus, RestartPolicy } from "../runtime/contract.js";
 export { ALL_RUNTIME_KINDS } from "../runtime/contract.js";
-
-// ─── Daemon-side Runtime Registry ─────────────────────────────────────────────
-
-/**
- * Map of runtime kind → ManagedRuntime instance.
- * Only runtimes implementing the ManagedRuntime interface (with start())
- * are registered here. The legacy ToolRuntime is excluded until it is
- * migrated to the protocol-wrapped version.
- */
-const runtimeInstances = new Map<RuntimeComponentKind, ManagedRuntime>([
-  ["agent", agentRuntime],
-  ["voice", voiceRuntime],
-  ["scheduler", schedulerRuntime],
-  ["computer-control", computerControlRuntime],
-]);
-
-/**
- * Get all registered runtime instances.
- */
-export function getRuntimeInstances(): Map<RuntimeComponentKind, ManagedRuntime> {
-  return runtimeInstances;
-}
-
-/**
- * Get a single runtime instance by kind.
- */
-export function getRuntimeInstance(kind: RuntimeComponentKind): ManagedRuntime | undefined {
-  return runtimeInstances.get(kind);
-}
-
-/**
- * Start all registered runtime instances.
- *
- * Scope: start() only initializes lifecycle/status (timestamp, health check,
- * runtime:started event). It must NOT start autonomous scheduler/tick loops
- * or execute side-effect tasks.
- */
-export async function startAllRuntimes(): Promise<void> {
-  for (const [kind, runtime] of runtimeInstances) {
-    try {
-      await runtime.start();
-      console.log(`[Jarvis] Runtime "${kind}" started`);
-    } catch (error) {
-      console.error(`[Jarvis] Runtime "${kind}" failed to start:`, error);
-    }
-  }
-}
