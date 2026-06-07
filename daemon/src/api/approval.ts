@@ -1,5 +1,7 @@
 import { Hono } from "hono";
 import { getRepositories, apiError, extractErrorMessage, logError, toolRuntime } from "../runtimes/index.js";
+import { executeApprovedTool } from "../runtime/resume.js";
+import { handleMessageInConversation } from "../orchestrator/conversation.js";
 
 const approvalRoutes = new Hono();
 
@@ -37,10 +39,13 @@ approvalRoutes.get("/:id", async (c) => {
 
 /**
  * POST /api/approvals/:id/approve - Approve a pending request
+ *
+ * Returns 202 Accepted. The tool is executed asynchronously and the
+ * result is appended to the conversation, then the LLM is re-triggered.
  */
 approvalRoutes.post("/:id/approve", async (c) => {
   try {
-    const { approvalRequests, toolCallLogs } = getRepositories();
+    const { approvalRequests, toolCallLogs, conversations } = getRepositories();
     const id = c.req.param("id");
     const existing = await approvalRequests.getById(id);
     if (!existing) {
@@ -66,17 +71,55 @@ approvalRoutes.post("/:id/approve", async (c) => {
       metadata: { toolId: existing.toolId, toolName: existing.toolName, approvalId: id },
     });
 
-    await toolCallLogs.create({
-      toolId: existing.toolId,
-      toolName: existing.toolName,
-      source: (existing.source as "mcp" | "native" | "skill" | "rest") ?? "rest",
-      args: existing.args,
-      resultSuccess: true,
-      risk: existing.risk,
-      confirmedByUser: true,
+    // Enqueue async resume: execute tool, append result, re-trigger LLM
+    const resumePromise = executeApprovedTool(id).then(async (resumeResult) => {
+      try {
+        // Add tool result message to conversation
+        if (existing.runId) {
+          const { agentRuns } = getRepositories();
+          const run = await agentRuns.getById(existing.runId);
+          if (run?.conversationId) {
+            await conversations.addMessage(run.conversationId, {
+              role: "tool",
+              content: JSON.stringify(resumeResult.toolResult),
+              toolCallId: existing.toolCallId ?? undefined,
+            });
+
+            // Re-trigger LLM to continue the conversation
+            await handleMessageInConversation(
+              run.conversationId,
+              "[System: Tool execution completed. Continue with the conversation.]",
+              {
+                runtimeContext: {
+                  runId: existing.runId,
+                  projectId: run.projectId ?? undefined,
+                  mode: run.mode,
+                },
+              },
+            );
+          }
+        }
+
+        await toolCallLogs.create({
+          toolId: existing.toolId,
+          toolName: existing.toolName,
+          source: (existing.source as "mcp" | "native" | "skill" | "rest") ?? "rest",
+          args: existing.args,
+          resultSuccess: resumeResult.toolResult.success,
+          resultData: resumeResult.toolResult.data,
+          resultError: resumeResult.toolResult.success ? undefined : String(resumeResult.toolResult.error),
+          risk: existing.risk,
+          confirmedByUser: true,
+        });
+      } catch (err) {
+        logError("approvals/approve/resume", err);
+      }
     });
 
-    return c.json({ data: updated });
+    // Don't await — return 202 immediately
+    resumePromise.catch((err) => logError("approvals/approve/resume-fatal", err));
+
+    return c.json({ data: updated }, 202);
   } catch (err) {
     logError("approvals/approve", err);
     return apiError(c, extractErrorMessage(err), 500);
@@ -85,10 +128,12 @@ approvalRoutes.post("/:id/approve", async (c) => {
 
 /**
  * POST /api/approvals/:id/deny - Deny a pending request
+ *
+ * Returns 200. The agent run (if any) is updated to reflect the denial.
  */
 approvalRoutes.post("/:id/deny", async (c) => {
   try {
-    const { approvalRequests, toolCallLogs } = getRepositories();
+    const { approvalRequests, toolCallLogs, agentRuns } = getRepositories();
     const id = c.req.param("id");
     const existing = await approvalRequests.getById(id);
     if (!existing) {
@@ -100,6 +145,11 @@ approvalRoutes.post("/:id/deny", async (c) => {
 
     toolRuntime.getPermissionGuard().resolvePendingConfirmation(id, false);
     const updated = await approvalRequests.deny(id);
+
+    // Update agent run status if linked
+    if (existing.runId) {
+      await agentRuns.updateStatus(existing.runId, "failed", "User denied tool approval");
+    }
 
     // Audit log: denied decision
     const { auditLog } = getRepositories();
