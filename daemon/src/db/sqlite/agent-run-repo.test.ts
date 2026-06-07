@@ -13,7 +13,7 @@ function createTestDb() {
       conversation_id TEXT,
       user_message_id TEXT,
       assistant_message_id TEXT,
-      status TEXT NOT NULL DEFAULT 'running' CHECK(status IN ('running', 'succeeded', 'failed', 'cancelled')),
+      status TEXT NOT NULL DEFAULT 'running' CHECK(status IN ('running', 'succeeded', 'failed', 'cancelled', 'waiting_for_approval')),
       selected_model TEXT,
       route_reason TEXT,
       tool_call_count INTEGER DEFAULT 0,

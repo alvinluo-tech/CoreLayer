@@ -49,6 +49,7 @@ const statusColors: Record<RunStatus, string> = {
   succeeded: 'var(--emerald)',
   failed: 'var(--red)',
   cancelled: 'var(--text-tertiary)',
+  waiting_for_approval: 'var(--amber)',
 };
 
 const statusIcons: Record<RunStatus, React.ReactNode> = {
@@ -56,6 +57,7 @@ const statusIcons: Record<RunStatus, React.ReactNode> = {
   succeeded: <CheckCircle2 size={12} />,
   failed: <XCircle size={12} />,
   cancelled: <AlertTriangle size={12} />,
+  waiting_for_approval: <AlertTriangle size={12} />,
 };
 
 function formatDuration(ms: number | null): string {

@@ -156,7 +156,7 @@ sqlite.exec(`
     conversation_id TEXT,
     user_message_id TEXT,
     assistant_message_id TEXT,
-    status TEXT NOT NULL DEFAULT 'running' CHECK(status IN ('running', 'succeeded', 'failed', 'cancelled')),
+    status TEXT NOT NULL DEFAULT 'running' CHECK(status IN ('running', 'succeeded', 'failed', 'cancelled', 'waiting_for_approval')),
     selected_model TEXT,
     route_reason TEXT,
     tool_call_count INTEGER DEFAULT 0,
@@ -243,6 +243,51 @@ try { sqlite.exec(`ALTER TABLE agent_runs ADD COLUMN memory_writes TEXT DEFAULT 
 try { sqlite.exec(`ALTER TABLE agent_runs ADD COLUMN tool_calls TEXT DEFAULT '[]'`); } catch {}
 try { sqlite.exec(`ALTER TABLE agent_runs ADD COLUMN artifacts TEXT DEFAULT '[]'`); } catch {}
 try { sqlite.exec(`ALTER TABLE agent_runs ADD COLUMN approvals TEXT DEFAULT '[]'`); } catch {}
+
+// Migration: add `waiting_for_approval` to agent_runs CHECK constraint
+// SQLite does not support ALTER TABLE to modify CHECK constraints, so we recreate the table.
+try {
+  const tableInfo = sqlite.prepare(`PRAGMA table_info(agent_runs)`).all() as Array<{ name: string }>;
+  if (tableInfo.length > 0) {
+    // Check if the CHECK constraint already includes waiting_for_approval
+    const createSql = sqlite.prepare(`SELECT sql FROM sqlite_master WHERE type='table' AND name='agent_runs'`).get() as { sql: string } | undefined;
+    if (createSql && !createSql.sql.includes("waiting_for_approval")) {
+      sqlite.exec(`BEGIN TRANSACTION`);
+      sqlite.exec(`CREATE TABLE agent_runs_new (
+        id TEXT PRIMARY KEY,
+        conversation_id TEXT,
+        workspace_id TEXT,
+        project_id TEXT,
+        task_id TEXT,
+        agent_id TEXT,
+        user_message_id TEXT,
+        assistant_message_id TEXT,
+        status TEXT NOT NULL DEFAULT 'running' CHECK(status IN ('running', 'succeeded', 'failed', 'cancelled', 'waiting_for_approval')),
+        mode TEXT NOT NULL DEFAULT 'chat',
+        selected_model TEXT,
+        route_reason TEXT,
+        selected_tools TEXT DEFAULT '[]',
+        memory_reads TEXT DEFAULT '[]',
+        memory_writes TEXT DEFAULT '[]',
+        tool_calls TEXT DEFAULT '[]',
+        tool_call_count INTEGER DEFAULT 0,
+        artifacts TEXT DEFAULT '[]',
+        approvals TEXT DEFAULT '[]',
+        started_at TEXT DEFAULT 'CURRENT_TIMESTAMP',
+        completed_at TEXT,
+        duration_ms INTEGER,
+        error TEXT
+      )`);
+      sqlite.exec(`INSERT INTO agent_runs_new SELECT * FROM agent_runs`);
+      sqlite.exec(`DROP TABLE agent_runs`);
+      sqlite.exec(`ALTER TABLE agent_runs_new RENAME TO agent_runs`);
+      sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_agent_runs_conversation ON agent_runs(conversation_id)`);
+      sqlite.exec(`COMMIT`);
+    }
+  }
+} catch {
+  // If migration fails, continue — the table may already have the new constraint
+}
 
 // Migration: add missing columns to conversations for existing databases
 try { sqlite.exec(`ALTER TABLE conversations ADD COLUMN workspace_id TEXT`); } catch {}

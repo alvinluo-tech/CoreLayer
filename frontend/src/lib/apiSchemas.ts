@@ -29,7 +29,13 @@ export const approvalListResponseSchema = z.object({
 
 // ---- AgentRun ----
 
-export const runStatusSchema = z.enum(['running', 'succeeded', 'failed', 'cancelled']);
+export const runStatusSchema = z.enum([
+  'running',
+  'succeeded',
+  'failed',
+  'cancelled',
+  'waiting_for_approval',
+]);
 export const runModeSchema = z.enum([
   'chat',
   'voice',
