@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { generateToolCallId, resolveToolCallId } from "./tool-call-id.js";
+import { generateToolCallId, resolveToolCallId } from "../domain/tool-call-id.js";
 
 describe("generateToolCallId", () => {
   it("returns a tc_ prefixed ID", () => {

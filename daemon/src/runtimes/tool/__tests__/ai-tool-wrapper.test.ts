@@ -15,7 +15,7 @@ vi.mock("../../../tools/registry.js", () => ({
   }),
 }));
 
-import { wrapToolsForAI, type AIToolRuntimeContext } from "./ai-tool-wrapper.js";
+import { wrapToolsForAI, type AIToolRuntimeContext } from "../adapters/ai-tool-wrapper.js";
 
 function makeTool(name: string, hasExecute = true) {
   return {

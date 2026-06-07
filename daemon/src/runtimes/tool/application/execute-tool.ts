@@ -1,8 +1,8 @@
 import { PermissionGuard } from "@jarvis/permission-guard";
 import type { ToolResult, JSONSchema } from "@jarvis/types";
 import type { ApprovalRequiredResult } from "@jarvis/runtime-protocol";
-import { getRegistry } from "../../tools/registry.js";
-import { getRepositories } from "../../db/factory.js";
+import { getRegistry } from "../../../tools/registry.js";
+import { getRepositories } from "../../../db/factory.js";
 
 /**
  * Basic validation of tool args against the tool's inputSchema.
