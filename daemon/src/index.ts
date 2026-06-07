@@ -35,11 +35,11 @@ import memoryRoutes from "./api/memories.js";
 import agentProfileRoutes from "./api/agent-profiles.js";
 import eventRoutes from "./api/events.js";
 import auditRoutes from "./api/audit.js";
-import { startScheduler, setIdleCallback, consolidateOnIdle } from "./scheduler.js";
-import { registerDefaultReportSchedules } from "./reports/generator.js";
-import { registerSensor, startSensors, setSensorChangeHandler } from "./sensors/registry.js";
-import { createTodoSensor } from "./sensors/todo-sensor.js";
-import { createReadingSensor } from "./sensors/reading-sensor.js";
+import { startScheduler, setIdleCallback, consolidateOnIdle } from "./runtimes/scheduler/scheduler.js";
+import { registerDefaultReportSchedules } from "./runtimes/scheduler/reports/generator.js";
+import { registerSensor, startSensors, setSensorChangeHandler } from "./runtimes/scheduler/sensors/registry.js";
+import { createTodoSensor } from "./runtimes/scheduler/sensors/todo-sensor.js";
+import { createReadingSensor } from "./runtimes/scheduler/sensors/reading-sensor.js";
 
 // ─── Security helpers ────────────────────────────────────────────────────────
 function isLoopback(addr: string): boolean {

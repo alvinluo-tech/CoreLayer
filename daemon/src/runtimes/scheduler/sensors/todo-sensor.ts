@@ -1,6 +1,6 @@
 import type { Sensor, SensorChange } from "./types.js";
-import { getRepositories } from "../db/factory.js";
-import { isTaskComplete } from "../task/task-status.js";
+import { getRepositories } from "../../../db/factory.js";
+import { isTaskComplete } from "../../../task/task-status.js";
 
 /**
  * Todo sensor — polls the task repository for changes.

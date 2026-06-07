@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
-import * as schema from "./db/schema.js";
+import * as schema from "../../../db/schema.js";
 
 // Create in-memory test DB with scheduled_tasks table
 function createTestDb() {
@@ -112,15 +112,15 @@ function createTestDb() {
 
 const testDb = createTestDb();
 
-vi.mock("./db/client.js", () => ({ db: testDb, schema }));
+vi.mock("../../../db/client.js", () => ({ db: testDb, schema }));
 
-const { createSqliteScheduledTaskRepo } = await import("./db/sqlite/scheduled-task-repo.js");
-const { createSqliteConversationRepo } = await import("./db/sqlite/conversation-repo.js");
-const { createSqliteMemoryRepo } = await import("./db/sqlite/memory-repo.js");
-const { createSqliteTaskRepo } = await import("./db/sqlite/task-repo.js");
-const { createSqliteArticleRepo } = await import("./db/sqlite/article-repo.js");
+const { createSqliteScheduledTaskRepo } = await import("../../../db/sqlite/scheduled-task-repo.js");
+const { createSqliteConversationRepo } = await import("../../../db/sqlite/conversation-repo.js");
+const { createSqliteMemoryRepo } = await import("../../../db/sqlite/memory-repo.js");
+const { createSqliteTaskRepo } = await import("../../../db/sqlite/task-repo.js");
+const { createSqliteArticleRepo } = await import("../../../db/sqlite/article-repo.js");
 
-vi.mock("./db/factory.js", () => ({
+vi.mock("../../../db/factory.js", () => ({
   getRepositories: () => ({
     scheduledTasks: createSqliteScheduledTaskRepo(),
     conversations: createSqliteConversationRepo(),
@@ -131,12 +131,12 @@ vi.mock("./db/factory.js", () => ({
 }));
 
 // Mock skills loader
-vi.mock("./skills/loader.js", () => ({
+vi.mock("../../../skills/loader.js", () => ({
   getSkill: vi.fn().mockReturnValue({ manifest: { name: "test-skill" } }),
 }));
 
 // Mock skills executor
-vi.mock("./skills/executor.js", () => ({
+vi.mock("../../../skills/executor.js", () => ({
   executeSkill: vi.fn().mockResolvedValue({
     success: true,
     skillName: "test-skill",
@@ -147,7 +147,7 @@ vi.mock("./skills/executor.js", () => ({
 }));
 
 // Mock runtime run-executor
-vi.mock("./runtimes/agent/run.js", () => ({
+vi.mock("../../agent/run.js", () => ({
   runTurn: vi.fn().mockResolvedValue({
     runId: "run-1",
     conversationId: "conv-1",
@@ -164,7 +164,7 @@ const compressorMocks = vi.hoisted(() => ({
   extractPreferences: vi.fn(),
 }));
 
-vi.mock("./orchestrator/compressor.js", () => compressorMocks);
+vi.mock("../../../orchestrator/compressor.js", () => compressorMocks);
 
 const {
   computeNextRun,
@@ -180,7 +180,7 @@ const {
   NO_REPLY_PREFIX,
   resetTickState,
   resetConsolidationState,
-} = await import("./scheduler.js");
+} = await import("../scheduler.js");
 
 describe("Scheduler", () => {
   beforeEach(async () => {
@@ -235,7 +235,7 @@ describe("Scheduler", () => {
 
   describe("triggerTask", () => {
     it("should execute a skill-based task", async () => {
-      const repo = (await import("./db/factory.js")).getRepositories().scheduledTasks;
+      const repo = (await import("../../../db/factory.js")).getRepositories().scheduledTasks;
       const task = await repo.upsert({
         name: "test-skill-task",
         cronExpr: "0 21 * * *",
@@ -255,10 +255,10 @@ describe("Scheduler", () => {
     });
 
     it("should fail when skill not found", async () => {
-      const { getSkill } = await import("./skills/loader.js");
+      const { getSkill } = await import("../../../skills/loader.js");
       vi.mocked(getSkill).mockReturnValueOnce(undefined);
 
-      const repo = (await import("./db/factory.js")).getRepositories().scheduledTasks;
+      const repo = (await import("../../../db/factory.js")).getRepositories().scheduledTasks;
       const task = await repo.upsert({
         name: "bad-skill",
         cronExpr: "0 21 * * *",
@@ -271,9 +271,9 @@ describe("Scheduler", () => {
     });
 
     it("should execute prompt-based task", async () => {
-      const { runTurn } = await import("./runtimes/agent/run.js");
+      const { runTurn } = await import("../../agent/run.js");
 
-      const repo = (await import("./db/factory.js")).getRepositories().scheduledTasks;
+      const repo = (await import("../../../db/factory.js")).getRepositories().scheduledTasks;
       const task = await repo.upsert({
         name: "prompt-task",
         cronExpr: "0 21 * * *",
@@ -286,7 +286,7 @@ describe("Scheduler", () => {
     });
 
     it("should update lastRun and nextRun after execution", async () => {
-      const repo = (await import("./db/factory.js")).getRepositories().scheduledTasks;
+      const repo = (await import("../../../db/factory.js")).getRepositories().scheduledTasks;
       const task = await repo.upsert({
         name: "update-test",
         cronExpr: "0 21 * * *",
@@ -324,7 +324,7 @@ describe("Scheduler", () => {
 
   describe("consolidateOnIdle", () => {
     it("marks consolidated messages and does not append duplicate summaries on the next run", async () => {
-      const repos = (await import("./db/factory.js")).getRepositories();
+      const repos = (await import("../../../db/factory.js")).getRepositories();
       const conversation = await repos.conversations.create("compression regression");
 
       for (let i = 0; i < 8; i++) {
@@ -358,7 +358,7 @@ describe("Scheduler", () => {
     });
 
     it("stores preferences returned by compression without running extraction again", async () => {
-      const repos = (await import("./db/factory.js")).getRepositories();
+      const repos = (await import("../../../db/factory.js")).getRepositories();
       const conversation = await repos.conversations.create("preference regression");
 
       for (let i = 0; i < 8; i++) {
@@ -393,7 +393,7 @@ describe("Scheduler", () => {
     });
 
     it("should prune unused old memories", async () => {
-      const memRepo = (await import("./db/factory.js")).getRepositories().memories;
+      const memRepo = (await import("../../../db/factory.js")).getRepositories().memories;
 
       // Create a memory that is old and unused
       const oldDate = new Date();
@@ -450,7 +450,7 @@ describe("Scheduler", () => {
     });
 
     it("should clean expired memories", async () => {
-      const memRepo = (await import("./db/factory.js")).getRepositories().memories;
+      const memRepo = (await import("../../../db/factory.js")).getRepositories().memories;
 
       // Create an expired memory
       const pastDate = new Date();
@@ -515,7 +515,7 @@ describe("Scheduler", () => {
     });
 
     it("runTick cleans up TICK conversation when agent replies NO_REPLY", async () => {
-      const { runTurn } = await import("./runtimes/agent/run.js");
+      const { runTurn } = await import("../../agent/run.js");
       vi.mocked(runTurn).mockResolvedValueOnce({
         runId: "run-tick",
         conversationId: "tick-conv",

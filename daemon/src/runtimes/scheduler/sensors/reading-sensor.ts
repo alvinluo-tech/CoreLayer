@@ -1,5 +1,5 @@
 import type { Sensor, SensorChange } from "./types.js";
-import { getRepositories } from "../db/factory.js";
+import { getRepositories } from "../../../db/factory.js";
 
 /**
  * Reading list sensor — polls the article repository for changes.

@@ -36,7 +36,7 @@ describe("Runtime entrypoint guards", () => {
   });
 
   it("scheduler.ts should not call handleMessageInConversation", () => {
-    const source = readFile("scheduler.ts");
+    const source = readFile("runtimes/scheduler/scheduler.ts");
     const lines = source.split("\n");
     const violations: string[] = [];
     for (let i = 0; i < lines.length; i++) {
@@ -49,7 +49,7 @@ describe("Runtime entrypoint guards", () => {
   });
 
   it("scheduler.ts should not call streamMessageInConversation", () => {
-    const source = readFile("scheduler.ts");
+    const source = readFile("runtimes/scheduler/scheduler.ts");
     const lines = source.split("\n");
     const violations: string[] = [];
     for (let i = 0; i < lines.length; i++) {

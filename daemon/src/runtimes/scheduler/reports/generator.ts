@@ -1,6 +1,6 @@
-import { getRepositories } from "../db/factory.js";
-import { logError } from "../utils/errors.js";
-import { isTaskComplete } from "../task/task-status.js";
+import { getRepositories } from "../../../db/factory.js";
+import { logError } from "../../../utils/errors.js";
+import { isTaskComplete } from "../../../task/task-status.js";
 
 /**
  * Report generation — produces daily and weekly markdown reports

@@ -9,7 +9,7 @@
 import { registerRuntime } from "../runtime-host/registry.js";
 import { AgentRuntime } from "./agent-runtime/index.js";
 import { VoiceRuntime } from "./voice/voice-runtime.js";
-import { SchedulerRuntime } from "./scheduler-runtime/index.js";
+import { SchedulerRuntime } from "./scheduler/scheduler-runtime.js";
 import { ComputerControlRuntime } from "./computer-control/computer-control-runtime-facade.js";
 import { ToolRuntime as ToolExecutor } from "./tool/application/execute-tool.js";
 
@@ -76,7 +76,7 @@ export const schedulerRuntime = new SchedulerRuntime({
 registerRuntime("scheduler", schedulerRuntime);
 
 // Re-export scheduler domain functions
-export { triggerTask, computeNextRun } from "../scheduler.js";
+export { triggerTask, computeNextRun } from "./scheduler/scheduler.js";
 export { parseNlTimeToCron } from "../utils/nl-time-parse.js";
 
 // ─── Computer Control Runtime ─────────────────────────────────────────────────

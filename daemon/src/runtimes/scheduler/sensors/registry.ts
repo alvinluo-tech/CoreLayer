@@ -1,5 +1,5 @@
 import type { Sensor, SensorChangeEvent } from "./types.js";
-import { logError } from "../utils/errors.js";
+import { logError } from "../../../utils/errors.js";
 
 /**
  * Sensor registry — manages lifecycle and change detection.

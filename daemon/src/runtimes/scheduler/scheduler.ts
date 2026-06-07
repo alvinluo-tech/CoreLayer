@@ -1,11 +1,11 @@
 import { CronExpressionParser } from "cron-parser";
-import { executeSkill } from "./skills/executor.js";
-import { getSkill } from "./skills/loader.js";
-import { getRepositories } from "./db/factory.js";
-import type { ScheduledTaskRow } from "./db/repository.js";
-import { logError } from "./utils/errors.js";
-import { configManager } from "./config/config-manager.js";
-import { buildTickSystemPrompt } from "./orchestrator/prompt-builder.js";
+import { executeSkill } from "../../skills/executor.js";
+import { getSkill } from "../../skills/loader.js";
+import { getRepositories } from "../../db/factory.js";
+import type { ScheduledTaskRow } from "../../db/repository.js";
+import { logError } from "../../utils/errors.js";
+import { configManager } from "../../config/config-manager.js";
+import { buildTickSystemPrompt } from "../../orchestrator/prompt-builder.js";
 
 /**
  * Scheduler for recurring task execution.
@@ -91,7 +91,7 @@ export async function runTick(): Promise<{
     // Consolidation is already handled by checkIdle() with proper cooldown.
     // runTick() only handles the autonomous agent processing (TICK conversation).
 
-    const { runTurn } = await import("./runtimes/agent/run.js");
+    const { runTurn } = await import("../agent/run.js");
     const repos = getRepositories();
     const conv = await repos.conversations.create("TICK: autonomous processing");
 
@@ -167,7 +167,7 @@ async function executeTask(row: ScheduledTaskRow): Promise<TaskExecutionResult> 
   // Prompt-based execution: send prompt through runtime
   if (row.prompt) {
     try {
-      const { runTurn } = await import("./runtimes/agent/run.js");
+      const { runTurn } = await import("../agent/run.js");
       const conv = await getRepositories().conversations.create(`Scheduled: ${row.name}`);
       await runTurn({
         conversationId: conv.id,
@@ -420,7 +420,7 @@ async function checkIdle(): Promise<void> {
     if (count > 0) {
       logError("Scheduler/idle", `Expired ${count} stale approval requests`);
       // Resolve in-memory PermissionGuard confirmations for expired requests
-      const { toolRuntime } = await import("./runtimes/index.js");
+      const { toolRuntime } = await import("../index.js");
       const guard = toolRuntime.getPermissionGuard();
       for (const id of ids) {
         guard.resolvePendingConfirmation(id, false);
@@ -469,7 +469,7 @@ export async function consolidateOnIdle(): Promise<{
   );
 
   // 2. Compress each conversation
-  const { compressConversation } = await import("./orchestrator/compressor.js");
+  const { compressConversation } = await import("../../orchestrator/compressor.js");
 
   for (const conv of recentConversations) {
     try {

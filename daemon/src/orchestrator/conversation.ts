@@ -11,7 +11,7 @@ import { getModelGateway } from "../model/gateway.js";
 import { getRepositories } from "../db/factory.js";
 import type { MessageRow, ConversationRow, ScoredMemoryRow } from "../db/repository.js";
 import { classifyError, extractErrorMessage, logError } from "../utils/errors.js";
-import { recordActivity } from "../scheduler.js";
+import { recordActivity } from "../runtimes/scheduler/scheduler.js";
 
 // ---- Compression Lock & Cooldown ----
 

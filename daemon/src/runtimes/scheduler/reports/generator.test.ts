@@ -7,7 +7,7 @@ const mockGetMessages = vi.fn();
 const mockScheduledGetAll = vi.fn();
 const mockScheduledUpsert = vi.fn();
 
-vi.mock("../db/factory.js", () => ({
+vi.mock("../../../db/factory.js", () => ({
   getRepositories: vi.fn(() => ({
     tasks: { query: mockQuery },
     articles: { list: mockArticleList },
@@ -22,7 +22,7 @@ vi.mock("../db/factory.js", () => ({
   })),
 }));
 
-vi.mock("../utils/errors.js", () => ({
+vi.mock("../../../utils/errors.js", () => ({
   logError: vi.fn(),
 }));
 

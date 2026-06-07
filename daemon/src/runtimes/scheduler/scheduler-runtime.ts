@@ -210,7 +210,7 @@ export class SchedulerRuntime implements ManagedRuntime {
    * Run a TICK using the existing scheduler.
    */
   async runTick(): Promise<{ ran: boolean; reason?: string }> {
-    const { runTick } = await import("../../scheduler.js");
+    const { runTick } = await import("./scheduler.js");
     return runTick();
   }
 
