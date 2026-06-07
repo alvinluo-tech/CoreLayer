@@ -72,11 +72,16 @@ pub enum RestartPolicy {
 ///
 /// Thread-safe via `Arc<Mutex<...>>` so Tauri commands and background tasks
 /// can read and update component state concurrently.
+///
+/// Currently unused — the single daemon maps all components to one process.
+/// Will be used when runtimes are split into separate processes.
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct RuntimeRegistry {
     components: Arc<Mutex<HashMap<RuntimeKind, RuntimeComponent>>>,
 }
 
+#[allow(dead_code)]
 impl RuntimeRegistry {
     pub fn new() -> Self {
         Self {
