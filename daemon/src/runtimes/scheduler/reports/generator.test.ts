@@ -22,7 +22,7 @@ vi.mock("../../../persistence/factory.js", () => ({
   })),
 }));
 
-vi.mock("../../../utils/errors.js", () => ({
+vi.mock("../../../shared/errors.js", () => ({
   logError: vi.fn(),
 }));
 

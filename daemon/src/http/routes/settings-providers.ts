@@ -3,7 +3,7 @@ import { configManager, type StoredProvider } from "../../config/config-manager.
 import { LEGACY_DEFAULTS } from "../../config/provider-resolver.js";
 import { resetGateway } from "../../gateways/model/gateway.js";
 import { PROVIDER_PRESETS } from "@jarvis/model-gateway";
-import { apiError, logError } from "../../utils/errors.js";
+import { apiError, logError } from "../../shared/errors.js";
 import { maskApiKey, isMaskedKey } from "./settings-helpers.js";
 
 const app = new Hono();

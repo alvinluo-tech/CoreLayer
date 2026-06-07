@@ -45,7 +45,7 @@ vi.mock("../../persistence/factory.js", () => ({
   }),
 }));
 
-vi.mock("../../utils/errors.js", () => ({
+vi.mock("../../shared/errors.js", () => ({
   apiError: (c: unknown, msg: string, status = 500) => (c as { json: (body: unknown, s?: number) => unknown }).json({ error: msg }, status),
   extractErrorMessage: (err: unknown) => err instanceof Error ? err.message : String(err),
   logError: vi.fn(),

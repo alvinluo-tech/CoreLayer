@@ -4,7 +4,7 @@ import { configManager } from "../../config/config-manager.js";
 import { resolveProvider } from "../../config/provider-resolver.js";
 import { DEFAULT_PROFILES } from "@jarvis/model-gateway";
 import { deadHostManager } from "./dead-host.js";
-import { logError } from "../../utils/errors.js";
+import { logError } from "../../shared/errors.js";
 
 interface ProviderConfig {
   baseURL: string;

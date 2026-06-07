@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { sql } from "drizzle-orm";
 import { db, schema } from "../../persistence/client.js";
 import { getModelGateway } from "../../gateways/model/gateway.js";
-import { apiError, logError } from "../../utils/errors.js";
+import { apiError, logError } from "../../shared/errors.js";
 
 const app = new Hono();
 

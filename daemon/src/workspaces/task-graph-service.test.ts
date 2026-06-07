@@ -83,7 +83,7 @@ vi.mock("../persistence/factory.js", () => ({
 }));
 
 const { createSqliteTaskRepo } = await import("../persistence/sqlite/task-repo.js");
-const { TaskGraph } = await import("./task-graph.js");
+const { TaskGraph } = await import("./task-graph-service.js");
 
 describe("TaskGraph", () => {
   let graph: InstanceType<typeof TaskGraph>;

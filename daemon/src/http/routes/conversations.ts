@@ -4,7 +4,7 @@ import { getRepositories } from "../../persistence/factory.js";
 import { runStreamTurn } from "../../runtimes/agent/stream.js";
 import { runTurn } from "../../runtimes/agent/run.js";
 import { isGoalCommand, handleGoalCommand } from "../../runtimes/agent/application/goal-handler.js";
-import { apiError, extractErrorMessage, logError } from "../../utils/errors.js";
+import { apiError, extractErrorMessage, logError } from "../../shared/errors.js";
 
 const app = new Hono();
 

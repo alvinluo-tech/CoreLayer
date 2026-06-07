@@ -1,6 +1,6 @@
 import { getRepositories } from "../../../persistence/factory.js";
-import { logError } from "../../../utils/errors.js";
-import { isTaskComplete } from "../../../task/task-status.js";
+import { logError } from "../../../shared/errors.js";
+import { isTaskComplete } from "../../../workspaces/task-status.js";
 
 /**
  * Report generation — produces daily and weekly markdown reports

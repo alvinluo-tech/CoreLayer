@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { getRepositories } from "../../persistence/factory.js";
-import { apiError, extractErrorMessage, logError } from "../../utils/errors.js";
+import { apiError, extractErrorMessage, logError } from "../../shared/errors.js";
 
 const workspaceRoutes = new Hono();
 

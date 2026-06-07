@@ -10,7 +10,7 @@ import {
   setDbConfig,
 } from "../../config/storage-config.js";
 import { switchStorageMode, getCurrentMode, getRepositories } from "../../persistence/factory.js";
-import { apiError, logError } from "../../utils/errors.js";
+import { apiError, logError } from "../../shared/errors.js";
 import { maskApiKey, isMaskedKey } from "./settings-helpers.js";
 
 const app = new Hono();

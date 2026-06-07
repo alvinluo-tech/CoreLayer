@@ -1,5 +1,5 @@
 import { synthesizeSpeech, type TTSOptions } from "./tts.js";
-import { logError } from "../../utils/errors.js";
+import { logError } from "../../shared/errors.js";
 
 /**
  * Sentence-level streaming TTS.

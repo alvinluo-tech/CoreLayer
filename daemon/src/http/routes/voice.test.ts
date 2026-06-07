@@ -43,7 +43,7 @@ vi.mock("../../config/config-manager.js", () => ({
   },
 }));
 
-vi.mock("../../utils/errors.js", () => ({
+vi.mock("../../shared/errors.js", () => ({
   extractErrorMessage: vi.fn((e: unknown) => (e instanceof Error ? e.message : String(e))),
   logError: vi.fn(),
 }));

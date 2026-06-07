@@ -223,7 +223,7 @@ vi.mock("../../config/config-manager.js", () => ({
   },
 }));
 
-vi.mock("../../utils/errors.js", () => ({
+vi.mock("../../shared/errors.js", () => ({
   logError: vi.fn(),
 }));
 

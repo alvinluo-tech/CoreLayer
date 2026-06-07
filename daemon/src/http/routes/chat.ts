@@ -3,7 +3,7 @@ import { stream } from "hono/streaming";
 import { ContextBuilder } from "../../runtimes/agent/application/context-builder.js";
 import { getRepositories } from "../../persistence/factory.js";
 import { configManager } from "../../config/config-manager.js";
-import { apiError, extractErrorMessage, classifyError, logError } from "../../utils/errors.js";
+import { apiError, extractErrorMessage, classifyError, logError } from "../../shared/errors.js";
 import { runTurn } from "../../runtimes/agent/run.js";
 import { runStreamTurn } from "../../runtimes/agent/stream.js";
 

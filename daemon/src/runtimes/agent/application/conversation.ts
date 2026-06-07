@@ -3,14 +3,14 @@ import type { ModelMessage, Tool } from "ai";
 import { ContextBuilder, MEMORY_MIN_SCORE } from "./context-builder.js";
 import { compressConversation, createSummaryMessage, extractMemoriesFromTurn } from "./compressor.js";
 import { getAllTools } from "../../tool/adapters/native-tools/registry.js";
-import { isTaskComplete } from "../../../task/task-status.js";
+import { isTaskComplete } from "../../../workspaces/task-status.js";
 import { wrapToolsForAI } from "../../tool/adapters/ai-tool-wrapper.js";
 
 import { configManager } from "../../../config/config-manager.js";
 import { getModelGateway } from "../../../gateways/model/gateway.js";
 import { getRepositories } from "../../../persistence/factory.js";
 import type { MessageRow, ConversationRow, ScoredMemoryRow } from "../../../persistence/repository.js";
-import { classifyError, extractErrorMessage, logError } from "../../../utils/errors.js";
+import { classifyError, extractErrorMessage, logError } from "../../../shared/errors.js";
 import { recordActivity } from "../../scheduler/scheduler.js";
 
 // ---- Compression Lock & Cooldown ----

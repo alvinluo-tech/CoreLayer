@@ -6,9 +6,9 @@
  */
 
 import { generateText } from "ai";
-import { getModelGateway } from "../gateways/model/gateway.js";
-import { getRepositories } from "../persistence/factory.js";
-import { logError } from "../utils/errors.js";
+import { getModelGateway } from "../../../gateways/model/gateway.js";
+import { getRepositories } from "../../../persistence/factory.js";
+import { logError } from "../../../shared/errors.js";
 
 export interface TaskDraft {
   title: string;

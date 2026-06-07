@@ -12,7 +12,7 @@ import { registerReadingTools } from "./runtimes/tool/adapters/native-tools/read
 import { registerReviewTools } from "./runtimes/tool/adapters/native-tools/review/connector.js";
 import { registerConversationTools } from "./runtimes/tool/adapters/native-tools/conversation.js";
 import { registerMemoryTools } from "./runtimes/memory/connector.js";
-import { logError } from "./utils/errors.js";
+import { logError } from "./shared/errors.js";
 import { registerAllAdapters } from "./gateways/mcp/adapters/index.js";
 import type { RuntimeComponent, RuntimeComponentKind } from "./runtime-host/contract.js";
 import { ALL_RUNTIME_KINDS } from "./runtime-host/contract.js";

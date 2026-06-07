@@ -6,7 +6,7 @@ import { StreamingTTS } from "../../runtimes/voice/streaming-tts.js";
 import { voiceRegistry } from "../../runtimes/voice/providers.js";
 import { getProviderConfig } from "../../gateways/ai-provider/provider.js";
 import { configManager } from "../../config/config-manager.js";
-import { extractErrorMessage, logError } from "../../utils/errors.js";
+import { extractErrorMessage, logError } from "../../shared/errors.js";
 import { runStreamTurn } from "../../runtimes/agent/stream.js";
 
 const voiceRoutes = new Hono();

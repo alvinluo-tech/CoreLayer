@@ -36,7 +36,7 @@ vi.mock("../../../persistence/factory.js", () => ({
     },
   })),
 }));
-vi.mock("../../../utils/errors.js", () => ({
+vi.mock("../../../shared/errors.js", () => ({
   classifyError: vi.fn(() => ({ code: "UNKNOWN", status: 500 })),
   extractErrorMessage: vi.fn(() => "mock error"),
   logError: vi.fn(),

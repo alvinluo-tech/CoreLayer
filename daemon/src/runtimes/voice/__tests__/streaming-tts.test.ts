@@ -4,7 +4,7 @@ vi.mock("../tts.js", () => ({
   synthesizeSpeech: vi.fn().mockResolvedValue(Buffer.from("fake-audio")),
 }));
 
-vi.mock("../../../utils/errors.js", () => ({
+vi.mock("../../../shared/errors.js", () => ({
   logError: vi.fn(),
 }));
 

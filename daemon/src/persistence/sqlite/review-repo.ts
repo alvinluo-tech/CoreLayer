@@ -7,7 +7,7 @@ import type {
   DailySummaryResult,
   WeeklyStatsResult,
 } from "../repository.js";
-import { isTaskComplete } from "../../task/task-status.js";
+import { isTaskComplete } from "../../workspaces/task-status.js";
 
 function getWeekStart(date: Date): Date {
   const d = new Date(date);

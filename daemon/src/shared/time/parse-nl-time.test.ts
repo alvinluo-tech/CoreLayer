@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseNlTimeToCron } from "./nl-time-parse.js";
+import { parseNlTimeToCron } from "./parse-nl-time.js";
 
 describe("parseNlTimeToCron", () => {
   describe("relative time", () => {

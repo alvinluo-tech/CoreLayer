@@ -3,7 +3,7 @@ import { executeSkill } from "../../skills/executor.js";
 import { getSkill } from "../../skills/loader.js";
 import { getRepositories } from "../../persistence/factory.js";
 import type { ScheduledTaskRow } from "../../persistence/repository.js";
-import { logError } from "../../utils/errors.js";
+import { logError } from "../../shared/errors.js";
 import { configManager } from "../../config/config-manager.js";
 import { buildTickSystemPrompt } from "../agent/application/prompt-builder.js";
 

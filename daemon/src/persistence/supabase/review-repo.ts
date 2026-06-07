@@ -1,5 +1,5 @@
 import { getSupabaseClient } from "./client.js";
-import { isTaskComplete } from "../../task/task-status.js";
+import { isTaskComplete } from "../../workspaces/task-status.js";
 import type {
   ReviewRepository,
   ReviewRow,

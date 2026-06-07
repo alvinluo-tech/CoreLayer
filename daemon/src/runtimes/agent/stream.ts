@@ -15,7 +15,7 @@ import { streamChat } from "./application/conversation.js";
 import { normalizeStream } from "../../shared/stream/sse-normalizer.js";
 import { withStreamTimeout } from "../../shared/stream/stream-timeout.js";
 import { configManager } from "../../config/config-manager.js";
-import { logError } from "../../utils/errors.js";
+import { logError } from "../../shared/errors.js";
 import { resolveConversationScope } from "./run-context.js";
 import type { ModelMessage } from "ai";
 

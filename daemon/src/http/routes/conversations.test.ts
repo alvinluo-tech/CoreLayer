@@ -60,7 +60,7 @@ vi.mock("../../runtimes/agent/application/goal-handler.js", () => ({
   })),
 }));
 
-vi.mock("../../utils/errors.js", () => ({
+vi.mock("../../shared/errors.js", () => ({
   apiError: vi.fn((_c: unknown, message: string, status: number) => {
     return new Response(JSON.stringify({ error: message }), { status });
   }),

@@ -12,8 +12,8 @@ import type {
 } from "./domain/agent-run.js";
 import { getRepositories } from "../../persistence/factory.js";
 import { handleMessageInConversation } from "./application/conversation.js";
-import { logError } from "../../utils/errors.js";
-import { TaskGraph } from "../../task/task-graph.js";
+import { logError } from "../../shared/errors.js";
+import { TaskGraph } from "../../workspaces/task-graph-service.js";
 import { resolveConversationScope } from "./run-context.js";
 
 export type RunTurnOptions = {

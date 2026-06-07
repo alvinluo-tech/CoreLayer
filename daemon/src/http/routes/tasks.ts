@@ -1,8 +1,8 @@
 import { Hono } from "hono";
 import { getRepositories } from "../../persistence/factory.js";
-import { apiError, extractErrorMessage, logError } from "../../utils/errors.js";
-import { TaskGraph } from "../../task/task-graph.js";
-import { decomposeTask } from "../../task/task-decomposer.js";
+import { apiError, extractErrorMessage, logError } from "../../shared/errors.js";
+import { TaskGraph } from "../../workspaces/task-graph-service.js";
+import { decomposeTask } from "../../runtimes/agent/application/task-decomposer.js";
 
 const app = new Hono();
 const taskGraph = new TaskGraph();
