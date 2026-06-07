@@ -68,6 +68,12 @@ importers:
       '@jarvis/permission-guard':
         specifier: workspace:*
         version: link:../packages/permission-guard
+      '@jarvis/runtime-core':
+        specifier: workspace:*
+        version: link:../packages/runtime-core
+      '@jarvis/runtime-protocol':
+        specifier: workspace:*
+        version: link:../packages/runtime-protocol
       '@jarvis/tool-registry':
         specifier: workspace:*
         version: link:../packages/tool-registry
