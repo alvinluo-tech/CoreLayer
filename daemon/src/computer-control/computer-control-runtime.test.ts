@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+﻿import { describe, it, expect, beforeEach, vi } from "vitest";
 import {
   requestComputerControl,
   setComputerControlPermission,
@@ -12,7 +12,7 @@ import { COMPUTER_CONTROL_RISK } from "./types.js";
 
 // Mock OSCapabilityBroker
 const mockRequestCapability = vi.fn();
-vi.mock("../capability/os-capability-broker.js", () => ({
+vi.mock("../capabilities/os-capability-broker.js", () => ({
   getCapabilityBroker: () => ({
     requestCapability: mockRequestCapability,
   }),

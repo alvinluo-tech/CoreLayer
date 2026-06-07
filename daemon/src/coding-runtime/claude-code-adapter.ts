@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Claude Code adapter for the Coding Runtime.
  *
  * Wraps the `claude` CLI as a subprocess. Actual execution goes through
@@ -15,7 +15,7 @@ import type {
   CodingRunEvent,
   CodingArtifact,
 } from "./types.js";
-import { getCapabilityBroker } from "../capability/os-capability-broker.js";
+import { getCapabilityBroker } from "../capabilities/os-capability-broker.js";
 
 /** In-memory store for run tracking (will be replaced with DB-backed store) */
 const runs = new Map<string, CodingRunInfo>();

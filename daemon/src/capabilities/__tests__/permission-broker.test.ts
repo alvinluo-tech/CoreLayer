@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { PermissionBroker } from "./permission-broker.js";
+﻿import { describe, it, expect } from "vitest";
+import { PermissionBroker } from "../permission-broker.js";
 
 describe("PermissionBroker", () => {
   const broker = new PermissionBroker();

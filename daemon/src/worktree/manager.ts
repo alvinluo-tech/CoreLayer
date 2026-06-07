@@ -1,4 +1,4 @@
-/**
+﻿/**
  * WorktreeManager — manages git worktrees for isolated agent execution.
  *
  * Each coding agent run gets its own worktree so multiple agents
@@ -15,7 +15,7 @@ import type {
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { getCapabilityBroker } from "../capability/os-capability-broker.js";
+import { getCapabilityBroker } from "../capabilities/os-capability-broker.js";
 
 /** In-memory store (will be replaced with DB-backed store) */
 const projectWorkspaces = new Map<string, ProjectWorkspace>();

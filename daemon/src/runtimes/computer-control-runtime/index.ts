@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Computer Control Runtime — manages direct OS interactions.
  *
  * This runtime wraps the existing computer-control/ modules,
@@ -308,7 +308,7 @@ export class ComputerControlRuntime implements ManagedRuntime {
    */
   async clipboardRead(): Promise<unknown> {
     const { getCapabilityBroker } = await import(
-      "../../capability/os-capability-broker.js"
+      "../../capabilities/os-capability-broker.js"
     );
     const broker = getCapabilityBroker();
     const decision = await broker.requestCapability({
@@ -327,7 +327,7 @@ export class ComputerControlRuntime implements ManagedRuntime {
    */
   async clipboardWrite(actorId: string, text: string): Promise<unknown> {
     const { getCapabilityBroker } = await import(
-      "../../capability/os-capability-broker.js"
+      "../../capabilities/os-capability-broker.js"
     );
     const broker = getCapabilityBroker();
     const decision = await broker.requestCapability({

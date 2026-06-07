@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Coding Runtime Registry — manages multiple coding tool adapters.
  *
  * Push/PR operations are high-risk and go through the OSCapabilityBroker.
@@ -7,7 +7,7 @@
 import type { CodingRuntime, CodingTask, CodingRunInfo, CodingArtifact } from "./types.js";
 import { ClaudeCodeAdapter } from "./claude-code-adapter.js";
 import { CodexAdapter } from "./codex-adapter.js";
-import { getCapabilityBroker } from "../capability/os-capability-broker.js";
+import { getCapabilityBroker } from "../capabilities/os-capability-broker.js";
 
 const adapters = new Map<string, CodingRuntime>();
 
