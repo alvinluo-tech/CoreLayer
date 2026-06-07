@@ -1,5 +1,8 @@
+mod audit_log;
 mod daemon_supervisor;
+mod event_log;
 mod runtime_registry;
+mod secret_store;
 
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -768,6 +771,103 @@ async fn get_daemon_url_command(
     Ok(get_daemon_url().await)
 }
 
+// ---- Event Log Commands ----
+
+pub struct EventLogState(pub Arc<Mutex<event_log::EventLog>>);
+
+#[tauri::command]
+async fn get_recent_events(
+    state: State<'_, EventLogState>,
+    limit: Option<usize>,
+) -> Result<Vec<event_log::RuntimeEvent>, String> {
+    let log = state.0.lock().await;
+    Ok(log.recent(limit.unwrap_or(50)).await)
+}
+
+#[tauri::command]
+async fn get_all_events(
+    state: State<'_, EventLogState>,
+) -> Result<Vec<event_log::RuntimeEvent>, String> {
+    let log = state.0.lock().await;
+    Ok(log.all().await)
+}
+
+#[tauri::command]
+async fn clear_events(state: State<'_, EventLogState>) -> Result<(), String> {
+    let log = state.0.lock().await;
+    log.clear().await;
+    Ok(())
+}
+
+// ---- Audit Log Commands ----
+
+pub struct AuditLogState(pub Arc<Mutex<audit_log::AuditLog>>);
+
+#[tauri::command]
+async fn get_recent_audit_entries(
+    state: State<'_, AuditLogState>,
+    limit: Option<usize>,
+) -> Result<Vec<audit_log::AuditEntry>, String> {
+    let log = state.0.lock().await;
+    Ok(log.recent(limit.unwrap_or(50)).await)
+}
+
+#[tauri::command]
+async fn get_all_audit_entries(
+    state: State<'_, AuditLogState>,
+) -> Result<Vec<audit_log::AuditEntry>, String> {
+    let log = state.0.lock().await;
+    Ok(log.all().await)
+}
+
+// ---- Secret Store Commands ----
+
+pub struct SecretStoreState(pub Arc<Mutex<secret_store::SecretStore>>);
+
+#[tauri::command]
+async fn secret_set(
+    state: State<'_, SecretStoreState>,
+    key: String,
+    value: String,
+    description: Option<String>,
+) -> Result<(), String> {
+    let store = state.0.lock().await;
+    store.set(&key, &value, description.as_deref()).await
+}
+
+#[tauri::command]
+async fn secret_get(
+    state: State<'_, SecretStoreState>,
+    key: String,
+) -> Result<Option<String>, String> {
+    let store = state.0.lock().await;
+    Ok(store.get(&key).await)
+}
+
+#[tauri::command]
+async fn secret_rotate(
+    state: State<'_, SecretStoreState>,
+    key: String,
+    new_value: String,
+) -> Result<bool, String> {
+    let store = state.0.lock().await;
+    store.rotate(&key, &new_value).await
+}
+
+#[tauri::command]
+async fn secret_delete(state: State<'_, SecretStoreState>, key: String) -> Result<bool, String> {
+    let store = state.0.lock().await;
+    store.delete(&key).await
+}
+
+#[tauri::command]
+async fn secret_list(
+    state: State<'_, SecretStoreState>,
+) -> Result<Vec<secret_store::SecretInfo>, String> {
+    let store = state.0.lock().await;
+    Ok(store.list().await)
+}
+
 // ---- Runtime Registry Commands ----
 
 #[tauri::command]
@@ -1148,8 +1248,20 @@ pub fn run() {
     let supervisor_state =
         daemon_supervisor::DaemonSupervisorState(Arc::new(Mutex::new(supervisor)));
 
+    let event_log = event_log::EventLog::new(1000);
+    let event_log_state = EventLogState(Arc::new(Mutex::new(event_log)));
+
+    let audit_log = audit_log::AuditLog::new(None);
+    let audit_log_state = AuditLogState(Arc::new(Mutex::new(audit_log)));
+
+    let secret_store = secret_store::SecretStore::new(None);
+    let secret_store_state = SecretStoreState(Arc::new(Mutex::new(secret_store)));
+
     tauri::Builder::default()
         .manage(supervisor_state)
+        .manage(event_log_state)
+        .manage(audit_log_state)
+        .manage(secret_store_state)
         .invoke_handler(tauri::generate_handler![
             send_message,
             health_check,
@@ -1226,7 +1338,17 @@ pub fn run() {
             daemon_supervisor::start_daemon,
             daemon_supervisor::stop_daemon,
             daemon_supervisor::restart_daemon,
-            get_runtime_components
+            get_runtime_components,
+            get_recent_events,
+            get_all_events,
+            clear_events,
+            get_recent_audit_entries,
+            get_all_audit_entries,
+            secret_set,
+            secret_get,
+            secret_rotate,
+            secret_delete,
+            secret_list
         ])
         .setup(|app| {
             // Set window icon from default window icon (embedded via tauri.conf.json bundle)
