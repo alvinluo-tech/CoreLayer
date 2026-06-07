@@ -282,8 +282,16 @@ importers:
       '@jarvis/runtime-protocol':
         specifier: workspace:*
         version: link:../runtime-protocol
+    devDependencies:
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@25.9.1)(jsdom@29.1.1)(lightningcss@1.32.0)
 
-  packages/runtime-protocol: {}
+  packages/runtime-protocol:
+    devDependencies:
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@25.9.1)(jsdom@29.1.1)(lightningcss@1.32.0)
 
   packages/tool-registry:
     dependencies:
