@@ -1,11 +1,26 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync, existsSync } from "fs";
-import { resolve } from "path";
+import { readFileSync, existsSync, readdirSync, statSync } from "fs";
+import { resolve, join, relative } from "path";
 
 const srcDir = resolve(import.meta.dirname, "..");
+const rootDir = resolve(srcDir, "../..");
 
 function readFile(relativePath: string): string {
   return readFileSync(resolve(srcDir, relativePath), "utf-8");
+}
+
+function listTsFiles(dir: string): string[] {
+  const results: string[] = [];
+  if (!existsSync(dir)) return results;
+  for (const entry of readdirSync(dir)) {
+    const full = join(dir, entry);
+    if (statSync(full).isDirectory()) {
+      results.push(...listTsFiles(full));
+    } else if (entry.endsWith(".ts") && !entry.endsWith(".d.ts")) {
+      results.push(relative(srcDir, full).replace(/\\/g, "/"));
+    }
+  }
+  return results;
 }
 
 describe("Runtime entrypoint guards", () => {
@@ -179,5 +194,111 @@ describe("Runtime directory naming guards", () => {
       const fullPath = resolve(srcDir, dir);
       expect(existsSync(fullPath)).toBe(false);
     });
+  }
+});
+
+describe("Forbidden top-level directories", () => {
+  const forbiddenDirs = [
+    "runtime",
+    "api",
+    "db",
+    "capability",
+    "coding-runtime",
+    "computer-control",
+    "voice",
+    "model",
+    "mcp",
+  ];
+
+  for (const dir of forbiddenDirs) {
+    it(`daemon/src/${dir} must not exist`, () => {
+      expect(existsSync(resolve(srcDir, dir))).toBe(false);
+    });
+  }
+});
+
+describe("Runtime modules must not import http/routes", () => {
+  const runtimeFiles = listTsFiles(resolve(srcDir, "runtimes")).filter(
+    (f) => !f.includes("__tests__") && !f.includes(".test."),
+  );
+
+  for (const file of runtimeFiles) {
+    it(`${file} must not import http/routes`, () => {
+      const source = readFile(file);
+      const violations: string[] = [];
+      for (const [i, line] of source.split("\n").entries()) {
+        if (line.includes("import") && line.includes("http/routes")) {
+          violations.push(`  line ${i + 1}: ${line.trim()}`);
+        }
+      }
+      expect(violations).toEqual([]);
+    });
+  }
+});
+
+describe("Runtime modules must not import another runtime's private files", () => {
+  const runtimeDirs = ["agent", "tool", "coding", "voice", "memory", "scheduler", "computer-control"];
+  const runtimeFiles = listTsFiles(resolve(srcDir, "runtimes")).filter(
+    (f) => !f.includes("__tests__") && !f.includes(".test."),
+  );
+
+  for (const file of runtimeFiles) {
+    const currentRuntime = runtimeDirs.find((r) => file.startsWith(`runtimes/${r}/`));
+    if (!currentRuntime) continue;
+
+    const otherRuntimes = runtimeDirs.filter((r) => r !== currentRuntime);
+
+    it(`${file} must not import another runtime's application/domain`, () => {
+      const source = readFile(file);
+      const violations: string[] = [];
+      for (const [i, line] of source.split("\n").entries()) {
+        if (!line.includes("import")) continue;
+        for (const other of otherRuntimes) {
+          if (line.includes(`runtimes/${other}/application/`) || line.includes(`runtimes/${other}/domain/`)) {
+            violations.push(`  line ${i + 1}: ${line.trim()}`);
+          }
+        }
+      }
+      expect(violations).toEqual([]);
+    });
+  }
+});
+
+describe("Runtime modules must not directly import node:child_process", () => {
+  const runtimeFiles = listTsFiles(resolve(srcDir, "runtimes")).filter(
+    (f) => !f.includes("__tests__") && !f.includes(".test."),
+  );
+
+  for (const file of runtimeFiles) {
+    it(`${file} must not import node:child_process`, () => {
+      const source = readFile(file);
+      expect(source).not.toMatch(/import.*from\s+["']node:child_process/);
+    });
+  }
+});
+
+describe("packages/* must not import daemon/* or frontend/*", () => {
+  const packagesDir = resolve(rootDir, "packages");
+  if (!existsSync(packagesDir)) return;
+
+  const packageDirs = readdirSync(packagesDir).filter((d) =>
+    statSync(join(packagesDir, d)).isDirectory(),
+  );
+
+  for (const pkg of packageDirs) {
+    const tsFiles = listTsFiles(join(packagesDir, pkg));
+    for (const file of tsFiles) {
+      it(`${pkg}/${file} must not import daemon/ or frontend/`, () => {
+        const fullPath = join(packagesDir, pkg, file);
+        const source = readFileSync(fullPath, "utf-8");
+        const violations: string[] = [];
+        for (const [i, line] of source.split("\n").entries()) {
+          if (line.includes("import") && (line.includes("/daemon/") || line.includes("/frontend/"))) {
+            violations.push(`  line ${i + 1}: ${line.trim()}`);
+          }
+        }
+        expect(violations).toEqual([]);
+      });
+    }
   }
 });
