@@ -4,6 +4,11 @@ import type { JarvisTool } from "@jarvis/types";
 
 // Mock the tools registry for ContextBuilder tests
 vi.mock("../../tool/adapters/native-tools/registry.js", () => ({
+  getRegistry: () => ({ resolveTool: () => null, getTool: () => null }),
+  registerJarvisTool: vi.fn(),
+  registerTool: vi.fn(),
+  getTool: vi.fn(() => null),
+  getAllTools: vi.fn(() => []),
   getAllJarvisTools: () => [
     {
       id: "native:getTodayTasks",

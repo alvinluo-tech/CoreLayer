@@ -23,6 +23,27 @@ function listTsFiles(dir: string): string[] {
   return results;
 }
 
+function extractModuleSpecifiers(line: string): string[] {
+  const specifiers: string[] = [];
+
+  const staticImportOrExportMatch = line.match(/from\s+["']([^"']+)["']/);
+  if (staticImportOrExportMatch) {
+    specifiers.push(staticImportOrExportMatch[1]);
+  }
+
+  const dynamicImportMatch = line.match(/import\s*\(\s*["']([^"']+)["']\s*\)/);
+  if (dynamicImportMatch) {
+    specifiers.push(dynamicImportMatch[1]);
+  }
+
+  const sideEffectImportMatch = line.match(/^\s*import\s+["']([^"']+)["']/);
+  if (sideEffectImportMatch) {
+    specifiers.push(sideEffectImportMatch[1]);
+  }
+
+  return specifiers;
+}
+
 describe("Runtime entrypoint guards", () => {
   it("conversations.ts should not call handleMessageInConversation in runtime paths", () => {
     const source = readFile("http/routes/conversations.ts");
@@ -256,14 +277,8 @@ describe("Runtime modules must not import another runtime's private files", () =
       const violations: string[] = [];
 
       for (const [i, line] of source.split("\n").entries()) {
-        if (!line.includes("import")) continue;
-
-        // Extract import specifiers from static and dynamic imports
-        const specifiers: string[] = [];
-        const staticMatch = line.match(/from\s+["']([^"']+)["']/);
-        if (staticMatch) specifiers.push(staticMatch[1]);
-        const dynamicMatch = line.match(/import\s*\(\s*["']([^"']+)["']\s*\)/);
-        if (dynamicMatch) specifiers.push(dynamicMatch[1]);
+        const specifiers = extractModuleSpecifiers(line);
+        if (specifiers.length === 0) continue;
 
         for (const spec of specifiers) {
           if (!spec.startsWith(".")) continue;
@@ -274,6 +289,102 @@ describe("Runtime modules must not import another runtime's private files", () =
           for (const other of otherRuntimes) {
             for (const pattern of privatePatterns) {
               if (normalized.includes(`runtimes/${other}/${pattern}`)) {
+                violations.push(`  line ${i + 1}: ${line.trim()}`);
+              }
+            }
+          }
+        }
+      }
+      expect(violations).toEqual([]);
+    });
+  }
+});
+
+describe("Runtime modules must import other runtimes only via public-api", () => {
+  const runtimeDirs = ["agent", "tool", "coding", "voice", "memory", "scheduler", "computer-control"];
+
+  const runtimeFiles = listTsFiles(resolve(srcDir, "runtimes")).filter(
+    (f) => !f.includes("__tests__") && !f.includes(".test.") && !f.endsWith("public-api.ts"),
+  );
+
+  for (const file of runtimeFiles) {
+    const currentRuntime = runtimeDirs.find((r) => file.startsWith(`runtimes/${r}/`));
+    if (!currentRuntime) continue;
+
+    const otherRuntimes = runtimeDirs.filter((r) => r !== currentRuntime);
+
+    it(`${file} must import other runtimes only through public-api`, () => {
+      const source = readFile(file);
+      const fileDir = resolve(srcDir, dirname(file));
+      const violations: string[] = [];
+
+      for (const [i, line] of source.split("\n").entries()) {
+        const specifiers = extractModuleSpecifiers(line);
+        if (specifiers.length === 0) continue;
+
+        for (const spec of specifiers) {
+          if (!spec.startsWith(".")) continue;
+
+          const resolved = resolve(fileDir, spec);
+          const normalized = resolved.replace(/\\/g, "/");
+
+          for (const other of otherRuntimes) {
+            const runtimeRoot = `runtimes/${other}/`;
+            if (normalized.includes(runtimeRoot)) {
+              const isPublicApi =
+                normalized.endsWith("/public-api") ||
+                normalized.endsWith("/public-api.ts") ||
+                normalized.endsWith("/public-api.js");
+              if (!isPublicApi) {
+                violations.push(`  line ${i + 1}: ${line.trim()}`);
+              }
+            }
+          }
+        }
+      }
+      expect(violations).toEqual([]);
+    });
+  }
+});
+
+describe("Non-runtime modules must import runtimes only via public-api", () => {
+  const runtimeDirs = ["agent", "tool", "coding", "voice", "memory", "scheduler", "computer-control"];
+
+  const nonRuntimeDirs = ["http/routes", "skills", "approvals", "plugins", "gateways", "legacy"];
+  const nonRuntimeFiles: string[] = [];
+  for (const dir of nonRuntimeDirs) {
+    const fullPath = resolve(srcDir, dir);
+    if (existsSync(fullPath)) {
+      nonRuntimeFiles.push(...listTsFiles(fullPath));
+    }
+  }
+
+  for (const file of nonRuntimeFiles) {
+    if (file.includes("__tests__") || file.includes(".test.")) continue;
+
+    it(`${file} must import runtimes only through public-api`, () => {
+      const source = readFile(file);
+      const fileDir = resolve(srcDir, dirname(file));
+      const violations: string[] = [];
+
+      for (const [i, line] of source.split("\n").entries()) {
+        const specifiers = extractModuleSpecifiers(line);
+        if (specifiers.length === 0) continue;
+
+        for (const spec of specifiers) {
+          if (!spec.startsWith(".")) continue;
+
+          const resolved = resolve(fileDir, spec);
+          const normalized = resolved.replace(/\\/g, "/");
+
+          for (const runtime of runtimeDirs) {
+            const runtimeRoot = `runtimes/${runtime}/`;
+            if (normalized.includes(runtimeRoot)) {
+              const isPublicApi =
+                normalized.endsWith("/public-api") ||
+                normalized.endsWith("/public-api.ts") ||
+                normalized.endsWith("/public-api.js");
+              if (!isPublicApi) {
                 violations.push(`  line ${i + 1}: ${line.trim()}`);
               }
             }
@@ -340,40 +451,41 @@ describe("packages/* must not import daemon/* or frontend/*", () => {
   }
 });
 
-describe("HTTP routes must not import runtime application/domain/adapters internals", () => {
-  const routeFiles = listTsFiles(resolve(srcDir, "http/routes")).filter(
+describe("Bootstrap layer may import runtime internals for registration/startup", () => {
+  const bootstrapFiles = listTsFiles(resolve(srcDir, "bootstrap")).filter(
     (f) => !f.includes("__tests__") && !f.includes(".test."),
   );
 
-  for (const file of routeFiles) {
-    it(`${file} must not import runtimes/*/application|domain|adapters`, () => {
+  it("register-tools.ts may import tool adapter connectors and memory connector", () => {
+    const source = readFile("bootstrap/register-tools.ts");
+    const lines = source.split("\n").filter((l) => l.includes("import") && l.includes("runtimes/"));
+    const allowedPatterns = [
+      "runtimes/tool/adapters/native-tools/",
+      "runtimes/memory/connector",
+    ];
+    for (const line of lines) {
+      const hasAllowed = allowedPatterns.some((p) => line.includes(p));
+      expect(hasAllowed).toBe(true);
+    }
+  });
+
+  it("start-background-services.ts may import scheduler internals", () => {
+    const source = readFile("bootstrap/start-background-services.ts");
+    const lines = source.split("\n").filter((l) => l.includes("import") && l.includes("runtimes/"));
+    for (const line of lines) {
+      expect(line).toMatch(/runtimes\/scheduler\//);
+    }
+  });
+
+  it("bootstrap must not import agent, voice, coding, or computer-control internals", () => {
+    const forbiddenRuntimes = ["agent", "voice", "coding", "computer-control"];
+    for (const file of bootstrapFiles) {
       const source = readFile(file);
-      const fileDir = resolve(srcDir, dirname(file));
-      const violations: string[] = [];
-
-      for (const [i, line] of source.split("\n").entries()) {
-        if (!line.includes("import")) continue;
-
-        const specifiers: string[] = [];
-        const staticMatch = line.match(/from\s+["']([^"']+)["']/);
-        if (staticMatch) specifiers.push(staticMatch[1]);
-        const dynamicMatch = line.match(/import\s*\(\s*["']([^"']+)["']\s*\)/);
-        if (dynamicMatch) specifiers.push(dynamicMatch[1]);
-
-        for (const spec of specifiers) {
-          if (!spec.startsWith(".")) continue;
-
-          const resolved = resolve(fileDir, spec);
-          const normalized = resolved.replace(/\\/g, "/");
-
-          if (/runtimes\/[^/]+\/(application|domain|adapters)\//.test(normalized)) {
-            violations.push(`  line ${i + 1}: ${line.trim()}`);
-          }
-        }
+      for (const runtime of forbiddenRuntimes) {
+        expect(source).not.toMatch(new RegExp(`runtimes/${runtime}/(?!public-api)`));
       }
-      expect(violations).toEqual([]);
-    });
-  }
+    }
+  });
 });
 
 describe("Runtime modules must not import runtimes/index.ts", () => {
@@ -388,14 +500,8 @@ describe("Runtime modules must not import runtimes/index.ts", () => {
       const violations: string[] = [];
 
       for (const [i, line] of source.split("\n").entries()) {
-        if (!line.includes("import")) continue;
-
-        // Extract import specifiers from static and dynamic imports
-        const specifiers: string[] = [];
-        const staticMatch = line.match(/from\s+["']([^"']+)["']/);
-        if (staticMatch) specifiers.push(staticMatch[1]);
-        const dynamicMatch = line.match(/import\s*\(\s*["']([^"']+)["']\s*\)/);
-        if (dynamicMatch) specifiers.push(dynamicMatch[1]);
+        const specifiers = extractModuleSpecifiers(line);
+        if (specifiers.length === 0) continue;
 
         for (const spec of specifiers) {
           // Skip bare module specifiers (not relative paths)

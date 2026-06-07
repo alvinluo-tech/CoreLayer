@@ -18,13 +18,18 @@ vi.mock("ai", () => ({
 }));
 vi.mock("../application/prompt-builder.js", () => ({
   buildSystemPrompt: vi.fn(() => "system prompt"),
+  buildTickSystemPrompt: vi.fn(() => "tick prompt"),
 }));
 vi.mock("../../../gateways/ai-provider/provider.js", () => ({
   getModel: vi.fn(() => ({})),
 }));
 vi.mock("../../tool/adapters/native-tools/registry.js", () => ({
-  getAllTools: vi.fn(() => []),
+  getRegistry: () => ({ resolveTool: () => null, getTool: () => null }),
+  registerJarvisTool: vi.fn(),
+  registerTool: vi.fn(),
   getTool: vi.fn(() => null),
+  getAllJarvisTools: vi.fn(() => []),
+  getAllTools: vi.fn(() => []),
 }));
 vi.mock("../../../persistence/factory.js", () => ({
   getRepositories: vi.fn(() => ({

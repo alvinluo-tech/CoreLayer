@@ -15,10 +15,19 @@ const mockConversationsGetById = vi.fn();
 const mockResolvePendingConfirmation = vi.fn().mockReturnValue(true);
 vi.mock("../../runtimes/tool/application/execute-tool.js", () => ({
   toolRuntime: {
+    execute: vi.fn(),
     getPermissionGuard: () => ({
       resolvePendingConfirmation: mockResolvePendingConfirmation,
     }),
   },
+}));
+vi.mock("../../runtimes/tool/adapters/native-tools/registry.js", () => ({
+  getRegistry: () => ({ resolveTool: () => null, getTool: () => null }),
+  registerJarvisTool: vi.fn(),
+  registerTool: vi.fn(),
+  getTool: vi.fn(() => null),
+  getAllJarvisTools: vi.fn(() => []),
+  getAllTools: vi.fn(() => []),
 }));
 
 vi.mock("../../persistence/factory.js", () => ({

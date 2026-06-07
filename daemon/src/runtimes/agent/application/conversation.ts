@@ -10,7 +10,7 @@ import { getModelGateway } from "../../../gateways/model/gateway.js";
 import { getRepositories } from "../../../persistence/factory.js";
 import type { MessageRow, ConversationRow, ScoredMemoryRow } from "../../../persistence/repository.js";
 import { classifyError, extractErrorMessage, logError } from "../../../shared/errors.js";
-import { recordActivity } from "../../scheduler/scheduler.js";
+import { recordActivity } from "../../scheduler/public-api.js";
 
 // ---- Compression Lock & Cooldown ----
 

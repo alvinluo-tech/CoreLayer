@@ -5,6 +5,11 @@ import type { ModelMessage, Tool } from "ai";
 
 // Mock the tools registry
 vi.mock("../../tool/adapters/native-tools/registry.js", () => ({
+  getRegistry: () => ({ resolveTool: () => null, getTool: () => null }),
+  registerJarvisTool: vi.fn(),
+  registerTool: vi.fn(),
+  getTool: vi.fn(() => null),
+  getAllTools: vi.fn(() => []),
   getAllJarvisTools: () => [
     {
       id: "native:getTodayTasks",

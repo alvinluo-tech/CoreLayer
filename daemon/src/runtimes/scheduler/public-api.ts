@@ -11,4 +11,4 @@
  * move to separate processes.
  */
 
-export { triggerTask, computeNextRun } from "./scheduler.js";
+export { triggerTask, computeNextRun, recordActivity, getIdleMs } from "./scheduler.js";

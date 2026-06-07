@@ -19,3 +19,26 @@ export { ContextBuilder } from "./application/context-builder.js";
 export { decomposeTask } from "./application/task-decomposer.js";
 export { buildTickSystemPrompt } from "./application/prompt-builder.js";
 export { compressConversation } from "./application/compressor.js";
+
+import { runTurn } from "./run.js";
+import { runStreamTurn } from "./stream.js";
+import { handleMessageInConversation } from "./application/conversation.js";
+import { isGoalCommand, handleGoalCommand, GoalJudge } from "./application/goal-handler.js";
+import { ContextBuilder } from "./application/context-builder.js";
+import { decomposeTask } from "./application/task-decomposer.js";
+import { buildTickSystemPrompt } from "./application/prompt-builder.js";
+import { compressConversation } from "./application/compressor.js";
+
+/** Facade — prefer importing this object over individual named exports. */
+export const agentRuntimeApi = {
+  runTurn,
+  runStreamTurn,
+  handleMessageInConversation,
+  isGoalCommand,
+  handleGoalCommand,
+  GoalJudge,
+  ContextBuilder,
+  decomposeTask,
+  buildTickSystemPrompt,
+  compressConversation,
+} as const;

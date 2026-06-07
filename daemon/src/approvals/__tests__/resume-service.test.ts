@@ -14,6 +14,11 @@ const mockRegistry = {
 
 vi.mock("../../runtimes/tool/adapters/native-tools/registry.js", () => ({
   getRegistry: () => mockRegistry,
+  registerJarvisTool: vi.fn(),
+  registerTool: vi.fn(),
+  getTool: vi.fn(() => null),
+  getAllJarvisTools: vi.fn(() => []),
+  getAllTools: vi.fn(() => []),
 }));
 
 const mockApprovalRequests = {
