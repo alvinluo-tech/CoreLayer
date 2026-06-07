@@ -1,10 +1,15 @@
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
-import { getRepositories } from "../db/factory.js";
-import { isGoalCommand, handleGoalCommand } from "../orchestrator/goal-handler.js";
-import { apiError, extractErrorMessage, logError } from "../utils/errors.js";
-import { runStreamTurn } from "../runtime/run-stream-executor.js";
-import { runTurn } from "../runtime/run-executor.js";
+import {
+  getRepositories,
+  isGoalCommand,
+  handleGoalCommand,
+  apiError,
+  extractErrorMessage,
+  logError,
+  runStreamTurn,
+  runTurn,
+} from "../runtimes/index.js";
 
 const app = new Hono();
 

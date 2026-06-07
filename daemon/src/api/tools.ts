@@ -1,8 +1,6 @@
 import { Hono } from "hono";
 import type { ToolSource, RiskLevel } from "@jarvis/types";
-import { getRegistry } from "../tools/registry.js";
-import { getRepositories } from "../db/factory.js";
-import { toolRuntime } from "../runtime/index.js";
+import { getRegistry, getRepositories, toolRuntime } from "../runtimes/index.js";
 
 const app = new Hono();
 

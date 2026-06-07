@@ -8,7 +8,13 @@ const mockApprove = vi.fn();
 const mockDeny = vi.fn();
 const mockCreate = vi.fn();
 
-vi.mock("../db/factory.js", () => ({
+const mockResolvePendingConfirmation = vi.fn().mockReturnValue(true);
+vi.mock("../runtimes/index.js", () => ({
+  toolRuntime: {
+    getPermissionGuard: () => ({
+      resolvePendingConfirmation: mockResolvePendingConfirmation,
+    }),
+  },
   getRepositories: () => ({
     approvalRequests: {
       expireStale: mockExpireStale,
@@ -19,16 +25,12 @@ vi.mock("../db/factory.js", () => ({
       create: mockCreate,
     },
     toolCallLogs: { create: vi.fn() },
+    auditLog: { create: vi.fn() },
+    permissionMemories: { create: vi.fn() },
   }),
-}));
-
-const mockResolvePendingConfirmation = vi.fn().mockReturnValue(true);
-vi.mock("../runtime/index.js", () => ({
-  toolRuntime: {
-    getPermissionGuard: () => ({
-      resolvePendingConfirmation: mockResolvePendingConfirmation,
-    }),
-  },
+  apiError: (c: unknown, msg: string, status = 500) => (c as { json: (body: unknown, s?: number) => unknown }).json({ error: msg }, status),
+  extractErrorMessage: (err: unknown) => err instanceof Error ? err.message : String(err),
+  logError: vi.fn(),
 }));
 
 // Import after mocks
