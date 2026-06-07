@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
-import * as schema from "../db/schema.js";
+import * as schema from "../../db/schema.js";
 
 function createTestDb() {
   const sqlite = new Database(":memory:");
@@ -141,20 +141,20 @@ function createTestDb() {
 }
 
 const testDb = createTestDb();
-vi.mock("../db/client.js", () => ({ db: testDb, schema }));
+vi.mock("../../db/client.js", () => ({ db: testDb, schema }));
 
-const { createSqliteConversationRepo } = await import("../db/sqlite/conversation-repo.js");
-const { createSqliteAgentRunRepo } = await import("../db/sqlite/agent-run-repo.js");
-const { createSqliteMemoryRepo } = await import("../db/sqlite/memory-repo.js");
-const { createSqliteTaskRepo } = await import("../db/sqlite/task-repo.js");
-const { createSqliteArticleRepo } = await import("../db/sqlite/article-repo.js");
-const { createSqliteScheduledTaskRepo } = await import("../db/sqlite/scheduled-task-repo.js");
-const { createSqliteWorkspaceRepo } = await import("../db/sqlite/workspace-repo.js");
-const { createSqliteProjectRepo } = await import("../db/sqlite/project-repo.js");
-const { createSqliteAgentProfileRepo } = await import("../db/sqlite/agent-profile-repo.js");
-const { createSqliteAgentRunEventRepo } = await import("../db/sqlite/agent-run-event-repo.js");
+const { createSqliteConversationRepo } = await import("../../db/sqlite/conversation-repo.js");
+const { createSqliteAgentRunRepo } = await import("../../db/sqlite/agent-run-repo.js");
+const { createSqliteMemoryRepo } = await import("../../db/sqlite/memory-repo.js");
+const { createSqliteTaskRepo } = await import("../../db/sqlite/task-repo.js");
+const { createSqliteArticleRepo } = await import("../../db/sqlite/article-repo.js");
+const { createSqliteScheduledTaskRepo } = await import("../../db/sqlite/scheduled-task-repo.js");
+const { createSqliteWorkspaceRepo } = await import("../../db/sqlite/workspace-repo.js");
+const { createSqliteProjectRepo } = await import("../../db/sqlite/project-repo.js");
+const { createSqliteAgentProfileRepo } = await import("../../db/sqlite/agent-profile-repo.js");
+const { createSqliteAgentRunEventRepo } = await import("../../db/sqlite/agent-run-event-repo.js");
 
-vi.mock("../db/factory.js", () => ({
+vi.mock("../../db/factory.js", () => ({
   getRepositories: () => ({
     conversations: createSqliteConversationRepo(),
     agentRuns: createSqliteAgentRunRepo(),
@@ -170,7 +170,7 @@ vi.mock("../db/factory.js", () => ({
 }));
 
 // Mock streamChat to return a fake stream with delta events
-vi.mock("../orchestrator/conversation.js", () => ({
+vi.mock("../../orchestrator/conversation.js", () => ({
   streamChat: vi.fn().mockResolvedValue({
     stream: {
       fullStream: {
@@ -195,21 +195,21 @@ vi.mock("../orchestrator/conversation.js", () => ({
 }));
 
 // Mock normalizeStream to pass through delta events
-vi.mock("../api/sse-normalizer.js", () => ({
+vi.mock("../../api/sse-normalizer.js", () => ({
   normalizeStream: vi.fn((stream: AsyncIterable<unknown>) => stream),
 }));
 
-vi.mock("../api/stream-timeout.js", () => ({
+vi.mock("../../api/stream-timeout.js", () => ({
   withStreamTimeout: vi.fn((stream: AsyncIterable<unknown>) => stream),
 }));
 
-vi.mock("../config/config-manager.js", () => ({
+vi.mock("../../config/config-manager.js", () => ({
   configManager: {
     getStreamTimeout: () => 120_000,
   },
 }));
 
-vi.mock("../utils/errors.js", () => ({
+vi.mock("../../utils/errors.js", () => ({
   logError: vi.fn(),
 }));
 
@@ -227,8 +227,8 @@ vi.mock("./run-context.js", () => ({
   }),
 }));
 
-const { runStreamTurn } = await import("./run-stream-executor.js");
-const { streamChat } = await import("../orchestrator/conversation.js");
+const { runStreamTurn } = await import("./stream.js");
+const { streamChat } = await import("../../orchestrator/conversation.js");
 
 describe("runStreamTurn", () => {
   beforeEach(() => {

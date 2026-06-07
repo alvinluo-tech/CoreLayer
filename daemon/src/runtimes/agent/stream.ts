@@ -9,13 +9,13 @@
 import type {
   AgentRunRequest,
   AgentRunEvent,
-} from "./agent-run.js";
-import { getRepositories } from "../db/factory.js";
-import { streamChat } from "../orchestrator/conversation.js";
-import { normalizeStream } from "../api/sse-normalizer.js";
-import { withStreamTimeout } from "../api/stream-timeout.js";
-import { configManager } from "../config/config-manager.js";
-import { logError } from "../utils/errors.js";
+} from "./domain/agent-run.js";
+import { getRepositories } from "../../db/factory.js";
+import { streamChat } from "../../orchestrator/conversation.js";
+import { normalizeStream } from "../../api/sse-normalizer.js";
+import { withStreamTimeout } from "../../api/stream-timeout.js";
+import { configManager } from "../../config/config-manager.js";
+import { logError } from "../../utils/errors.js";
 import { resolveConversationScope } from "./run-context.js";
 import type { ModelMessage } from "ai";
 
@@ -252,7 +252,7 @@ export async function runStreamTurn(
 
   return {
     runId: run.id,
-    conversationId,
+    conversationId: conversationId!,
     stream: eventStream(),
     abortController,
   };

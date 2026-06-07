@@ -6,7 +6,7 @@
  */
 
 import type { ManagedRuntime } from "@jarvis/runtime-core";
-import type { RuntimeComponentKind } from "../runtime/contract.js";
+import type { RuntimeComponentKind } from "./contract.js";
 
 /**
  * Map of runtime kind → ManagedRuntime instance.

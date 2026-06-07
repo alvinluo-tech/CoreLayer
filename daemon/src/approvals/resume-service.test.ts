@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { executeApprovedTool } from "./resume.js";
+import { executeApprovedTool } from "./resume-service.js";
 
 const mockTool = {
   id: "shell:exec",

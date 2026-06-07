@@ -11,7 +11,7 @@
  *    or when the existing conversation has no projectId.
  */
 
-import { getRepositories } from "../db/factory.js";
+import { getRepositories } from "../../db/factory.js";
 
 export interface RunContext {
   workspaceId: string;

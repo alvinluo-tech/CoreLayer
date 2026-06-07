@@ -91,7 +91,7 @@ export async function runTick(): Promise<{
     // Consolidation is already handled by checkIdle() with proper cooldown.
     // runTick() only handles the autonomous agent processing (TICK conversation).
 
-    const { runTurn } = await import("./runtime/run-executor.js");
+    const { runTurn } = await import("./runtimes/agent/run.js");
     const repos = getRepositories();
     const conv = await repos.conversations.create("TICK: autonomous processing");
 
@@ -167,7 +167,7 @@ async function executeTask(row: ScheduledTaskRow): Promise<TaskExecutionResult> 
   // Prompt-based execution: send prompt through runtime
   if (row.prompt) {
     try {
-      const { runTurn } = await import("./runtime/run-executor.js");
+      const { runTurn } = await import("./runtimes/agent/run.js");
       const conv = await getRepositories().conversations.create(`Scheduled: ${row.name}`);
       await runTurn({
         conversationId: conv.id,
@@ -420,7 +420,7 @@ async function checkIdle(): Promise<void> {
     if (count > 0) {
       logError("Scheduler/idle", `Expired ${count} stale approval requests`);
       // Resolve in-memory PermissionGuard confirmations for expired requests
-      const { toolRuntime } = await import("./runtime/index.js");
+      const { toolRuntime } = await import("./runtimes/index.js");
       const guard = toolRuntime.getPermissionGuard();
       for (const id of ids) {
         guard.resolvePendingConfirmation(id, false);

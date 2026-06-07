@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { getRepositories, apiError, extractErrorMessage, logError, toolRuntime } from "../runtimes/index.js";
-import { executeApprovedTool } from "../runtime/resume.js";
+import { executeApprovedTool } from "../approvals/resume-service.js";
 import { handleMessageInConversation } from "../orchestrator/conversation.js";
 
 const approvalRoutes = new Hono();

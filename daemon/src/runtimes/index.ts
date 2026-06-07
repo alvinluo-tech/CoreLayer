@@ -11,7 +11,7 @@ import { AgentRuntime } from "./agent-runtime/index.js";
 import { VoiceRuntime } from "./voice-runtime/index.js";
 import { SchedulerRuntime } from "./scheduler-runtime/index.js";
 import { ComputerControlRuntime } from "./computer-control-runtime/index.js";
-import { ToolRuntime as ToolExecutor } from "../runtime/tool-runtime.js";
+import { ToolRuntime as ToolExecutor } from "./tool/execute.js";
 
 // Default config for in-process runtimes (no separate process, no HTTP port)
 const runtimeDefaults = {
@@ -30,13 +30,13 @@ export const agentRuntime = new AgentRuntime({
 registerRuntime("agent", agentRuntime);
 
 // Re-export agent domain functions (delegated to existing modules)
-export { runTurn } from "../runtime/run-executor.js";
-export type { RunTurnOptions } from "../runtime/run-executor.js";
-export { runStreamTurn } from "../runtime/run-stream-executor.js";
-export type { RunStreamTurnOptions } from "../runtime/run-stream-executor.js";
+export { runTurn } from "./agent/run.js";
+export type { RunTurnOptions } from "./agent/run.js";
+export { runStreamTurn } from "./agent/stream.js";
+export type { RunStreamTurnOptions } from "./agent/stream.js";
 export { ContextBuilder } from "../orchestrator/context-builder.js";
 export { isGoalCommand, handleGoalCommand } from "../orchestrator/goal-handler.js";
-export { wrapToolsForAI, trimToolResult } from "../runtime/ai-tool-wrapper.js";
+export { wrapToolsForAI, trimToolResult } from "./tool/adapters/ai-tool-wrapper.js";
 
 // ─── Tool Runtime ─────────────────────────────────────────────────────────────
 
@@ -45,7 +45,7 @@ export const toolRuntime = new ToolExecutor();
 
 // Re-export tool domain functions
 export { getRegistry } from "../tools/registry.js";
-export type { ToolExecutionContext, ToolExecutionResult } from "../runtime/tool-runtime.js";
+export type { ToolExecutionContext, ToolExecutionResult } from "./tool/execute.js";
 
 // ─── Voice Runtime ────────────────────────────────────────────────────────────
 
@@ -97,5 +97,5 @@ export { apiError, extractErrorMessage, classifyError, logError } from "../utils
 
 // ─── Runtime Contract Types ───────────────────────────────────────────────────
 
-export type { RuntimeComponent, RuntimeComponentKind, RuntimeStatus, RestartPolicy } from "../runtime/contract.js";
-export { ALL_RUNTIME_KINDS } from "../runtime/contract.js";
+export type { RuntimeComponent, RuntimeComponentKind, RuntimeStatus, RestartPolicy } from "../runtime-host/contract.js";
+export { ALL_RUNTIME_KINDS } from "../runtime-host/contract.js";

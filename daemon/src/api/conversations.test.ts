@@ -17,11 +17,11 @@ const { mockRunStreamTurn, mockRunTurn, mockGetById, mockAddMessage, mockList, m
   mockDeleteMessage: vi.fn(),
 }));
 
-vi.mock("../runtime/run-stream-executor.js", () => ({
+vi.mock("../runtimes/agent/stream.js", () => ({
   runStreamTurn: (...args: unknown[]) => mockRunStreamTurn(...args),
 }));
 
-vi.mock("../runtime/run-executor.js", () => ({
+vi.mock("../runtimes/agent/run.js", () => ({
   runTurn: (...args: unknown[]) => mockRunTurn(...args),
 }));
 

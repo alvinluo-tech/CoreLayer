@@ -5,8 +5,8 @@
  * and builds the RuntimeComponent array for the API response.
  */
 
-import type { RuntimeComponent, RuntimeComponentKind } from "../runtime/contract.js";
-import { ALL_RUNTIME_KINDS } from "../runtime/contract.js";
+import type { RuntimeComponent, RuntimeComponentKind } from "./contract.js";
+import { ALL_RUNTIME_KINDS } from "./contract.js";
 import { getRuntimeInstances } from "./registry.js";
 
 /**

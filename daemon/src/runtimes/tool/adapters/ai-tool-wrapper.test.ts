@@ -5,11 +5,11 @@ const { mockExecute, mockGetTool } = vi.hoisted(() => ({
   mockGetTool: vi.fn(),
 }));
 
-vi.mock("./index.js", () => ({
+vi.mock("../../index.js", () => ({
   toolRuntime: { execute: (...args: unknown[]) => mockExecute(...args) },
 }));
 
-vi.mock("../tools/registry.js", () => ({
+vi.mock("../../../tools/registry.js", () => ({
   getRegistry: () => ({
     getTool: (name: string) => mockGetTool(name),
   }),

@@ -62,17 +62,17 @@ describe("Runtime entrypoint guards", () => {
   });
 
   it("run-executor.ts should use handleMessageInConversation (allowed)", () => {
-    const source = readFile("runtime/run-executor.ts");
+    const source = readFile("runtimes/agent/run.ts");
     expect(source).toContain("handleMessageInConversation");
   });
 
   it("run-stream-executor.ts should use streamChat (allowed)", () => {
-    const source = readFile("runtime/run-stream-executor.ts");
+    const source = readFile("runtimes/agent/stream.ts");
     expect(source).toContain("streamChat");
   });
 
   it("ai-tool-wrapper.ts should pass toolCallId to toolRuntime.execute", () => {
-    const source = readFile("runtime/ai-tool-wrapper.ts");
+    const source = readFile("runtimes/tool/adapters/ai-tool-wrapper.ts");
     expect(source).toContain("toolCallId");
   });
 

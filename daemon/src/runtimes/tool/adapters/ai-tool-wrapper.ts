@@ -1,8 +1,8 @@
 import type { Tool } from "ai";
 import { isApprovalRequiredResult } from "@jarvis/runtime-protocol";
-import { toolRuntime } from "./index.js";
-import { getRegistry } from "../tools/registry.js";
-import { resolveToolCallId } from "./tool-call-id.js";
+import { toolRuntime } from "../../index.js";
+import { getRegistry } from "../../../tools/registry.js";
+import { resolveToolCallId } from "../tool-call-id.js";
 
 /**
  * Runtime context passed through to ToolRuntime for every AI tool call.

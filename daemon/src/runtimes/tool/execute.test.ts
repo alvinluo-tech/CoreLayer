@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { JarvisTool, ToolResult, JSONSchema } from "@jarvis/types";
 import { isApprovalRequiredResult } from "@jarvis/runtime-protocol";
-import { ToolRuntime } from "./tool-runtime.js";
-import type { ToolExecutionResult } from "./tool-runtime.js";
+import { ToolRuntime } from "./execute.js";
+import type { ToolExecutionResult } from "./execute.js";
 
 // Mock dependencies
 const mockExecute = vi.fn<() => Promise<ToolResult>>();
@@ -43,7 +43,7 @@ const mockRegistry = {
   getTool: vi.fn(() => undefined),
 };
 
-vi.mock("../tools/registry.js", () => ({
+vi.mock("../../tools/registry.js", () => ({
   getRegistry: () => mockRegistry,
 }));
 
@@ -57,7 +57,7 @@ const mockPermissionMemories = {
   find: vi.fn(),
 };
 
-vi.mock("../db/factory.js", () => ({
+vi.mock("../../db/factory.js", () => ({
   getRepositories: () => ({
     approvalRequests: mockApprovalRequests,
     permissionMemories: mockPermissionMemories,

@@ -48,7 +48,7 @@ vi.mock("../utils/errors.js", () => ({
 
 // Mock runStreamTurn to return a controlled stream
 const mockRunStreamTurn = vi.fn();
-vi.mock("../runtime/run-stream-executor.js", () => ({
+vi.mock("../runtimes/agent/stream.js", () => ({
   runStreamTurn: (...args: unknown[]) => mockRunStreamTurn(...args),
 }));
 

@@ -45,7 +45,7 @@ vi.mock("../runtimes/index.js", () => ({
   logError: vi.fn(),
 }));
 
-vi.mock("../runtime/resume.js", () => ({
+vi.mock("../approvals/resume-service.js", () => ({
   executeApprovedTool: vi.fn().mockResolvedValue({
     approvalRequestId: "id-1",
     toolResult: { success: true, data: "output" },

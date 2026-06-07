@@ -147,7 +147,7 @@ vi.mock("./skills/executor.js", () => ({
 }));
 
 // Mock runtime run-executor
-vi.mock("./runtime/run-executor.js", () => ({
+vi.mock("./runtimes/agent/run.js", () => ({
   runTurn: vi.fn().mockResolvedValue({
     runId: "run-1",
     conversationId: "conv-1",
@@ -271,7 +271,7 @@ describe("Scheduler", () => {
     });
 
     it("should execute prompt-based task", async () => {
-      const { runTurn } = await import("./runtime/run-executor.js");
+      const { runTurn } = await import("./runtimes/agent/run.js");
 
       const repo = (await import("./db/factory.js")).getRepositories().scheduledTasks;
       const task = await repo.upsert({
@@ -515,7 +515,7 @@ describe("Scheduler", () => {
     });
 
     it("runTick cleans up TICK conversation when agent replies NO_REPLY", async () => {
-      const { runTurn } = await import("./runtime/run-executor.js");
+      const { runTurn } = await import("./runtimes/agent/run.js");
       vi.mocked(runTurn).mockResolvedValueOnce({
         runId: "run-tick",
         conversationId: "tick-conv",

@@ -229,7 +229,7 @@ export class ToolRuntime implements ManagedRuntime {
     },
   ): Promise<ToolResult> {
     const { ToolRuntime: ExistingToolRuntime } = await import(
-      "../../runtime/tool-runtime.js"
+      "../tool/execute.js"
     );
 
     const runtime = new ExistingToolRuntime();
