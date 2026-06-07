@@ -67,10 +67,13 @@ impl DaemonSupervisor {
     pub fn initialize(&mut self, app_handle: &tauri::AppHandle) {
         use tauri::Manager;
 
-        let external_url = std::env::var("DAEMON_URL").ok();
+        let external_url = std::env::var("DAEMON_URL")
+            .ok()
+            .or_else(default_dev_daemon_url);
         if let Some(url) = external_url {
             self.url = url;
             self.owns_process = false;
+            self.selected_port = extract_port(&self.url);
             log::info!("[DaemonSupervisor] External mode: {}", self.url);
             return;
         }
@@ -403,6 +406,18 @@ fn current_target_triple() -> &'static str {
     } else {
         "unknown-target"
     }
+}
+
+fn default_dev_daemon_url() -> Option<String> {
+    if cfg!(debug_assertions) {
+        Some("http://localhost:3001".to_string())
+    } else {
+        None
+    }
+}
+
+fn extract_port(url: &str) -> Option<u16> {
+    url.rsplit(':').next()?.parse().ok()
 }
 
 /// Allocate a free port by binding to port 0.
