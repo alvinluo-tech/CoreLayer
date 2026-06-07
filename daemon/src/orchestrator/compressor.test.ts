@@ -5,7 +5,7 @@ vi.mock("ai", () => ({
   generateText: vi.fn(),
 }));
 
-vi.mock("../ai/provider.js", () => ({
+vi.mock("../gateways/ai-provider/provider.js", () => ({
   getModel: vi.fn(() => ({})),
 }));
 

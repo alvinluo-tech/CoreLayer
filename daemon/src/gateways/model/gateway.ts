@@ -1,8 +1,8 @@
 import { ModelGateway, DEFAULT_PROFILES, DEFAULT_ROUTING_RULES } from "@jarvis/model-gateway";
 import type { ProviderConfig, ModelProfile } from "@jarvis/types";
-import { configManager } from "../config/config-manager.js";
-import { resolveProvider, LEGACY_DEFAULTS } from "../config/provider-resolver.js";
-import { getRepositories } from "../db/factory.js";
+import { configManager } from "../../config/config-manager.js";
+import { resolveProvider, LEGACY_DEFAULTS } from "../../config/provider-resolver.js";
+import { getRepositories } from "../../db/factory.js";
 
 let gateway: ModelGateway | null = null;
 

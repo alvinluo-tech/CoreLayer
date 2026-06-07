@@ -26,7 +26,7 @@ vi.mock("ai", () => ({
 vi.mock("./prompt-builder.js", () => ({
   buildSystemPrompt: vi.fn(() => "system prompt"),
 }));
-vi.mock("../ai/provider.js", () => ({
+vi.mock("../gateways/ai-provider/provider.js", () => ({
   getModel: vi.fn(() => ({})),
 }));
 vi.mock("../tools/registry.js", () => ({

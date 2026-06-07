@@ -7,7 +7,7 @@ import { isTaskComplete } from "../task/task-status.js";
 import { wrapToolsForAI } from "../runtimes/index.js";
 
 import { configManager } from "../config/config-manager.js";
-import { getModelGateway } from "../model/gateway.js";
+import { getModelGateway } from "../gateways/model/gateway.js";
 import { getRepositories } from "../db/factory.js";
 import type { MessageRow, ConversationRow, ScoredMemoryRow } from "../db/repository.js";
 import { classifyError, extractErrorMessage, logError } from "../utils/errors.js";

@@ -6,7 +6,7 @@
  */
 
 import { generateText } from "ai";
-import { getModelGateway } from "../model/gateway.js";
+import { getModelGateway } from "../gateways/model/gateway.js";
 import { getRepositories } from "../db/factory.js";
 import { logError } from "../utils/errors.js";
 

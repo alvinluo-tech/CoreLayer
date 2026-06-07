@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { sql } from "drizzle-orm";
 import { db, schema } from "../../db/client.js";
-import { getModelGateway } from "../../model/gateway.js";
+import { getModelGateway } from "../../gateways/model/gateway.js";
 import { apiError, logError } from "../../utils/errors.js";
 
 const app = new Hono();

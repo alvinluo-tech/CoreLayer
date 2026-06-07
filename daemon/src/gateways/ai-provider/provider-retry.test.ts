@@ -8,7 +8,7 @@ const mockProviders = [
 ];
 let activeProvider = "mimo";
 
-vi.mock("../config/config-manager.js", () => ({
+vi.mock("../../config/config-manager.js", () => ({
   configManager: {
     getActiveProvider: () => activeProvider,
     getActiveModel: () => "test-model",
@@ -16,7 +16,7 @@ vi.mock("../config/config-manager.js", () => ({
   },
 }));
 
-vi.mock("../config/provider-resolver.js", () => ({
+vi.mock("../../config/provider-resolver.js", () => ({
   resolveProvider: (name: string) => ({
     baseURL: `https://${name}.example.com/v1`,
     apiKey: "test-key",

@@ -13,7 +13,7 @@ import { registerReviewTools } from "./tools/review/connector.js";
 import { registerConversationTools } from "./tools/conversation/connector.js";
 import { registerMemoryTools } from "./runtimes/memory/connector.js";
 import { logError } from "./utils/errors.js";
-import { registerAllAdapters } from "./mcp/adapters/index.js";
+import { registerAllAdapters } from "./gateways/mcp/adapters/index.js";
 import type { RuntimeComponent, RuntimeComponentKind } from "./runtime-host/contract.js";
 import { ALL_RUNTIME_KINDS } from "./runtime-host/contract.js";
 import { getRuntimeInstances, startAllRuntimes } from "./runtime-host/index.js";
@@ -238,7 +238,7 @@ function startServer(port: number, hostname: string) {
       console.log(`[Jarvis] Received ${signal}, shutting down gracefully...`);
       server.close();
       try {
-        const { disconnectAllMCPServers } = await import("./mcp/client.js");
+        const { disconnectAllMCPServers } = await import("./gateways/mcp/client.js");
         await disconnectAllMCPServers();
       } catch {}
       process.exit(0);
@@ -274,7 +274,7 @@ getRepositories().eventLog.create({
 }).catch((err: unknown) => console.error("[Jarvis] Failed to log startup event:", err));
 
 // Auto-connect saved MCP servers after server starts
-import("./mcp/client.js")
+import("./gateways/mcp/client.js")
   .then(({ autoConnectMCPServers }) => autoConnectMCPServers())
   .catch((err) => console.error("[Jarvis] MCP auto-connect failed:", err));
 

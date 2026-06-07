@@ -63,7 +63,7 @@ export { synthesizeSpeech, isTtsAvailable } from "./voice/tts.js";
 export type { TTSModel } from "./voice/tts.js";
 export { StreamingTTS } from "./voice/streaming-tts.js";
 export { voiceRegistry } from "./voice/providers.js";
-export { getProviderConfig } from "../ai/provider.js";
+export { getProviderConfig } from "../gateways/ai-provider/provider.js";
 
 // ─── Scheduler Runtime ────────────────────────────────────────────────────────
 

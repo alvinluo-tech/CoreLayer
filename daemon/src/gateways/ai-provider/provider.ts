@@ -1,10 +1,10 @@
 import { createOpenAI } from "@ai-sdk/openai";
 import type { LanguageModelV3, LanguageModelV3CallOptions } from "@ai-sdk/provider";
-import { configManager } from "../config/config-manager.js";
-import { resolveProvider } from "../config/provider-resolver.js";
+import { configManager } from "../../config/config-manager.js";
+import { resolveProvider } from "../../config/provider-resolver.js";
 import { DEFAULT_PROFILES } from "@jarvis/model-gateway";
 import { deadHostManager } from "./dead-host.js";
-import { logError } from "../utils/errors.js";
+import { logError } from "../../utils/errors.js";
 
 interface ProviderConfig {
   baseURL: string;

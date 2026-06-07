@@ -17,7 +17,7 @@ vi.mock("../../db/factory.js", () => ({
 }));
 
 // Import after mocks
-const { registerTaskFlowAdapter } = await import("../../mcp/adapters/taskflow.js");
+const { registerTaskFlowAdapter } = await import("../../gateways/mcp/adapters/taskflow.js");
 const { registerFlexiLogAdapter } = await import("./flexilog.js");
 
 describe("Adapter Registration", () => {
@@ -53,7 +53,7 @@ describe("TaskFlow Adapter — Repository Pattern", () => {
     const mockTasks = [{ id: "1", title: "Test" }];
     mockQuery.mockResolvedValue(mockTasks);
 
-    const { registerTaskFlowAdapter: register } = await import("../../mcp/adapters/taskflow.js");
+    const { registerTaskFlowAdapter: register } = await import("../../gateways/mcp/adapters/taskflow.js");
     const { getRegistry } = await import("../../tools/registry.js");
     register();
 
@@ -71,7 +71,7 @@ describe("TaskFlow Adapter — Repository Pattern", () => {
     const mockTask = { id: "new-1", title: "New Task" };
     mockCreate.mockResolvedValue(mockTask);
 
-    const { registerTaskFlowAdapter: register } = await import("../../mcp/adapters/taskflow.js");
+    const { registerTaskFlowAdapter: register } = await import("../../gateways/mcp/adapters/taskflow.js");
     const { getRegistry } = await import("../../tools/registry.js");
     register();
 
@@ -100,7 +100,7 @@ describe("TaskFlow Adapter — Repository Pattern", () => {
   it("create_task uses defaults for optional fields", async () => {
     mockCreate.mockResolvedValue({ id: "1", title: "Minimal" });
 
-    const { registerTaskFlowAdapter: register } = await import("../../mcp/adapters/taskflow.js");
+    const { registerTaskFlowAdapter: register } = await import("../../gateways/mcp/adapters/taskflow.js");
     const { getRegistry } = await import("../../tools/registry.js");
     register();
 
@@ -122,7 +122,7 @@ describe("TaskFlow Adapter — Repository Pattern", () => {
   it("returns error when repo throws", async () => {
     mockQuery.mockRejectedValue(new Error("DB connection failed"));
 
-    const { registerTaskFlowAdapter: register } = await import("../../mcp/adapters/taskflow.js");
+    const { registerTaskFlowAdapter: register } = await import("../../gateways/mcp/adapters/taskflow.js");
     const { getRegistry } = await import("../../tools/registry.js");
     register();
 

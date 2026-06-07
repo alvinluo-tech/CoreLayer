@@ -3,14 +3,14 @@
  * New tools should be registered as native tools or MCP servers.
  */
 
-export { registerAdapterTools } from "../../legacy/rest-bridges/base.js";
-export type { AppConfig, AdapterToolDef } from "../../legacy/rest-bridges/types.js";
+export { registerAdapterTools } from "../../../legacy/rest-bridges/base.js";
+export type { AppConfig, AdapterToolDef } from "../../../legacy/rest-bridges/types.js";
 
 export { registerTaskFlowAdapter } from "./taskflow.js";
-export { registerFlexiLogAdapter } from "../../legacy/rest-bridges/flexilog.js";
+export { registerFlexiLogAdapter } from "../../../legacy/rest-bridges/flexilog.js";
 
 import { registerTaskFlowAdapter } from "./taskflow.js";
-import { registerFlexiLogAdapter } from "../../legacy/rest-bridges/flexilog.js";
+import { registerFlexiLogAdapter } from "../../../legacy/rest-bridges/flexilog.js";
 
 /**
  * @deprecated Register all external app adapters.
