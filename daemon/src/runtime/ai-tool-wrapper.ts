@@ -1,4 +1,5 @@
 import type { Tool } from "ai";
+import { isApprovalRequiredResult } from "@jarvis/runtime-protocol";
 import { toolRuntime } from "./index.js";
 import { getRegistry } from "../tools/registry.js";
 import { resolveToolCallId } from "./tool-call-id.js";
@@ -62,7 +63,7 @@ export function wrapToolsForAI(
         execute: async (args: unknown) => {
           const toolId = resolveToolId(name);
           const toolCallId = resolveToolCallId(undefined, ctx.runId, toolId, args);
-          const { result } = await toolRuntime.execute(toolId, args, {
+          const executeResult = await toolRuntime.execute(toolId, args, {
             caller: "ai",
             runId: ctx.runId,
             conversationId: ctx.conversationId,
@@ -70,8 +71,11 @@ export function wrapToolsForAI(
             mode: ctx.mode,
             toolCallId,
           });
-          if (result.success) return trimToolResult(result.data);
-          throw new Error(result.error ?? "Tool execution failed");
+          if (isApprovalRequiredResult(executeResult)) {
+            throw new Error(`Approval required: ${executeResult.approvalRequestId}`);
+          }
+          if (executeResult.result.success) return trimToolResult(executeResult.result.data);
+          throw new Error(executeResult.result.error ?? "Tool execution failed");
         },
       } as Tool;
     } else {

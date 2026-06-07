@@ -21,6 +21,7 @@ import type {
   ShutdownResponse,
   RuntimeHealth,
 } from "@jarvis/runtime-protocol";
+import { isApprovalRequiredResult } from "@jarvis/runtime-protocol";
 import type { ToolResult } from "@jarvis/types";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
@@ -239,6 +240,10 @@ export class ToolRuntime implements ManagedRuntime {
       projectId: context.projectId,
       mode: context.mode,
     });
+
+    if (isApprovalRequiredResult(result)) {
+      return { success: false, error: `Approval required: ${result.approvalRequestId}` };
+    }
 
     return result.result;
   }

@@ -3,6 +3,7 @@ import type {
   SkillExecutionResult,
   StepResult,
 } from "./types.js";
+import { isApprovalRequiredResult } from "@jarvis/runtime-protocol";
 import { getSkill } from "./loader.js";
 import { toolRuntime } from "../runtimes/index.js";
 
@@ -133,7 +134,7 @@ async function executeToolStep(
 
   try {
     const args = resolveTemplate(step.args ?? {}, context);
-    const { result } = await toolRuntime.execute(step.tool, args, {
+    const executeResult = await toolRuntime.execute(step.tool, args, {
       caller: "skill",
       skillName,
       runId: runtimeContext?.runId,
@@ -141,13 +142,23 @@ async function executeToolStep(
       conversationId: runtimeContext?.conversationId,
       projectId: runtimeContext?.projectId,
     });
+    if (isApprovalRequiredResult(executeResult)) {
+      return {
+        stepId: step.id,
+        type: "tool_call",
+        success: false,
+        output: null,
+        durationMs: Date.now() - startTime,
+        error: `Approval required: ${executeResult.approvalRequestId}`,
+      };
+    }
     return {
       stepId: step.id,
       type: "tool_call",
-      success: result.success,
-      output: result.data ?? result.error,
+      success: executeResult.result.success,
+      output: executeResult.result.data ?? executeResult.result.error,
       durationMs: Date.now() - startTime,
-      error: result.success ? undefined : String(result.error),
+      error: executeResult.result.success ? undefined : String(executeResult.result.error),
     };
   } catch (err) {
     return {

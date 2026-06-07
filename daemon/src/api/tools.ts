@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import type { ToolSource, RiskLevel } from "@jarvis/types";
+import { isApprovalRequiredResult } from "@jarvis/runtime-protocol";
 import { getRegistry, getRepositories, toolRuntime } from "../runtimes/index.js";
 
 const app = new Hono();
@@ -116,8 +117,11 @@ app.post("/:id/execute", async (c) => {
   }
 
   try {
-    const { result } = await toolRuntime.execute(toolId, args, { caller: "rest-api" });
-    return c.json(result);
+    const executeResult = await toolRuntime.execute(toolId, args, { caller: "rest-api" });
+    if (isApprovalRequiredResult(executeResult)) {
+      return c.json({ error: "Approval required", approvalRequestId: executeResult.approvalRequestId }, 202);
+    }
+    return c.json(executeResult.result);
   } catch (error) {
     return c.json({
       success: false,

@@ -1,5 +1,6 @@
 import { PermissionGuard } from "@jarvis/permission-guard";
 import type { ToolResult, JSONSchema } from "@jarvis/types";
+import type { ApprovalRequiredResult } from "@jarvis/runtime-protocol";
 import { getRegistry } from "../tools/registry.js";
 import { getRepositories } from "../db/factory.js";
 
@@ -67,6 +68,8 @@ export interface ToolExecutionResult {
   durationMs: number;
 }
 
+export type ToolExecuteReturn = ToolExecutionResult | ApprovalRequiredResult;
+
 /**
  * Single execution entry point for all tool calls.
  * Enforces permission checks, audit logging, and timeout.
@@ -131,7 +134,7 @@ export class ToolRuntime {
     toolId: string,
     args: unknown,
     context: ToolExecutionContext,
-  ): Promise<ToolExecutionResult> {
+  ): Promise<ToolExecuteReturn> {
     const registry = getRegistry();
     const tool = registry.resolveTool(toolId) ?? registry.getTool(`native:${toolId}`);
     if (!tool) {
@@ -208,28 +211,24 @@ export class ToolRuntime {
     }
 
     if (context.caller === "ai") {
-      // Idempotency: if toolCallId provided and a pending approval exists, skip duplicate
-      if (context.toolCallId && context.runId && effectiveRequiresConfirmation) {
-        const { approvalRequests } = getRepositories();
-        const existing = await approvalRequests.findByToolCallId(context.toolCallId);
-        if (existing) {
-          return {
-            result: { success: false, error: `Duplicate tool call: ${context.toolCallId}` },
-            confirmed: false,
-            durationMs: Date.now() - startTime,
-          };
+      // Non-blocking approval: return ApprovalRequiredResult immediately
+      if (effectiveRequiresConfirmation && context.runId) {
+        // Idempotency: if toolCallId provided and a pending approval exists, skip duplicate
+        if (context.toolCallId) {
+          const { approvalRequests } = getRepositories();
+          const existing = await approvalRequests.findByToolCallId(context.toolCallId);
+          if (existing) {
+            return {
+              result: { success: false, error: `Duplicate tool call: ${context.toolCallId}` },
+              confirmed: false,
+              durationMs: Date.now() - startTime,
+            };
+          }
         }
-      }
 
-      const pending = await this.permissionGuard.executeWithPendingConfirmation(tool, args, {
-        waitForExternalResolution: effectiveRequiresConfirmation,
-      });
-
-      if (context.runId && effectiveRequiresConfirmation) {
         const { approvalRequests } = getRepositories();
         const expiresInMs = 5 * 60_000; // 5 minutes
-        await approvalRequests.create({
-          id: pending.confirmationId,
+        const approvalRequest = await approvalRequests.create({
           runId: context.runId,
           toolId: tool.id,
           toolName: tool.name,
@@ -241,14 +240,38 @@ export class ToolRuntime {
           preview: tool.description,
           toolCallId: context.toolCallId,
           expiresAt: Date.now() + expiresInMs,
+          operationKind: "tool.execute",
+          operationPayload: { args },
         });
+
+        return {
+          kind: "approval_required",
+          approvalRequestId: approvalRequest.id,
+          runId: context.runId,
+          toolCallId: context.toolCallId ?? null,
+          toolId: tool.id,
+          toolName: tool.name,
+          operationKind: "tool.execute",
+          operationPayload: { args },
+          actor: context.caller,
+          mode: context.mode ?? "chat",
+          projectId: context.projectId ?? null,
+          taskId: null,
+          conversationId: context.conversationId ?? null,
+          source: context.source ?? null,
+          preview: tool.description ?? null,
+          risk: tool.risk,
+          createdAt: new Date().toISOString(),
+          expiresAt: new Date(Date.now() + expiresInMs).toISOString(),
+        };
       }
 
-      const result = await pending.confirm();
-      this.persistAuditEntry(tool, args, result.success ? "success" : (result.error?.includes("拒绝") ? "denied" : "failure"), context, { confirmedByUser: effectiveRequiresConfirmation && result.success, error: result.error });
+      // No confirmation needed — execute immediately
+      const result = await tool.execute(args);
+      this.persistAuditEntry(tool, args, result.success ? "success" : "failure", context, { confirmedByUser: false, error: result.error });
       return {
         result,
-        confirmed: effectiveRequiresConfirmation && result.success,
+        confirmed: false,
         durationMs: Date.now() - startTime,
       };
     }
