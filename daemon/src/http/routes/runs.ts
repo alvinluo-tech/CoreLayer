@@ -1,6 +1,6 @@
 import { Hono } from "hono";
-import { getRepositories } from "../db/factory.js";
-import { apiError, extractErrorMessage, logError } from "../utils/errors.js";
+import { getRepositories } from "../../db/factory.js";
+import { apiError, extractErrorMessage, logError } from "../../utils/errors.js";
 
 const runsRoutes = new Hono();
 

@@ -1,59 +1,38 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
-// Mock all external dependencies before importing voice routes
-vi.mock("../voice/asr.js", () => ({
-  transcribeWithGroq: vi.fn(),
-  isAsrAvailable: vi.fn().mockReturnValue(false),
-}));
+// Mock all external dependencies via the barrel import
+const mockTranscribeWithGroq = vi.fn();
+const mockIsAsrAvailable = vi.fn().mockReturnValue(false);
+const mockSynthesizeSpeech = vi.fn();
+const mockIsTtsAvailable = vi.fn().mockReturnValue(false);
+const mockRunStreamTurn = vi.fn();
 
-vi.mock("../voice/tts.js", () => ({
-  synthesizeSpeech: vi.fn(),
-  isTtsAvailable: vi.fn().mockReturnValue(false),
-}));
-
-vi.mock("../voice/streaming-tts.js", () => ({
+vi.mock("../../runtimes/index.js", () => ({
+  transcribeWithGroq: (...args: unknown[]) => mockTranscribeWithGroq(...args),
+  isAsrAvailable: () => mockIsAsrAvailable(),
+  synthesizeSpeech: (...args: unknown[]) => mockSynthesizeSpeech(...args),
+  isTtsAvailable: () => mockIsTtsAvailable(),
   StreamingTTS: vi.fn().mockImplementation(() => ({
     feed: vi.fn(),
     flush: vi.fn().mockResolvedValue([]),
     onAudio: vi.fn(),
   })),
-}));
-
-vi.mock("../voice/providers.js", () => ({
   voiceRegistry: {
     getAvailableASR: vi.fn().mockReturnValue([]),
     getAvailableTTS: vi.fn().mockReturnValue([]),
   },
-}));
-
-vi.mock("../config/env.js", () => ({
-  env: {},
-}));
-
-vi.mock("../config/config-manager.js", () => ({
+  getProviderConfig: vi.fn().mockReturnValue({ apiKey: "" }),
   configManager: {
     getCredentials: vi.fn(() => ({})),
     getProviderConfig: vi.fn(() => ({ baseURL: "", apiKey: "" })),
   },
-}));
-
-vi.mock("../ai/provider.js", () => ({
-  getProviderConfig: vi.fn().mockReturnValue({ apiKey: "" }),
-}));
-
-vi.mock("../utils/errors.js", () => ({
   extractErrorMessage: vi.fn((e: unknown) => (e instanceof Error ? e.message : String(e))),
   logError: vi.fn(),
-}));
-
-// Mock runStreamTurn to return a controlled stream
-const mockRunStreamTurn = vi.fn();
-vi.mock("../runtimes/agent/stream.js", () => ({
   runStreamTurn: (...args: unknown[]) => mockRunStreamTurn(...args),
 }));
 
 // Mock DB layer (needed by some transitive imports)
-vi.mock("../db/client.js", () => ({ db: {}, schema: {} }));
+vi.mock("../../db/client.js", () => ({ db: {}, schema: {} }));
 
 const voiceRoutes = (await import("./voice.js")).default;
 

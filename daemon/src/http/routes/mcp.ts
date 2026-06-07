@@ -1,6 +1,6 @@
 import { Hono } from "hono";
-import { getMCPManager, connectMCPServer, disconnectMCPServer } from "../mcp/client.js";
-import { addMCPServer, removeMCPServer } from "../config/mcp-config.js";
+import { getMCPManager, connectMCPServer, disconnectMCPServer } from "../../mcp/client.js";
+import { addMCPServer, removeMCPServer } from "../../config/mcp-config.js";
 import type { MCPServerConfig } from "@jarvis/types";
 
 const app = new Hono();
@@ -151,7 +151,7 @@ app.get("/servers/:id/resources/*", async (c) => {
 // Get model gateway info
 app.get("/models", async (c) => {
   try {
-    const { getModelGateway } = await import("../model/gateway.js");
+    const { getModelGateway } = await import("../../model/gateway.js");
     const gateway = getModelGateway();
     return c.json({
       profiles: gateway.getAllProfiles(),

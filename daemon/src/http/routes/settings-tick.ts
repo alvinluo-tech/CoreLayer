@@ -1,6 +1,6 @@
 import { Hono } from "hono";
-import { configManager, type JarvisConfig } from "../config/config-manager.js";
-import { apiError, logError } from "../utils/errors.js";
+import { configManager, type JarvisConfig } from "../../config/config-manager.js";
+import { apiError, logError } from "../../utils/errors.js";
 
 const app = new Hono();
 

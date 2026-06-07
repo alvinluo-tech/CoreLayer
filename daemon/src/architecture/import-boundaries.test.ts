@@ -10,7 +10,7 @@ function readFile(relativePath: string): string {
 
 describe("Runtime entrypoint guards", () => {
   it("conversations.ts should not call handleMessageInConversation in runtime paths", () => {
-    const source = readFile("api/conversations.ts");
+    const source = readFile("http/routes/conversations.ts");
     const lines = source.split("\n");
     const violations: string[] = [];
     for (let i = 0; i < lines.length; i++) {
@@ -23,7 +23,7 @@ describe("Runtime entrypoint guards", () => {
   });
 
   it("conversations.ts should not call streamMessageInConversation", () => {
-    const source = readFile("api/conversations.ts");
+    const source = readFile("http/routes/conversations.ts");
     const lines = source.split("\n");
     const violations: string[] = [];
     for (let i = 0; i < lines.length; i++) {
@@ -83,7 +83,7 @@ describe("Runtime entrypoint guards", () => {
   });
 
   it("conversations.ts should not import handleMessageInConversation", () => {
-    const source = readFile("api/conversations.ts");
+    const source = readFile("http/routes/conversations.ts");
     const lines = source.split("\n");
     const violations: string[] = [];
     for (let i = 0; i < lines.length; i++) {
@@ -96,7 +96,7 @@ describe("Runtime entrypoint guards", () => {
   });
 
   it("conversations.ts should not import streamMessageInConversation", () => {
-    const source = readFile("api/conversations.ts");
+    const source = readFile("http/routes/conversations.ts");
     const lines = source.split("\n");
     const violations: string[] = [];
     for (let i = 0; i < lines.length; i++) {

@@ -10,7 +10,7 @@ import {
   logError,
   runTurn,
   runStreamTurn,
-} from "../runtimes/index.js";
+} from "../../runtimes/index.js";
 
 const chatRoutes = new Hono();
 

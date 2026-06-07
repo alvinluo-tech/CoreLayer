@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import type { ToolSource, RiskLevel } from "@jarvis/types";
 import { isApprovalRequiredResult } from "@jarvis/runtime-protocol";
-import { getRegistry, getRepositories, toolRuntime } from "../runtimes/index.js";
+import { getRegistry, getRepositories, toolRuntime } from "../../runtimes/index.js";
 
 const app = new Hono();
 

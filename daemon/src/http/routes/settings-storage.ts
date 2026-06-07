@@ -1,16 +1,16 @@
 import { Hono } from "hono";
 import fs from "fs";
 import pg from "pg";
-import { env } from "../config/env.js";
-import { resolveAppPaths } from "../config/app-paths.js";
+import { env } from "../../config/env.js";
+import { resolveAppPaths } from "../../config/app-paths.js";
 import {
   setStorageMode,
   isCloudConfigured,
   getDbConfig,
   setDbConfig,
-} from "../config/storage-config.js";
-import { switchStorageMode, getCurrentMode, getRepositories } from "../db/factory.js";
-import { apiError, logError } from "../utils/errors.js";
+} from "../../config/storage-config.js";
+import { switchStorageMode, getCurrentMode, getRepositories } from "../../db/factory.js";
+import { apiError, logError } from "../../utils/errors.js";
 import { maskApiKey, isMaskedKey } from "./settings-helpers.js";
 
 const app = new Hono();

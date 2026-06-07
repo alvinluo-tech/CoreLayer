@@ -13,7 +13,7 @@ import {
   extractErrorMessage,
   logError,
   runStreamTurn,
-} from "../runtimes/index.js";
+} from "../../runtimes/index.js";
 
 const voiceRoutes = new Hono();
 

@@ -64,7 +64,7 @@ vi.mock("../../orchestrator/conversation.js", () => ({
 }));
 
 // Import after mocks
-const { default: approvalRoutes } = await import("../../api/approval.js");
+const { default: approvalRoutes } = await import("../../http/routes/approval.js");
 
 import { Hono } from "hono";
 

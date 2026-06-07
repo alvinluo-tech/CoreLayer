@@ -9,7 +9,7 @@ import {
   logError,
   runStreamTurn,
   runTurn,
-} from "../runtimes/index.js";
+} from "../../runtimes/index.js";
 
 const app = new Hono();
 
@@ -195,7 +195,7 @@ app.post("/:id/messages/stream", async (c) => {
           lastConversation = event.result.conversation;
 
           // Goal auto-continuation: check if active goals need more work
-          const { GoalJudge } = await import("../orchestrator/goal-handler.js");
+          const { GoalJudge } = await import("../../orchestrator/goal-handler.js");
           const goalJudge = new GoalJudge();
           const goalCheck = await goalJudge.checkAfterTurn(fullText);
 

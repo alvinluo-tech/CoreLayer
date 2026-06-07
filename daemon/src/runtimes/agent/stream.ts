@@ -12,8 +12,8 @@ import type {
 } from "./domain/agent-run.js";
 import { getRepositories } from "../../db/factory.js";
 import { streamChat } from "../../orchestrator/conversation.js";
-import { normalizeStream } from "../../api/sse-normalizer.js";
-import { withStreamTimeout } from "../../api/stream-timeout.js";
+import { normalizeStream } from "../../http/routes/sse-normalizer.js";
+import { withStreamTimeout } from "../../http/routes/stream-timeout.js";
 import { configManager } from "../../config/config-manager.js";
 import { logError } from "../../utils/errors.js";
 import { resolveConversationScope } from "./run-context.js";
