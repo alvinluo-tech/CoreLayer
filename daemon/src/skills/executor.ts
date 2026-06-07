@@ -4,7 +4,7 @@ import type {
   StepResult,
 } from "./types.js";
 import { getSkill } from "./loader.js";
-import { toolRuntime } from "../runtime/index.js";
+import { toolRuntime } from "../runtimes/index.js";
 
 /**
  * Optional runtime context for skill execution.

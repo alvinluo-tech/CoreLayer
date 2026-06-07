@@ -34,6 +34,7 @@ export { runStreamTurn } from "../runtime/run-stream-executor.js";
 export type { RunStreamTurnOptions } from "../runtime/run-stream-executor.js";
 export { ContextBuilder } from "../orchestrator/context-builder.js";
 export { isGoalCommand, handleGoalCommand } from "../orchestrator/goal-handler.js";
+export { wrapToolsForAI, trimToolResult } from "../runtime/ai-tool-wrapper.js";
 
 // ─── Tool Runtime ─────────────────────────────────────────────────────────────
 
@@ -88,3 +89,8 @@ export const computerControlRuntime = new ComputerControlRuntime({
 export { getRepositories } from "../db/factory.js";
 export { configManager } from "../config/config-manager.js";
 export { apiError, extractErrorMessage, classifyError, logError } from "../utils/errors.js";
+
+// ─── Runtime Contract Types ───────────────────────────────────────────────────
+
+export type { RuntimeComponent, RuntimeKind, RuntimeStatus, RestartPolicy } from "../runtime/contract.js";
+export { ALL_RUNTIME_KINDS } from "../runtime/contract.js";

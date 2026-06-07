@@ -4,7 +4,7 @@ import { ContextBuilder, MEMORY_MIN_SCORE } from "./context-builder.js";
 import { compressConversation, createSummaryMessage, extractMemoriesFromTurn } from "./compressor.js";
 import { getAllTools } from "../tools/registry.js";
 import { isTaskComplete } from "../task/task-status.js";
-import { wrapToolsForAI } from "../runtime/ai-tool-wrapper.js";
+import { wrapToolsForAI } from "../runtimes/index.js";
 
 import { configManager } from "../config/config-manager.js";
 import { getModelGateway } from "../model/gateway.js";

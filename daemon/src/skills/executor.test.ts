@@ -6,7 +6,7 @@ vi.mock("./loader.js", () => ({
   getSkill: vi.fn(),
 }));
 
-vi.mock("../runtime/index.js", () => ({
+vi.mock("../runtimes/index.js", () => ({
   toolRuntime: {
     execute: vi.fn(),
   },
@@ -14,7 +14,7 @@ vi.mock("../runtime/index.js", () => ({
 
 import { executeSkill } from "./executor.js";
 import { getSkill } from "./loader.js";
-import { toolRuntime } from "../runtime/index.js";
+import { toolRuntime } from "../runtimes/index.js";
 
 const mockGetSkill = vi.mocked(getSkill);
 const mockToolExecute = vi.mocked(toolRuntime.execute);
