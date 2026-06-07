@@ -59,6 +59,8 @@ export interface RuntimeStatus extends RuntimeInfo {
   completedRuns: number;
   /** Number of failed runs */
   failedRuns: number;
+  /** Uptime in milliseconds */
+  uptime: number;
   /** Average response time in ms */
   avgResponseTimeMs?: number;
   /** Memory usage in bytes */

@@ -22,6 +22,8 @@
     "@jarvis/mcp-client": "workspace:*",
     "@jarvis/model-gateway": "workspace:*",
     "@jarvis/permission-guard": "workspace:*",
+    "@jarvis/runtime-core": "workspace:*",
+    "@jarvis/runtime-protocol": "workspace:*",
     "@jarvis/tool-registry": "workspace:*",
     "@jarvis/types": "workspace:*",
     "@supabase/supabase-js": "^2.106.2",
