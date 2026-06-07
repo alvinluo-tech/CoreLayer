@@ -89,6 +89,12 @@ export const computerControlRuntime = new ComputerControlRuntime({
 });
 registerRuntime("computer-control", computerControlRuntime);
 
+// ─── Memory ───────────────────────────────────────────────────────────────────
+
+// Re-export memory domain functions
+export { registerMemoryTools } from "./memory/connector.js";
+export { extractTimeClues, mapToDateTimeRange } from "./memory/temporal-memory.js";
+
 // ─── Shared ───────────────────────────────────────────────────────────────────
 
 export { getRepositories } from "../db/factory.js";

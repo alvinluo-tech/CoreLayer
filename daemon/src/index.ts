@@ -11,7 +11,7 @@ import { registerTodoTools } from "./tools/todo/connector.js";
 import { registerReadingTools } from "./tools/reading/connector.js";
 import { registerReviewTools } from "./tools/review/connector.js";
 import { registerConversationTools } from "./tools/conversation/connector.js";
-import { registerMemoryTools } from "./tools/memory/connector.js";
+import { registerMemoryTools } from "./runtimes/memory/connector.js";
 import { logError } from "./utils/errors.js";
 import { registerAllAdapters } from "./mcp/adapters/index.js";
 import type { RuntimeComponent, RuntimeComponentKind } from "./runtime-host/contract.js";

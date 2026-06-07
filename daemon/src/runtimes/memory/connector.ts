@@ -1,7 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 import { getRepositories } from "../../db/factory.js";
-import { registerTool } from "../registry.js";
+import { registerTool } from "../../tools/registry.js";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 

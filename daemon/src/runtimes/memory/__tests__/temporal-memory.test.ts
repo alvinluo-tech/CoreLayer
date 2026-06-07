@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { extractTimeClues, mapToDateTimeRange } from "./temporal-memory.js";
+import { extractTimeClues, mapToDateTimeRange } from "../temporal-memory.js";
 
 describe("extractTimeClues", () => {
   it("extracts 'yesterday'", () => {
