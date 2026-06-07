@@ -65,13 +65,13 @@ export function createConfigSensor(options: ConfigSensorOptions): Sensor {
 /**
  * Create a config sensor with default paths:
  * - ./data/config.json
- * - ~/.jarvis/mcp-servers.json
+ * - ~/.jarvis/config/mcp-servers.json
  */
 export function createDefaultConfigSensor(): Sensor {
   return createConfigSensor({
     paths: [
       join(process.cwd(), "data", "config.json"),
-      join(homedir(), ".jarvis", "mcp-servers.json"),
+      join(homedir(), ".jarvis", "config", "mcp-servers.json"),
     ],
   });
 }

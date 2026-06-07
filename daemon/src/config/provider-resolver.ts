@@ -1,7 +1,7 @@
 import { configManager } from "./config-manager.js";
 
 // Canonical legacy provider defaults — base URLs only, no env keys.
-// API keys are resolved exclusively from ~/.jarvis/credentials.json.
+// API keys are resolved exclusively from ~/.jarvis/config/credentials.json.
 export const LEGACY_DEFAULTS: Record<string, { baseURL: string }> = {
   mimo: { baseURL: "https://token-plan-ams.xiaomimimo.com/v1" },
   groq: { baseURL: "https://api.groq.com/openai/v1" },
@@ -38,7 +38,7 @@ export interface ResolvedProvider {
 }
 
 export function resolveProvider(name: string): ResolvedProvider {
-  // 1. Check configManager (user-level ~/.jarvis/config.json + credentials.json)
+  // 1. Check configManager (user-level ~/.jarvis/config/*.json)
   try {
     return configManager.getProviderConfig(name);
   } catch {

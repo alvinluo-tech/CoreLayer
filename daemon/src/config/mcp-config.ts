@@ -3,7 +3,7 @@ import { join } from "path";
 import { homedir } from "os";
 import type { MCPServerConfig } from "@jarvis/types";
 
-const CONFIG_DIR = join(homedir(), ".jarvis");
+const CONFIG_DIR = join(homedir(), ".jarvis", "config");
 const CONFIG_FILE = join(CONFIG_DIR, "mcp-servers.json");
 
 export interface MCPConfigStore {

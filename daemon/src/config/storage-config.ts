@@ -5,7 +5,7 @@ import { resolveAppPaths } from "./app-paths.js";
 
 const appPaths = resolveAppPaths();
 const CONFIG_DIR = appPaths.configDir;
-const CONFIG_FILE = join(CONFIG_DIR, "config.json");
+const CONFIG_FILE = join(CONFIG_DIR, "storage.json");
 
 export interface DbConfigCredentials {
   supabaseUrl?: string;

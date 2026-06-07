@@ -2,7 +2,7 @@ import { defineConfig } from "drizzle-kit";
 import { homedir } from "os";
 import path from "path";
 
-const defaultDbPath = path.join(homedir(), ".jarvis", "jarvis.db");
+const defaultDbPath = path.join(homedir(), ".jarvis", "data", "jarvis.db");
 
 export default defineConfig({
   schema: "./src/db/schema.ts",

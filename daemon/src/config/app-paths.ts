@@ -40,7 +40,7 @@ export function resolveAppPaths(): AppPaths {
     ? path.isAbsolute(envSqlitePath)
       ? envSqlitePath
       : path.resolve(appDataDir, envSqlitePath)
-    : path.join(appDataDir, "jarvis.db");
+    : path.join(appDataDir, "data", "jarvis.db");
 
   return { appDataDir, configDir, dataDir, logDir, sqlitePath };
 }
