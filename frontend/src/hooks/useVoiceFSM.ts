@@ -42,7 +42,7 @@ export function useVoiceFSM(options: UseVoiceFSMOptions) {
   const [isSupported, setIsSupported] = useState(false);
   const [layoutMode, setLayoutMode] = useState<'centered' | 'bottom-right'>('centered');
 
-  const daemonUrlRef = useRef('http://127.0.0.1:3001');
+  const daemonUrlRef = useRef('');
   const isActiveRef = useRef(false);
   const prevStateRef = useRef<VoiceState>('idle');
   const lastStreamedTextRef = useRef('');
@@ -391,7 +391,7 @@ export function useVoiceFSM(options: UseVoiceFSMOptions) {
       isActiveRef,
     };
     const realtimeCallbacks = { setState, setAssistantText, setFinalTranscript, setLastError };
-    await createConnectRealtimeSession(realtimeRefs, realtimeCallbacks)();
+    await createConnectRealtimeSession(realtimeRefs, realtimeCallbacks, daemonUrlRef.current)();
   }, []);
 
   // --- Start listening ---

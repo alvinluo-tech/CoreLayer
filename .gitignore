@@ -41,9 +41,13 @@ pnpm-debug.log*
 
 # Tauri
 src-tauri/target/
+frontend/src-tauri/resources/daemon/
+frontend/src-tauri/binaries/
+.sidecar-build/
 
 # Rust
 Cargo.lock
+!frontend/src-tauri/Cargo.lock
 
 # TypeScript
 *.tsbuildinfo

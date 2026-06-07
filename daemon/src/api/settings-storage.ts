@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import fs from "fs";
 import pg from "pg";
 import { env } from "../config/env.js";
+import { resolveAppPaths } from "../config/app-paths.js";
 import {
   setStorageMode,
   isCloudConfigured,
@@ -351,7 +352,7 @@ app.get("/db-stats", async (c) => {
 
     if (mode === "local") {
       try {
-        const stats = fs.statSync(env.SQLITE_DB_PATH);
+        const stats = fs.statSync(resolveAppPaths().sqlitePath);
         const sizeInKb = stats.size / 1024;
         dbSize = sizeInKb > 1024
           ? `${(sizeInKb / 1024).toFixed(2)} MB`

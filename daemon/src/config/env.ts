@@ -54,6 +54,11 @@ export const env = {
   DAEMON_PORT: parseInt(getEnvVar("DAEMON_PORT", [], "3001"), 10),
   DAEMON_HOST: getEnvVar("DAEMON_HOST", [], "localhost"),
 
+  // Runtime (set by Tauri supervisor in sidecar mode)
+  JARVIS_RUNTIME_MODE: getEnvVar("JARVIS_RUNTIME_MODE", [], "dev") as "dev" | "sidecar" | "external",
+  JARVIS_APP_DATA_DIR: getEnvVar("JARVIS_APP_DATA_DIR", [], ""),
+  JARVIS_LOG_DIR: getEnvVar("JARVIS_LOG_DIR", [], ""),
+
   // General PostgreSQL
   DATABASE_URL: getEnvVar("DATABASE_URL", ["POSTGRES_URL"], ""),
 

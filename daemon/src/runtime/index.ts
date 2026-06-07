@@ -27,3 +27,12 @@ export type { RunContext } from "./run-context.js";
 
 // Approval Manager (Phase 4)
 export { ApprovalManager } from "./approval-manager.js";
+
+// Runtime Component Contract (Phase 8)
+export type {
+  RuntimeKind,
+  RuntimeStatus,
+  RestartPolicy,
+  RuntimeComponent,
+} from "./contract.js";
+export { ALL_RUNTIME_KINDS } from "./contract.js";

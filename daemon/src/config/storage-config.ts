@@ -1,8 +1,10 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { join } from "path";
 import { env } from "./env.js";
+import { resolveAppPaths } from "./app-paths.js";
 
-const CONFIG_DIR = join(process.cwd(), "data");
+const appPaths = resolveAppPaths();
+const CONFIG_DIR = appPaths.configDir;
 const CONFIG_FILE = join(CONFIG_DIR, "config.json");
 
 export interface DbConfigCredentials {

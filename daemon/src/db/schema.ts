@@ -329,3 +329,31 @@ export const goals = sqliteTable("goals", {
   createdAt: text("created_at").default("CURRENT_TIMESTAMP").notNull(),
   updatedAt: text("updated_at").default("CURRENT_TIMESTAMP").notNull(),
 });
+
+// ---- Event Log ----
+
+export const eventLog = sqliteTable("event_log", {
+  id: text("id").primaryKey(),
+  type: text("type").notNull(),
+  projectId: text("project_id"),
+  taskId: text("task_id"),
+  agentRunId: text("agent_run_id"),
+  runtimeId: text("runtime_id"),
+  payload: text("payload"), // JSON stored as text
+  createdAt: text("created_at").default("CURRENT_TIMESTAMP").notNull(),
+});
+
+// ---- Audit Log ----
+
+export const auditLog = sqliteTable("audit_log", {
+  id: text("id").primaryKey(),
+  actor: text("actor").notNull(),
+  action: text("action").notNull(),
+  resource: text("resource").notNull(),
+  riskLevel: text("risk_level"),
+  permissionDecision: text("permission_decision"),
+  confirmedByUser: integer("confirmed_by_user", { mode: "boolean" }),
+  result: text("result"),
+  metadata: text("metadata"), // JSON stored as text
+  createdAt: text("created_at").default("CURRENT_TIMESTAMP").notNull(),
+});

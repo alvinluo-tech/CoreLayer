@@ -5,7 +5,7 @@ export const DEFAULT_PERMISSION_CONFIG: PermissionGuardConfig = {
     low: 'auto',
     medium: 'notify',
     high: 'confirm',
-    critical: 'confirm',
+    critical: 'deny',
   },
   appPermissions: {},
 };

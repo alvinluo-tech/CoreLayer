@@ -1,9 +1,16 @@
 mod daemon_supervisor;
+mod runtime_registry;
 
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Duration;
+use tauri::{Manager, State};
 use tokio::sync::Mutex;
+
+/// Compatibility fallback for daemon URL. The primary source of truth is
+/// `DaemonSupervisorState`. This static exists so proxy helpers that lack
+/// Tauri state access can still resolve the URL.
+static DAEMON_URL: std::sync::OnceLock<String> = std::sync::OnceLock::new();
 
 /// Shared HTTP client with connection pooling and timeout.
 /// Created once at app startup, reused across all daemon proxy calls.
@@ -91,7 +98,9 @@ struct DaemonErrorResponse {
 }
 
 async fn get_daemon_url() -> String {
-    std::env::var("DAEMON_URL").unwrap_or_else(|_| "http://127.0.0.1:3001".to_string())
+    DAEMON_URL.get().cloned().unwrap_or_else(|| {
+        std::env::var("DAEMON_URL").unwrap_or_else(|_| "http://127.0.0.1:3001".to_string())
+    })
 }
 
 /// Percent-encode a string for safe use in URL path segments.
@@ -747,8 +756,63 @@ async fn get_voice_status() -> Result<VoiceStatus, String> {
 }
 
 #[tauri::command]
-async fn get_daemon_url_command() -> Result<String, String> {
+async fn get_daemon_url_command(
+    state: State<'_, daemon_supervisor::DaemonSupervisorState>,
+) -> Result<String, String> {
+    // Try supervisor first, fall back to static
+    let supervisor = state.0.lock().await;
+    let url = supervisor.url().to_string();
+    if url != "http://127.0.0.1:3001" {
+        return Ok(url);
+    }
     Ok(get_daemon_url().await)
+}
+
+// ---- Runtime Registry Commands ----
+
+#[tauri::command]
+async fn get_runtime_components(
+    state: State<'_, daemon_supervisor::DaemonSupervisorState>,
+) -> Result<Vec<runtime_registry::RuntimeComponent>, String> {
+    let supervisor = state.0.lock().await;
+    let status = supervisor.get_status().await;
+
+    // Currently all components map to the same daemon process.
+    // Future phases can split into separate processes.
+    let component_status = if status.healthy {
+        runtime_registry::RuntimeStatus::Running
+    } else if status.running {
+        runtime_registry::RuntimeStatus::Degraded
+    } else {
+        runtime_registry::RuntimeStatus::Failed
+    };
+
+    let kinds = vec![
+        runtime_registry::RuntimeKind::AgentRuntime,
+        runtime_registry::RuntimeKind::ToolRuntime,
+        runtime_registry::RuntimeKind::CodingRuntime,
+        runtime_registry::RuntimeKind::VoiceRuntime,
+        runtime_registry::RuntimeKind::MemoryRuntime,
+        runtime_registry::RuntimeKind::SchedulerRuntime,
+        runtime_registry::RuntimeKind::ComputerControlRuntime,
+    ];
+
+    let components = kinds
+        .into_iter()
+        .map(|kind| runtime_registry::RuntimeComponent {
+            kind,
+            status: component_status.clone(),
+            pid: status.pid,
+            port: status.port,
+            health_url: Some(format!("{}/health", status.url)),
+            log_path: status.log_path.clone(),
+            restart_policy: runtime_registry::RestartPolicy::MaxAttempts(3),
+            last_health_check: status.last_health_check.clone(),
+            last_error: status.last_error.clone(),
+        })
+        .collect();
+
+    Ok(components)
 }
 
 // ---- MCP Server Commands ----
@@ -1161,10 +1225,10 @@ pub fn run() {
             daemon_supervisor::daemon_status,
             daemon_supervisor::start_daemon,
             daemon_supervisor::stop_daemon,
-            daemon_supervisor::restart_daemon
+            daemon_supervisor::restart_daemon,
+            get_runtime_components
         ])
         .setup(|app| {
-            use tauri::Manager;
             // Set window icon from default window icon (embedded via tauri.conf.json bundle)
             if let Some(window) = app.get_webview_window("main") {
                 if let Some(icon) = app.default_window_icon() {
@@ -1179,8 +1243,56 @@ pub fn run() {
                         .build(),
                 )?;
             }
+
+            // Initialize and start daemon supervisor
+            let handle = app.handle().clone();
+            let state = handle.state::<daemon_supervisor::DaemonSupervisorState>();
+            let mut supervisor = state.0.blocking_lock();
+            supervisor.initialize(&handle);
+
+            // Store the daemon URL globally so proxy helpers can use it
+            let daemon_url = supervisor.url().to_string();
+            let _ = DAEMON_URL.set(daemon_url.clone());
+            log::info!("[App] Daemon URL: {}", daemon_url);
+
+            if supervisor.owns_process() {
+                // Start daemon synchronously so the webview only loads
+                // after the daemon is healthy and accepting connections.
+                let state_clone = handle
+                    .state::<daemon_supervisor::DaemonSupervisorState>()
+                    .0
+                    .clone();
+                drop(supervisor);
+                let result = tauri::async_runtime::block_on(async move {
+                    let mut sup = state_clone.lock().await;
+                    sup.start_owned_daemon().await
+                });
+                match result {
+                    Ok(()) => log::info!("[App] Daemon started successfully"),
+                    Err(e) => log::error!("[App] Failed to start daemon: {}", e),
+                }
+            } else {
+                log::info!("[App] Using external daemon at {}", supervisor.url());
+            }
+
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::Destroyed = event {
+                // Clean up daemon on window close
+                let handle = window.app_handle().clone();
+                if let Some(state) = try_state::<daemon_supervisor::DaemonSupervisorState>(&handle)
+                {
+                    let mut supervisor = state.0.blocking_lock();
+                    supervisor.shutdown();
+                }
+            }
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+/// Try to get state without panicking if not managed.
+fn try_state<T: Send + Sync + 'static>(handle: &tauri::AppHandle) -> Option<tauri::State<'_, T>> {
+    handle.try_state::<T>()
 }

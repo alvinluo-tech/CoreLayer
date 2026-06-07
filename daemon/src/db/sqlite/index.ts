@@ -16,6 +16,8 @@ import { createSqliteAgentProfileRepo } from "./agent-profile-repo.js";
 import { createSqliteApprovalRepo } from "./approval-repo.js";
 import { createSqlitePermissionMemoryRepo } from "./permission-memory-repo.js";
 import { createSqliteAgentRunEventRepo } from "./agent-run-event-repo.js";
+import { createSqliteEventLogRepo } from "./event-log-repo.js";
+import { createSqliteAuditLogRepo } from "./audit-log-repo.js";
 
 export function createSqliteRepositories(): Repositories {
   return {
@@ -36,5 +38,7 @@ export function createSqliteRepositories(): Repositories {
     approvalRequests: createSqliteApprovalRepo(),
     permissionMemories: createSqlitePermissionMemoryRepo(),
     agentRunEvents: createSqliteAgentRunEventRepo(),
+    eventLog: createSqliteEventLogRepo(),
+    auditLog: createSqliteAuditLogRepo(),
   };
 }

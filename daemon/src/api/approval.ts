@@ -56,6 +56,18 @@ approvalRoutes.post("/:id/approve", async (c) => {
     const updated = await approvalRequests.approve(id);
 
     // Audit log: approved decision
+    const { auditLog } = getRepositories();
+    await auditLog.create({
+      actor: "user",
+      action: "approval.decision",
+      resource: `tool:${existing.toolName}`,
+      riskLevel: existing.risk,
+      permissionDecision: "approve",
+      confirmedByUser: true,
+      result: "approved",
+      metadata: { toolId: existing.toolId, toolName: existing.toolName, approvalId: id },
+    });
+
     await toolCallLogs.create({
       toolId: existing.toolId,
       toolName: existing.toolName,
@@ -92,6 +104,18 @@ approvalRoutes.post("/:id/deny", async (c) => {
     const updated = await approvalRequests.deny(id);
 
     // Audit log: denied decision
+    const { auditLog } = getRepositories();
+    await auditLog.create({
+      actor: "user",
+      action: "approval.decision",
+      resource: `tool:${existing.toolName}`,
+      riskLevel: existing.risk,
+      permissionDecision: "deny",
+      confirmedByUser: false,
+      result: "denied",
+      metadata: { toolId: existing.toolId, toolName: existing.toolName, approvalId: id },
+    });
+
     await toolCallLogs.create({
       toolId: existing.toolId,
       toolName: existing.toolName,

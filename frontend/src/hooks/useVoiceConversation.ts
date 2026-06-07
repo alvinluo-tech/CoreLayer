@@ -53,7 +53,7 @@ export function useVoiceConversation(
     position: PhysicalPosition | null;
   } | null>(null);
 
-  const daemonUrlRef = useRef<string>('http://127.0.0.1:3001');
+  const daemonUrlRef = useRef<string>('');
   const audioQueueRef = useRef<AudioQueueManager | null>(null);
   const webAsrRef = useRef<WebSpeechASR | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -341,7 +341,7 @@ export function useVoiceConversation(
       isActiveRef,
     };
     const realtimeCallbacks = { setState, setAssistantText, setFinalTranscript, setLastError };
-    await createConnectRealtimeSession(realtimeRefs, realtimeCallbacks)();
+    await createConnectRealtimeSession(realtimeRefs, realtimeCallbacks, daemonUrlRef.current)();
   }, []);
 
   // --- Batch ASR fallback (P0) ---

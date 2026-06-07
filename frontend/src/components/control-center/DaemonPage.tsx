@@ -36,7 +36,7 @@ export function DaemonPage() {
       if (status.status === 'fulfilled') setDaemonStatus(status.value);
       if (health.status === 'fulfilled') setHealthInfo(health.value);
       if (status.status === 'rejected' && health.status === 'rejected') {
-        setError('无法连接到守护进程');
+        setError('无法连接到本地运行时');
       }
     } catch {
       setError('获取状态失败');
@@ -69,8 +69,8 @@ export function DaemonPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold">守护进程</h2>
-          <p className="text-sm text-muted-foreground">Daemon 进程健康监控</p>
+          <h2 className="text-lg font-semibold">本地运行时</h2>
+          <p className="text-sm text-muted-foreground">Jarvis Runtime 健康监控</p>
         </div>
         <div className="flex gap-2">
           <Button
@@ -163,6 +163,37 @@ export function DaemonPage() {
         </div>
       </Card>
 
+      {/* Runtime Info */}
+      <Card className="p-5">
+        <div className="flex items-center gap-3 mb-4">
+          <Server className="h-5 w-5 text-muted-foreground" />
+          <h3 className="text-sm font-medium">运行时信息</h3>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="flex items-center justify-between py-2 px-3 rounded-md bg-muted/50">
+            <span className="text-sm">运行模式</span>
+            <span className="text-sm font-mono">{daemonStatus?.runtimeMode ?? '—'}</span>
+          </div>
+          <div className="flex items-center justify-between py-2 px-3 rounded-md bg-muted/50">
+            <span className="text-sm">PID</span>
+            <span className="text-sm font-mono">{daemonStatus?.pid ?? '—'}</span>
+          </div>
+          <div className="flex items-center justify-between py-2 px-3 rounded-md bg-muted/50">
+            <span className="text-sm">端口</span>
+            <span className="text-sm font-mono">{daemonStatus?.port ?? '—'}</span>
+          </div>
+          <div className="flex items-center justify-between py-2 px-3 rounded-md bg-muted/50">
+            <span className="text-sm">日志路径</span>
+            <span
+              className="text-xs font-mono truncate max-w-48"
+              title={daemonStatus?.logPath ?? ''}
+            >
+              {daemonStatus?.logPath ?? '—'}
+            </span>
+          </div>
+        </div>
+      </Card>
+
       {/* Connection Info */}
       <Card className="p-5">
         <div className="flex items-center gap-3 mb-4">
@@ -171,7 +202,7 @@ export function DaemonPage() {
         </div>
         <div className="space-y-3">
           <div className="flex items-center justify-between py-2 px-3 rounded-md bg-muted/50">
-            <span className="text-sm">Daemon URL</span>
+            <span className="text-sm">Runtime URL</span>
             <span className="text-sm font-mono text-muted-foreground">
               {daemonStatus?.url ?? '—'}
             </span>
