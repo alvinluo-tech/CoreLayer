@@ -1256,23 +1256,21 @@ pub fn run() {
             log::info!("[App] Daemon URL: {}", daemon_url);
 
             if supervisor.owns_process() {
-                // Spawn daemon in background to not block app startup
+                // Start daemon synchronously so the webview only loads
+                // after the daemon is healthy and accepting connections.
                 let state_clone = handle
                     .state::<daemon_supervisor::DaemonSupervisorState>()
                     .0
                     .clone();
-                tauri::async_runtime::spawn(async move {
+                drop(supervisor);
+                let result = tauri::async_runtime::block_on(async move {
                     let mut sup = state_clone.lock().await;
-                    match sup.start_owned_daemon().await {
-                        Ok(()) => {
-                            // Update the compat static with the actual URL
-                            // (port may have changed during allocation)
-                            let _ = DAEMON_URL.set(sup.url().to_string());
-                            log::info!("[App] Daemon started successfully");
-                        }
-                        Err(e) => log::error!("[App] Failed to start daemon: {}", e),
-                    }
+                    sup.start_owned_daemon().await
                 });
+                match result {
+                    Ok(()) => log::info!("[App] Daemon started successfully"),
+                    Err(e) => log::error!("[App] Failed to start daemon: {}", e),
+                }
             } else {
                 log::info!("[App] Using external daemon at {}", supervisor.url());
             }
