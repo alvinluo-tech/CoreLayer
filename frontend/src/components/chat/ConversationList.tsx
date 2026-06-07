@@ -88,7 +88,7 @@ export function ConversationList() {
 
       {/* Conversation list */}
       <div
-        className="space-y-1.5 max-h-[300px] overflow-y-auto pr-1.5"
+        className="space-y-1.5 max-h-[40vh] overflow-y-auto pr-1.5"
         style={{
           scrollbarWidth: 'thin',
           scrollbarColor: 'rgba(0,212,255,0.15) transparent',
