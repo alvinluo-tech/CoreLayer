@@ -271,6 +271,14 @@ importers:
         specifier: ^2.1.0
         version: 2.1.9(@types/node@25.9.1)(jsdom@29.1.1)(lightningcss@1.32.0)
 
+  packages/runtime-core:
+    dependencies:
+      '@jarvis/runtime-protocol':
+        specifier: workspace:*
+        version: link:../runtime-protocol
+
+  packages/runtime-protocol: {}
+
   packages/tool-registry:
     dependencies:
       '@jarvis/types':
