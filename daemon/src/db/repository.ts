@@ -711,6 +711,8 @@ export interface ApprovalRequestRow {
   preview: string | null;
   toolCallId: string | null;
   expiresAt: number | null;
+  operationKind: string | null;
+  operationPayload: unknown;
 }
 
 export interface CreateApprovalRequestInput {
@@ -726,6 +728,8 @@ export interface CreateApprovalRequestInput {
   preview?: string;
   toolCallId?: string;
   expiresAt?: number;
+  operationKind?: string;
+  operationPayload?: unknown;
 }
 
 export interface ApprovalRequestRepository {

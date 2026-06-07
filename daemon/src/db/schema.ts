@@ -298,6 +298,8 @@ export const approvalRequests = sqliteTable("approval_requests", {
   preview: text("preview"), // user-facing summary of what will change
   toolCallId: text("tool_call_id"), // for idempotent dedup
   expiresAt: integer("expires_at"), // unix timestamp, null = no expiry
+  operationKind: text("operation_kind"), // e.g. "tool.execute" — for resume after approval
+  operationPayload: text("operation_payload"), // JSON — serializable resume data
 });
 
 // ---- Permission Memories ----

@@ -26,6 +26,8 @@ function mapRow(row: typeof schema.approvalRequests.$inferSelect): ApprovalReque
     preview: row.preview ?? null,
     toolCallId: row.toolCallId ?? null,
     expiresAt: row.expiresAt ?? null,
+    operationKind: row.operationKind ?? null,
+    operationPayload: row.operationPayload ? JSON.parse(row.operationPayload) : null,
   };
 }
 
@@ -51,6 +53,8 @@ export function createSqliteApprovalRepo(database?: DrizzleDb): ApprovalRequestR
           preview: input.preview ?? null,
           toolCallId: input.toolCallId ?? null,
           expiresAt: input.expiresAt ?? null,
+          operationKind: input.operationKind ?? null,
+          operationPayload: input.operationPayload != null ? JSON.stringify(input.operationPayload) : null,
         })
         .run();
       const row = db

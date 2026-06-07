@@ -87,7 +87,9 @@ function createTestDb() {
       source TEXT,
       preview TEXT,
       tool_call_id TEXT,
-      expires_at INTEGER
+      expires_at INTEGER,
+      operation_kind TEXT,
+      operation_payload TEXT
     );
     CREATE TABLE IF NOT EXISTS permission_memories (
       id TEXT PRIMARY KEY,
@@ -160,6 +162,21 @@ describe("ApprovalRequest Repository", () => {
       });
 
       expect(request.projectScope).toBe(true);
+    });
+
+    it("should persist operationKind and operationPayload", async () => {
+      const request = await approvalRepo.create({
+        runId: testRunId,
+        toolId: "shell:exec",
+        toolName: "Shell",
+        args: {},
+        risk: "high",
+        operationKind: "tool.execute",
+        operationPayload: { args: { command: "ls" } },
+      });
+
+      expect(request.operationKind).toBe("tool.execute");
+      expect(request.operationPayload).toEqual({ args: { command: "ls" } });
     });
   });
 

@@ -573,6 +573,10 @@ try { sqlite.exec(`ALTER TABLE approval_requests ADD COLUMN preview TEXT`); } ca
 try { sqlite.exec(`ALTER TABLE approval_requests ADD COLUMN tool_call_id TEXT`); } catch { /* already exists */ }
 try { sqlite.exec(`ALTER TABLE approval_requests ADD COLUMN expires_at INTEGER`); } catch { /* already exists */ }
 
+// Migration: Phase B — approval resume payload
+try { sqlite.exec(`ALTER TABLE approval_requests ADD COLUMN operation_kind TEXT`); } catch { /* already exists */ }
+try { sqlite.exec(`ALTER TABLE approval_requests ADD COLUMN operation_payload TEXT`); } catch { /* already exists */ }
+
 // Migration: Phase 7 - Agent Run Event Store
 sqlite.exec(`
   CREATE TABLE IF NOT EXISTS agent_run_events (
