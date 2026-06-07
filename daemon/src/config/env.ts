@@ -24,31 +24,16 @@ function getEnvVar(key: string, fallbackKeys: string[] = [], defaultValue?: stri
 }
 
 export const env = {
-  // AI Provider (any string, defaults to "mimo" for backward compat)
+  // AI Provider selection (non-secret, can stay in .env)
   AI_PROVIDER: getEnvVar("AI_PROVIDER", [], "mimo"),
   AI_MODEL: getEnvVar("AI_MODEL", [], "mimo-v2.5-pro"),
 
-  // MiMo (Xiaomi)
-  MIMO_API_KEY: getEnvVar("MIMO_API_KEY", ["XIAOMI_API_KEY"], ""),
+  // Provider base URLs (non-secret defaults)
   MIMO_API_URL: getEnvVar("MIMO_API_URL", ["XIAOMI_API_URL", "OPENAI_API_BASE_URL"], "https://token-plan-ams.xiaomimimo.com/v1"),
-
-  // Groq (for ASR and fallback LLM)
-  GROQ_API_KEY: getEnvVar("GROQ_API_KEY", [], ""),
-
-  // OpenRouter
-  OPENROUTER_API_KEY: getEnvVar("OPENROUTER_API_KEY", [], ""),
-
-  // Ollama (local)
   OLLAMA_BASE_URL: getEnvVar("OLLAMA_BASE_URL", [], "http://localhost:11434/v1"),
-
-  // Supabase
-  SUPABASE_URL: getEnvVar("SUPABASE_URL", [], ""),
-  SUPABASE_ANON_KEY: getEnvVar("SUPABASE_ANON_KEY", [], ""),
-  SUPABASE_SERVICE_ROLE_KEY: getEnvVar("SUPABASE_SERVICE_ROLE_KEY", [], ""),
 
   // Storage
   STORAGE_MODE: getEnvVar("STORAGE_MODE", [], "local") as "local" | "cloud",
-  SQLITE_DB_PATH: getEnvVar("SQLITE_DB_PATH", [], ""),
 
   // Server
   DAEMON_PORT: parseInt(getEnvVar("DAEMON_PORT", [], "3001"), 10),
@@ -61,7 +46,4 @@ export const env = {
 
   // General PostgreSQL
   DATABASE_URL: getEnvVar("DATABASE_URL", ["POSTGRES_URL"], ""),
-
-  // Wake word (Porcupine)
-  PORCUPINE_ACCESS_KEY: getEnvVar("PORCUPINE_ACCESS_KEY", [], ""),
 } as const;

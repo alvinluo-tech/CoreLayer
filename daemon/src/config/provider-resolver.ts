@@ -1,10 +1,11 @@
 import { configManager } from "./config-manager.js";
 
-// Canonical legacy provider defaults — single source of truth
-export const LEGACY_DEFAULTS: Record<string, { baseURL: string; envKey?: string }> = {
-  mimo: { baseURL: "https://token-plan-ams.xiaomimimo.com/v1", envKey: "MIMO_API_KEY" },
-  groq: { baseURL: "https://api.groq.com/openai/v1", envKey: "GROQ_API_KEY" },
-  openrouter: { baseURL: "https://openrouter.ai/api/v1", envKey: "OPENROUTER_API_KEY" },
+// Canonical legacy provider defaults — base URLs only, no env keys.
+// API keys are resolved exclusively from ~/.jarvis/credentials.json.
+export const LEGACY_DEFAULTS: Record<string, { baseURL: string }> = {
+  mimo: { baseURL: "https://token-plan-ams.xiaomimimo.com/v1" },
+  groq: { baseURL: "https://api.groq.com/openai/v1" },
+  openrouter: { baseURL: "https://openrouter.ai/api/v1" },
   local: { baseURL: "http://localhost:11434/v1" },
   ollama: { baseURL: "http://localhost:11434/v1" },
 };
@@ -41,15 +42,15 @@ export function resolveProvider(name: string): ResolvedProvider {
   try {
     return configManager.getProviderConfig(name);
   } catch {
-    // Provider not in config, fall through to env fallback
+    // Provider not in config, fall through to legacy defaults
   }
 
-  // 2. Check legacy env vars
+  // 2. Check legacy defaults (baseURL only — key must be in configManager)
   const legacy = LEGACY_DEFAULTS[name];
   if (legacy) {
     return {
       baseURL: legacy.baseURL,
-      apiKey: legacy.envKey ? (process.env[legacy.envKey] ?? "") : "",
+      apiKey: "",
     };
   }
 

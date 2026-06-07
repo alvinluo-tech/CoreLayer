@@ -18,8 +18,6 @@ vi.mock("fs", () => ({
 vi.mock("./env.js", () => ({
   env: {
     STORAGE_MODE: "local",
-    SUPABASE_URL: "",
-    SUPABASE_SERVICE_ROLE_KEY: "",
     DATABASE_URL: "",
   },
 }));

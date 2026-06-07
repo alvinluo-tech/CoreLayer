@@ -64,10 +64,7 @@ export function setStorageMode(mode: "local" | "cloud" | "postgres"): void {
 
 export function isCloudConfigured(): boolean {
   const dbConfig = readConfig().dbConfig;
-  return Boolean(
-    (env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY) ||
-      (dbConfig?.supabaseUrl && dbConfig?.supabaseServiceKey)
-  );
+  return Boolean(dbConfig?.supabaseUrl && dbConfig?.supabaseServiceKey);
 }
 
 export function isPostgresConfigured(): boolean {

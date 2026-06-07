@@ -1,4 +1,3 @@
-import { env } from "../config/env.js";
 import { configManager } from "../config/config-manager.js";
 import type { TTSProvider, TTSOptions as ProviderTTSOptions, TTSResult } from "./providers.js";
 import { voiceRegistry } from "./providers.js";
@@ -25,7 +24,7 @@ export async function synthesizeSpeech(options: TTSOptions): Promise<Buffer> {
     speed,
   } = options;
 
-  const mimoApiKey = configManager.getCredentials()["mimo"] || env.MIMO_API_KEY;
+  const mimoApiKey = configManager.getCredentials()["mimo"];
   if (!mimoApiKey) {
     throw new Error("MIMO_API_KEY not configured");
   }
@@ -48,7 +47,7 @@ export async function synthesizeSpeech(options: TTSOptions): Promise<Buffer> {
     }
   }
 
-  const mimoApiUrl = configManager.getProviderConfig("mimo").baseURL || env.MIMO_API_URL;
+  const mimoApiUrl = configManager.getProviderConfig("mimo").baseURL;
   const url = `${mimoApiUrl}/chat/completions`;
 
   const audioConfig: Record<string, string> = {
@@ -111,7 +110,7 @@ export async function synthesizeSpeech(options: TTSOptions): Promise<Buffer> {
  * Check if TTS is available (MiMo key configured).
  */
 export function isTtsAvailable(): boolean {
-  return Boolean(configManager.getCredentials()["mimo"] || env.MIMO_API_KEY);
+  return Boolean(configManager.getCredentials()["mimo"]);
 }
 
 // ---- MiMo TTS Provider ----

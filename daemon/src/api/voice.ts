@@ -4,8 +4,8 @@ import { transcribeWithGroq, isAsrAvailable } from "../voice/asr.js";
 import { synthesizeSpeech, isTtsAvailable, type TTSModel } from "../voice/tts.js";
 import { StreamingTTS } from "../voice/streaming-tts.js";
 import { voiceRegistry } from "../voice/providers.js";
-import { env } from "../config/env.js";
 import { getProviderConfig } from "../ai/provider.js";
+import { configManager } from "../config/config-manager.js";
 import { extractErrorMessage, logError } from "../utils/errors.js";
 import { runStreamTurn } from "../runtime/run-stream-executor.js";
 
@@ -145,7 +145,7 @@ voiceRoutes.get("/status", (c) => {
       tts: voiceRegistry.getAvailableTTS().map((p) => p.name),
     },
     ttsModels: ["mimo-v2.5-tts", "mimo-v2.5-tts-voiceclone", "mimo-v2.5-tts-voicedesign"],
-    wakeWord: !!(env.PORCUPINE_ACCESS_KEY || null),
+    wakeWord: Boolean(configManager.getCredentials()["porcupine"]),
   });
 });
 
@@ -354,8 +354,7 @@ voiceRoutes.post("/realtime-session", async (c) => {
       const config = getProviderConfig("openai");
       apiKey = config.apiKey;
     } catch {
-      // Fallback to environment variables
-      apiKey = process.env.OPENAI_API_KEY || env.GROQ_API_KEY || "";
+      apiKey = "";
     }
 
     if (!apiKey) {
