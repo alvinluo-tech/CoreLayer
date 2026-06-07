@@ -15,7 +15,7 @@ import { registerMemoryTools } from "./tools/memory/connector.js";
 import { logError } from "./utils/errors.js";
 import { registerAllAdapters } from "./mcp/adapters/index.js";
 import type { RuntimeComponent, RuntimeComponentKind } from "./runtimes/index.js";
-import { ALL_RUNTIME_KINDS } from "./runtimes/index.js";
+import { ALL_RUNTIME_KINDS, getRuntimeInstances, startAllRuntimes } from "./runtimes/index.js";
 import conversationRoutes from "./api/conversations.js";
 import taskRoutes from "./api/tasks.js";
 import articleRoutes from "./api/articles.js";
@@ -129,18 +129,39 @@ app.get("/api/runtime/status", (c) => {
   });
 });
 
-app.get("/api/runtime/components", (c) => {
+app.get("/api/runtime/components", async (c) => {
   const paths = resolveAppPaths();
-  const isHealthy = true; // If we can respond, we're healthy
-  const status: RuntimeComponent["status"] = isHealthy ? "running" : "failed";
-  const components: RuntimeComponent[] = ALL_RUNTIME_KINDS.map((kind: RuntimeComponentKind) => ({
-    kind,
-    status,
-    pid: process.pid,
-    healthUrl: "/health",
-    logPath: paths.logDir,
-    restartPolicy: { type: "maxAttempts" as const, maxAttempts: 3 },
-  }));
+  const instances = getRuntimeInstances();
+  const components: RuntimeComponent[] = await Promise.all(
+    ALL_RUNTIME_KINDS.map(async (kind: RuntimeComponentKind) => {
+      const runtime = instances.get(kind);
+      let status: RuntimeComponent["status"] = "pending";
+      let lastError: string | undefined;
+
+      if (runtime) {
+        try {
+          const runtimeStatus = await runtime.getStatus();
+          status = runtimeStatus.health === "healthy" ? "running"
+            : runtimeStatus.health === "degraded" ? "degraded"
+            : "failed";
+          lastError = runtimeStatus.lastError;
+        } catch (err) {
+          status = "failed";
+          lastError = err instanceof Error ? err.message : String(err);
+        }
+      }
+
+      return {
+        kind,
+        status,
+        pid: runtime ? process.pid : undefined,
+        healthUrl: "/health",
+        logPath: paths.logDir,
+        restartPolicy: { type: "maxAttempts" as const, maxAttempts: 3 },
+        lastError,
+      };
+    })
+  );
   return c.json({ components });
 });
 
@@ -241,6 +262,9 @@ console.log(`[Jarvis] 存储: ${getCurrentMode()}`);
 console.log(`[Jarvis] 数据库: ${resolveAppPaths().sqlitePath}`);
 
 startServer(env.DAEMON_PORT, effectiveHost);
+
+// Start all managed runtime instances (lifecycle/status init only, no autonomous loops)
+startAllRuntimes().catch((err) => console.error("[Jarvis] Runtime startup failed:", err));
 
 // Emit daemon startup event
 getRepositories().eventLog.create({

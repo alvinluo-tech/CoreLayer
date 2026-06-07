@@ -18,6 +18,9 @@ export interface ManagedRuntime {
   /** Get runtime information */
   getInfo(): RuntimeInfo;
 
+  /** Start the runtime (initialize lifecycle/status only, no autonomous loops) */
+  start(): Promise<void>;
+
   /** Get detailed runtime status */
   getStatus(): Promise<RuntimeStatus>;
 

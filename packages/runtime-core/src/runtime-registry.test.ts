@@ -22,6 +22,7 @@ function createMockRuntime(overrides: Partial<RuntimeInfo> = {}): ManagedRuntime
 
   return {
     getInfo: () => info,
+    start: async () => {},
     getStatus: async () =>
       ({
         ...info,

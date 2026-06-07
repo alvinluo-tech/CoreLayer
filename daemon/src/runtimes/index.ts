@@ -6,6 +6,8 @@
  * they should NOT import from internal modules directly.
  */
 
+import type { ManagedRuntime } from "@jarvis/runtime-core";
+import type { RuntimeComponentKind } from "../runtime/contract.js";
 import { AgentRuntime } from "./agent-runtime/index.js";
 import { VoiceRuntime } from "./voice-runtime/index.js";
 import { SchedulerRuntime } from "./scheduler-runtime/index.js";
@@ -94,3 +96,50 @@ export { apiError, extractErrorMessage, classifyError, logError } from "../utils
 
 export type { RuntimeComponent, RuntimeComponentKind, RuntimeStatus, RestartPolicy } from "../runtime/contract.js";
 export { ALL_RUNTIME_KINDS } from "../runtime/contract.js";
+
+// ─── Daemon-side Runtime Registry ─────────────────────────────────────────────
+
+/**
+ * Map of runtime kind → ManagedRuntime instance.
+ * Only runtimes implementing the ManagedRuntime interface (with start())
+ * are registered here. The legacy ToolRuntime is excluded until it is
+ * migrated to the protocol-wrapped version.
+ */
+const runtimeInstances = new Map<RuntimeComponentKind, ManagedRuntime>([
+  ["agent", agentRuntime],
+  ["voice", voiceRuntime],
+  ["scheduler", schedulerRuntime],
+  ["computer-control", computerControlRuntime],
+]);
+
+/**
+ * Get all registered runtime instances.
+ */
+export function getRuntimeInstances(): Map<RuntimeComponentKind, ManagedRuntime> {
+  return runtimeInstances;
+}
+
+/**
+ * Get a single runtime instance by kind.
+ */
+export function getRuntimeInstance(kind: RuntimeComponentKind): ManagedRuntime | undefined {
+  return runtimeInstances.get(kind);
+}
+
+/**
+ * Start all registered runtime instances.
+ *
+ * Scope: start() only initializes lifecycle/status (timestamp, health check,
+ * runtime:started event). It must NOT start autonomous scheduler/tick loops
+ * or execute side-effect tasks.
+ */
+export async function startAllRuntimes(): Promise<void> {
+  for (const [kind, runtime] of runtimeInstances) {
+    try {
+      await runtime.start();
+      console.log(`[Jarvis] Runtime "${kind}" started`);
+    } catch (error) {
+      console.error(`[Jarvis] Runtime "${kind}" failed to start:`, error);
+    }
+  }
+}

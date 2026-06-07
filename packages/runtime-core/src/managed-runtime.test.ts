@@ -27,6 +27,7 @@ describe('ManagedRuntime interface contract', () => {
           restartCount: 0,
         };
       },
+      async start() {},
       async getStatus(): Promise<RuntimeStatus> {
         return {
           id: 'mock',
@@ -71,6 +72,11 @@ describe('ManagedRuntime interface contract', () => {
     expect(info.protocolVersion).toBe(1);
     expect(info.health).toBe('healthy');
     expect(info.restartCount).toBe(0);
+  });
+
+  it('start completes without error', async () => {
+    const runtime = createMockRuntime();
+    await expect(runtime.start()).resolves.toBeUndefined();
   });
 
   it('getStatus returns RuntimeStatus with run tracking', async () => {
