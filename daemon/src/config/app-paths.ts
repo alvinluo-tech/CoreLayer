@@ -1,5 +1,6 @@
 import path from "path";
 import { mkdirSync } from "fs";
+import { homedir } from "os";
 
 export interface AppPaths {
   appDataDir: string;
@@ -15,7 +16,8 @@ export interface AppPaths {
  * In sidecar mode (JARVIS_RUNTIME_MODE=sidecar), paths are set by the
  * Tauri supervisor via environment variables.
  *
- * In dev mode, paths fall back to repo-relative locations.
+ * In dev mode, paths default to ~/.jarvis/ — consistent with
+ * config-manager and mcp-config which already use that location.
  */
 export function resolveAppPaths(): AppPaths {
   const runtimeMode = process.env.JARVIS_RUNTIME_MODE ?? "dev";
@@ -31,23 +33,20 @@ export function resolveAppPaths(): AppPaths {
     ? (process.env.JARVIS_LOG_DIR ?? path.join(appDataDir, "logs"))
     : path.join(appDataDir, "logs");
 
-  // SQLite path: keep relative env paths relative to the daemon process cwd.
-  // This preserves the existing dev .env value "./data/jarvis.db".
+  // SQLite path: resolve env paths against appDataDir, not cwd.
+  // Absolute env paths are used as-is; relative paths resolve under appDataDir.
   const envSqlitePath = process.env.SQLITE_DB_PATH;
   const sqlitePath = envSqlitePath
-    ? path.resolve(process.cwd(), envSqlitePath)
-    : path.join(isSidecar ? dataDir : appDataDir, "jarvis.db");
+    ? path.isAbsolute(envSqlitePath)
+      ? envSqlitePath
+      : path.resolve(appDataDir, envSqlitePath)
+    : path.join(appDataDir, "jarvis.db");
 
   return { appDataDir, configDir, dataDir, logDir, sqlitePath };
 }
 
 function getDefaultAppDataDir(): string {
-  // Dev mode can run with cwd at repo root or at the daemon package root.
-  // Keep both cases pointed at the historical daemon/data directory.
-  const cwd = process.cwd();
-  return path.basename(cwd) === "daemon"
-    ? path.resolve(cwd, "data")
-    : path.resolve(cwd, "daemon", "data");
+  return path.join(homedir(), ".jarvis");
 }
 
 /**

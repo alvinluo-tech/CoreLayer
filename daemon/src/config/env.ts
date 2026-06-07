@@ -48,7 +48,7 @@ export const env = {
 
   // Storage
   STORAGE_MODE: getEnvVar("STORAGE_MODE", [], "local") as "local" | "cloud",
-  SQLITE_DB_PATH: getEnvVar("SQLITE_DB_PATH", [], "./data/jarvis.db"),
+  SQLITE_DB_PATH: getEnvVar("SQLITE_DB_PATH", [], ""),
 
   // Server
   DAEMON_PORT: parseInt(getEnvVar("DAEMON_PORT", [], "3001"), 10),
