@@ -1,7 +1,7 @@
-﻿/**
- * Claude Code adapter for the Coding Runtime.
+/**
+ * Codex adapter for the Coding Runtime.
  *
- * Wraps the `claude` CLI as a subprocess. Actual execution goes through
+ * Wraps the Codex CLI as a subprocess. Actual execution goes through
  * the OSCapabilityBroker for permission enforcement.
  *
  * This is a skeleton — the actual subprocess management will be implemented
@@ -15,27 +15,27 @@ import type {
   CodingRunEvent,
   CodingArtifact,
 } from "./types.js";
-import { getCapabilityBroker } from "../capabilities/os-capability-broker.js";
+import { getCapabilityBroker } from "../../capabilities/os-capability-broker.js";
 
 /** In-memory store for run tracking (will be replaced with DB-backed store) */
 const runs = new Map<string, CodingRunInfo>();
 let sequenceCounter = 0;
 
-export class ClaudeCodeAdapter implements CodingRuntime {
-  readonly id = "claude-code";
-  readonly name = "Claude Code";
+export class CodexAdapter implements CodingRuntime {
+  readonly id = "codex";
+  readonly name = "Codex";
 
   async createRun(task: CodingTask): Promise<CodingRunInfo> {
     const runId = crypto.randomUUID();
     const now = new Date().toISOString();
 
-    // Permission check: shell exec for running claude CLI
+    // Permission check: shell exec for running codex CLI
     const broker = getCapabilityBroker();
     const decision = await broker.requestShellExec(
       "coding-runtime",
-      `claude --prompt "${task.taskPrompt.slice(0, 100)}..."`,
+      `codex --prompt "${task.taskPrompt.slice(0, 100)}..."`,
       {
-        reason: `Claude Code run for repo: ${task.repoPath}`,
+        reason: `Codex run for repo: ${task.repoPath}`,
       },
     );
 
@@ -64,7 +64,7 @@ export class ClaudeCodeAdapter implements CodingRuntime {
     };
     runs.set(runId, info);
 
-    // TODO: If approved, spawn `claude` subprocess and stream events
+    // TODO: If approved, spawn `codex` subprocess and stream events
     // For now, this is a skeleton that tracks the run state
 
     return info;
@@ -80,7 +80,6 @@ export class ClaudeCodeAdapter implements CodingRuntime {
     const info = runs.get(runId);
     if (!info) throw new Error(`Coding run not found: ${runId}`);
 
-    // Skeleton: yield a single status event
     yield {
       runId,
       sequence: ++sequenceCounter,

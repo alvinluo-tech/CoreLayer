@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { listCodingRuntimes, getCodingRuntime } from "./registry.js";
+import { listCodingRuntimes, getCodingRuntime } from "../registry.js";
 
 describe("CodingRuntime Registry", () => {
   it("lists default adapters", () => {

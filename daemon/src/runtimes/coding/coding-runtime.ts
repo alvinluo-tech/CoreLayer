@@ -1,7 +1,7 @@
 /**
  * Coding Runtime — manages coding agent adapters (Claude Code, Codex).
  *
- * This runtime wraps the existing coding-runtime/ modules,
+ * This runtime wraps the existing coding runtime modules,
  * exposing them through the RuntimeProtocol HTTP endpoints.
  */
 
@@ -223,9 +223,7 @@ export class CodingRuntime implements ManagedRuntime {
       timeoutMs?: number;
     },
   ): Promise<{ runId: string; status: string }> {
-    const { createCodingRun } = await import(
-      "../../coding-runtime/registry.js"
-    );
+    const { createCodingRun } = await import("./registry.js");
 
     const result = await createCodingRun(adapterId, task);
     return {
@@ -238,9 +236,7 @@ export class CodingRuntime implements ManagedRuntime {
    * List available coding adapters.
    */
   async listAdapters(): Promise<Array<{ id: string; name: string }>> {
-    const { listCodingRuntimes } = await import(
-      "../../coding-runtime/registry.js"
-    );
+    const { listCodingRuntimes } = await import("./registry.js");
 
     return listCodingRuntimes();
   }
@@ -252,9 +248,7 @@ export class CodingRuntime implements ManagedRuntime {
     adapterId: string,
     runId: string,
   ): Promise<Array<{ type: string; content: string }>> {
-    const { collectCodingArtifacts } = await import(
-      "../../coding-runtime/registry.js"
-    );
+    const { collectCodingArtifacts } = await import("./registry.js");
 
     const artifacts = await collectCodingArtifacts(adapterId, runId);
     return artifacts.map((a) => ({
