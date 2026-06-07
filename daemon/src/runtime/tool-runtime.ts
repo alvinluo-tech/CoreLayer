@@ -95,6 +95,38 @@ export class ToolRuntime {
     this.permissionGuard = permissionGuard ?? new PermissionGuard();
   }
 
+  /** Write a tool execution result to the persistent audit log */
+  private async persistAuditEntry(
+    tool: { id: string; name: string; risk: string },
+    _args: unknown,
+    result: "success" | "failure" | "denied" | "cancelled",
+    context: ToolExecutionContext,
+    opts?: { confirmedByUser?: boolean; error?: string },
+  ): Promise<void> {
+    try {
+      const { auditLog } = getRepositories();
+      await auditLog.create({
+        actor: context.caller,
+        action: "tool.execute",
+        resource: `tool:${tool.name}`,
+        riskLevel: tool.risk,
+        permissionDecision: result === "denied" ? "deny" : "allow",
+        confirmedByUser: opts?.confirmedByUser ?? false,
+        result,
+        metadata: {
+          toolId: tool.id,
+          toolName: tool.name,
+          conversationId: context.conversationId,
+          runId: context.runId,
+          projectId: context.projectId,
+          error: opts?.error,
+        },
+      });
+    } catch {
+      // Best-effort — don't fail tool execution
+    }
+  }
+
   async execute(
     toolId: string,
     args: unknown,
@@ -158,12 +190,14 @@ export class ToolRuntime {
             }).then((r) => approvalRequests.approve(r.id)).catch(() => { /* best-effort */ });
           }
           const result = await tool.execute(args);
+          this.persistAuditEntry(tool, args, result.success ? "success" : "failure", context, { confirmedByUser: true, error: result.error });
           return {
             result,
             confirmed: true,
             durationMs: Date.now() - startTime,
           };
         } else if (memory.decision === "deny") {
+          this.persistAuditEntry(tool, args, "denied", context);
           return {
             result: { success: false, error: `Tool denied by saved permission: ${toolId}` },
             confirmed: false,
@@ -211,6 +245,7 @@ export class ToolRuntime {
       }
 
       const result = await pending.confirm();
+      this.persistAuditEntry(tool, args, result.success ? "success" : (result.error?.includes("拒绝") ? "denied" : "failure"), context, { confirmedByUser: effectiveRequiresConfirmation && result.success, error: result.error });
       return {
         result,
         confirmed: effectiveRequiresConfirmation && result.success,
@@ -219,6 +254,7 @@ export class ToolRuntime {
     }
 
     const { result, confirmed } = await this.permissionGuard.executeWithGuard(tool, args);
+    this.persistAuditEntry(tool, args, result.success ? "success" : "failure", context, { confirmedByUser: confirmed, error: result.error });
     return {
       result,
       confirmed,
