@@ -3,7 +3,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { env } from "./config/env.js";
 import { resolveAppPaths } from "./config/app-paths.js";
-import { initializeRepositories, getCurrentMode, getRepositories } from "./db/factory.js";
+import { initializeRepositories, getCurrentMode, getRepositories } from "./persistence/factory.js";
 import { getStorageMode } from "./config/storage-config.js";
 import { runMigration } from "./config/migration.js";
 import { configManager } from "./config/config-manager.js";

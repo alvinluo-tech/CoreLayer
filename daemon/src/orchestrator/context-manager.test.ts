@@ -8,7 +8,7 @@ import {
   selectHistoryWithinBudget,
   assembleContext,
 } from "./context-manager.js";
-import type { MessageRow, MemoryRow } from "../db/repository.js";
+import type { MessageRow, MemoryRow } from "../persistence/repository.js";
 import type { ModelMessage } from "ai";
 
 // ---- estimateTokens ----

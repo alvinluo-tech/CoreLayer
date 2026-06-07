@@ -1,7 +1,7 @@
 import { generateText } from "ai";
 import type { ModelMessage } from "ai";
 import { getModel } from "../gateways/ai-provider/provider.js";
-import type { MessageRow } from "../db/repository.js";
+import type { MessageRow } from "../persistence/repository.js";
 import { logError } from "../utils/errors.js";
 
 // ---- Summary Structure ----

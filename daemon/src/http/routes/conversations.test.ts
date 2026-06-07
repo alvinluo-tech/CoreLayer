@@ -25,7 +25,7 @@ vi.mock("../runtimes/agent/run.js", () => ({
   runTurn: (...args: unknown[]) => mockRunTurn(...args),
 }));
 
-vi.mock("../db/factory.js", () => ({
+vi.mock("../persistence/factory.js", () => ({
   getRepositories: () => ({
     conversations: {
       getById: (...args: unknown[]) => mockGetById(...args),

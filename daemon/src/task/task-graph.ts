@@ -8,8 +8,8 @@
  * - Detect circular dependencies
  */
 
-import { getRepositories } from "../db/factory.js";
-import type { TaskRow } from "../db/repository.js";
+import { getRepositories } from "../persistence/factory.js";
+import type { TaskRow } from "../persistence/repository.js";
 import { isTaskComplete, isTaskExecutable } from "./task-status.js";
 
 export class TaskGraph {

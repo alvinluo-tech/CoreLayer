@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { ContextBuilder } from "./context-builder.js";
-import type { MessageRow, ScoredMemoryRow } from "../db/repository.js";
+import type { MessageRow, ScoredMemoryRow } from "../persistence/repository.js";
 
 // Mock the tools registry
 vi.mock("../tools/registry.js", () => ({

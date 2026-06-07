@@ -1,8 +1,8 @@
 import { CronExpressionParser } from "cron-parser";
 import { executeSkill } from "../../skills/executor.js";
 import { getSkill } from "../../skills/loader.js";
-import { getRepositories } from "../../db/factory.js";
-import type { ScheduledTaskRow } from "../../db/repository.js";
+import { getRepositories } from "../../persistence/factory.js";
+import type { ScheduledTaskRow } from "../../persistence/repository.js";
 import { logError } from "../../utils/errors.js";
 import { configManager } from "../../config/config-manager.js";
 import { buildTickSystemPrompt } from "../../orchestrator/prompt-builder.js";

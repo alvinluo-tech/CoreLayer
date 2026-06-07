@@ -1,4 +1,4 @@
-import { getRepositories } from "../../../db/factory.js";
+import { getRepositories } from "../../../persistence/factory.js";
 import { logError } from "../../../utils/errors.js";
 import { isTaskComplete } from "../../../task/task-status.js";
 

@@ -7,7 +7,7 @@ vi.stubGlobal("fetch", mockFetch);
 // Mock getRepositories
 const mockQuery = vi.fn();
 const mockCreate = vi.fn();
-vi.mock("../../db/factory.js", () => ({
+vi.mock("../../persistence/factory.js", () => ({
   getRepositories: () => ({
     tasks: {
       query: mockQuery,

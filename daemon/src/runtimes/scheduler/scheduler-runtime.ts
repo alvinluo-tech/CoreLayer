@@ -226,7 +226,7 @@ export class SchedulerRuntime implements ManagedRuntime {
       lastRun?: string;
     }>
   > {
-    const { getRepositories } = await import("../../db/factory.js");
+    const { getRepositories } = await import("../../persistence/factory.js");
     const repos = getRepositories();
     const tasks = await repos.scheduledTasks.getAll();
 

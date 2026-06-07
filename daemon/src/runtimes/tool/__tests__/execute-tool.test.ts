@@ -57,7 +57,7 @@ const mockPermissionMemories = {
   find: vi.fn(),
 };
 
-vi.mock("../../../db/factory.js", () => ({
+vi.mock("../../../persistence/factory.js", () => ({
   getRepositories: () => ({
     approvalRequests: mockApprovalRequests,
     permissionMemories: mockPermissionMemories,

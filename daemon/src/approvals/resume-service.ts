@@ -10,7 +10,7 @@
  * re-enters the agent loop with the tool result.
  */
 
-import { getRepositories } from "../db/factory.js";
+import { getRepositories } from "../persistence/factory.js";
 import { getRegistry } from "../tools/registry.js";
 import type { ToolResult } from "@jarvis/types";
 

@@ -1,5 +1,5 @@
 import type { ModelMessage } from "ai";
-import type { MessageRow, MemoryRow } from "../db/repository.js";
+import type { MessageRow, MemoryRow } from "../persistence/repository.js";
 
 // ---- Token Estimation ----
 

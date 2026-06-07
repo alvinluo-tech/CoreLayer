@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
-import * as schema from "../../../db/schema.js";
-import { createSqliteMemoryRepo } from "../../../db/sqlite/memory-repo.js";
-import type { Repositories } from "../../../db/repository.js";
+import * as schema from "../../../persistence/schema.js";
+import { createSqliteMemoryRepo } from "../../../persistence/sqlite/memory-repo.js";
+import type { Repositories } from "../../../persistence/repository.js";
 
 function createTestDb() {
   const sqlite = new Database(":memory:");
@@ -35,7 +35,7 @@ function createTestDb() {
 // Mock getRepositories to return our test repos
 const mockRepos: Partial<Repositories> = {};
 
-vi.mock("../../../db/factory.js", () => ({
+vi.mock("../../../persistence/factory.js", () => ({
   getRepositories: () => mockRepos,
 }));
 

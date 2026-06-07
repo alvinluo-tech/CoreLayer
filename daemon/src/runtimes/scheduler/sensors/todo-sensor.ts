@@ -1,5 +1,5 @@
 import type { Sensor, SensorChange } from "./types.js";
-import { getRepositories } from "../../../db/factory.js";
+import { getRepositories } from "../../../persistence/factory.js";
 import { isTaskComplete } from "../../../task/task-status.js";
 
 /**

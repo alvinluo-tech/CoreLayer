@@ -33,7 +33,7 @@ vi.mock("../tools/registry.js", () => ({
   getAllTools: vi.fn(() => []),
   getTool: vi.fn(() => null),
 }));
-vi.mock("../db/factory.js", () => ({
+vi.mock("../persistence/factory.js", () => ({
   getRepositories: vi.fn(() => ({
     conversations: {
       addMessage: vi.fn(),

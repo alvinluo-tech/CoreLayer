@@ -27,7 +27,7 @@ const mockGoalRepo = {
   }),
 };
 
-vi.mock("../db/factory.js", () => ({
+vi.mock("../persistence/factory.js", () => ({
   getRepositories: () => ({ goals: mockGoalRepo }),
 }));
 

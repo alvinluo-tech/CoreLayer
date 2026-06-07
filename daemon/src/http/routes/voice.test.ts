@@ -32,7 +32,7 @@ vi.mock("../../runtimes/index.js", () => ({
 }));
 
 // Mock DB layer (needed by some transitive imports)
-vi.mock("../../db/client.js", () => ({ db: {}, schema: {} }));
+vi.mock("../../persistence/client.js", () => ({ db: {}, schema: {} }));
 
 const voiceRoutes = (await import("./voice.js")).default;
 

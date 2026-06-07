@@ -13,7 +13,7 @@ import type {
   CapabilityDecisionResult,
 } from "./types.js";
 import { PermissionBroker } from "./permission-broker.js";
-import { getRepositories } from "../db/factory.js";
+import { getRepositories } from "../persistence/factory.js";
 
 export class OSCapabilityBroker {
   private permissionBroker: PermissionBroker;

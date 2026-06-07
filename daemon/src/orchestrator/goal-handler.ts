@@ -1,5 +1,5 @@
-import { getRepositories } from "../db/factory.js";
-import type { GoalRow } from "../db/repository.js";
+import { getRepositories } from "../persistence/factory.js";
+import type { GoalRow } from "../persistence/repository.js";
 
 export interface GoalCommandResult {
   handled: boolean;

@@ -10,7 +10,7 @@ vi.mock("../gateways/ai-provider/provider.js", () => ({
 }));
 
 import { sanitizeToolMessages, compressConversation, createSummaryMessage, extractToolSummaries, extractPreferences } from "./compressor.js";
-import type { MessageRow } from "../db/repository.js";
+import type { MessageRow } from "../persistence/repository.js";
 
 // ---- sanitizeToolMessages ----
 

@@ -10,7 +10,7 @@ import type {
   AgentRunRequest,
   AgentRunEvent,
 } from "./domain/agent-run.js";
-import { getRepositories } from "../../db/factory.js";
+import { getRepositories } from "../../persistence/factory.js";
 import { streamChat } from "../../orchestrator/conversation.js";
 import { normalizeStream } from "../../http/routes/sse-normalizer.js";
 import { withStreamTimeout } from "../../http/routes/stream-timeout.js";

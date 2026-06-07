@@ -1,5 +1,5 @@
 import type { ModelMessage } from "ai";
-import type { MessageRow, ScoredMemoryRow } from "../db/repository.js";
+import type { MessageRow, ScoredMemoryRow } from "../persistence/repository.js";
 import { getAllJarvisTools } from "../tools/registry.js";
 import type { JarvisTool } from "@jarvis/types";
 import { estimateTokens, computeContextBudget, selectHistoryWithinBudget, shouldCompress } from "./context-manager.js";

@@ -9,7 +9,7 @@ import {
   getDbConfig,
   setDbConfig,
 } from "../../config/storage-config.js";
-import { switchStorageMode, getCurrentMode, getRepositories } from "../../db/factory.js";
+import { switchStorageMode, getCurrentMode, getRepositories } from "../../persistence/factory.js";
 import { apiError, logError } from "../../utils/errors.js";
 import { maskApiKey, isMaskedKey } from "./settings-helpers.js";
 

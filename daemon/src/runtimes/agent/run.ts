@@ -10,7 +10,7 @@ import type {
   AgentRunEvent,
   AgentRunResult,
 } from "./domain/agent-run.js";
-import { getRepositories } from "../../db/factory.js";
+import { getRepositories } from "../../persistence/factory.js";
 import { handleMessageInConversation } from "../../orchestrator/conversation.js";
 import { logError } from "../../utils/errors.js";
 import { TaskGraph } from "../../task/task-graph.js";

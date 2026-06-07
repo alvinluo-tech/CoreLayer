@@ -8,8 +8,8 @@ import { wrapToolsForAI } from "../runtimes/index.js";
 
 import { configManager } from "../config/config-manager.js";
 import { getModelGateway } from "../gateways/model/gateway.js";
-import { getRepositories } from "../db/factory.js";
-import type { MessageRow, ConversationRow, ScoredMemoryRow } from "../db/repository.js";
+import { getRepositories } from "../persistence/factory.js";
+import type { MessageRow, ConversationRow, ScoredMemoryRow } from "../persistence/repository.js";
 import { classifyError, extractErrorMessage, logError } from "../utils/errors.js";
 import { recordActivity } from "../runtimes/scheduler/scheduler.js";
 

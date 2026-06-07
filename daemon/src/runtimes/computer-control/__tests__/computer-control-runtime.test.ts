@@ -20,7 +20,7 @@ vi.mock("../../../capabilities/os-capability-broker.js", () => ({
 
 // Mock repositories
 const mockAuditLogCreate = vi.fn();
-vi.mock("../../../db/factory.js", () => ({
+vi.mock("../../../persistence/factory.js", () => ({
   getRepositories: () => ({
     auditLog: { create: mockAuditLogCreate },
   }),

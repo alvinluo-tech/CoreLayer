@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { getRepositories } from "../../db/factory.js";
+import { getRepositories } from "../../persistence/factory.js";
 import { apiError, extractErrorMessage, logError } from "../../utils/errors.js";
 
 const app = new Hono();

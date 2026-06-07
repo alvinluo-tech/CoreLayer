@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
-import * as schema from "../../../db/schema.js";
+import * as schema from "../../../persistence/schema.js";
 
 function createTestDb() {
   const sqlite = new Database(":memory:");
@@ -142,20 +142,20 @@ function createTestDb() {
 }
 
 const testDb = createTestDb();
-vi.mock("../../../db/client.js", () => ({ db: testDb, schema }));
+vi.mock("../../../persistence/client.js", () => ({ db: testDb, schema }));
 
-const { createSqliteConversationRepo } = await import("../../../db/sqlite/conversation-repo.js");
-const { createSqliteAgentRunRepo } = await import("../../../db/sqlite/agent-run-repo.js");
-const { createSqliteMemoryRepo } = await import("../../../db/sqlite/memory-repo.js");
-const { createSqliteTaskRepo } = await import("../../../db/sqlite/task-repo.js");
-const { createSqliteArticleRepo } = await import("../../../db/sqlite/article-repo.js");
-const { createSqliteScheduledTaskRepo } = await import("../../../db/sqlite/scheduled-task-repo.js");
-const { createSqliteWorkspaceRepo } = await import("../../../db/sqlite/workspace-repo.js");
-const { createSqliteProjectRepo } = await import("../../../db/sqlite/project-repo.js");
-const { createSqliteAgentProfileRepo } = await import("../../../db/sqlite/agent-profile-repo.js");
-const { createSqliteAgentRunEventRepo } = await import("../../../db/sqlite/agent-run-event-repo.js");
+const { createSqliteConversationRepo } = await import("../../../persistence/sqlite/conversation-repo.js");
+const { createSqliteAgentRunRepo } = await import("../../../persistence/sqlite/agent-run-repo.js");
+const { createSqliteMemoryRepo } = await import("../../../persistence/sqlite/memory-repo.js");
+const { createSqliteTaskRepo } = await import("../../../persistence/sqlite/task-repo.js");
+const { createSqliteArticleRepo } = await import("../../../persistence/sqlite/article-repo.js");
+const { createSqliteScheduledTaskRepo } = await import("../../../persistence/sqlite/scheduled-task-repo.js");
+const { createSqliteWorkspaceRepo } = await import("../../../persistence/sqlite/workspace-repo.js");
+const { createSqliteProjectRepo } = await import("../../../persistence/sqlite/project-repo.js");
+const { createSqliteAgentProfileRepo } = await import("../../../persistence/sqlite/agent-profile-repo.js");
+const { createSqliteAgentRunEventRepo } = await import("../../../persistence/sqlite/agent-run-event-repo.js");
 
-vi.mock("../../../db/factory.js", () => ({
+vi.mock("../../../persistence/factory.js", () => ({
   getRepositories: () => ({
     conversations: createSqliteConversationRepo(),
     agentRuns: createSqliteAgentRunRepo(),

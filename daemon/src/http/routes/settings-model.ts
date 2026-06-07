@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { configManager } from "../../config/config-manager.js";
-import { getRepositories } from "../../db/factory.js";
+import { getRepositories } from "../../persistence/factory.js";
 import { resetGateway, getModelGateway } from "../../gateways/model/gateway.js";
 import { DEFAULT_ROUTING_RULES } from "@jarvis/model-gateway";
 import { apiError, logError } from "../../utils/errors.js";

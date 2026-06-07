@@ -1,5 +1,5 @@
 import { PermissionGuard } from "@jarvis/permission-guard";
-import { getRepositories } from "../db/factory.js";
+import { getRepositories } from "../persistence/factory.js";
 
 /**
  * Bridges the in-memory PermissionGuard confirmations with database-backed

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
-import * as schema from "../../../db/schema.js";
+import * as schema from "../../../persistence/schema.js";
 
 // Create in-memory test DB with scheduled_tasks table
 function createTestDb() {
@@ -112,15 +112,15 @@ function createTestDb() {
 
 const testDb = createTestDb();
 
-vi.mock("../../../db/client.js", () => ({ db: testDb, schema }));
+vi.mock("../../../persistence/client.js", () => ({ db: testDb, schema }));
 
-const { createSqliteScheduledTaskRepo } = await import("../../../db/sqlite/scheduled-task-repo.js");
-const { createSqliteConversationRepo } = await import("../../../db/sqlite/conversation-repo.js");
-const { createSqliteMemoryRepo } = await import("../../../db/sqlite/memory-repo.js");
-const { createSqliteTaskRepo } = await import("../../../db/sqlite/task-repo.js");
-const { createSqliteArticleRepo } = await import("../../../db/sqlite/article-repo.js");
+const { createSqliteScheduledTaskRepo } = await import("../../../persistence/sqlite/scheduled-task-repo.js");
+const { createSqliteConversationRepo } = await import("../../../persistence/sqlite/conversation-repo.js");
+const { createSqliteMemoryRepo } = await import("../../../persistence/sqlite/memory-repo.js");
+const { createSqliteTaskRepo } = await import("../../../persistence/sqlite/task-repo.js");
+const { createSqliteArticleRepo } = await import("../../../persistence/sqlite/article-repo.js");
 
-vi.mock("../../../db/factory.js", () => ({
+vi.mock("../../../persistence/factory.js", () => ({
   getRepositories: () => ({
     scheduledTasks: createSqliteScheduledTaskRepo(),
     conversations: createSqliteConversationRepo(),
@@ -235,7 +235,7 @@ describe("Scheduler", () => {
 
   describe("triggerTask", () => {
     it("should execute a skill-based task", async () => {
-      const repo = (await import("../../../db/factory.js")).getRepositories().scheduledTasks;
+      const repo = (await import("../../../persistence/factory.js")).getRepositories().scheduledTasks;
       const task = await repo.upsert({
         name: "test-skill-task",
         cronExpr: "0 21 * * *",
@@ -258,7 +258,7 @@ describe("Scheduler", () => {
       const { getSkill } = await import("../../../skills/loader.js");
       vi.mocked(getSkill).mockReturnValueOnce(undefined);
 
-      const repo = (await import("../../../db/factory.js")).getRepositories().scheduledTasks;
+      const repo = (await import("../../../persistence/factory.js")).getRepositories().scheduledTasks;
       const task = await repo.upsert({
         name: "bad-skill",
         cronExpr: "0 21 * * *",
@@ -273,7 +273,7 @@ describe("Scheduler", () => {
     it("should execute prompt-based task", async () => {
       const { runTurn } = await import("../../agent/run.js");
 
-      const repo = (await import("../../../db/factory.js")).getRepositories().scheduledTasks;
+      const repo = (await import("../../../persistence/factory.js")).getRepositories().scheduledTasks;
       const task = await repo.upsert({
         name: "prompt-task",
         cronExpr: "0 21 * * *",
@@ -286,7 +286,7 @@ describe("Scheduler", () => {
     });
 
     it("should update lastRun and nextRun after execution", async () => {
-      const repo = (await import("../../../db/factory.js")).getRepositories().scheduledTasks;
+      const repo = (await import("../../../persistence/factory.js")).getRepositories().scheduledTasks;
       const task = await repo.upsert({
         name: "update-test",
         cronExpr: "0 21 * * *",
@@ -324,7 +324,7 @@ describe("Scheduler", () => {
 
   describe("consolidateOnIdle", () => {
     it("marks consolidated messages and does not append duplicate summaries on the next run", async () => {
-      const repos = (await import("../../../db/factory.js")).getRepositories();
+      const repos = (await import("../../../persistence/factory.js")).getRepositories();
       const conversation = await repos.conversations.create("compression regression");
 
       for (let i = 0; i < 8; i++) {
@@ -358,7 +358,7 @@ describe("Scheduler", () => {
     });
 
     it("stores preferences returned by compression without running extraction again", async () => {
-      const repos = (await import("../../../db/factory.js")).getRepositories();
+      const repos = (await import("../../../persistence/factory.js")).getRepositories();
       const conversation = await repos.conversations.create("preference regression");
 
       for (let i = 0; i < 8; i++) {
@@ -393,7 +393,7 @@ describe("Scheduler", () => {
     });
 
     it("should prune unused old memories", async () => {
-      const memRepo = (await import("../../../db/factory.js")).getRepositories().memories;
+      const memRepo = (await import("../../../persistence/factory.js")).getRepositories().memories;
 
       // Create a memory that is old and unused
       const oldDate = new Date();
@@ -450,7 +450,7 @@ describe("Scheduler", () => {
     });
 
     it("should clean expired memories", async () => {
-      const memRepo = (await import("../../../db/factory.js")).getRepositories().memories;
+      const memRepo = (await import("../../../persistence/factory.js")).getRepositories().memories;
 
       // Create an expired memory
       const pastDate = new Date();

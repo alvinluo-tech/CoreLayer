@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { eq } from "drizzle-orm";
-import * as schema from "../db/schema.js";
+import * as schema from "../persistence/schema.js";
 
 function createTestDb() {
   const sqlite = new Database(":memory:");
@@ -75,14 +75,14 @@ function createTestDb() {
 
 const testDb = createTestDb();
 
-vi.mock("../db/client.js", () => ({ db: testDb, schema }));
-vi.mock("../db/factory.js", () => ({
+vi.mock("../persistence/client.js", () => ({ db: testDb, schema }));
+vi.mock("../persistence/factory.js", () => ({
   getRepositories: () => ({
     tasks: createSqliteTaskRepo(),
   }),
 }));
 
-const { createSqliteTaskRepo } = await import("../db/sqlite/task-repo.js");
+const { createSqliteTaskRepo } = await import("../persistence/sqlite/task-repo.js");
 const { TaskGraph } = await import("./task-graph.js");
 
 describe("TaskGraph", () => {

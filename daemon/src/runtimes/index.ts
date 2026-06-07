@@ -97,7 +97,7 @@ export { extractTimeClues, mapToDateTimeRange } from "./memory/temporal-memory.j
 
 // ─── Shared ───────────────────────────────────────────────────────────────────
 
-export { getRepositories } from "../db/factory.js";
+export { getRepositories } from "../persistence/factory.js";
 export { configManager } from "../config/config-manager.js";
 export { apiError, extractErrorMessage, classifyError, logError } from "../utils/errors.js";
 

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { eq } from "drizzle-orm";
-import * as schema from "../../db/schema.js";
+import * as schema from "../../persistence/schema.js";
 
 function createTestDb() {
   const sqlite = new Database(":memory:");
