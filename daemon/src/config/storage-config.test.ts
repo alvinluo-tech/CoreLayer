@@ -16,8 +16,6 @@ vi.mock("fs", () => ({
 vi.mock("./env.js", () => ({
   env: {
     STORAGE_MODE: "local",
-    SUPABASE_URL: "",
-    SUPABASE_SERVICE_ROLE_KEY: "",
     DATABASE_URL: "",
   },
 }));
@@ -51,8 +49,6 @@ function mockConfigFile(data: Record<string, unknown> | null) {
 beforeEach(() => {
   vi.clearAllMocks();
   mockedEnv.STORAGE_MODE = "local";
-  mockedEnv.SUPABASE_URL = "";
-  mockedEnv.SUPABASE_SERVICE_ROLE_KEY = "";
   mockedEnv.DATABASE_URL = "";
 });
 
@@ -109,16 +105,9 @@ describe("setStorageMode", () => {
 });
 
 describe("isCloudConfigured", () => {
-  it("returns false when env vars are empty and no dbConfig", () => {
+  it("returns false when no dbConfig", () => {
     mockConfigFile({});
     expect(isCloudConfigured()).toBe(false);
-  });
-
-  it("returns true when env SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are set", () => {
-    mockConfigFile({});
-    mockedEnv.SUPABASE_URL = "https://example.supabase.co";
-    mockedEnv.SUPABASE_SERVICE_ROLE_KEY = "key";
-    expect(isCloudConfigured()).toBe(true);
   });
 
   it("returns true when dbConfig has supabase credentials", () => {
@@ -126,9 +115,8 @@ describe("isCloudConfigured", () => {
     expect(isCloudConfigured()).toBe(true);
   });
 
-  it("returns false when only one env var is set", () => {
-    mockConfigFile({});
-    mockedEnv.SUPABASE_URL = "https://example.supabase.co";
+  it("returns false when only supabaseUrl is set in dbConfig", () => {
+    mockConfigFile({ dbConfig: { supabaseUrl: "https://x.supabase.co" } });
     expect(isCloudConfigured()).toBe(false);
   });
 });

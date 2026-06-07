@@ -5,7 +5,7 @@ import { compressConversation, createSummaryMessage, extractMemoriesFromTurn } f
 import { getAllTools } from "../tools/registry.js";
 import { isTaskComplete } from "../task/task-status.js";
 import { wrapToolsForAI } from "../runtime/ai-tool-wrapper.js";
-import { env } from "../config/env.js";
+
 import { configManager } from "../config/config-manager.js";
 import { getModelGateway } from "../model/gateway.js";
 import { getRepositories } from "../db/factory.js";
@@ -396,16 +396,8 @@ function extractSummaryFromHistory(history: MessageRow[]): string | undefined {
 }
 
 export function isAiConfigured(): boolean {
-  // Check ~/.jarvis/credentials.json first
   const creds = configManager.getCredentials();
-  if (Object.values(creds).some((v) => v)) return true;
-
-  // Fallback: check env vars — provider and key must both be present
-  if (!env.AI_PROVIDER) return false;
-  return Boolean(
-    env.MIMO_API_KEY || env.GROQ_API_KEY || env.OPENROUTER_API_KEY ||
-    process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY
-  );
+  return Object.values(creds).some((v) => v);
 }
 
 export function generateTitleFromMessage(message: string): string {

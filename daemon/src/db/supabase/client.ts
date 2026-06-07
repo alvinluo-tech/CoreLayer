@@ -1,16 +1,19 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
-import { env } from "../../config/env.js";
+import { getDbConfig } from "../../config/storage-config.js";
 
 let client: SupabaseClient | null = null;
 
 export function getSupabaseClient(): SupabaseClient {
   if (!client) {
-    if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
+    const dbConfig = getDbConfig();
+    const url = dbConfig.supabaseUrl;
+    const serviceKey = dbConfig.supabaseServiceKey;
+    if (!url || !serviceKey) {
       throw new Error(
-        "Supabase not configured. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables.",
+        "Supabase not configured. Set supabaseUrl and supabaseServiceKey in Settings → Storage.",
       );
     }
-    client = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
+    client = createClient(url, serviceKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
   }

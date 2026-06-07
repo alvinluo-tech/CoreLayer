@@ -112,7 +112,7 @@ export type Credentials = Record<string, string>;
 // ---- Config directory ----
 
 function getConfigDir(): string {
-  return process.env.JARVIS_HOME || join(homedir(), ".jarvis");
+  return process.env.JARVIS_HOME || join(homedir(), ".jarvis", "config");
 }
 
 function getConfigPath(): string {

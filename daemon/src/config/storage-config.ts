@@ -5,7 +5,7 @@ import { resolveAppPaths } from "./app-paths.js";
 
 const appPaths = resolveAppPaths();
 const CONFIG_DIR = appPaths.configDir;
-const CONFIG_FILE = join(CONFIG_DIR, "config.json");
+const CONFIG_FILE = join(CONFIG_DIR, "storage.json");
 
 export interface DbConfigCredentials {
   supabaseUrl?: string;
@@ -64,10 +64,7 @@ export function setStorageMode(mode: "local" | "cloud" | "postgres"): void {
 
 export function isCloudConfigured(): boolean {
   const dbConfig = readConfig().dbConfig;
-  return Boolean(
-    (env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY) ||
-      (dbConfig?.supabaseUrl && dbConfig?.supabaseServiceKey)
-  );
+  return Boolean(dbConfig?.supabaseUrl && dbConfig?.supabaseServiceKey);
 }
 
 export function isPostgresConfigured(): boolean {

@@ -3,16 +3,15 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("../config/env.js", () => ({
   env: {
     AI_PROVIDER: "mimo",
-    MIMO_API_KEY: "test-mimo-key",
     MIMO_API_URL: "https://api.test.com/v1",
-    GROQ_API_KEY: "",
-    OPENROUTER_API_KEY: "",
   },
 }));
 
+const mockCredentials: Record<string, string> = {};
+
 vi.mock("../config/config-manager.js", () => ({
   configManager: {
-    getCredentials: vi.fn(() => ({})),
+    getCredentials: vi.fn(() => mockCredentials),
     getConfig: vi.fn(() => ({ providers: [] })),
     getProviderConfig: vi.fn(() => ({ baseURL: "", apiKey: "" })),
   },
@@ -51,70 +50,37 @@ vi.mock("../utils/errors.js", () => ({
 }));
 
 import { isAiConfigured, generateTitleFromMessage } from "./conversation.js";
-import { env } from "../config/env.js";
 
 // ---- isAiConfigured ----
 
 describe("isAiConfigured", () => {
   beforeEach(() => {
-    // Reset to a valid default configuration
-    vi.mocked(env).AI_PROVIDER = "mimo";
-    vi.mocked(env).MIMO_API_KEY = "test-mimo-key";
-    vi.mocked(env).GROQ_API_KEY = "";
-    vi.mocked(env).OPENROUTER_API_KEY = "";
-    // Also clear any process.env keys that the source reads
-    delete process.env.OPENAI_API_KEY;
-    delete process.env.ANTHROPIC_API_KEY;
+    // Reset credentials — no keys by default
+    Object.keys(mockCredentials).forEach((k) => delete mockCredentials[k]);
   });
 
-  it("returns true when AI_PROVIDER and MIMO_API_KEY are set", () => {
+  it("returns true when a credential is set", () => {
+    mockCredentials["mimo"] = "test-key";
     expect(isAiConfigured()).toBe(true);
   });
 
-  it("returns false when AI_PROVIDER is set but no API keys exist", () => {
-    vi.mocked(env).MIMO_API_KEY = "";
-    vi.mocked(env).GROQ_API_KEY = "";
-    vi.mocked(env).OPENROUTER_API_KEY = "";
-
+  it("returns false when no credentials exist", () => {
     expect(isAiConfigured()).toBe(false);
   });
 
-  it("returns false when no AI_PROVIDER is set even if a key exists", () => {
-    vi.mocked(env).AI_PROVIDER = "";
-    vi.mocked(env).MIMO_API_KEY = "some-key";
-
+  it("returns false when all credentials are empty strings", () => {
+    mockCredentials["mimo"] = "";
+    mockCredentials["groq"] = "";
     expect(isAiConfigured()).toBe(false);
   });
 
-  it("returns true when AI_PROVIDER and GROQ_API_KEY are set", () => {
-    vi.mocked(env).MIMO_API_KEY = "";
-    vi.mocked(env).GROQ_API_KEY = "groq-key";
-
+  it("returns true when only groq key is set", () => {
+    mockCredentials["groq"] = "groq-key";
     expect(isAiConfigured()).toBe(true);
   });
 
-  it("returns true when AI_PROVIDER and OPENROUTER_API_KEY are set", () => {
-    vi.mocked(env).MIMO_API_KEY = "";
-    vi.mocked(env).OPENROUTER_API_KEY = "openrouter-key";
-
-    expect(isAiConfigured()).toBe(true);
-  });
-
-  it("returns true when AI_PROVIDER and OPENAI_API_KEY env var are set", () => {
-    vi.mocked(env).MIMO_API_KEY = "";
-    vi.mocked(env).GROQ_API_KEY = "";
-    vi.mocked(env).OPENROUTER_API_KEY = "";
-    process.env.OPENAI_API_KEY = "openai-key";
-
-    expect(isAiConfigured()).toBe(true);
-  });
-
-  it("returns true when AI_PROVIDER and ANTHROPIC_API_KEY env var are set", () => {
-    vi.mocked(env).MIMO_API_KEY = "";
-    vi.mocked(env).GROQ_API_KEY = "";
-    vi.mocked(env).OPENROUTER_API_KEY = "";
-    process.env.ANTHROPIC_API_KEY = "anthropic-key";
-
+  it("returns true when only openrouter key is set", () => {
+    mockCredentials["openrouter"] = "openrouter-key";
     expect(isAiConfigured()).toBe(true);
   });
 });
@@ -122,11 +88,7 @@ describe("isAiConfigured", () => {
 // ---- generateTitleFromMessage ----
 
 describe("generateTitleFromMessage", () => {
-  it("returns the message unchanged when shorter than 30 characters", () => {
-    expect(generateTitleFromMessage("hello world")).toBe("hello world");
-  });
-
-  it("returns the message unchanged when exactly 30 characters", () => {
+  it("returns the message when 30 characters or fewer", () => {
     const msg = "a".repeat(30);
     expect(generateTitleFromMessage(msg)).toBe(msg);
   });
@@ -138,14 +100,13 @@ describe("generateTitleFromMessage", () => {
 
   it("replaces newlines with spaces before truncating", () => {
     const msg = "first line\nsecond line\nthird";
-    // After replace: "first line second line third" (28 chars, under 30)
     expect(generateTitleFromMessage(msg)).toBe("first line second line third");
   });
 
   it("truncates after newline replacement if still too long", () => {
     const msg = "first line\nsecond line\nthird line extra characters here";
     const result = generateTitleFromMessage(msg);
-    expect(result.length).toBe(33); // 30 + "..."
+    expect(result.length).toBe(33);
     expect(result).toMatch(/\.\.\.$/);
   });
 

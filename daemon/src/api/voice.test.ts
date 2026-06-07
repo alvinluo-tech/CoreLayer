@@ -27,7 +27,14 @@ vi.mock("../voice/providers.js", () => ({
 }));
 
 vi.mock("../config/env.js", () => ({
-  env: { PORCUPINE_ACCESS_KEY: null },
+  env: {},
+}));
+
+vi.mock("../config/config-manager.js", () => ({
+  configManager: {
+    getCredentials: vi.fn(() => ({})),
+    getProviderConfig: vi.fn(() => ({ baseURL: "", apiKey: "" })),
+  },
 }));
 
 vi.mock("../ai/provider.js", () => ({

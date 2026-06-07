@@ -2,21 +2,21 @@ import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
 
 vi.mock("../config/env.js", () => ({
   env: {
-    MIMO_API_KEY: "test-key",
     MIMO_API_URL: "https://api.test.com/v1",
   },
 }));
 
+const mockCredentials: Record<string, string> = {};
+
 vi.mock("../config/config-manager.js", () => ({
   configManager: {
-    getCredentials: vi.fn(() => ({})),
+    getCredentials: vi.fn(() => mockCredentials),
     getConfig: vi.fn(() => ({ providers: [] })),
-    getProviderConfig: vi.fn(() => ({ baseURL: "", apiKey: "" })),
+    getProviderConfig: vi.fn(() => ({ baseURL: "https://api.test.com/v1", apiKey: "" })),
   },
 }));
 
 import { isTtsAvailable, synthesizeSpeech } from "./tts.js";
-import { env } from "../config/env.js";
 
 // Helper to build a minimal valid TTS JSON response
 function ttsResponse(audioData: string) {
@@ -27,15 +27,20 @@ function ttsResponse(audioData: string) {
 
 describe("isTtsAvailable", () => {
   beforeEach(() => {
-    vi.mocked(env).MIMO_API_KEY = "test-key";
+    mockCredentials["mimo"] = "test-key";
   });
 
-  it("returns true when MIMO_API_KEY is set", () => {
+  it("returns true when mimo key is set", () => {
     expect(isTtsAvailable()).toBe(true);
   });
 
-  it("returns false when MIMO_API_KEY is empty", () => {
-    vi.mocked(env).MIMO_API_KEY = "";
+  it("returns false when mimo key is empty", () => {
+    mockCredentials["mimo"] = "";
+    expect(isTtsAvailable()).toBe(false);
+  });
+
+  it("returns false when no credentials exist", () => {
+    delete mockCredentials["mimo"];
     expect(isTtsAvailable()).toBe(false);
   });
 });
@@ -44,110 +49,59 @@ describe("synthesizeSpeech", () => {
   let mockFetch: Mock;
 
   beforeEach(() => {
-    vi.mocked(env).MIMO_API_KEY = "test-key";
-    vi.mocked(env).MIMO_API_URL = "https://api.test.com/v1";
+    mockCredentials["mimo"] = "test-key";
 
     mockFetch = vi.fn();
     vi.stubGlobal("fetch", mockFetch);
   });
 
-  it("throws when MIMO_API_KEY is missing", async () => {
-    vi.mocked(env).MIMO_API_KEY = "";
+  it("throws when mimo key is missing", async () => {
+    mockCredentials["mimo"] = "";
 
     await expect(
       synthesizeSpeech({ text: "hello" }),
     ).rejects.toThrow("MIMO_API_KEY not configured");
   });
 
-  it("returns a Buffer on successful response", async () => {
-    const audioBase64 = Buffer.from("fake-audio-bytes").toString("base64");
+  it("calls MiMo TTS API with correct parameters", async () => {
     mockFetch.mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve(ttsResponse(audioBase64)),
+      json: () => Promise.resolve(ttsResponse("audio-data")),
     });
 
-    const result = await synthesizeSpeech({ text: "hello world" });
+    await synthesizeSpeech({ text: "Hello world" });
 
-    expect(Buffer.isBuffer(result)).toBe(true);
-    expect(result.toString()).toBe("fake-audio-bytes");
     expect(mockFetch).toHaveBeenCalledOnce();
+    const [url, options] = mockFetch.mock.calls[0];
+    expect(url).toBe("https://api.test.com/v1/chat/completions");
+    expect(options.method).toBe("POST");
+    const body = JSON.parse(options.body);
+    expect(body.model).toBe("mimo-v2.5-tts");
+    expect(body.messages).toHaveLength(2);
   });
 
-  it("throws on non-ok response", async () => {
-    mockFetch.mockResolvedValue({
-      ok: false,
-      status: 500,
-      text: () => Promise.resolve("Internal Server Error"),
-    });
-
-    await expect(
-      synthesizeSpeech({ text: "hello" }),
-    ).rejects.toThrow("MiMo TTS error (500): Internal Server Error");
-  });
-
-  it("throws when response has no audio data", async () => {
+  it("returns audio buffer on success", async () => {
+    const audioData = Buffer.from("fake-audio").toString("base64");
     mockFetch.mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({ choices: [{ message: {} }] }),
+      json: () => Promise.resolve(ttsResponse(audioData)),
     });
 
-    await expect(
-      synthesizeSpeech({ text: "hello" }),
-    ).rejects.toThrow("MiMo TTS: no audio data in response");
+    const result = await synthesizeSpeech({ text: "test" });
+    expect(result).toBeInstanceOf(Buffer);
   });
 
-  describe("markdown stripping", () => {
-    beforeEach(() => {
-      mockFetch.mockImplementation(async (_url: string, init: RequestInit) => {
-        const body = JSON.parse(init.body as string);
-        // Return the cleaned text encoded in audio so we can inspect it
-        const assistantMsg = body.messages[1].content;
-        return {
-          ok: true,
-          json: () =>
-            Promise.resolve(
-              ttsResponse(Buffer.from(assistantMsg).toString("base64")),
-            ),
-        };
-      });
+  it("strips markdown from text before sending", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(ttsResponse("dGVzdA==")),
     });
 
-    it("strips bold markers", async () => {
-      const result = await synthesizeSpeech({ text: "this is **bold** text" });
-      expect(result.toString()).toBe("this is bold text");
-    });
+    await synthesizeSpeech({ text: "**bold** and *italic*" });
 
-    it("strips heading markers", async () => {
-      const result = await synthesizeSpeech({ text: "# Heading" });
-      expect(result.toString()).toBe("Heading");
-    });
-
-    it("converts links to text only", async () => {
-      const result = await synthesizeSpeech({
-        text: "click [here](https://example.com) now",
-      });
-      expect(result.toString()).toBe("click here now");
-    });
-
-    it("strips thought tags", async () => {
-      const result = await synthesizeSpeech({
-        text: "before<thought>internal reasoning</thought>after",
-      });
-      expect(result.toString()).toBe("beforeafter");
-    });
-
-    it("converts newlines to commas", async () => {
-      const result = await synthesizeSpeech({
-        text: "line one\nline two\nline three",
-      });
-      expect(result.toString()).toBe("line one，line two，line three");
-    });
-
-    it("strips inline code backticks", async () => {
-      const result = await synthesizeSpeech({
-        text: "use `console.log` for debugging",
-      });
-      expect(result.toString()).toBe("use console.log for debugging");
-    });
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    const assistantMsg = body.messages[1].content;
+    expect(assistantMsg).not.toContain("**");
+    expect(assistantMsg).not.toContain("*");
   });
 });

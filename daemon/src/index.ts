@@ -234,7 +234,7 @@ function startServer(port: number, hostname: string) {
 const activeProvider = configManager.getActiveProvider();
 const activeModel = configManager.getActiveModel();
 const creds = configManager.getCredentials();
-const aiConfigured = Boolean(Object.values(creds).some((v) => v) || env.MIMO_API_KEY || env.GROQ_API_KEY);
+const aiConfigured = Boolean(Object.values(creds).some((v) => v));
 const aiMode = aiConfigured ? `AI 模式 (${activeProvider}/${activeModel})` : "本地模式 (无 API Key)";
 console.log(`[Jarvis] AI: ${aiMode}`);
 console.log(`[Jarvis] 存储: ${getCurrentMode()}`);

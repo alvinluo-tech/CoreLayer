@@ -1,5 +1,6 @@
-import { readFileSync, existsSync } from "fs";
+import { readFileSync, existsSync, renameSync, mkdirSync } from "fs";
 import { join } from "path";
+import { homedir } from "os";
 import { configManager, type StoredProvider, type RoutingRule } from "./config-manager.js";
 
 interface LegacyProvider {
@@ -27,6 +28,9 @@ const ENV_KEY_MAP: Record<string, string> = {
 };
 
 export function runMigration(): void {
+  // Step 0: Move legacy files from ~/.jarvis/ to ~/.jarvis/config/
+  migrateConfigDir();
+
   const config = configManager.getConfig();
   if (config.migrated) return;
 
@@ -96,5 +100,28 @@ export function runMigration(): void {
   // Mark migration complete
   if (migrated) {
     configManager.updateConfig({ migrated: true });
+  }
+}
+
+/**
+ * Move config files from legacy ~/.jarvis/ root to ~/.jarvis/config/.
+ * One-time migration — only runs if old files exist at root level.
+ */
+function migrateConfigDir(): void {
+  const jarvisHome = join(homedir(), ".jarvis");
+  const configDir = join(jarvisHome, "config");
+  mkdirSync(configDir, { recursive: true });
+
+  const filesToMigrate = ["config.json", "credentials.json", "mcp-servers.json"];
+  for (const file of filesToMigrate) {
+    const oldPath = join(jarvisHome, file);
+    const newPath = join(configDir, file);
+    if (existsSync(oldPath) && !existsSync(newPath)) {
+      try {
+        renameSync(oldPath, newPath);
+      } catch {
+        // Ignore — file may be locked by another process
+      }
+    }
   }
 }

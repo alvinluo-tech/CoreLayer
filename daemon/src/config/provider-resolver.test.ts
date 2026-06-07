@@ -64,19 +64,10 @@ describe("resolveProvider", () => {
       throw new Error("not found");
     });
 
-    const originalEnv = process.env.GROQ_API_KEY;
-    process.env.GROQ_API_KEY = "groq-test-key";
-
     const result = resolveProvider("groq");
 
     expect(result.baseURL).toBe(LEGACY_DEFAULTS.groq.baseURL);
-    expect(result.apiKey).toBe("groq-test-key");
-
-    if (originalEnv !== undefined) {
-      process.env.GROQ_API_KEY = originalEnv;
-    } else {
-      delete process.env.GROQ_API_KEY;
-    }
+    expect(result.apiKey).toBe("");
   });
 
   it("should return empty apiKey for legacy providers without env key", () => {
