@@ -1,52 +1,14 @@
 import { serve } from "@hono/node-server";
-import { Hono } from "hono";
-import { cors } from "hono/cors";
 import { env } from "./config/env.js";
 import { resolveAppPaths } from "./config/app-paths.js";
 import { initializeRepositories, getCurrentMode, getRepositories } from "./persistence/factory.js";
 import { getStorageMode } from "./config/storage-config.js";
 import { runMigration } from "./config/migration.js";
 import { configManager } from "./config/config-manager.js";
-import { registerTodoTools } from "./runtimes/tool/adapters/native-tools/todo/connector.js";
-import { registerReadingTools } from "./runtimes/tool/adapters/native-tools/reading/connector.js";
-import { registerReviewTools } from "./runtimes/tool/adapters/native-tools/review/connector.js";
-import { registerConversationTools } from "./runtimes/tool/adapters/native-tools/conversation.js";
-import { registerMemoryTools } from "./runtimes/memory/connector.js";
-import { logError } from "./shared/errors.js";
-import { registerAllAdapters } from "./gateways/mcp/adapters/index.js";
-import type { RuntimeComponent, RuntimeComponentKind } from "./runtime-host/contract.js";
-import { ALL_RUNTIME_KINDS } from "./runtime-host/contract.js";
-import { getRuntimeInstances, startAllRuntimes } from "./runtime-host/index.js";
-import conversationRoutes from "./http/routes/conversations.js";
-import taskRoutes from "./http/routes/tasks.js";
-import articleRoutes from "./http/routes/articles.js";
-import reviewRoutes from "./http/routes/reviews.js";
-import settingsRoutes from "./http/routes/settings.js";
-import chatRoutes from "./http/routes/chat.js";
-import voiceRoutes from "./http/routes/voice.js";
-import mcpRoutes from "./http/routes/mcp.js";
-import toolRoutes from "./http/routes/tools.js";
-import scheduledTaskRoutes from "./http/routes/scheduled-tasks.js";
-import approvalRoutes from "./http/routes/approval.js";
-import workspaceRoutes from "./http/routes/workspaces.js";
-import projectRoutes from "./http/routes/projects.js";
-import runsRoutes from "./http/routes/runs.js";
-import memoryRoutes from "./http/routes/memories.js";
-import agentProfileRoutes from "./http/routes/agent-profiles.js";
-import eventRoutes from "./http/routes/events.js";
-import auditRoutes from "./http/routes/audit.js";
-import { startScheduler, setIdleCallback, consolidateOnIdle } from "./runtimes/scheduler/scheduler.js";
-import { registerDefaultReportSchedules } from "./runtimes/scheduler/reports/generator.js";
-import { registerSensor, startSensors, setSensorChangeHandler } from "./runtimes/scheduler/sensors/registry.js";
-import { createTodoSensor } from "./runtimes/scheduler/sensors/todo-sensor.js";
-import { createReadingSensor } from "./runtimes/scheduler/sensors/reading-sensor.js";
-
-// ─── Security helpers ────────────────────────────────────────────────────────
-function isLoopback(addr: string): boolean {
-  // Strip IPv6-mapped IPv4 prefix
-  const clean = addr.replace(/^::ffff:/, "");
-  return clean === "127.0.0.1" || clean === "::1" || clean === "localhost";
-}
+import { registerAllTools } from "./bootstrap/register-tools.js";
+import { createHttpApp } from "./bootstrap/create-http-app.js";
+import { startRuntimeHost } from "./bootstrap/start-runtime-host.js";
+import { startBackgroundServices } from "./bootstrap/start-background-services.js";
 
 // Sidecar mode must not bind to 0.0.0.0 — enforce loopback-only
 let effectiveHost = env.DAEMON_HOST;
@@ -65,159 +27,10 @@ const storageMode = getStorageMode();
 initializeRepositories(storageMode);
 
 // Register all tool connectors
-registerTodoTools();
-registerReadingTools();
-registerReviewTools();
-registerConversationTools();
-registerMemoryTools();
-registerAllAdapters();
+registerAllTools();
 
-const app = new Hono();
-
-app.use(
-  "/*",
-  cors({
-    origin: (origin) => {
-      if (!origin) return "http://localhost:1420";
-      if (
-        /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin) ||
-        origin === "http://tauri.localhost" ||
-        origin === "tauri://localhost"
-      ) {
-        return origin;
-      }
-      return "http://localhost:1420";
-    },
-  })
-);
-
-// ─── Global error handler (safety net for any unhandled route exception) ─────
-app.onError((err, c) => {
-  logError("UnhandledRouteError", err);
-  return c.json({ error: "Internal server error" }, 500);
-});
-
-// ─── 404 handler ─────────────────────────────────────────────────────────────
-app.notFound((c) => {
-  return c.json({ error: "Route not found" }, 404);
-});
-
-app.get("/health", (c) => {
-  return c.json({
-    status: "ok",
-    timestamp: new Date().toISOString(),
-    storageMode: getCurrentMode(),
-    aiProvider: env.AI_PROVIDER,
-    aiModel: env.AI_MODEL,
-  });
-});
-
-// ─── Runtime status & shutdown (for Tauri supervisor) ─────────────────────────
-app.get("/api/runtime/status", (c) => {
-  const paths = resolveAppPaths();
-  return c.json({
-    status: "ok",
-    runtimeMode: env.JARVIS_RUNTIME_MODE,
-    pid: process.pid,
-    uptime: process.uptime(),
-    memoryUsage: process.memoryUsage(),
-    storageMode: getCurrentMode(),
-    paths: {
-      appDataDir: paths.appDataDir,
-      sqlitePath: paths.sqlitePath,
-      logDir: paths.logDir,
-    },
-  });
-});
-
-app.get("/api/runtime/components", async (c) => {
-  const paths = resolveAppPaths();
-  const instances = getRuntimeInstances();
-  const components: RuntimeComponent[] = await Promise.all(
-    ALL_RUNTIME_KINDS.map(async (kind: RuntimeComponentKind) => {
-      const runtime = instances.get(kind);
-      let status: RuntimeComponent["status"] = "pending";
-      let lastError: string | undefined;
-
-      if (runtime) {
-        try {
-          const runtimeStatus = await runtime.getStatus();
-          status = runtimeStatus.health === "healthy" ? "running"
-            : runtimeStatus.health === "degraded" ? "degraded"
-            : "failed";
-          lastError = runtimeStatus.lastError;
-        } catch (err) {
-          status = "failed";
-          lastError = err instanceof Error ? err.message : String(err);
-        }
-      }
-
-      return {
-        kind,
-        status,
-        pid: runtime ? process.pid : undefined,
-        healthUrl: "/health",
-        logPath: paths.logDir,
-        restartPolicy: { type: "maxAttempts" as const, maxAttempts: 3 },
-        lastError,
-      };
-    })
-  );
-  return c.json({ components });
-});
-
-app.post("/api/runtime/shutdown", async (c) => {
-  // Only allow shutdown from loopback (127.0.0.1 / ::1)
-  const incoming = (c.env as Record<string, unknown>)?.incoming as
-    | { socket?: { remoteAddress?: string } }
-    | undefined;
-  const peerAddress = incoming?.socket?.remoteAddress;
-  if (peerAddress && !isLoopback(peerAddress)) {
-    return c.json({ error: "Shutdown only allowed from loopback" }, 403);
-  }
-  console.log("[Jarvis] Shutdown requested via API");
-  // Give the response time to send before exiting
-  setTimeout(() => process.exit(0), 200);
-  return c.json({ status: "shutting_down" });
-});
-
-// Chat routes (streaming + non-streaming)
-app.route("/api/chat", chatRoutes);
-
-// Conversation management routes
-app.route("/api/conversations", conversationRoutes);
-
-// Task, Article, Review routes
-app.route("/api/tasks", taskRoutes);
-app.route("/api/articles", articleRoutes);
-app.route("/api/reviews", reviewRoutes);
-
-// Settings routes
-app.route("/api/settings", settingsRoutes);
-
-// Voice routes (ASR/TTS)
-app.route("/api/voice", voiceRoutes);
-
-// MCP routes (MCP server management, tools, resources, prompts)
-app.route("/api/mcp", mcpRoutes);
-
-// Unified tool registry routes
-app.route("/api/tools", toolRoutes);
-
-// Scheduled task routes
-app.route("/api/tasks/scheduled", scheduledTaskRoutes);
-
-// Approval Inbox routes (Phase 4)
-app.route("/api/approvals", approvalRoutes);
-
-// Workspace & Project routes (Phase 5)
-app.route("/api/workspaces", workspaceRoutes);
-app.route("/api/projects", projectRoutes);
-app.route("/api/runs", runsRoutes);
-app.route("/api/memories", memoryRoutes);
-app.route("/api/agent-profiles", agentProfileRoutes);
-app.route("/api/events", eventRoutes);
-app.route("/api/audit", auditRoutes);
+// Create HTTP app
+const app = createHttpApp();
 
 function startServer(port: number, hostname: string) {
   try {
@@ -233,14 +46,13 @@ function startServer(port: number, hostname: string) {
       }
     });
 
-    // Graceful shutdown
     const shutdown = async (signal: string) => {
       console.log(`[Jarvis] Received ${signal}, shutting down gracefully...`);
       server.close();
       try {
         const { disconnectAllMCPServers } = await import("./gateways/mcp/client.js");
         await disconnectAllMCPServers();
-      } catch {}
+      } catch { /* best-effort MCP cleanup */ }
       process.exit(0);
     };
 
@@ -264,8 +76,8 @@ console.log(`[Jarvis] 数据库: ${resolveAppPaths().sqlitePath}`);
 
 startServer(env.DAEMON_PORT, effectiveHost);
 
-// Start all managed runtime instances (lifecycle/status init only, no autonomous loops)
-startAllRuntimes().catch((err) => console.error("[Jarvis] Runtime startup failed:", err));
+// Start all managed runtime instances
+startRuntimeHost().catch((err) => console.error("[Jarvis] Runtime startup failed:", err));
 
 // Emit daemon startup event
 getRepositories().eventLog.create({
@@ -278,18 +90,5 @@ import("./gateways/mcp/client.js")
   .then(({ autoConnectMCPServers }) => autoConnectMCPServers())
   .catch((err) => console.error("[Jarvis] MCP auto-connect failed:", err));
 
-// Start scheduler and register default report schedules
-startScheduler()
-  .then(() => registerDefaultReportSchedules())
-  .catch((err) => console.error("[Jarvis] Scheduler startup failed:", err));
-
-// Register idle consolidation callback
-setIdleCallback(consolidateOnIdle);
-
-// Register and start sensors for proactive memory updates
-setSensorChangeHandler((event) => {
-  console.info(`[Sensor:${event.sensorName}] Change detected:`, event.changes.map((c) => c.detail).join("; "));
-});
-registerSensor(createTodoSensor());
-registerSensor(createReadingSensor());
-startSensors();
+// Start background services (scheduler, sensors)
+startBackgroundServices().catch((err) => console.error("[Jarvis] Background services startup failed:", err));

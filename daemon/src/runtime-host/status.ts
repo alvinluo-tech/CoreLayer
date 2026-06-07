@@ -8,6 +8,7 @@
 import type { RuntimeComponent, RuntimeComponentKind } from "./contract.js";
 import { ALL_RUNTIME_KINDS } from "./contract.js";
 import { getRuntimeInstances } from "./registry.js";
+import { resolveAppPaths } from "../config/app-paths.js";
 
 /**
  * Build the list of runtime components with real status from the registry.
@@ -18,6 +19,8 @@ import { getRuntimeInstances } from "./registry.js";
  */
 export async function buildRuntimeComponents(): Promise<RuntimeComponent[]> {
   const instances = getRuntimeInstances();
+
+  const { logDir } = resolveAppPaths();
 
   return Promise.all(
     ALL_RUNTIME_KINDS.map(async (kind: RuntimeComponentKind) => {
@@ -46,6 +49,7 @@ export async function buildRuntimeComponents(): Promise<RuntimeComponent[]> {
         status,
         pid: runtime ? process.pid : undefined,
         healthUrl: "/health",
+        logPath: logDir,
         restartPolicy: { type: "maxAttempts" as const, maxAttempts: 3 },
         lastError,
       };

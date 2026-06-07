@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { IterationBudget, injectBudgetWarning, guardEmptyResponse, ForceAnswerDetector } from "../application/conversation.js";
-import { trimToolResult } from "../../tool/adapters/ai-tool-wrapper.js";
+import { trimToolResult } from "../../tool/public-api.js";
 
 // ---- IterationBudget ----
 

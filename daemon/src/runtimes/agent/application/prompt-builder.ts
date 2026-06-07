@@ -1,4 +1,4 @@
-import { getAllJarvisTools } from "../../tool/adapters/native-tools/registry.js";
+import { getAllJarvisTools } from "../../tool/public-api.js";
 
 /**
  * Dynamically generate a tool catalog grouped by source.

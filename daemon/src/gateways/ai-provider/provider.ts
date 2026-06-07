@@ -61,7 +61,7 @@ function adaptParams(modelId: string, params: LanguageModelV3CallOptions): Langu
     if (!adapted.maxOutputTokens) {
       adapted.maxOutputTokens = 16384;
     }
-    const { temperature: _, ...rest } = adapted;
+    const { temperature: _removed, ...rest } = adapted;
     adapted = rest;
   }
 

@@ -41,6 +41,18 @@ pub struct AuditEntry {
     pub metadata: Option<serde_json::Value>,
 }
 
+/// Input for creating an audit entry.
+pub struct AuditInput<'a> {
+    pub actor: &'a str,
+    pub action: &'a str,
+    pub resource: &'a str,
+    pub risk_level: AuditRisk,
+    pub decision: AuditDecision,
+    pub confirmed_by_user: bool,
+    pub result: &'a str,
+    pub metadata: Option<serde_json::Value>,
+}
+
 /// Persistent audit log for security-sensitive operations.
 ///
 /// Writes entries to a JSONL file for durability. Also keeps an in-memory
@@ -84,28 +96,18 @@ impl AuditLog {
     }
 
     /// Create and record an audit entry in one call.
-    pub async fn audit(
-        &self,
-        actor: &str,
-        action: &str,
-        resource: &str,
-        risk_level: AuditRisk,
-        decision: AuditDecision,
-        confirmed_by_user: bool,
-        result: &str,
-        metadata: Option<serde_json::Value>,
-    ) {
+    pub async fn audit(&self, input: AuditInput<'_>) {
         let entry = AuditEntry {
             id: format!("audit-{}-{}", chrono_millis(), rand_suffix()),
             timestamp: chrono_now(),
-            actor: actor.to_string(),
-            action: action.to_string(),
-            resource: resource.to_string(),
-            risk_level,
-            decision,
-            confirmed_by_user,
-            result: result.to_string(),
-            metadata,
+            actor: input.actor.to_string(),
+            action: input.action.to_string(),
+            resource: input.resource.to_string(),
+            risk_level: input.risk_level,
+            decision: input.decision,
+            confirmed_by_user: input.confirmed_by_user,
+            result: input.result.to_string(),
+            metadata: input.metadata,
         };
         self.record(entry).await;
     }

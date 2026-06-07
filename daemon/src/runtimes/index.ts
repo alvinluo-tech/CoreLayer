@@ -10,7 +10,6 @@ import { AgentRuntime } from "./agent/agent-runtime.js";
 import { VoiceRuntime } from "./voice/voice-runtime.js";
 import { SchedulerRuntime } from "./scheduler/scheduler-runtime.js";
 import { ComputerControlRuntime } from "./computer-control/computer-control-runtime-facade.js";
-import { ToolRuntime as ToolExecutor } from "./tool/application/execute-tool.js";
 import { ToolRuntime as ToolRuntimeFacade } from "./tool/tool-runtime.js";
 import { CodingRuntime } from "./coding/coding-runtime.js";
 import { MemoryRuntime } from "./memory/memory-runtime.js";
@@ -32,9 +31,6 @@ export const agentRuntime = new AgentRuntime({
 registerRuntime("agent", agentRuntime);
 
 // ─── Tool Runtime ─────────────────────────────────────────────────────────────
-
-// Singleton instance of the tool execution runtime (permission guard, audit, etc.)
-export const toolRuntime = new ToolExecutor();
 
 export const toolRuntimeFacade = new ToolRuntimeFacade({
   id: "tool-runtime",

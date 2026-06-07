@@ -1,6 +1,6 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { registerJarvisTool } from "../runtimes/tool/adapters/native-tools/registry.js";
+import { registerJarvisTool } from "../runtimes/tool/public-api.js";
 import type { Plugin, PluginMetadata, PluginContext } from "./types.js";
 
 /**
@@ -160,7 +160,7 @@ export async function loadPluginsFromDirectory(dirPath: string): Promise<number>
         console.error(`[Plugins] Error loading plugin from ${file}:`, err);
       }
     }
-  } catch (err) {
+  } catch {
     // Directory may not exist
     console.log(`[Plugins] Plugin directory not found: ${dirPath}`);
   }

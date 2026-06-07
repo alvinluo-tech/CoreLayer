@@ -1,5 +1,5 @@
 import { ModelGateway, DEFAULT_PROFILES, DEFAULT_ROUTING_RULES } from "@jarvis/model-gateway";
-import type { ProviderConfig, ModelProfile } from "@jarvis/types";
+import type { ProviderConfig, ModelProfile, ModelRoutingRule } from "@jarvis/types";
 import { configManager } from "../../config/config-manager.js";
 import { resolveProvider, LEGACY_DEFAULTS } from "../../config/provider-resolver.js";
 import { getRepositories } from "../../persistence/factory.js";
@@ -109,7 +109,7 @@ export function getModelGateway(): ModelGateway {
 
   gateway = new ModelGateway({
     defaultModelId: activeModelId,
-    routingRules: routingRules as any,
+    routingRules: routingRules as ModelRoutingRule[],
     providers,
     profiles,
   });

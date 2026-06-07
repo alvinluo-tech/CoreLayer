@@ -5,7 +5,7 @@ const { mockExecute, mockGetTool } = vi.hoisted(() => ({
   mockGetTool: vi.fn(),
 }));
 
-vi.mock("../../index.js", () => ({
+vi.mock("../public-api.js", () => ({
   toolRuntime: { execute: (...args: unknown[]) => mockExecute(...args) },
 }));
 

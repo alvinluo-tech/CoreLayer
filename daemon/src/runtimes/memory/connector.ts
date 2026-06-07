@@ -1,7 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 import { getRepositories } from "../../persistence/factory.js";
-import { registerTool } from "../tool/adapters/native-tools/registry.js";
+import { registerTool } from "../tool/public-api.js";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 

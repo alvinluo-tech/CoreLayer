@@ -5,7 +5,7 @@ import type {
 } from "./types.js";
 import { isApprovalRequiredResult } from "@jarvis/runtime-protocol";
 import { getSkill } from "./loader.js";
-import { toolRuntime } from "../runtimes/tool/application/execute-tool.js";
+import { toolRuntime } from "../runtimes/tool/public-api.js";
 
 /**
  * Optional runtime context for skill execution.

@@ -251,7 +251,7 @@ class ConfigManager {
 
   removeCredential(providerId: string): void {
     const creds = this.getCredentials();
-    const { [providerId]: _, ...rest } = creds;
+    const { [providerId]: _removed, ...rest } = creds;
     writeJsonFile(getCredentialsPath(), rest);
     credentialsCache = null; // invalidate on write
   }

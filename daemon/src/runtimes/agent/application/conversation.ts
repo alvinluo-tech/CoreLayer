@@ -2,9 +2,8 @@ import { generateText, streamText, stepCountIs } from "ai";
 import type { ModelMessage, Tool } from "ai";
 import { ContextBuilder, MEMORY_MIN_SCORE } from "./context-builder.js";
 import { compressConversation, createSummaryMessage, extractMemoriesFromTurn } from "./compressor.js";
-import { getAllTools } from "../../tool/adapters/native-tools/registry.js";
+import { getAllTools, wrapToolsForAI } from "../../tool/public-api.js";
 import { isTaskComplete } from "../../../workspaces/task-status.js";
-import { wrapToolsForAI } from "../../tool/adapters/ai-tool-wrapper.js";
 
 import { configManager } from "../../../config/config-manager.js";
 import { getModelGateway } from "../../../gateways/model/gateway.js";
@@ -417,11 +416,11 @@ async function handleLocally(userMessage: string): Promise<{
 
   // Today's tasks
   if (msg.includes("今天") && (msg.includes("任务") || msg.includes("todo"))) {
-    const { getTool } = await import("../../tool/adapters/native-tools/registry.js");
+    const { getTool } = await import("../../tool/public-api.js");
     const t = getTool("getTodayTasks");
     if (t?.execute) {
       try {
-        const result = await (t.execute as Function)({});
+        const result = await (t.execute as (...args: unknown[]) => unknown)({});
         toolCallsLog.push({ name: "getTodayTasks", args: {}, result });
         const data = result as { tasks: { title: string; status: string; priority: number }[]; count: number };
         if (data.count === 0) return { reply: "今天没有待办任务。", toolCalls: toolCallsLog };
@@ -435,10 +434,10 @@ async function handleLocally(userMessage: string): Promise<{
 
   // All tasks
   if (msg.includes("任务") || msg.includes("todo")) {
-    const { getTool } = await import("../../tool/adapters/native-tools/registry.js");
+    const { getTool } = await import("../../tool/public-api.js");
     const t = getTool("queryTasks");
     if (t?.execute) {
-      const result = await (t.execute as Function)({});
+      const result = await (t.execute as (...args: unknown[]) => unknown)({});
       toolCallsLog.push({ name: "queryTasks", args: {}, result });
       const data = result as { tasks: { title: string; status: string }[]; count: number };
       if (data.count === 0) return { reply: "暂无任务。可以通过对话创建新任务。", toolCalls: toolCallsLog };
@@ -449,10 +448,10 @@ async function handleLocally(userMessage: string): Promise<{
 
   // Reading list
   if (msg.includes("阅读") || msg.includes("reading") || msg.includes("文章")) {
-    const { getTool } = await import("../../tool/adapters/native-tools/registry.js");
+    const { getTool } = await import("../../tool/public-api.js");
     const t = getTool("getReadingList");
     if (t?.execute) {
-      const result = await (t.execute as Function)({});
+      const result = await (t.execute as (...args: unknown[]) => unknown)({});
       toolCallsLog.push({ name: "getReadingList", args: {}, result });
       const data = result as { articles: { title: string; status: string }[]; count: number };
       if (data.count === 0) return { reply: "阅读清单为空。", toolCalls: toolCallsLog };
@@ -463,10 +462,10 @@ async function handleLocally(userMessage: string): Promise<{
 
   // Daily summary
   if (msg.includes("总结") || msg.includes("summary") || msg.includes("复盘")) {
-    const { getTool } = await import("../../tool/adapters/native-tools/registry.js");
+    const { getTool } = await import("../../tool/public-api.js");
     const t = getTool("getDailySummary");
     if (t?.execute) {
-      const result = await (t.execute as Function)({});
+      const result = await (t.execute as (...args: unknown[]) => unknown)({});
       toolCallsLog.push({ name: "getDailySummary", args: {}, result });
       const data = result as { tasksCompleted: number; tasksTotal: number; completionRate: number; articlesRead: number };
       return {
@@ -478,10 +477,10 @@ async function handleLocally(userMessage: string): Promise<{
 
   // Weekly stats
   if (msg.includes("周") || msg.includes("week")) {
-    const { getTool } = await import("../../tool/adapters/native-tools/registry.js");
+    const { getTool } = await import("../../tool/public-api.js");
     const t = getTool("getWeeklyStats");
     if (t?.execute) {
-      const result = await (t.execute as Function)({});
+      const result = await (t.execute as (...args: unknown[]) => unknown)({});
       toolCallsLog.push({ name: "getWeeklyStats", args: {}, result });
       const data = result as { tasksCompleted: number; tasksTotal: number; completionRate: number; articlesFinished: number };
       return {
@@ -494,11 +493,11 @@ async function handleLocally(userMessage: string): Promise<{
   // Create task
   const createMatch = msg.match(/(?:创建|添加|新建|add|create)[\s]*任务[\s：:]*(.+)/);
   if (createMatch) {
-    const { getTool } = await import("../../tool/adapters/native-tools/registry.js");
+    const { getTool } = await import("../../tool/public-api.js");
     const t = getTool("createTask");
     if (t?.execute) {
       const title = createMatch[1].trim();
-      const result = await (t.execute as Function)({ title });
+      const result = await (t.execute as (...args: unknown[]) => unknown)({ title });
       toolCallsLog.push({ name: "createTask", args: { title }, result });
       return { reply: `✅ 已创建任务：${title}`, toolCalls: toolCallsLog };
     }
@@ -507,11 +506,11 @@ async function handleLocally(userMessage: string): Promise<{
   // Add article
   const addArticleMatch = msg.match(/(?:添加|加入|add)[\s]*(?:文章|阅读|article)[\s：:]*(.+)/);
   if (addArticleMatch) {
-    const { getTool } = await import("../../tool/adapters/native-tools/registry.js");
+    const { getTool } = await import("../../tool/public-api.js");
     const t = getTool("addArticle");
     if (t?.execute) {
       const title = addArticleMatch[1].trim();
-      const result = await (t.execute as Function)({ title });
+      const result = await (t.execute as (...args: unknown[]) => unknown)({ title });
       toolCallsLog.push({ name: "addArticle", args: { title }, result });
       return { reply: `✅ 已添加到阅读清单：${title}`, toolCalls: toolCallsLog };
     }
@@ -519,10 +518,10 @@ async function handleLocally(userMessage: string): Promise<{
 
   // Recommend next reading
   if (msg.includes("推荐") || msg.includes("recommend") || msg.includes("下一篇")) {
-    const { getTool } = await import("../../tool/adapters/native-tools/registry.js");
+    const { getTool } = await import("../../tool/public-api.js");
     const t = getTool("recommendNext");
     if (t?.execute) {
-      const result = await (t.execute as Function)({});
+      const result = await (t.execute as (...args: unknown[]) => unknown)({});
       toolCallsLog.push({ name: "recommendNext", args: {}, result });
       const data = result as { recommendation: { title: string } | null; reason: string };
       if (!data.recommendation) return { reply: data.reason, toolCalls: toolCallsLog };
@@ -608,7 +607,8 @@ export async function handleMessageInConversation(
 
   // AI path: consume the stream to get full text
   let fullText = "";
-  for await (const event of streamResult.result!.fullStream) {
+  const r = streamResult.result as { fullStream: AsyncIterable<{ type: string; text?: string }> };
+  for await (const event of r.fullStream) {
     if (event.type === "text-delta" && event.text) {
       fullText += event.text;
     }
@@ -650,14 +650,14 @@ export async function streamMessageInConversation(
 ): Promise<{
   isAi: boolean;
   userMessage: MessageRow;
-  result?: any;
+  result?: unknown;
   reply?: string;
-  toolCalls?: any[];
+  toolCalls?: unknown[];
   toolCallsLog?: { name: string; args: unknown; result: unknown }[];
   abortController?: AbortController;
   needsForceAnswer?: boolean;
   forceAnswerFollowUp?: () => Promise<string>;
-  saveAssistantMessage: (reply: string, toolCallsLog: any[]) => Promise<MessageRow>;
+  saveAssistantMessage: (reply: string, toolCallsLog: unknown[]) => Promise<MessageRow>;
 }> {
   recordActivity();
   const repo = getRepositories().conversations;
@@ -720,7 +720,7 @@ export async function streamMessageInConversation(
 
   const context = await builder.build(memories, history);
 
-  const saveAssistantMessage = async (reply: string, toolCallsLog: any[]) => {
+  const saveAssistantMessage = async (reply: string, toolCallsLog: unknown[]) => {
     // Save assistant message
     const msg = await repo.addMessage(conversationId, {
       role: "assistant",
@@ -828,9 +828,10 @@ export async function streamMessageInConversation(
         tools: aiTools,
         stopWhen: stepCountIs(maxSteps),
         abortSignal: controller.signal,
-        onFinish: async (event: any) => {
+        onFinish: async (event: unknown) => {
           clearTimeout(timeoutId);
-          logCacheStats(event.providerMetadata as Record<string, unknown> | undefined, "streamMessage");
+          const e = event as Record<string, unknown>;
+          logCacheStats(e.providerMetadata as Record<string, unknown> | undefined, "streamMessage");
           // Persist accumulated token usage
           if (tokenUsage.promptTokens > 0 || tokenUsage.completionTokens > 0) {
             try {
@@ -841,15 +842,17 @@ export async function streamMessageInConversation(
             }
           }
         },
-        onStepFinish: async (step: any) => {
+        onStepFinish: async (step: unknown) => {
+          const s = step as Record<string, unknown>;
           // Accumulate token usage from each step
-          if (step.usage) {
-            tokenUsage.promptTokens += step.usage.inputTokens ?? 0;
-            tokenUsage.completionTokens += step.usage.outputTokens ?? 0;
+          const usage = s.usage as Record<string, unknown> | undefined;
+          if (usage) {
+            tokenUsage.promptTokens += (usage.inputTokens as number) ?? 0;
+            tokenUsage.completionTokens += (usage.outputTokens as number) ?? 0;
           }
 
-          const toolCalls = step.toolCalls ?? [];
-          let toolResults = step.toolResults ?? [];
+          const toolCalls = (s.toolCalls ?? []) as Array<Record<string, unknown>>;
+          let toolResults = (s.toolResults ?? []) as Array<Record<string, unknown>>;
 
           // Track iteration budget and inject warning if needed
           if (budget.advance()) {
@@ -857,11 +860,11 @@ export async function streamMessageInConversation(
           }
 
           // Track force answer: consecutive tool-only rounds
-          forceDetector.recordStep({ text: step.text, toolCalls: step.toolCalls });
+          forceDetector.recordStep({ text: s.text as string, toolCalls: s.toolCalls as Record<string, unknown>[] });
 
           // Track loop breakage: stuck (same tool + similar args) or excessive (single tool overuse)
           for (const tc of toolCalls) {
-            const { stuck, excessive } = loopBreaker.recordToolCall(tc.toolName, tc.input ?? tc.args);
+            const { stuck, excessive } = loopBreaker.recordToolCall(tc.toolName as string, tc.input ?? tc.args);
             if (stuck || excessive) {
               loopDetected = true;
             }
@@ -874,16 +877,16 @@ export async function streamMessageInConversation(
             for (const tc of toolCalls) {
               await onToolEvent({
                 type: 'tool-call',
-                name: tc.toolName,
-                toolCallId: tc.toolCallId,
+                name: tc.toolName as string,
+                toolCallId: tc.toolCallId as string,
                 args: tc.input ?? tc.args,
               });
             }
             for (const tr of toolResults) {
               await onToolEvent({
                 type: 'tool-result',
-                name: tr.toolName,
-                toolCallId: tr.toolCallId,
+                name: tr.toolName as string,
+                toolCallId: tr.toolCallId as string,
                 result: tr.output ?? tr.result,
               });
             }
@@ -892,7 +895,7 @@ export async function streamMessageInConversation(
           // Accumulate tool calls log for callers that need it after stream completes
           for (const tc of toolCalls) {
             toolCallsLog.push({
-              name: tc.toolName,
+              name: tc.toolName as string,
               args: tc.input ?? tc.args,
               result: null,
             });
@@ -1026,15 +1029,17 @@ export async function streamChat(
       tools: aiTools,
       stopWhen: stepCountIs(maxSteps),
       abortSignal: controller.signal,
-      onFinish: async (event: any) => {
+      onFinish: async (event: unknown) => {
         clearTimeout(timeoutId);
-        logCacheStats(event.providerMetadata as Record<string, unknown> | undefined, "streamChat");
+        const e = event as Record<string, unknown>;
+        logCacheStats(e.providerMetadata as Record<string, unknown> | undefined, "streamChat");
       },
       ...(onToolEvent
         ? {
-            onStepFinish: async (step: any) => {
-              const toolCalls = step.toolCalls ?? [];
-              let toolResults = step.toolResults ?? [];
+            onStepFinish: async (step: unknown) => {
+              const s = step as Record<string, unknown>;
+              const toolCalls = (s.toolCalls ?? []) as Array<Record<string, unknown>>;
+              let toolResults = (s.toolResults ?? []) as Array<Record<string, unknown>>;
 
               // Track iteration budget and inject warning if needed
               if (budget.advance()) {
@@ -1044,16 +1049,16 @@ export async function streamChat(
               for (const tc of toolCalls) {
                 await onToolEvent({
                   type: 'tool-call',
-                  name: tc.toolName,
-                  toolCallId: tc.toolCallId,
+                  name: tc.toolName as string,
+                  toolCallId: tc.toolCallId as string,
                   args: tc.input ?? tc.args,
                 });
               }
               for (const tr of toolResults) {
                 await onToolEvent({
                   type: 'tool-result',
-                  name: tr.toolName,
-                  toolCallId: tr.toolCallId,
+                  name: tr.toolName as string,
+                  toolCallId: tr.toolCallId as string,
                   result: tr.output ?? tr.result,
                 });
               }

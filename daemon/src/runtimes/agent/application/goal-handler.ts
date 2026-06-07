@@ -1,5 +1,5 @@
 import { getRepositories } from "../../../persistence/factory.js";
-import type { GoalRow } from "../../../persistence/repository.js";
+import type { GoalRow, GoalRepository } from "../../../persistence/repository.js";
 
 export interface GoalCommandResult {
   handled: boolean;
@@ -106,7 +106,7 @@ export async function handleGoalCommand(raw: string): Promise<GoalCommandResult>
 }
 
 async function findLatestGoal(
-  repo: GoalRow extends unknown ? any : any,
+  repo: GoalRepository,
   id?: string,
   statuses?: string[],
 ): Promise<GoalRow | null> {

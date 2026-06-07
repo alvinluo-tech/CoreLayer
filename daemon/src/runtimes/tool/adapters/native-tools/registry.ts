@@ -1,5 +1,5 @@
 import { ToolRegistry as BaseToolRegistry } from "@jarvis/tool-registry";
-import type { JarvisTool, RiskLevel, ToolResult } from "@jarvis/types";
+import type { JarvisTool, JSONSchema, RiskLevel, ToolResult } from "@jarvis/types";
 import type { Tool } from "ai";
 
 /**
@@ -21,7 +21,7 @@ export function registerTool(name: string, toolDef: Tool, riskOverride?: RiskLev
     name,
     title: name,
     description: "description" in toolDef ? String(toolDef.description) : "",
-    inputSchema: ("parameters" in toolDef ? toolDef.parameters : { type: "object" }) as JarvisTool["inputSchema"] as any,
+    inputSchema: ("parameters" in toolDef ? toolDef.parameters : { type: "object" }) as JarvisTool["inputSchema"] as JSONSchema,
     risk: riskOverride ?? inferRisk(name),
     permissions: [],
     requiresConfirmation: false,

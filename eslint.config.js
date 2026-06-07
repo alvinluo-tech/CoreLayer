@@ -32,6 +32,31 @@ export default tseslint.config(
     },
   },
   {
+    files: ["daemon/src/**/*.ts"],
+    rules: {
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_", destructuredArrayIgnorePattern: "^_" },
+      ],
+    },
+  },
+  {
+    files: [
+      "daemon/src/**/*.test.ts",
+      "daemon/src/**/__tests__/**/*.ts",
+      "daemon/src/__e2e__/**/*.ts",
+    ],
+    rules: {
+      "@typescript-eslint/no-explicit-any": "off",
+      "@typescript-eslint/no-unsafe-function-type": "off",
+      "@typescript-eslint/no-require-imports": "off",
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
+      ],
+    },
+  },
+  {
     ignores: [
       "**/node_modules/**",
       "**/dist/**",

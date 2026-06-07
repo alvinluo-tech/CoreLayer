@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync, existsSync, readdirSync, statSync } from "fs";
-import { resolve, join, relative } from "path";
+import { resolve, join, relative, dirname } from "path";
 
 const srcDir = resolve(import.meta.dirname, "..");
 const rootDir = resolve(srcDir, "../..");
@@ -238,6 +238,8 @@ describe("Runtime modules must not import http/routes", () => {
 
 describe("Runtime modules must not import another runtime's private files", () => {
   const runtimeDirs = ["agent", "tool", "coding", "voice", "memory", "scheduler", "computer-control"];
+  const privatePatterns = ["application/", "domain/", "adapters/"];
+
   const runtimeFiles = listTsFiles(resolve(srcDir, "runtimes")).filter(
     (f) => !f.includes("__tests__") && !f.includes(".test."),
   );
@@ -248,14 +250,33 @@ describe("Runtime modules must not import another runtime's private files", () =
 
     const otherRuntimes = runtimeDirs.filter((r) => r !== currentRuntime);
 
-    it(`${file} must not import another runtime's application/domain`, () => {
+    it(`${file} must not import another runtime's application/domain/adapters`, () => {
       const source = readFile(file);
+      const fileDir = resolve(srcDir, dirname(file));
       const violations: string[] = [];
+
       for (const [i, line] of source.split("\n").entries()) {
         if (!line.includes("import")) continue;
-        for (const other of otherRuntimes) {
-          if (line.includes(`runtimes/${other}/application/`) || line.includes(`runtimes/${other}/domain/`)) {
-            violations.push(`  line ${i + 1}: ${line.trim()}`);
+
+        // Extract import specifiers from static and dynamic imports
+        const specifiers: string[] = [];
+        const staticMatch = line.match(/from\s+["']([^"']+)["']/);
+        if (staticMatch) specifiers.push(staticMatch[1]);
+        const dynamicMatch = line.match(/import\s*\(\s*["']([^"']+)["']\s*\)/);
+        if (dynamicMatch) specifiers.push(dynamicMatch[1]);
+
+        for (const spec of specifiers) {
+          if (!spec.startsWith(".")) continue;
+
+          const resolved = resolve(fileDir, spec);
+          const normalized = resolved.replace(/\\/g, "/");
+
+          for (const other of otherRuntimes) {
+            for (const pattern of privatePatterns) {
+              if (normalized.includes(`runtimes/${other}/${pattern}`)) {
+                violations.push(`  line ${i + 1}: ${line.trim()}`);
+              }
+            }
           }
         }
       }
@@ -316,5 +337,81 @@ describe("packages/* must not import daemon/* or frontend/*", () => {
         expect(violations).toEqual([]);
       });
     }
+  }
+});
+
+describe("HTTP routes must not import runtime application/domain/adapters internals", () => {
+  const routeFiles = listTsFiles(resolve(srcDir, "http/routes")).filter(
+    (f) => !f.includes("__tests__") && !f.includes(".test."),
+  );
+
+  for (const file of routeFiles) {
+    it(`${file} must not import runtimes/*/application|domain|adapters`, () => {
+      const source = readFile(file);
+      const fileDir = resolve(srcDir, dirname(file));
+      const violations: string[] = [];
+
+      for (const [i, line] of source.split("\n").entries()) {
+        if (!line.includes("import")) continue;
+
+        const specifiers: string[] = [];
+        const staticMatch = line.match(/from\s+["']([^"']+)["']/);
+        if (staticMatch) specifiers.push(staticMatch[1]);
+        const dynamicMatch = line.match(/import\s*\(\s*["']([^"']+)["']\s*\)/);
+        if (dynamicMatch) specifiers.push(dynamicMatch[1]);
+
+        for (const spec of specifiers) {
+          if (!spec.startsWith(".")) continue;
+
+          const resolved = resolve(fileDir, spec);
+          const normalized = resolved.replace(/\\/g, "/");
+
+          if (/runtimes\/[^/]+\/(application|domain|adapters)\//.test(normalized)) {
+            violations.push(`  line ${i + 1}: ${line.trim()}`);
+          }
+        }
+      }
+      expect(violations).toEqual([]);
+    });
+  }
+});
+
+describe("Runtime modules must not import runtimes/index.ts", () => {
+  const runtimeFiles = listTsFiles(resolve(srcDir, "runtimes")).filter(
+    (f) => !f.includes("__tests__") && !f.includes(".test."),
+  );
+
+  for (const file of runtimeFiles) {
+    it(`${file} must not import runtimes/index.ts`, () => {
+      const source = readFile(file);
+      const fileDir = resolve(srcDir, dirname(file));
+      const violations: string[] = [];
+
+      for (const [i, line] of source.split("\n").entries()) {
+        if (!line.includes("import")) continue;
+
+        // Extract import specifiers from static and dynamic imports
+        const specifiers: string[] = [];
+        const staticMatch = line.match(/from\s+["']([^"']+)["']/);
+        if (staticMatch) specifiers.push(staticMatch[1]);
+        const dynamicMatch = line.match(/import\s*\(\s*["']([^"']+)["']\s*\)/);
+        if (dynamicMatch) specifiers.push(dynamicMatch[1]);
+
+        for (const spec of specifiers) {
+          // Skip bare module specifiers (not relative paths)
+          if (!spec.startsWith(".")) continue;
+
+          // Resolve the import relative to the file's directory
+          const resolved = resolve(fileDir, spec);
+          const normalized = resolved.replace(/\\/g, "/");
+
+          // Check if it resolves to runtimes/index.ts (with or without .js extension)
+          if (normalized.endsWith("/runtimes/index") || normalized.endsWith("/runtimes/index.js") || normalized.endsWith("/runtimes/index.ts")) {
+            violations.push(`  line ${i + 1}: ${line.trim()}`);
+          }
+        }
+      }
+      expect(violations).toEqual([]);
+    });
   }
 });

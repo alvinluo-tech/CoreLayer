@@ -1,9 +1,9 @@
 import { Hono } from "hono";
 import { getRepositories } from "../../persistence/factory.js";
 import { apiError, extractErrorMessage, logError } from "../../shared/errors.js";
-import { toolRuntime } from "../../runtimes/tool/application/execute-tool.js";
+import { toolRuntime } from "../../runtimes/tool/public-api.js";
 import { executeApprovedTool } from "../../approvals/resume-service.js";
-import { handleMessageInConversation } from "../../runtimes/agent/application/conversation.js";
+import { handleMessageInConversation } from "../../runtimes/agent/public-api.js";
 
 const approvalRoutes = new Hono();
 

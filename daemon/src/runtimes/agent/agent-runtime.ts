@@ -194,7 +194,7 @@ export class AgentRuntime implements ManagedRuntime {
     }
   }
 
-  async shutdown(_response: ShutdownResponse): Promise<void> {
+  async shutdown(_shutdownResponse: ShutdownResponse): Promise<void> {
     // Cancel all active runs
     for (const [runId, run] of this.activeRuns) {
       run.abortController.abort();

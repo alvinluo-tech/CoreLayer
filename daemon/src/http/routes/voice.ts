@@ -1,13 +1,10 @@
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
-import { transcribeWithGroq, isAsrAvailable } from "../../runtimes/voice/asr.js";
-import { synthesizeSpeech, isTtsAvailable, type TTSModel } from "../../runtimes/voice/tts.js";
-import { StreamingTTS } from "../../runtimes/voice/streaming-tts.js";
-import { voiceRegistry } from "../../runtimes/voice/providers.js";
+import { transcribeWithGroq, isAsrAvailable, synthesizeSpeech, isTtsAvailable, type TTSModel, StreamingTTS, voiceRegistry } from "../../runtimes/voice/public-api.js";
 import { getProviderConfig } from "../../gateways/ai-provider/provider.js";
 import { configManager } from "../../config/config-manager.js";
 import { extractErrorMessage, logError } from "../../shared/errors.js";
-import { runStreamTurn } from "../../runtimes/agent/stream.js";
+import { runStreamTurn } from "../../runtimes/agent/public-api.js";
 
 const voiceRoutes = new Hono();
 

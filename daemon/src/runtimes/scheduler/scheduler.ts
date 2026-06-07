@@ -5,7 +5,7 @@ import { getRepositories } from "../../persistence/factory.js";
 import type { ScheduledTaskRow } from "../../persistence/repository.js";
 import { logError } from "../../shared/errors.js";
 import { configManager } from "../../config/config-manager.js";
-import { buildTickSystemPrompt } from "../agent/application/prompt-builder.js";
+import { buildTickSystemPrompt } from "../agent/public-api.js";
 
 /**
  * Scheduler for recurring task execution.
@@ -91,7 +91,7 @@ export async function runTick(): Promise<{
     // Consolidation is already handled by checkIdle() with proper cooldown.
     // runTick() only handles the autonomous agent processing (TICK conversation).
 
-    const { runTurn } = await import("../agent/run.js");
+    const { runTurn } = await import("../agent/public-api.js");
     const repos = getRepositories();
     const conv = await repos.conversations.create("TICK: autonomous processing");
 
@@ -167,7 +167,7 @@ async function executeTask(row: ScheduledTaskRow): Promise<TaskExecutionResult> 
   // Prompt-based execution: send prompt through runtime
   if (row.prompt) {
     try {
-      const { runTurn } = await import("../agent/run.js");
+      const { runTurn } = await import("../agent/public-api.js");
       const conv = await getRepositories().conversations.create(`Scheduled: ${row.name}`);
       await runTurn({
         conversationId: conv.id,
@@ -420,7 +420,7 @@ async function checkIdle(): Promise<void> {
     if (count > 0) {
       logError("Scheduler/idle", `Expired ${count} stale approval requests`);
       // Resolve in-memory PermissionGuard confirmations for expired requests
-      const { toolRuntime } = await import("../index.js");
+      const { toolRuntime } = await import("../tool/public-api.js");
       const guard = toolRuntime.getPermissionGuard();
       for (const id of ids) {
         guard.resolvePendingConfirmation(id, false);
@@ -469,7 +469,7 @@ export async function consolidateOnIdle(): Promise<{
   );
 
   // 2. Compress each conversation
-  const { compressConversation } = await import("../agent/application/compressor.js");
+  const { compressConversation } = await import("../agent/public-api.js");
 
   for (const conv of recentConversations) {
     try {

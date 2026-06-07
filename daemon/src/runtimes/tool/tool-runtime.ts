@@ -228,11 +228,11 @@ export class ToolRuntime implements ManagedRuntime {
       mode?: string;
     },
   ): Promise<ToolResult> {
-    const { ToolRuntime: ExistingToolRuntime } = await import(
+    const { ToolExecutionService } = await import(
       "./application/execute-tool.js"
     );
 
-    const runtime = new ExistingToolRuntime();
+    const runtime = new ToolExecutionService();
     const result = await runtime.execute(toolId, args, {
       caller: context.caller,
       conversationId: context.conversationId,

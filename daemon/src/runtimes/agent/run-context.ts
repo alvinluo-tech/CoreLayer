@@ -92,7 +92,7 @@ export async function resolveConversationScope(request: {
   agentId?: string;
 }): Promise<ResolvedRunContext> {
   const repos = getRepositories();
-  let conversation = request.conversationId
+  const conversation = request.conversationId
     ? await repos.conversations.getById(request.conversationId)
     : null;
 

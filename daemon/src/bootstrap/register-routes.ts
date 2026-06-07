@@ -1,0 +1,42 @@
+import type { Hono } from "hono";
+import conversationRoutes from "../http/routes/conversations.js";
+import taskRoutes from "../http/routes/tasks.js";
+import articleRoutes from "../http/routes/articles.js";
+import reviewRoutes from "../http/routes/reviews.js";
+import settingsRoutes from "../http/routes/settings.js";
+import chatRoutes from "../http/routes/chat.js";
+import voiceRoutes from "../http/routes/voice.js";
+import mcpRoutes from "../http/routes/mcp.js";
+import toolRoutes from "../http/routes/tools.js";
+import scheduledTaskRoutes from "../http/routes/scheduled-tasks.js";
+import approvalRoutes from "../http/routes/approval.js";
+import workspaceRoutes from "../http/routes/workspaces.js";
+import projectRoutes from "../http/routes/projects.js";
+import runsRoutes from "../http/routes/runs.js";
+import memoryRoutes from "../http/routes/memories.js";
+import agentProfileRoutes from "../http/routes/agent-profiles.js";
+import eventRoutes from "../http/routes/events.js";
+import auditRoutes from "../http/routes/audit.js";
+import runtimeRoutes from "../http/routes/runtime.js";
+
+export function registerRoutes(app: Hono): void {
+  app.route("/api/chat", chatRoutes);
+  app.route("/api/conversations", conversationRoutes);
+  app.route("/api/tasks", taskRoutes);
+  app.route("/api/articles", articleRoutes);
+  app.route("/api/reviews", reviewRoutes);
+  app.route("/api/settings", settingsRoutes);
+  app.route("/api/voice", voiceRoutes);
+  app.route("/api/mcp", mcpRoutes);
+  app.route("/api/tools", toolRoutes);
+  app.route("/api/tasks/scheduled", scheduledTaskRoutes);
+  app.route("/api/approvals", approvalRoutes);
+  app.route("/api/workspaces", workspaceRoutes);
+  app.route("/api/projects", projectRoutes);
+  app.route("/api/runs", runsRoutes);
+  app.route("/api/memories", memoryRoutes);
+  app.route("/api/agent-profiles", agentProfileRoutes);
+  app.route("/api/events", eventRoutes);
+  app.route("/api/audit", auditRoutes);
+  app.route("/api/runtime", runtimeRoutes);
+}

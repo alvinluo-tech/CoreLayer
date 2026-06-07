@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { JarvisTool, ToolResult, JSONSchema } from "@jarvis/types";
 import { isApprovalRequiredResult } from "@jarvis/runtime-protocol";
-import { ToolRuntime } from "../application/execute-tool.js";
+import { ToolExecutionService } from "../application/execute-tool.js";
 import type { ToolExecutionResult } from "../application/execute-tool.js";
 
 // Mock dependencies
@@ -64,13 +64,13 @@ vi.mock("../../../persistence/factory.js", () => ({
   }),
 }));
 
-describe("ToolRuntime", () => {
-  let runtime: ToolRuntime;
+describe("ToolExecutionService", () => {
+  let runtime: ToolExecutionService;
 
   beforeEach(() => {
     vi.clearAllMocks();
     mockExecute.mockResolvedValue({ success: true, data: "ok" });
-    runtime = new ToolRuntime();
+    runtime = new ToolExecutionService();
   });
 
   describe("validation gate", () => {

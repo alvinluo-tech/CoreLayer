@@ -91,7 +91,7 @@ function adjustPermissionForMode(
   return true;
 }
 
-export class ToolRuntime {
+export class ToolExecutionService {
   private permissionGuard: PermissionGuard;
 
   constructor(permissionGuard?: PermissionGuard) {
@@ -291,4 +291,4 @@ export class ToolRuntime {
 }
 
 /** Module-level singleton for tool execution (permission guard, audit, etc.) */
-export const toolRuntime = new ToolRuntime();
+export const toolRuntime = new ToolExecutionService();

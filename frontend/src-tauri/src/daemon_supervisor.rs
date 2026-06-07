@@ -121,7 +121,7 @@ impl DaemonSupervisor {
         let sidecar_path = self
             .sidecar_path
             .clone()
-            .ok_or_else(|| find_daemon_sidecar_error())?;
+            .ok_or_else(find_daemon_sidecar_error)?;
         log::info!(
             "[DaemonSupervisor] Starting daemon sidecar: {}",
             sidecar_path.display()
