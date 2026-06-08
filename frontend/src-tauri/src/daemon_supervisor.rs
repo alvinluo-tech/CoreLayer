@@ -429,8 +429,8 @@ fn find_sidecar_module_root(sidecar_path: &Path, resource_dir: Option<&Path>) ->
 fn clean_path<P: AsRef<Path>>(path: P) -> PathBuf {
     let path = path.as_ref();
     let path_str = path.to_string_lossy();
-    if path_str.starts_with(r"\\?\") {
-        PathBuf::from(&path_str[4..])
+    if let Some(stripped) = path_str.strip_prefix(r"\\?\") {
+        PathBuf::from(stripped)
     } else {
         path.to_path_buf()
     }
