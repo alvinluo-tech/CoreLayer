@@ -98,7 +98,7 @@ function ProjectDetail({ project }: { project: Project }) {
         <MetaValue>{project.id.slice(0, 12)}...</MetaValue>
       </div>
 
-      {/* Placeholder sections */}
+      {/* Related data sections */}
       <div className="space-y-3 pt-2">
         <SectionHeader>Related Data</SectionHeader>
         <div
@@ -116,7 +116,7 @@ function ProjectDetail({ project }: { project: Project }) {
               color: 'var(--text-tertiary)',
             }}
           >
-            Task, run, and memory counts will appear here once linked to this project.
+            Link tasks, runs, and memories to this project to see related counts here.
           </div>
         </div>
       </div>

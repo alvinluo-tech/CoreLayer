@@ -1,10 +1,56 @@
+import { useEffect, useState } from 'react';
 import { useConversationStore } from '@/stores/conversationStore';
+import { useRunStore } from '@/stores/runStore';
+import { useApprovalStore } from '@/stores/approvalStore';
+import { jarvisClient } from '@/lib/jarvisClient';
+
+interface DaemonStatus {
+  connected: boolean;
+  runtimeMode?: string;
+  uptime?: number;
+}
 
 /**
- * Fixed bottom status bar showing version, tech stack, and session info.
+ * Fixed bottom status bar showing version, daemon health, and runtime metrics.
  */
 export function BottomStatusBar() {
   const activeConversationId = useConversationStore((s) => s.activeConversationId);
+  const runs = useRunStore((s) => s.runs);
+  const pendingCount = useApprovalStore((s) => s.pendingCount);
+
+  const [daemon, setDaemon] = useState<DaemonStatus>({ connected: false });
+
+  const activeRunCount = runs.filter((r) => r.status === 'running').length;
+
+  useEffect(() => {
+    let alive = true;
+    const check = async () => {
+      try {
+        const raw = await jarvisClient.get('/api/runtime/status');
+        if (!alive) return;
+        const data = raw as Record<string, unknown>;
+        setDaemon({
+          connected: true,
+          runtimeMode: data.runtimeMode as string | undefined,
+          uptime: data.uptime as number | undefined,
+        });
+      } catch {
+        if (alive) setDaemon({ connected: false });
+      }
+    };
+    check();
+    const interval = setInterval(check, 15_000);
+    return () => {
+      alive = false;
+      clearInterval(interval);
+    };
+  }, []);
+
+  const formatUptime = (seconds: number): string => {
+    if (seconds < 60) return `${Math.floor(seconds)}s`;
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
+    return `${Math.floor(seconds / 3600)}h`;
+  };
 
   return (
     <div
@@ -41,13 +87,36 @@ export function BottomStatusBar() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
         <span>JARVIS v{__APP_VERSION__}</span>
         <span>·</span>
-        <span>TAURI v2</span>
-        <span>·</span>
-        <span>REACT 19</span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: '50%',
+              background: daemon.connected ? '#22c55e' : '#ef4444',
+              boxShadow: daemon.connected ? '0 0 4px #22c55e' : '0 0 4px #ef4444',
+            }}
+          />
+          {daemon.connected ? 'DAEMON' : 'OFFLINE'}
+        </span>
+        {daemon.runtimeMode && (
+          <>
+            <span>·</span>
+            <span>{daemon.runtimeMode.toUpperCase()}</span>
+          </>
+        )}
+        {daemon.uptime != null && (
+          <>
+            <span>·</span>
+            <span>UP {formatUptime(daemon.uptime)}</span>
+          </>
+        )}
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-        <span>ENCRYPTED</span>
-        <span>·</span>
+        {activeRunCount > 0 && <span style={{ color: 'var(--cyan)' }}>RUNS {activeRunCount}</span>}
+        {pendingCount() > 0 && (
+          <span style={{ color: 'var(--amber)' }}>PENDING {pendingCount()}</span>
+        )}
         <span>SESSION: {activeConversationId?.slice(0, 4).toUpperCase() ?? '—'}</span>
       </div>
     </div>

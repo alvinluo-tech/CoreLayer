@@ -30,6 +30,7 @@ import { useArticleStore } from '@/stores/articleStore';
 import { useReviewStore } from '@/stores/reviewStore';
 import { useApprovalStore } from '@/stores/approvalStore';
 import { useShellStore } from '@/stores/shellStore';
+import { useRunStore } from '@/stores/runStore';
 
 export function AppShell() {
   const { messages, sendMessage, isLoading, activeConversationId, error } = useChat();
@@ -311,6 +312,9 @@ export function AppShell() {
   const fetchDailySummary = useReviewStore((s) => s.fetchDailySummary);
   const fetchApprovals = useApprovalStore((s) => s.fetchApprovals);
   const pendingApprovalCount = useApprovalStore((s) => s.pendingCount);
+  const runs = useRunStore((s) => s.runs);
+  const fetchRuns = useRunStore((s) => s.fetchRuns);
+  const activeRunCount = runs.filter((r) => r.status === 'running').length;
 
   const refreshAllDashboardStates = useCallback(async () => {
     try {
@@ -321,6 +325,7 @@ export function AppShell() {
         fetchArticles().catch(() => {}),
         fetchDailySummary().catch(() => {}),
         fetchApprovals().catch(() => {}),
+        fetchRuns().catch(() => {}),
       ]);
     } catch (err) {
       console.warn('Failed to refresh dashboard states:', err);
@@ -332,6 +337,7 @@ export function AppShell() {
     fetchArticles,
     fetchDailySummary,
     fetchApprovals,
+    fetchRuns,
   ]);
 
   useEffect(() => {
@@ -595,6 +601,7 @@ export function AppShell() {
             activeView={activeView}
             onViewChange={setActiveView}
             pendingApprovalCount={pendingApprovalCount()}
+            runningRunCount={activeRunCount}
           />
         }
         mainSurface={renderMainContent()}
