@@ -650,6 +650,12 @@ export async function deleteModelProfile(id: string): Promise<{ success: boolean
 
 // ---- Daemon Supervisor ----
 
+export interface RegisteredRuntime {
+  kind: string;
+  status: string;
+  lastError?: string;
+}
+
 export interface DaemonStatus {
   running: boolean;
   healthy: boolean;
@@ -661,6 +667,8 @@ export interface DaemonStatus {
   port: number | null;
   logPath: string | null;
   runtimeMode: string;
+  appDataDir?: string;
+  registeredRuntimes?: RegisteredRuntime[];
 }
 
 export async function getDaemonStatus(): Promise<DaemonStatus> {

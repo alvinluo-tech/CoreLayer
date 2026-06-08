@@ -26,6 +26,16 @@ pub struct DaemonStatus {
     pub port: Option<u16>,
     pub log_path: Option<String>,
     pub runtime_mode: String,
+    pub app_data_dir: Option<String>,
+    pub registered_runtimes: Vec<RegisteredRuntime>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RegisteredRuntime {
+    pub kind: String,
+    pub status: String,
+    pub last_error: Option<String>,
 }
 
 pub struct DaemonSupervisor {
@@ -269,6 +279,12 @@ impl DaemonSupervisor {
             false
         };
 
+        let registered_runtimes = if running && healthy {
+            self.fetch_registered_runtimes().await
+        } else {
+            vec![]
+        };
+
         DaemonStatus {
             running,
             healthy,
@@ -284,6 +300,29 @@ impl DaemonSupervisor {
             } else {
                 "external".to_string()
             },
+            app_data_dir: self
+                .app_data_dir
+                .as_ref()
+                .map(|p| p.to_string_lossy().to_string()),
+            registered_runtimes,
+        }
+    }
+
+    async fn fetch_registered_runtimes(&self) -> Vec<RegisteredRuntime> {
+        let status_url = format!("{}/api/runtime/status", self.url);
+        match self.client.get(&status_url).send().await {
+            Ok(resp) if resp.status().is_success() => {
+                #[derive(Deserialize)]
+                struct RuntimeStatusResponse {
+                    registered_runtimes: Option<Vec<RegisteredRuntime>>,
+                }
+                resp.json::<RuntimeStatusResponse>()
+                    .await
+                    .ok()
+                    .and_then(|r| r.registered_runtimes)
+                    .unwrap_or_default()
+            }
+            _ => vec![],
         }
     }
 

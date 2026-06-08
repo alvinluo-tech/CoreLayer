@@ -5,6 +5,7 @@ import { env } from "../config/env.js";
 import { resolveAppPaths } from "../config/app-paths.js";
 import { getCurrentMode } from "../persistence/factory.js";
 import { registerRoutes } from "./register-routes.js";
+import { getRuntimeInstances } from "../runtime-host/registry.js";
 
 export function createHttpApp(): Hono {
   const app = new Hono();
@@ -48,12 +49,36 @@ export function createHttpApp(): Hono {
   });
 
   // Runtime status & shutdown (for Tauri supervisor)
-  app.get("/api/runtime/status", (c) => {
+  app.get("/api/runtime/status", async (c) => {
     const paths = resolveAppPaths();
+    const instances = getRuntimeInstances();
+    const registeredRuntimes: Array<{
+      kind: string;
+      status: string;
+      lastError?: string;
+    }> = [];
+
+    for (const [kind, runtime] of instances) {
+      let status = "unknown";
+      let lastError: string | undefined;
+      try {
+        const runtimeStatus = await runtime.getStatus();
+        status = runtimeStatus.health === "healthy" ? "running"
+          : runtimeStatus.health === "degraded" ? "degraded"
+          : "failed";
+        lastError = runtimeStatus.lastError;
+      } catch (err) {
+        status = "failed";
+        lastError = err instanceof Error ? err.message : String(err);
+      }
+      registeredRuntimes.push({ kind, status, lastError });
+    }
+
     return c.json({
       status: "ok",
       runtimeMode: env.JARVIS_RUNTIME_MODE,
       pid: process.pid,
+      selectedPort: env.DAEMON_PORT,
       uptime: process.uptime(),
       memoryUsage: process.memoryUsage(),
       storageMode: getCurrentMode(),
@@ -62,6 +87,7 @@ export function createHttpApp(): Hono {
         sqlitePath: paths.sqlitePath,
         logDir: paths.logDir,
       },
+      registeredRuntimes,
     });
   });
 

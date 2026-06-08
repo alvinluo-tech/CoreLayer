@@ -12,6 +12,8 @@ import {
   CheckCircle2,
   Wifi,
   WifiOff,
+  Copy,
+  Layers,
 } from 'lucide-react';
 import { getDaemonStatus, getHealth, restartDaemon, type DaemonStatus } from '@/lib/tauri';
 
@@ -65,6 +67,20 @@ export function DaemonPage() {
     }
   };
 
+  const handleCopyDiagnostics = async () => {
+    const diagnostics = JSON.stringify(
+      {
+        daemonStatus,
+        healthInfo,
+        userAgent: navigator.userAgent,
+        timestamp: new Date().toISOString(),
+      },
+      null,
+      2
+    );
+    await navigator.clipboard.writeText(diagnostics);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -73,6 +89,10 @@ export function DaemonPage() {
           <p className="text-sm text-muted-foreground">Jarvis Runtime 健康监控</p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={handleCopyDiagnostics} className="gap-1.5">
+            <Copy className="h-3.5 w-3.5" />
+            复制诊断
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -191,6 +211,14 @@ export function DaemonPage() {
               {daemonStatus?.logPath ?? '—'}
             </span>
           </div>
+          {daemonStatus?.appDataDir && (
+            <div className="flex items-center justify-between py-2 px-3 rounded-md bg-muted/50">
+              <span className="text-sm">数据目录</span>
+              <span className="text-xs font-mono truncate max-w-48" title={daemonStatus.appDataDir}>
+                {daemonStatus.appDataDir}
+              </span>
+            </div>
+          )}
         </div>
       </Card>
 
@@ -232,6 +260,36 @@ export function DaemonPage() {
           )}
         </div>
       </Card>
+
+      {/* Registered Runtimes */}
+      {daemonStatus?.registeredRuntimes && daemonStatus.registeredRuntimes.length > 0 && (
+        <Card className="p-5">
+          <div className="flex items-center gap-3 mb-4">
+            <Layers className="h-5 w-5 text-muted-foreground" />
+            <h3 className="text-sm font-medium">已注册运行时</h3>
+          </div>
+          <div className="space-y-2">
+            {daemonStatus.registeredRuntimes.map((rt) => (
+              <div
+                key={rt.kind}
+                className="flex items-center justify-between py-2 px-3 rounded-md bg-muted/50"
+              >
+                <span className="text-sm font-mono">{rt.kind}</span>
+                <StatusBadge
+                  status={
+                    rt.status === 'running'
+                      ? 'healthy'
+                      : rt.status === 'failed'
+                        ? 'error'
+                        : 'warning'
+                  }
+                  label={rt.status}
+                />
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {/* Error Info */}
       {daemonStatus?.lastError && (
