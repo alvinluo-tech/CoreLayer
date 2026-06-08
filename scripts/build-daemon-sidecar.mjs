@@ -197,6 +197,27 @@ copyBetterSqliteRuntime(sidecarNodeModules);
 copyPackageRuntime("bindings", sidecarNodeModules, ["bindings.js", "package.json", "LICENSE.md"]);
 copyPackageRuntime("file-uri-to-path", sidecarNodeModules, ["index.js", "package.json", "LICENSE"]);
 
+// ─── Step 5b: Verify native modules ──────────────────────────────────────────
+console.log(`[build-daemon] Step 5b: Verifying native modules...`);
+
+const requiredModules = ["better-sqlite3", "bindings", "file-uri-to-path"];
+for (const mod of requiredModules) {
+  const modDir = join(sidecarNodeModules, mod);
+  if (!existsSync(modDir)) {
+    console.error(`[build-daemon] ERROR: Required native module not found: ${mod}`);
+    process.exit(1);
+  }
+  console.log(`[build-daemon]   ✓ ${mod}`);
+}
+
+// Ensure drizzle-orm is NOT bundled (it's a dev dependency, not needed at runtime)
+const drizzleDir = join(sidecarNodeModules, "drizzle-orm");
+if (existsSync(drizzleDir)) {
+  console.error(`[build-daemon] WARNING: drizzle-orm found in sidecar node_modules — it should not be copied`);
+  rmSync(drizzleDir, { recursive: true, force: true });
+  console.log(`[build-daemon]   Removed drizzle-orm from sidecar`);
+}
+
 // ─── Step 6: Move to final output ─────────────────────────────────────────────
 console.log(`[build-daemon] Step 6: Moving to output...`);
 

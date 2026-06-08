@@ -19,6 +19,7 @@ import { spawnProcessLive, killProcessTree, isCommandAvailable, validateWorkdirP
 import { logAuditEntry } from "../../persistence/audit-log.js";
 import { persistArtifacts } from "./artifact-persistence.js";
 import { getRepositories } from "../../persistence/factory.js";
+import { maskObjectSecrets } from "../../shared/secret-masking.js";
 
 /** In-memory store for run tracking */
 const runs = new Map<string, CodingRunInfo>();
@@ -109,9 +110,10 @@ export class ClaudeCodeAdapter implements CodingRuntime {
 
     // Permission check: shell exec for running claude CLI
     const broker = getCapabilityBroker();
+    const maskedPrompt = maskObjectSecrets({ taskPrompt: task.taskPrompt }).taskPrompt as string;
     const decision = await broker.requestShellExec(
       "coding-runtime",
-      `claude --print "${task.taskPrompt.slice(0, 100)}..."`,
+      `claude --print "${String(maskedPrompt).slice(0, 100)}..."`,
       {
         reason: `Claude Code run for repo: ${task.repoPath}`,
       },
@@ -164,7 +166,7 @@ export class ClaudeCodeAdapter implements CodingRuntime {
       resource: runId,
       decision: "allowed",
       result: "success",
-      metadata: { adapterId: this.id, cwd, prompt: task.taskPrompt.slice(0, 100) },
+      metadata: { adapterId: this.id, cwd, prompt: String(maskedPrompt).slice(0, 100) },
     });
 
     // Spawn claude subprocess with live tracking
