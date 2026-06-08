@@ -83,12 +83,15 @@ export async function runStreamTurn(
     content: request.input,
   });
 
-  // Build message history for streamChat
+  // Build message history for streamChat (filter out non-user/assistant messages for type safety)
   const history = await conversations.getMessages(conversationId);
-  const messages: ModelMessage[] = history.slice(-20).map((msg) => ({
-    role: msg.role as "user" | "assistant",
-    content: msg.content,
-  }));
+  const messages: ModelMessage[] = history
+    .filter((msg) => msg.role === "user" || msg.role === "assistant")
+    .slice(-20)
+    .map((msg) => ({
+      role: msg.role as "user" | "assistant",
+      content: msg.content,
+    }));
 
   // Create AgentRun
   const run = await agentRuns.create({
