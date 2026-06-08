@@ -47,7 +47,7 @@ approvalRoutes.get("/:id", async (c) => {
  */
 approvalRoutes.post("/:id/approve", async (c) => {
   try {
-    const { approvalRequests, toolCallLogs, conversations } = getRepositories();
+    const { approvalRequests } = getRepositories();
     const id = c.req.param("id");
     const existing = await approvalRequests.getById(id);
     if (!existing) {
@@ -73,50 +73,8 @@ approvalRoutes.post("/:id/approve", async (c) => {
       metadata: { toolId: existing.toolId, toolName: existing.toolName, approvalId: id },
     });
 
-    // Enqueue async resume: execute tool, append result, re-trigger LLM
-    const resumePromise = executeApprovedTool(id).then(async (resumeResult) => {
-      try {
-        // Add tool result message to conversation
-        if (existing.runId) {
-          const { agentRuns } = getRepositories();
-          const run = await agentRuns.getById(existing.runId);
-          if (run?.conversationId) {
-            await conversations.addMessage(run.conversationId, {
-              role: "tool",
-              content: JSON.stringify(resumeResult.toolResult),
-              toolCallId: existing.toolCallId ?? undefined,
-            });
-
-            // Re-trigger LLM to continue the conversation
-            await handleMessageInConversation(
-              run.conversationId,
-              "[System: Tool execution completed. Continue with the conversation.]",
-              {
-                runtimeContext: {
-                  runId: existing.runId,
-                  projectId: run.projectId ?? undefined,
-                  mode: run.mode,
-                },
-              },
-            );
-          }
-        }
-
-        await toolCallLogs.create({
-          toolId: existing.toolId,
-          toolName: existing.toolName,
-          source: (existing.source as "mcp" | "native" | "skill" | "rest") ?? "rest",
-          args: existing.args,
-          resultSuccess: resumeResult.toolResult.success,
-          resultData: resumeResult.toolResult.data,
-          resultError: resumeResult.toolResult.success ? undefined : String(resumeResult.toolResult.error),
-          risk: existing.risk,
-          confirmedByUser: true,
-        });
-      } catch (err) {
-        logError("approvals/approve/resume", err);
-      }
-    });
+    // Enqueue async resume: execute tool, append result, and conditionally re-trigger LLM
+    const resumePromise = resumeAndSaveToolResult(id, true);
 
     // Don't await — return 202 immediately
     resumePromise.catch((err) => logError("approvals/approve/resume-fatal", err));
@@ -127,6 +85,66 @@ approvalRoutes.post("/:id/approve", async (c) => {
     return apiError(c, extractErrorMessage(err), 500);
   }
 });
+
+/**
+ * Reusable helper to execute an approved tool, save the result to database messages,
+ * log the audit entry, and optionally re-trigger the LLM to resume conversation.
+ */
+async function resumeAndSaveToolResult(id: string, triggerLLM: boolean): Promise<void> {
+  const { approvalRequests, toolCallLogs, conversations } = getRepositories();
+  const existing = await approvalRequests.getById(id);
+  if (!existing) return;
+
+  const resumeResult = await executeApprovedTool(id);
+
+  if (existing.runId) {
+    const { agentRuns } = getRepositories();
+    const run = await agentRuns.getById(existing.runId);
+    if (run?.conversationId) {
+      await conversations.addMessage(run.conversationId, {
+        role: "tool",
+        content: JSON.stringify(resumeResult.toolResult),
+        toolCallId: existing.toolCallId ?? undefined,
+      });
+
+      if (triggerLLM) {
+        // Verify if there are other pending approvals for this run before resuming
+        const allApprovals = await approvalRequests.getByRunId(existing.runId);
+        const pendingApprovals = allApprovals.filter(
+          (app) => app.status === "pending" && app.id !== id
+        );
+
+        if (pendingApprovals.length === 0) {
+          await handleMessageInConversation(
+            run.conversationId,
+            "[System: Tool execution completed. Continue with the conversation.]",
+            {
+              runtimeContext: {
+                runId: existing.runId,
+                projectId: run.projectId ?? undefined,
+                mode: run.mode,
+              },
+            },
+          );
+        } else {
+          console.info(`[Approvals] Skipping LLM re-trigger: ${pendingApprovals.length} pending approvals remaining for run ${existing.runId}`);
+        }
+      }
+    }
+  }
+
+  await toolCallLogs.create({
+    toolId: existing.toolId,
+    toolName: existing.toolName,
+    source: (existing.source as "mcp" | "native" | "skill" | "rest") ?? "rest",
+    args: existing.args,
+    resultSuccess: resumeResult.toolResult.success,
+    resultData: resumeResult.toolResult.data,
+    resultError: resumeResult.toolResult.success ? undefined : String(resumeResult.toolResult.error),
+    risk: existing.risk,
+    confirmedByUser: true,
+  });
+}
 
 /**
  * POST /api/approvals/:id/deny - Deny a pending request
@@ -229,6 +247,140 @@ approvalRoutes.post("/:id/remember", async (c) => {
     return c.json({ success: true });
   } catch (err) {
     logError("approvals/remember", err);
+    return apiError(c, extractErrorMessage(err), 500);
+  }
+});
+
+/**
+ * POST /api/approvals/batch/approve - Approve multiple requests at once
+ *
+ * Executes all specified tools concurrently and re-triggers the LLM
+ * only once after all executions complete, preventing duplicate replies.
+ */
+approvalRoutes.post("/batch/approve", async (c) => {
+  try {
+    const { approvalRequests, agentRuns, auditLog } = getRepositories();
+    const body = await c.req.json<{ ids: string[] }>();
+    const ids = body.ids ?? [];
+
+    if (ids.length === 0) {
+      return c.json({ data: [] });
+    }
+
+    const firstApproval = await approvalRequests.getById(ids[0]);
+    const runId = firstApproval?.runId;
+
+    const updatedList = [];
+    for (const id of ids) {
+      const existing = await approvalRequests.getById(id);
+      if (existing && existing.status === "pending") {
+        toolRuntime.getPermissionGuard().resolvePendingConfirmation(id, true);
+        const updated = await approvalRequests.approve(id);
+        updatedList.push(updated);
+
+        // Audit log: approved decision
+        await auditLog.create({
+          actor: "user",
+          action: "approval.decision",
+          resource: `tool:${existing.toolName}`,
+          riskLevel: existing.risk,
+          permissionDecision: "approve",
+          confirmedByUser: true,
+          result: "approved",
+          metadata: { toolId: existing.toolId, toolName: existing.toolName, approvalId: id },
+        });
+      }
+    }
+
+    // Execute approved tools in parallel, wait for all to finish, and trigger LLM exactly once
+    const batchResumePromise = (async () => {
+      await Promise.all(ids.map((id) => resumeAndSaveToolResult(id, false)));
+
+      if (runId) {
+        const run = await agentRuns.getById(runId);
+        if (run?.conversationId) {
+          await handleMessageInConversation(
+            run.conversationId,
+            "[System: Batch tool execution completed. Continue with the conversation.]",
+            {
+              runtimeContext: {
+                runId: run.id,
+                projectId: run.projectId ?? undefined,
+                mode: run.mode,
+              },
+            },
+          );
+        }
+      }
+    })();
+
+    // Don't wait for execution to finish - return 202 Accepted
+    batchResumePromise.catch((err) => logError("approvals/batch/approve/resume-fatal", err));
+
+    return c.json({ data: updatedList }, 202);
+  } catch (err) {
+    logError("approvals/batch/approve", err);
+    return apiError(c, extractErrorMessage(err), 500);
+  }
+});
+
+/**
+ * POST /api/approvals/batch/deny - Deny multiple requests at once
+ */
+approvalRoutes.post("/batch/deny", async (c) => {
+  try {
+    const { approvalRequests, toolCallLogs, agentRuns, auditLog } = getRepositories();
+    const body = await c.req.json<{ ids: string[] }>();
+    const ids = body.ids ?? [];
+    const updatedList = [];
+
+    let runIdToFail: string | null = null;
+
+    for (const id of ids) {
+      const existing = await approvalRequests.getById(id);
+      if (existing && existing.status === "pending") {
+        toolRuntime.getPermissionGuard().resolvePendingConfirmation(id, false);
+        const updated = await approvalRequests.deny(id);
+        updatedList.push(updated);
+
+        if (existing.runId) {
+          runIdToFail = existing.runId;
+        }
+
+        // Audit log: denied decision
+        await auditLog.create({
+          actor: "user",
+          action: "approval.decision",
+          resource: `tool:${existing.toolName}`,
+          riskLevel: existing.risk,
+          permissionDecision: "deny",
+          confirmedByUser: false,
+          result: "denied",
+          metadata: { toolId: existing.toolId, toolName: existing.toolName, approvalId: id },
+        });
+
+        // Tool call log entry
+        await toolCallLogs.create({
+          toolId: existing.toolId,
+          toolName: existing.toolName,
+          source: (existing.source as "mcp" | "native" | "skill" | "rest") ?? "rest",
+          args: existing.args,
+          resultSuccess: false,
+          resultError: "User denied approval",
+          risk: existing.risk,
+          confirmedByUser: false,
+        });
+      }
+    }
+
+    // Mark the run as failed if any of the approvals in the batch were denied
+    if (runIdToFail) {
+      await agentRuns.updateStatus(runIdToFail, "failed", "User denied tool approval");
+    }
+
+    return c.json({ data: updatedList });
+  } catch (err) {
+    logError("approvals/batch/deny", err);
     return apiError(c, extractErrorMessage(err), 500);
   }
 });
