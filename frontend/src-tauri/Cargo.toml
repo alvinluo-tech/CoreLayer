@@ -1,6 +1,6 @@
 [package]
 name = "jarvis-app"
-version = "0.3.0"
+version = "0.3.1"
 description = "Jarvis - Personal AI Command Center"
 authors = ["Jarvis Team"]
 license = "MIT"
