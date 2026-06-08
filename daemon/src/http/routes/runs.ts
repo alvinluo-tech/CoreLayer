@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { getRepositories } from "../../persistence/factory.js";
 import { apiError, extractErrorMessage, logError } from "../../shared/errors.js";
+import { cancelRun, retryRun } from "../../workflow/run-dispatcher.js";
 
 const runsRoutes = new Hono();
 
@@ -49,6 +50,40 @@ runsRoutes.get("/:id/events", async (c) => {
     return c.json({ data: events });
   } catch (err) {
     logError("runs/events", err);
+    return apiError(c, extractErrorMessage(err), 500);
+  }
+});
+
+/**
+ * POST /api/runs/:id/cancel - Cancel a running or queued run
+ */
+runsRoutes.post("/:id/cancel", async (c) => {
+  try {
+    const id = c.req.param("id");
+    const success = await cancelRun(id);
+    if (!success) {
+      return apiError(c, "Run not found or already completed", 400);
+    }
+    return c.json({ data: { cancelled: true } });
+  } catch (err) {
+    logError("runs/cancel", err);
+    return apiError(c, extractErrorMessage(err), 500);
+  }
+});
+
+/**
+ * POST /api/runs/:id/retry - Retry a failed run
+ */
+runsRoutes.post("/:id/retry", async (c) => {
+  try {
+    const id = c.req.param("id");
+    const success = await retryRun(id);
+    if (!success) {
+      return apiError(c, "Run not found or not in failed state", 400);
+    }
+    return c.json({ data: { retried: true } });
+  } catch (err) {
+    logError("runs/retry", err);
     return apiError(c, extractErrorMessage(err), 500);
   }
 });

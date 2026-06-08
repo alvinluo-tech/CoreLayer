@@ -13,6 +13,7 @@ import approvalRoutes from "../http/routes/approval.js";
 import workspaceRoutes from "../http/routes/workspaces.js";
 import projectRoutes from "../http/routes/projects.js";
 import runsRoutes from "../http/routes/runs.js";
+import queueRoutes from "../http/routes/queue.js";
 import memoryRoutes from "../http/routes/memories.js";
 import agentProfileRoutes from "../http/routes/agent-profiles.js";
 import eventRoutes from "../http/routes/events.js";
@@ -34,6 +35,7 @@ export function registerRoutes(app: Hono): void {
   app.route("/api/workspaces", workspaceRoutes);
   app.route("/api/projects", projectRoutes);
   app.route("/api/runs", runsRoutes);
+  app.route("/api/runtime/queue", queueRoutes);
   app.route("/api/memories", memoryRoutes);
   app.route("/api/agent-profiles", agentProfileRoutes);
   app.route("/api/events", eventRoutes);

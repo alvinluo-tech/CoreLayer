@@ -196,7 +196,7 @@ Based on: `2026-06-08-agent-os-product-closure-execution-brief.md`
 
 ### 3.2 Queue Service
 
-- [ ] Create `daemon/src/workflow/queue-service.ts`:
+- [x] Create `daemon/src/workflow/queue-service.ts`:
   - `enqueue(taskId, agentProfileId, payload)` → returns queue entry
   - `dequeue()` → returns next executable entry
   - `getQueue()` → returns all queued entries
@@ -207,7 +207,7 @@ Based on: `2026-06-08-agent-os-product-closure-execution-brief.md`
 
 ### 3.3 Slot Manager
 
-- [ ] Create `daemon/src/workflow/slot-manager.ts`:
+- [x] Create `daemon/src/workflow/slot-manager.ts`:
   - Configurable `maxConcurrentAgentRuns` (default 3)
   - Configurable `maxConcurrentExternalExecutors` (default 1)
   - `canStart()` → boolean
@@ -218,7 +218,7 @@ Based on: `2026-06-08-agent-os-product-closure-execution-brief.md`
 
 ### 3.4 Resource Monitor
 
-- [ ] Create `daemon/src/workflow/resource-monitor.ts`:
+- [x] Create `daemon/src/workflow/resource-monitor.ts`:
   - `getResourceStatus()` → { memoryPercent, freeMemoryMb, diskFreeGb, cpuUsagePercent, externalProcessCount }
   - Use `os.totalmem()`, `os.freemem()`, `os.platform()` for cross-platform
   - For CPU: sample `os.cpus()` times or use a lightweight library
@@ -228,7 +228,7 @@ Based on: `2026-06-08-agent-os-product-closure-execution-brief.md`
 
 ### 3.5 Run Dispatcher
 
-- [ ] Create `daemon/src/workflow/run-dispatcher.ts`:
+- [x] Create `daemon/src/workflow/run-dispatcher.ts`:
   - On tick/trigger:
     1. Check if slots available
     2. Check if resources acceptable
@@ -244,15 +244,15 @@ Based on: `2026-06-08-agent-os-product-closure-execution-brief.md`
 
 ### 3.6 API Endpoints
 
-- [ ] Expand `daemon/src/http/routes/runs.ts`:
-  - [ ] `POST /api/runs/:id/cancel` — cancel a running/queued run
-  - [ ] `POST /api/runs/:id/retry` — retry a failed run
+- [x] Expand `daemon/src/http/routes/runs.ts`:
+  - [x] `POST /api/runs/:id/cancel` — cancel a running/queued run
+  - [x] `POST /api/runs/:id/retry` — retry a failed run
 - [ ] Expand `daemon/src/http/routes/tasks.ts`:
   - [ ] `POST /api/tasks/:id/start` — enqueue task for execution
   - [ ] `POST /api/tasks/:id/cancel` — cancel task's active run
-- [ ] Add new route `daemon/src/http/routes/queue.ts`:
-  - [ ] `GET /api/runtime/queue` — list queued items
-  - [ ] `GET /api/runtime/resources` — current resource usage
+- [x] Add new route `daemon/src/http/routes/queue.ts`:
+  - [x] `GET /api/runtime/queue` — list queued items
+  - [x] `GET /api/runtime/resources` — current resource usage
 
 ### 3.7 Frontend: RunsView and TasksView Upgrade
 
@@ -287,7 +287,7 @@ Based on: `2026-06-08-agent-os-product-closure-execution-brief.md`
 
 ### Phase 3 Commit
 
-- [ ] `git commit -m "feat(queue): durable execution queue, slot manager, resource monitor, run lifecycle"`
+- [x] `git commit -m "feat(queue): durable execution queue, slot manager, resource monitor, run lifecycle"`
 
 ---
 
