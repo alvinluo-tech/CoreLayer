@@ -21,5 +21,8 @@ export function createSupabaseAgentRunRepo(): AgentRunRepository {
     async updateStatus(_id: string, _status: AgentRunRow["status"], _error?: string): Promise<void> {
       throw new Error("Supabase AgentRunRepository not implemented — use SQLite mode");
     },
+    async updateArtifacts(_id: string, _artifacts: unknown[]): Promise<void> {
+      throw new Error("Supabase AgentRunRepository not implemented — use SQLite mode");
+    },
   };
 }

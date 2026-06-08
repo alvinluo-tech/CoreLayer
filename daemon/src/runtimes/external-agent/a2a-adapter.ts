@@ -160,7 +160,7 @@ export class A2AAdapter implements ExternalAgentAdapter {
   async *streamTaskEvents(_taskId: string): AsyncIterable<TaskEvent> {
     // Skeleton: streaming not implemented yet
     // Future: SSE or WebSocket connection to agent endpoint
-    return;
+    yield* [];
   }
 }
 

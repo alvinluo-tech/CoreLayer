@@ -15,7 +15,10 @@ import type {
   CodingArtifact,
 } from "./types.js";
 import { getCapabilityBroker } from "../../capabilities/os-capability-broker.js";
-import { spawnProcessLive, killProcessTree, isCommandAvailable } from "./process-spawner.js";
+import { spawnProcessLive, killProcessTree, isCommandAvailable, validateWorkdirPolicy } from "./process-spawner.js";
+import { logAuditEntry } from "../../persistence/audit-log.js";
+import { persistArtifacts } from "./artifact-persistence.js";
+import { getRepositories } from "../../persistence/factory.js";
 
 /** In-memory store for run tracking */
 const runs = new Map<string, CodingRunInfo>();
@@ -62,11 +65,8 @@ export class CodexAdapter implements CodingRuntime {
       return info;
     }
 
-    // Validate working directory
-    const cwd = task.worktreePath ?? task.repoPath;
-    try {
-      execFileSync("ls", [cwd], { stdio: "ignore", timeout: 2_000 });
-    } catch {
+    // Require repoPath to be set
+    if (!task.repoPath) {
       const info: CodingRunInfo = {
         runId,
         adapterId: this.id,
@@ -74,10 +74,36 @@ export class CodexAdapter implements CodingRuntime {
         task,
         startedAt: now,
         completedAt: now,
-        artifacts: [{ type: "error", content: `Working directory does not exist: ${cwd}` }],
-        error: `Working directory does not exist: ${cwd}`,
+        artifacts: [{ type: "error", content: "repoPath is required but was not provided" }],
+        error: "repoPath is required but was not provided",
       };
       runs.set(runId, info);
+      return info;
+    }
+
+    // Validate working directory against worktree policy
+    const cwd = task.worktreePath ?? task.repoPath;
+    const workdirPolicy = validateWorkdirPolicy(cwd);
+    if (!workdirPolicy.allowed) {
+      const info: CodingRunInfo = {
+        runId,
+        adapterId: this.id,
+        status: "failed",
+        task,
+        startedAt: now,
+        completedAt: now,
+        artifacts: [{ type: "error", content: workdirPolicy.reason! }],
+        error: workdirPolicy.reason,
+      };
+      runs.set(runId, info);
+      await logAuditEntry({
+        actor: "system",
+        action: "run.start",
+        resource: runId,
+        decision: "denied",
+        result: workdirPolicy.reason,
+        metadata: { adapterId: this.id, cwd },
+      });
       return info;
     }
 
@@ -131,6 +157,16 @@ export class CodexAdapter implements CodingRuntime {
     };
     runs.set(runId, info);
 
+    // Log successful run start
+    await logAuditEntry({
+      actor: "user",
+      action: "run.start",
+      resource: runId,
+      decision: "allowed",
+      result: "success",
+      metadata: { adapterId: this.id, cwd, prompt: task.taskPrompt.slice(0, 100) },
+    });
+
     // Spawn codex subprocess with live tracking
     this.spawnCodex(runId, task);
 
@@ -182,6 +218,14 @@ export class CodexAdapter implements CodingRuntime {
 
       // Collect changed files artifact via git diff
       this.collectChangedFiles(info, task);
+
+      // Persist artifacts to disk and DB
+      persistArtifacts(runId, info.artifacts);
+      const { agentRuns } = getRepositories();
+      agentRuns.updateArtifacts(runId, info.artifacts).catch(() => {
+        // DB persistence is best-effort
+      });
+
       emitEvent(runId, "process_exited", { exitCode: code });
       emitEvent(runId, "status_change", { status: info.status });
     });
@@ -195,6 +239,16 @@ export class CodexAdapter implements CodingRuntime {
       info.error = err.message;
       info.completedAt = new Date().toISOString();
       info.artifacts.push({ type: "error", content: info.error });
+
+      // Persist artifacts to disk and DB
+      persistArtifacts(runId, info.artifacts);
+      try {
+        const { agentRuns } = getRepositories();
+        agentRuns.updateArtifacts(runId, info.artifacts);
+      } catch {
+        // DB persistence is best-effort
+      }
+
       emitEvent(runId, "process_exited", { exitCode: -1, error: err.message });
     });
   }
@@ -304,6 +358,16 @@ export class CodexAdapter implements CodingRuntime {
     info.completedAt = new Date().toISOString();
     info.durationMs = Date.now() - new Date(info.startedAt).getTime();
     emitEvent(runId, "run_cancelled", {});
+
+    await logAuditEntry({
+      actor: "user",
+      action: "run.cancel",
+      resource: runId,
+      decision: "allowed",
+      result: "success",
+      metadata: { adapterId: this.id },
+    });
+
     return true;
   }
 

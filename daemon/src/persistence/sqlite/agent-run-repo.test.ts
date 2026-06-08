@@ -13,7 +13,7 @@ function createTestDb() {
       conversation_id TEXT,
       user_message_id TEXT,
       assistant_message_id TEXT,
-      status TEXT NOT NULL DEFAULT 'running' CHECK(status IN ('running', 'succeeded', 'failed', 'cancelled', 'waiting_for_approval')),
+      status TEXT NOT NULL DEFAULT 'queued' CHECK(status IN ('queued', 'running', 'succeeded', 'failed', 'cancelled', 'waiting_for_approval')),
       selected_model TEXT,
       route_reason TEXT,
       tool_call_count INTEGER DEFAULT 0,
@@ -63,7 +63,7 @@ describe("AgentRun Repository", () => {
       expect(run.assistantMessageId).toBe("msg-2");
       expect(run.selectedModel).toBe("mimo-v2.5-pro");
       expect(run.routeReason).toBe("complex task");
-      expect(run.status).toBe("running");
+      expect(run.status).toBe("queued");
       expect(run.startedAt).toBeDefined();
     });
 
@@ -75,7 +75,7 @@ describe("AgentRun Repository", () => {
       expect(run.assistantMessageId).toBeNull();
       expect(run.selectedModel).toBeNull();
       expect(run.routeReason).toBeNull();
-      expect(run.status).toBe("running");
+      expect(run.status).toBe("queued");
       expect(run.completedAt).toBeNull();
       expect(run.durationMs).toBeNull();
       expect(run.error).toBeNull();

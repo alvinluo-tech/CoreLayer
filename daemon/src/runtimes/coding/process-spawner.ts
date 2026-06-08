@@ -6,8 +6,8 @@
  */
 
 import { spawn, execFileSync, type ChildProcess } from "child_process";
-import { mkdirSync, appendFileSync } from "fs";
-import { join } from "path";
+import { mkdirSync, appendFileSync, existsSync, statSync } from "fs";
+import { join, resolve } from "path";
 
 export interface SpawnOptions {
   command: string;
@@ -35,6 +35,59 @@ export interface SpawnResult {
 }
 
 const activeProcesses = new Map<number, ChildProcess>();
+
+export interface WorkdirPolicyResult {
+  allowed: boolean;
+  reason?: string;
+}
+
+/** System directories that should never be used as working directories. */
+const BLOCKED_PREFIXES = [
+  "/bin",
+  "/sbin",
+  "/usr",
+  "/lib",
+  "/etc",
+  "/var",
+  "/sys",
+  "/proc",
+  "/dev",
+  "/boot",
+  "C:\\Windows",
+  "C:\\Program Files",
+  "C:\\Program Files (x86)",
+];
+
+/**
+ * Validate a working directory against the worktree policy.
+ *
+ * Checks:
+ * 1. Directory exists
+ * 2. Is a directory (not a file)
+ * 3. Not within blocked system directories
+ */
+export function validateWorkdirPolicy(cwd: string): WorkdirPolicyResult {
+  const resolved = resolve(cwd);
+
+  if (!existsSync(resolved)) {
+    return { allowed: false, reason: `Directory does not exist: ${resolved}` };
+  }
+
+  if (!statSync(resolved).isDirectory()) {
+    return { allowed: false, reason: `Path is not a directory: ${resolved}` };
+  }
+
+  for (const prefix of BLOCKED_PREFIXES) {
+    if (resolved.toLowerCase().startsWith(prefix.toLowerCase())) {
+      return {
+        allowed: false,
+        reason: `Working directory is within a blocked system path: ${prefix}`,
+      };
+    }
+  }
+
+  return { allowed: true };
+}
 
 /**
  * Check if a command is available on the system PATH.

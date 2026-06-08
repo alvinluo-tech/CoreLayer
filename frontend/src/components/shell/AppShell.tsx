@@ -636,7 +636,7 @@ export function AppShell() {
             runningRunCount={activeRunCount}
           />
         }
-        contextPane={<ContextPane />}
+        contextPane={activeView === 'assistant' ? <ContextPane /> : undefined}
         mainSurface={renderMainContent()}
         inspector={<InspectorPane />}
       />

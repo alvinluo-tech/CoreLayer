@@ -143,7 +143,7 @@ export class LocalCLIAdapter implements ExternalAgentAdapter {
 
   async *streamTaskEvents(_taskId: string): AsyncIterable<TaskEvent> {
     // Skeleton: event streaming handled by coding-runtime
-    return;
+    yield* [];
   }
 
   /** Check if a command is available on the system PATH */

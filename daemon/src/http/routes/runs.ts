@@ -55,6 +55,24 @@ runsRoutes.get("/:id/events", async (c) => {
 });
 
 /**
+ * GET /api/runs/:id/artifacts - Get artifacts for a specific run
+ */
+runsRoutes.get("/:id/artifacts", async (c) => {
+  try {
+    const { agentRuns } = getRepositories();
+    const id = c.req.param("id");
+    const run = await agentRuns.getById(id);
+    if (!run) {
+      return apiError(c, "Run not found", 404);
+    }
+    return c.json({ data: run.artifacts ?? [] });
+  } catch (err) {
+    logError("runs/artifacts", err);
+    return apiError(c, extractErrorMessage(err), 500);
+  }
+});
+
+/**
  * POST /api/runs/:id/cancel - Cancel a running or queued run
  */
 runsRoutes.post("/:id/cancel", async (c) => {

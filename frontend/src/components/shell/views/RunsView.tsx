@@ -15,12 +15,16 @@ import {
   Wrench,
   Brain,
   ShieldCheck,
+  FileText,
+  FileCheck,
+  FolderOpen,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   useRunStore,
   type AgentRun,
   type AgentRunEvent,
+  type CodingArtifact,
   type RunStatus,
   type RunMode,
 } from '@/stores/runStore';
@@ -93,6 +97,24 @@ const eventTypeIcons: Record<string, React.ReactNode> = {
   task_blocked: <AlertTriangle size={12} />,
   run_completed: <CheckCircle2 size={12} />,
   run_failed: <XCircle size={12} />,
+};
+
+const artifactTypeIcons: Record<string, React.ReactNode> = {
+  diff_summary: <GitBranch size={12} />,
+  changed_files: <GitBranch size={12} />,
+  test_report: <FileCheck size={12} />,
+  final_summary: <FileText size={12} />,
+  log_path: <FolderOpen size={12} />,
+  error: <XCircle size={12} />,
+};
+
+const artifactTypeLabels: Record<string, string> = {
+  diff_summary: 'Diff Summary',
+  changed_files: 'Changed Files',
+  test_report: 'Test Report',
+  final_summary: 'Summary',
+  log_path: 'Log Path',
+  error: 'Error',
 };
 
 function Play({ size }: { size: number }) {
@@ -313,7 +335,15 @@ function RunRow({ run, isSelected }: { run: AgentRun; isSelected: boolean }) {
 
 // ---- Run Detail / Timeline ----
 
-function RunDetail({ run, events }: { run: AgentRun; events: AgentRunEvent[] }) {
+function RunDetail({
+  run,
+  events,
+  artifacts,
+}: {
+  run: AgentRun;
+  events: AgentRunEvent[];
+  artifacts: CodingArtifact[];
+}) {
   return (
     <div className="flex-1 overflow-y-auto p-4 space-y-4">
       {/* Header */}
@@ -465,6 +495,55 @@ function RunDetail({ run, events }: { run: AgentRun; events: AgentRunEvent[] }) 
           </div>
         </div>
       ) : null}
+
+      {/* Artifacts */}
+      {artifacts.length > 0 && (
+        <div>
+          <SectionHeader>Artifacts ({artifacts.length})</SectionHeader>
+          <div className="space-y-1 mt-1">
+            {artifacts.map((artifact, i) => {
+              const icon = artifactTypeIcons[artifact.type] ?? <FileText size={12} />;
+              const label = artifactTypeLabels[artifact.type] ?? artifact.type;
+              return (
+                <div
+                  key={i}
+                  className="flex items-start gap-2 px-2 py-1.5"
+                  style={{
+                    background: 'rgba(255,255,255,0.02)',
+                    borderRadius: 4,
+                    fontFamily: 'var(--font-data)',
+                    fontSize: 11,
+                  }}
+                >
+                  <span
+                    style={{
+                      color: artifact.type === 'error' ? 'var(--red)' : 'var(--text-tertiary)',
+                      marginTop: 1,
+                    }}
+                  >
+                    {icon}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <div style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>{label}</div>
+                    <pre
+                      className="mt-0.5 whitespace-pre-wrap break-words"
+                      style={{
+                        color: artifact.type === 'error' ? 'var(--red)' : 'var(--text-tertiary)',
+                        fontSize: 10,
+                        lineHeight: 1.4,
+                        maxHeight: 120,
+                        overflow: 'auto',
+                      }}
+                    >
+                      {artifact.content}
+                    </pre>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Timeline */}
       {events.length > 0 && (
@@ -634,9 +713,11 @@ export function RunsView() {
     runs,
     selectedRunId,
     events,
+    artifacts,
     filters,
     isLoading,
     isLoadingEvents,
+    isLoadingArtifacts,
     error,
     fetchRuns,
     selectRun,
@@ -740,7 +821,7 @@ export function RunsView() {
       {/* Right: Detail / Timeline */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {selectedRun ? (
-          <RunDetail run={selectedRun} events={events} />
+          <RunDetail run={selectedRun} events={events} artifacts={artifacts} />
         ) : (
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center space-y-2">
@@ -759,7 +840,7 @@ export function RunsView() {
         )}
 
         {/* Loading events indicator */}
-        {isLoadingEvents && (
+        {(isLoadingEvents || isLoadingArtifacts) && (
           <div
             className="flex items-center gap-2 px-4 py-2"
             style={{ borderTop: '1px solid var(--glass-border)' }}
@@ -772,7 +853,7 @@ export function RunsView() {
                 color: 'var(--text-tertiary)',
               }}
             >
-              Loading events...
+              Loading run details...
             </span>
           </div>
         )}

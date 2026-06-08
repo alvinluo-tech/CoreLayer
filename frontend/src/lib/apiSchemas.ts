@@ -91,6 +91,18 @@ export const runEventsResponseSchema = z.object({
   data: z.array(agentRunEventSchema),
 });
 
+// ---- Coding Artifact ----
+
+export const codingArtifactSchema = z.object({
+  type: z.string(),
+  content: z.string(),
+  metadata: z.record(z.unknown()).optional(),
+});
+
+export const runArtifactsResponseSchema = z.object({
+  data: z.array(codingArtifactSchema),
+});
+
 // ---- Memory ----
 
 export const memoryScopeTypeSchema = z.enum([
@@ -178,6 +190,7 @@ export type RunStatus = z.infer<typeof runStatusSchema>;
 export type RunMode = z.infer<typeof runModeSchema>;
 export type AgentRun = z.infer<typeof agentRunSchema>;
 export type AgentRunEvent = z.infer<typeof agentRunEventSchema>;
+export type CodingArtifact = z.infer<typeof codingArtifactSchema>;
 
 export type MemoryScopeType = z.infer<typeof memoryScopeTypeSchema>;
 export type MemoryType = z.infer<typeof memoryTypeSchema>;

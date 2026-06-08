@@ -1,0 +1,185 @@
+/**
+ * Unit tests for the queue service.
+ *
+ * Tests enqueue, dequeue, and getQueueStatus against a mocked persistence layer.
+ */
+
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+// Mock the persistence factory before importing the module under test
+const mockCreate = vi.fn();
+const mockGetRecent = vi.fn();
+const mockGetById = vi.fn();
+const mockUpdateStatus = vi.fn();
+
+vi.mock("../../persistence/factory.js", () => ({
+  getRepositories: () => ({
+    agentRuns: {
+      create: mockCreate,
+      getRecent: mockGetRecent,
+      getById: mockGetById,
+      updateStatus: mockUpdateStatus,
+    },
+  }),
+}));
+
+import { enqueue, dequeue, getQueueStatus } from "../queue-service.js";
+import type { AgentRunRow } from "../../persistence/repository.js";
+
+function makeRun(overrides: Partial<AgentRunRow> = {}): AgentRunRow {
+  return {
+    id: "run-001",
+    conversationId: null,
+    workspaceId: null,
+    projectId: null,
+    taskId: "task-001",
+    agentId: "agent-001",
+    userMessageId: null,
+    assistantMessageId: null,
+    status: "queued",
+    mode: "chat",
+    selectedModel: null,
+    routeReason: null,
+    selectedTools: null,
+    memoryReads: null,
+    memoryWrites: null,
+    toolCalls: null,
+    toolCallCount: null,
+    artifacts: null,
+    approvals: null,
+    startedAt: "2026-01-01T00:00:00Z",
+    completedAt: null,
+    durationMs: null,
+    error: null,
+    ...overrides,
+  };
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+
+// ---- enqueue ----
+
+describe("enqueue", () => {
+  it("creates a queued run and returns a QueueEntry", async () => {
+    const run = makeRun();
+    mockCreate.mockResolvedValue(run);
+
+    const entry = await enqueue({
+      taskId: "task-001",
+      agentId: "agent-001",
+      mode: "chat",
+    });
+
+    expect(mockCreate).toHaveBeenCalledWith({
+      taskId: "task-001",
+      agentId: "agent-001",
+      conversationId: undefined,
+      mode: "chat",
+      selectedModel: undefined,
+    });
+    expect(entry.runId).toBe("run-001");
+    expect(entry.taskId).toBe("task-001");
+    expect(entry.agentId).toBe("agent-001");
+    expect(entry.priority).toBe(0);
+    expect(entry.enqueuedAt).toBe("2026-01-01T00:00:00Z");
+  });
+
+  it("defaults mode to chat when not provided", async () => {
+    const run = makeRun({ mode: "chat" });
+    mockCreate.mockResolvedValue(run);
+
+    await enqueue({ taskId: "task-001" });
+
+    expect(mockCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ mode: "chat" }),
+    );
+  });
+});
+
+// ---- dequeue ----
+
+describe("dequeue", () => {
+  it("returns the next queued run", async () => {
+    const queued = makeRun({ id: "run-queued", status: "queued", completedAt: null });
+    const running = makeRun({ id: "run-running", status: "running", completedAt: null });
+    mockGetRecent.mockResolvedValue([running, queued]);
+
+    const result = await dequeue();
+
+    expect(result).toBeDefined();
+    expect(result!.id).toBe("run-queued");
+  });
+
+  it("returns null when queue is empty", async () => {
+    mockGetRecent.mockResolvedValue([]);
+
+    const result = await dequeue();
+
+    expect(result).toBeNull();
+  });
+
+  it("skips completed runs", async () => {
+    const completed = makeRun({ id: "run-done", status: "succeeded", completedAt: "2026-01-01T00:01:00Z" });
+    mockGetRecent.mockResolvedValue([completed]);
+
+    const result = await dequeue();
+
+    expect(result).toBeNull();
+  });
+
+  it("skips cancelled runs", async () => {
+    const cancelled = makeRun({ id: "run-cancel", status: "cancelled", completedAt: null });
+    mockGetRecent.mockResolvedValue([cancelled]);
+
+    const result = await dequeue();
+
+    expect(result).toBeNull();
+  });
+});
+
+// ---- getQueueStatus ----
+
+describe("getQueueStatus", () => {
+  it("returns correct counts for mixed statuses", async () => {
+    mockGetRecent.mockResolvedValue([
+      makeRun({ id: "q1", status: "queued", completedAt: null }),
+      makeRun({ id: "q2", status: "queued", completedAt: null }),
+      makeRun({ id: "r1", status: "running", completedAt: null }),
+      makeRun({ id: "s1", status: "succeeded", completedAt: "2026-01-01T00:01:00Z" }),
+      makeRun({ id: "f1", status: "failed", completedAt: "2026-01-01T00:01:00Z" }),
+    ]);
+
+    const status = await getQueueStatus();
+
+    expect(status.total).toBe(5);
+    expect(status.queued).toBe(2);
+    expect(status.running).toBe(1);
+    expect(status.completed).toBe(1);
+    expect(status.failed).toBe(1);
+  });
+
+  it("returns all zeros for empty queue", async () => {
+    mockGetRecent.mockResolvedValue([]);
+
+    const status = await getQueueStatus();
+
+    expect(status.total).toBe(0);
+    expect(status.queued).toBe(0);
+    expect(status.running).toBe(0);
+    expect(status.completed).toBe(0);
+    expect(status.failed).toBe(0);
+  });
+
+  it("does not count completed runs as queued", async () => {
+    mockGetRecent.mockResolvedValue([
+      makeRun({ id: "q1", status: "queued", completedAt: null }),
+      makeRun({ id: "q2", status: "queued", completedAt: "2026-01-01T00:01:00Z" }),
+    ]);
+
+    const status = await getQueueStatus();
+
+    expect(status.queued).toBe(1);
+  });
+});

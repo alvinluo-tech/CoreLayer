@@ -3,13 +3,15 @@ import { jarvisClient } from '@/lib/jarvisClient';
 import {
   runListResponseSchema,
   runEventsResponseSchema,
+  runArtifactsResponseSchema,
   type AgentRun,
   type AgentRunEvent,
+  type CodingArtifact,
   type RunStatus,
   type RunMode,
 } from '@/lib/apiSchemas';
 
-export type { AgentRun, AgentRunEvent, RunStatus, RunMode };
+export type { AgentRun, AgentRunEvent, RunStatus, RunMode, CodingArtifact };
 
 export type RunFilterStatus = 'all' | RunStatus;
 export type RunFilterMode = 'all' | RunMode;
@@ -23,9 +25,11 @@ interface RunState {
   runs: AgentRun[];
   selectedRunId: string | null;
   events: AgentRunEvent[];
+  artifacts: CodingArtifact[];
   filters: RunFilters;
   isLoading: boolean;
   isLoadingEvents: boolean;
+  isLoadingArtifacts: boolean;
   error: string | null;
 
   fetchRuns: () => Promise<void>;
@@ -42,9 +46,11 @@ export const useRunStore = create<RunState>((set, get) => ({
   runs: [],
   selectedRunId: null,
   events: [],
+  artifacts: [],
   filters: { status: 'all', mode: 'all' },
   isLoading: false,
   isLoadingEvents: false,
+  isLoadingArtifacts: false,
   error: null,
 
   fetchRuns: async () => {
@@ -60,14 +66,29 @@ export const useRunStore = create<RunState>((set, get) => ({
   },
 
   selectRun: async (runId: string) => {
-    set({ selectedRunId: runId, events: [], isLoadingEvents: true });
+    set({
+      selectedRunId: runId,
+      events: [],
+      artifacts: [],
+      isLoadingEvents: true,
+      isLoadingArtifacts: true,
+    });
     try {
-      const raw = await jarvisClient.get(`/api/runs/${runId}/events`);
-      const parsed = runEventsResponseSchema.parse(raw);
-      set({ events: parsed.data, isLoadingEvents: false });
+      const [eventsRaw, artifactsRaw] = await Promise.all([
+        jarvisClient.get(`/api/runs/${runId}/events`),
+        jarvisClient.get(`/api/runs/${runId}/artifacts`),
+      ]);
+      const eventsParsed = runEventsResponseSchema.parse(eventsRaw);
+      const artifactsParsed = runArtifactsResponseSchema.parse(artifactsRaw);
+      set({
+        events: eventsParsed.data,
+        artifacts: artifactsParsed.data,
+        isLoadingEvents: false,
+        isLoadingArtifacts: false,
+      });
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to load run events';
-      set({ error: message, isLoadingEvents: false });
+      const message = err instanceof Error ? err.message : 'Failed to load run details';
+      set({ error: message, isLoadingEvents: false, isLoadingArtifacts: false });
     }
   },
 

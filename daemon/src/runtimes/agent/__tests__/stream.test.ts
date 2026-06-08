@@ -64,7 +64,7 @@ function createTestDb() {
       conversation_id TEXT,
       user_message_id TEXT,
       assistant_message_id TEXT,
-      status TEXT NOT NULL DEFAULT 'running' CHECK(status IN ('running', 'succeeded', 'failed', 'cancelled', 'waiting_for_approval')),
+      status TEXT NOT NULL DEFAULT 'queued' CHECK(status IN ('queued', 'running', 'succeeded', 'failed', 'cancelled', 'waiting_for_approval')),
       selected_model TEXT,
       route_reason TEXT,
       tool_call_count INTEGER DEFAULT 0,
@@ -257,7 +257,7 @@ describe("runStreamTurn", () => {
 
     const runs = testDb.select().from(schema.agentRuns).all();
     expect(runs.length).toBe(1);
-    expect(runs[0].status).toBe("running");
+    expect(runs[0].status).toBe("queued");
     expect(runs[0].mode).toBe("chat");
 
     // Consume the stream to trigger completion

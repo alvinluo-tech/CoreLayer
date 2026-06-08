@@ -120,5 +120,12 @@ export function createSqliteAgentRunRepo(database?: DrizzleDb): AgentRunReposito
         .where(eq(schema.agentRuns.id, id))
         .run();
     },
+
+    async updateArtifacts(id: string, artifacts: unknown[]): Promise<void> {
+      db.update(schema.agentRuns)
+        .set({ artifacts: JSON.stringify(artifacts) })
+        .where(eq(schema.agentRuns.id, id))
+        .run();
+    },
   };
 }
