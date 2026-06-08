@@ -18,7 +18,7 @@ target/
 .codegraph/
 
 # IDE
-.vscode/
+.vscode/*
 !.vscode/settings.json
 .idea/
 *.swp
