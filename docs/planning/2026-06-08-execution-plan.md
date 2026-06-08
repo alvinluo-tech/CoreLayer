@@ -8,18 +8,18 @@ Based on: `2026-06-08-agent-os-product-closure-execution-brief.md`
 
 ### 0.1 Sidecar Health Smoke Test Script
 
-- [ ] Create `scripts/smoke-test-sidecar.mjs`
+- [x] Create `scripts/smoke-test-sidecar.mjs`
   - Build sidecar via `pnpm build:daemon:sidecar`
   - Set env: `DAEMON_HOST=127.0.0.1`, `DAEMON_PORT` (random), `JARVIS_RUNTIME_MODE=sidecar`, `JARVIS_APP_DATA_DIR` (temp), `JARVIS_SIDECAR_MODULE_ROOT=frontend/src-tauri/binaries`
   - Spawn sidecar process, poll `/health` with timeout (30s)
   - Fail non-zero if `/health` does not respond
   - Always kill sidecar process on exit (success or failure)
-- [ ] Add `pnpm test:smoke:sidecar` script to root `package.json`
+- [x] Add `pnpm test:smoke:sidecar` script to root `package.json`
 
 ### 0.2 Daemon Status API Enhancement
 
-- [ ] Extend `daemon/src/http/routes/runtime.ts` (or create new `daemon-status.ts` route)
-- [ ] Expose in status response:
+- [x] Extend `/api/runtime/status` in `daemon/src/bootstrap/create-http-app.ts`
+- [x] Expose in status response:
   - `runtimeMode`
   - `daemonPid`
   - `selectedPort`
@@ -28,13 +28,12 @@ Based on: `2026-06-08-agent-os-product-closure-execution-brief.md`
   - `logDir`
   - `uptime` (seconds since start)
   - `memoryUsage` (rss, heapUsed, heapTotal)
-  - `registeredRuntimes` (kind, status, restartCount)
-  - `lastStartupError` (nullable)
+  - `registeredRuntimes` (kind, status, lastError)
 - [ ] Add unit test for enhanced status payload
 
 ### 0.3 Frontend Daemon Status Page Upgrade
 
-- [ ] Update `frontend/src/components/control-center/DaemonPage.tsx`
+- [x] Update `frontend/src/components/control-center/DaemonPage.tsx`
   - Show connected/disconnected indicator (with color)
   - Show daemon URL
   - Show runtime mode
@@ -55,7 +54,7 @@ Based on: `2026-06-08-agent-os-product-closure-execution-brief.md`
 
 ### Phase 0 Commit
 
-- [ ] `git commit -m "feat(release): stabilize sidecar smoke test and daemon status observability"`
+- [x] `git commit -m "feat(release): stabilize sidecar smoke test and daemon status observability"`
 
 ---
 

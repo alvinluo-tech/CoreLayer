@@ -100,6 +100,30 @@ describe("classifyError", () => {
     expect(result.code).toBe(ErrorCodes.AI_ERROR);
   });
 
+  it("returns 429 RATE_LIMITED for rate limit errors", () => {
+    const result = classifyError(new Error("Rate limit exceeded"));
+    expect(result.status).toBe(429);
+    expect(result.code).toBe(ErrorCodes.RATE_LIMITED);
+    expect(result.retryable).toBe(true);
+  });
+
+  it("returns 403 PERMISSION_DENIED for permission errors", () => {
+    const result = classifyError(new Error("Permission denied"));
+    expect(result.status).toBe(403);
+    expect(result.code).toBe(ErrorCodes.PERMISSION_DENIED);
+    expect(result.retryable).toBe(false);
+  });
+
+  it("marks network errors as retryable", () => {
+    const result = classifyError(new Error("Network request failed"));
+    expect(result.retryable).toBe(true);
+  });
+
+  it("marks not-configured errors as non-retryable", () => {
+    const result = classifyError(new Error("Provider not configured"));
+    expect(result.retryable).toBe(false);
+  });
+
   it("is case-insensitive", () => {
     const result = classifyError(new Error("NOT CONFIGURED"));
     expect(result.status).toBe(503);
@@ -156,7 +180,7 @@ describe("ErrorResponse shape", () => {
       "",
     ];
 
-    const validStatuses: AppErrorStatus[] = [400, 401, 403, 404, 409, 500, 503];
+    const validStatuses: AppErrorStatus[] = [400, 401, 403, 404, 409, 429, 500, 503];
 
     for (const msg of testCases) {
       const result = classifyError(msg);
