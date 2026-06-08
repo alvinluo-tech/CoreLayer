@@ -295,7 +295,7 @@ Based on: `2026-06-08-agent-os-product-closure-execution-brief.md`
 
 ### 4.1 Subprocess Spawning Infrastructure
 
-- [ ] Create `daemon/src/runtimes/coding/process-spawner.ts`:
+- [x] Create `daemon/src/runtimes/coding/process-spawner.ts`:
   - `spawnProcess(command, args, options)` → child process handle
   - Capture stdout/stderr via streams
   - Track PID for cancellation
@@ -306,7 +306,7 @@ Based on: `2026-06-08-agent-os-product-closure-execution-brief.md`
 
 ### 4.2 Codex Adapter Real Implementation
 
-- [ ] Update `daemon/src/runtimes/coding/codex-adapter.ts`:
+- [x] Update `daemon/src/runtimes/coding/codex-adapter.ts`:
   - Resolve `codex` command availability (which/codex check)
   - Validate working directory exists and is a git repo
   - Request shell execution permission via PermissionBroker
@@ -320,7 +320,7 @@ Based on: `2026-06-08-agent-os-product-closure-execution-brief.md`
 
 ### 4.3 Claude Code Adapter Real Implementation
 
-- [ ] Update `daemon/src/runtimes/coding/claude-code-adapter.ts`:
+- [x] Update `daemon/src/runtimes/coding/claude-code-adapter.ts`:
   - Same pattern as Codex adapter
   - Resolve `claude` command availability
   - Spawn Claude Code CLI process
@@ -329,7 +329,7 @@ Based on: `2026-06-08-agent-os-product-closure-execution-brief.md`
 
 ### 4.4 Cancellation
 
-- [ ] Implement `cancelRun(runId)` in both adapters:
+- [x] Implement `cancelRun(runId)` in both adapters:
   - Look up process handle by runId
   - Kill process tree (cross-platform)
   - Mark run as `cancelled`
@@ -371,7 +371,7 @@ Based on: `2026-06-08-agent-os-product-closure-execution-brief.md`
 
 ### Phase 4 Commit
 
-- [ ] `git commit -m "feat(coding-runtime): real subprocess execution, cancellation, artifacts, permission integration"`
+- [x] `git commit -m "feat(coding-runtime): real subprocess execution, cancellation, artifacts, permission integration"`
 
 ---
 

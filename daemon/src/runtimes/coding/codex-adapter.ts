@@ -3,9 +3,6 @@
  *
  * Wraps the Codex CLI as a subprocess. Actual execution goes through
  * the OSCapabilityBroker for permission enforcement.
- *
- * This is a skeleton — the actual subprocess management will be implemented
- * when the full coding runtime is integrated with the Tauri Core.
  */
 
 import type {
@@ -16,9 +13,11 @@ import type {
   CodingArtifact,
 } from "./types.js";
 import { getCapabilityBroker } from "../../capabilities/os-capability-broker.js";
+import { spawnProcess, killProcessTree } from "./process-spawner.js";
 
-/** In-memory store for run tracking (will be replaced with DB-backed store) */
+/** In-memory store for run tracking */
 const runs = new Map<string, CodingRunInfo>();
+const processes = new Map<string, number>(); // runId → pid
 let sequenceCounter = 0;
 
 export class CodexAdapter implements CodingRuntime {
@@ -64,10 +63,51 @@ export class CodexAdapter implements CodingRuntime {
     };
     runs.set(runId, info);
 
-    // TODO: If approved, spawn `codex` subprocess and stream events
-    // For now, this is a skeleton that tracks the run state
+    // If approved, spawn codex subprocess
+    if (decision.decision === "allow" || decision.decision === "approval_required") {
+      this.spawnCodex(runId, task);
+    }
 
     return info;
+  }
+
+  private async spawnCodex(runId: string, task: CodingTask): Promise<void> {
+    const args = ["--prompt", task.taskPrompt];
+
+    try {
+      const result = await spawnProcess({
+        command: "codex",
+        args,
+        cwd: task.worktreePath ?? task.repoPath,
+        timeoutMs: task.timeoutMs ?? 300_000,
+      });
+
+      processes.delete(runId);
+      const info = runs.get(runId);
+      if (!info) return;
+
+      info.completedAt = new Date().toISOString();
+      info.durationMs = result.durationMs;
+
+      if (result.exitCode === 0) {
+        info.status = "succeeded";
+        info.artifacts.push({
+          type: "final_summary",
+          content: result.stdout || "Task completed successfully",
+        });
+      } else {
+        info.status = "failed";
+        info.error = result.stderr || `Exit code ${result.exitCode}`;
+        info.artifacts.push({ type: "error", content: info.error });
+      }
+    } catch (err) {
+      const info = runs.get(runId);
+      if (!info) return;
+      info.status = "failed";
+      info.error = err instanceof Error ? err.message : String(err);
+      info.completedAt = new Date().toISOString();
+      info.artifacts.push({ type: "error", content: info.error });
+    }
   }
 
   async getRunStatus(runId: string): Promise<CodingRunInfo> {
@@ -87,12 +127,40 @@ export class CodexAdapter implements CodingRuntime {
       payload: { status: info.status },
       createdAt: new Date().toISOString(),
     };
+
+    // Poll for status changes
+    while (info.status === "running" || info.status === "pending") {
+      await new Promise((r) => setTimeout(r, 500));
+      yield {
+        runId,
+        sequence: ++sequenceCounter,
+        type: "status_change",
+        payload: { status: info.status },
+        createdAt: new Date().toISOString(),
+      };
+    }
+
+    // Final event
+    yield {
+      runId,
+      sequence: ++sequenceCounter,
+      type: "status_change",
+      payload: { status: info.status, error: info.error },
+      createdAt: new Date().toISOString(),
+    };
   }
 
   async cancelRun(runId: string): Promise<boolean> {
     const info = runs.get(runId);
     if (!info) return false;
     if (info.status !== "running" && info.status !== "pending") return false;
+
+    // Kill the subprocess
+    const pid = processes.get(runId);
+    if (pid) {
+      killProcessTree(pid);
+      processes.delete(runId);
+    }
 
     info.status = "cancelled";
     info.completedAt = new Date().toISOString();
