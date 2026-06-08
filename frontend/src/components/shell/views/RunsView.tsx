@@ -11,10 +11,12 @@ import {
   XCircle,
   AlertTriangle,
   Loader2,
+  Clock,
   Wrench,
   Brain,
   ShieldCheck,
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import {
   useRunStore,
   type AgentRun,
@@ -45,6 +47,7 @@ const modeLabels: Record<RunMode, string> = {
 };
 
 const statusColors: Record<RunStatus, string> = {
+  queued: 'var(--text-tertiary)',
   running: 'var(--cyan)',
   succeeded: 'var(--emerald)',
   failed: 'var(--red)',
@@ -53,6 +56,7 @@ const statusColors: Record<RunStatus, string> = {
 };
 
 const statusIcons: Record<RunStatus, React.ReactNode> = {
+  queued: <Clock size={12} />,
   running: <Loader2 size={12} className="animate-spin" />,
   succeeded: <CheckCircle2 size={12} />,
   failed: <XCircle size={12} />,
@@ -685,21 +689,10 @@ export function RunsView() {
           >
             {error}
           </div>
-          <button
-            onClick={fetchRuns}
-            style={{
-              fontFamily: 'var(--font-data)',
-              fontSize: 11,
-              color: 'var(--cyan)',
-              background: 'rgba(0,212,255,0.08)',
-              border: '1px solid rgba(0,212,255,0.2)',
-              borderRadius: 6,
-              padding: '4px 12px',
-              cursor: 'pointer',
-            }}
-          >
+          <Button variant="glass" size="sm" onClick={fetchRuns} className="gap-1.5">
+            <RotateCcw size={12} />
             Retry
-          </button>
+          </Button>
         </div>
       </div>
     );

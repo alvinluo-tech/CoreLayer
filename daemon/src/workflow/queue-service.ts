@@ -61,11 +61,9 @@ export async function dequeue(): Promise<AgentRunRow | null> {
   const { agentRuns } = getRepositories();
   const runs = await agentRuns.getRecent(100);
 
-  // Find the first queued run (status = running but not yet dispatched)
+  // Find the first queued run (status = queued, not yet dispatched)
   const nextQueued = runs.find((r) => {
-    // We use "running" as the initial status from create()
-    // Real dispatch will transition to actual running state
-    return r.status === "running" && !r.completedAt;
+    return r.status === "queued" && !r.completedAt;
   });
 
   return nextQueued ?? null;
@@ -77,7 +75,7 @@ export async function dequeue(): Promise<AgentRunRow | null> {
 export async function getQueue(): Promise<AgentRunRow[]> {
   const { agentRuns } = getRepositories();
   const runs = await agentRuns.getRecent(100);
-  return runs.filter((r) => r.status === "running" && !r.completedAt);
+  return runs.filter((r) => r.status === "queued" && !r.completedAt);
 }
 
 /**
@@ -88,7 +86,7 @@ export async function removeFromQueue(runId: string): Promise<boolean> {
   const run = await agentRuns.getById(runId);
   if (!run) return false;
 
-  if (run.status !== "running" || run.completedAt) {
+  if (run.status !== "queued" && run.status !== "running" || run.completedAt) {
     return false; // Can only cancel queued/running items
   }
 
@@ -105,7 +103,7 @@ export async function getQueueStatus(): Promise<QueueStatus> {
 
   return {
     total: runs.length,
-    queued: runs.filter((r) => r.status === "running" && !r.completedAt).length,
+    queued: runs.filter((r) => r.status === "queued" && !r.completedAt).length,
     running: runs.filter((r) => r.status === "running" && !r.completedAt).length,
     completed: runs.filter((r) => r.status === "succeeded").length,
     failed: runs.filter((r) => r.status === "failed").length,

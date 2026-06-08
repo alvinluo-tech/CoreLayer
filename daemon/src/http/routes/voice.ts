@@ -500,7 +500,7 @@ voiceRoutes.post("/test-tts", async (c) => {
     speed?: number;
   }>().catch(() => null);
 
-  const providerId = body?.ttsProvider ?? body?.providerId;
+  const providerId = body?.providerId;
   const testText = body?.text ?? "你好，我是 Jarvis 语音助手，正在测试语音合成功能。";
   const voice = body?.voice;
   const speed = body?.speed;

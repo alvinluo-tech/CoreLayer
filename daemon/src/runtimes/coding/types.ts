@@ -35,9 +35,15 @@ export interface CodingTask {
 
 /** Artifact produced by a coding run */
 export interface CodingArtifact {
-  type: "diff_summary" | "changed_files" | "test_report" | "final_summary" | "error";
+  type: "diff_summary" | "changed_files" | "test_report" | "final_summary" | "log_path" | "error";
   content: string;
   metadata?: Record<string, unknown>;
+}
+
+/** Internal event queue for streaming events from a run */
+export interface CodingRunInfoEvents {
+  events: CodingRunEvent[];
+  resolve: () => void;
 }
 
 /** Status of a coding run */
@@ -57,7 +63,8 @@ export interface CodingRunInfo {
 export interface CodingRunEvent {
   runId: string;
   sequence: number;
-  type: "status_change" | "output" | "artifact" | "error" | "approval_required";
+  type: "status_change" | "output" | "artifact" | "error" | "approval_required"
+    | "process_spawned" | "stdout" | "stderr" | "process_exited" | "run_cancelled";
   payload: unknown;
   createdAt: string;
 }

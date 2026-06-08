@@ -243,8 +243,8 @@ export const agentRuns = sqliteTable("agent_runs", {
   agentId: text("agent_id").references(() => agentProfiles.id),
   userMessageId: text("user_message_id"),
   assistantMessageId: text("assistant_message_id"),
-  status: text("status", { enum: ["running", "succeeded", "failed", "cancelled", "waiting_for_approval"] })
-    .default("running")
+  status: text("status", { enum: ["queued", "running", "succeeded", "failed", "cancelled", "waiting_for_approval"] })
+    .default("queued")
     .notNull(),
   mode: text("mode", { enum: ["chat", "voice", "tick", "scheduled", "workflow", "regenerate"] })
     .default("chat")

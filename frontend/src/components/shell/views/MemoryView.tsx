@@ -11,7 +11,9 @@ import {
   ListTodo,
   MessageSquare,
   Globe,
+  RotateCcw,
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import {
   useMemoryStore,
   type Memory,
@@ -523,21 +525,10 @@ export function MemoryView() {
           >
             {error}
           </div>
-          <button
-            onClick={fetchMemories}
-            style={{
-              fontFamily: 'var(--font-data)',
-              fontSize: 11,
-              color: 'var(--cyan)',
-              background: 'rgba(0,212,255,0.08)',
-              border: '1px solid rgba(0,212,255,0.2)',
-              borderRadius: 6,
-              padding: '4px 12px',
-              cursor: 'pointer',
-            }}
-          >
+          <Button variant="glass" size="sm" onClick={fetchMemories} className="gap-1.5">
+            <RotateCcw size={12} />
             Retry
-          </button>
+          </Button>
         </div>
       </div>
     );

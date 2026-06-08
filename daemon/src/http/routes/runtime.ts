@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { buildRuntimeComponents } from "../../runtime-host/status.js";
+import { apiError, ErrorCodes } from "../../shared/errors.js";
 
 const runtime = new Hono();
 
@@ -20,7 +21,7 @@ runtime.post("/shutdown", async (c) => {
     | undefined;
   const peerAddress = incoming?.socket?.remoteAddress;
   if (peerAddress && !isLoopback(peerAddress)) {
-    return c.json({ error: "Shutdown only allowed from loopback" }, 403);
+    return apiError(c, "Shutdown only allowed from loopback", 403, ErrorCodes.PERMISSION_DENIED);
   }
   console.log("[Jarvis] Shutdown requested via API");
   setTimeout(() => process.exit(0), 200);

@@ -1,6 +1,10 @@
 import { Hono } from "hono";
 import { getRepositories } from "../../persistence/factory.js";
 import { apiError, extractErrorMessage, logError } from "../../shared/errors.js";
+import {
+  isAgentModelPolicy,
+  isAgentExecutorPolicy,
+} from "../../shared/agent-profile-types.js";
 import type { CreateAgentProfileInput, UpdateAgentProfileData } from "../../persistence/repository.js";
 
 const agentProfileRoutes = new Hono();
@@ -27,6 +31,12 @@ function validateCreateInput(body: unknown): { ok: true; input: CreateAgentProfi
   }
   if (b.memoryScopes !== undefined && !Array.isArray(b.memoryScopes)) {
     return { ok: false, error: "memoryScopes must be an array" };
+  }
+  if (b.modelPolicy !== undefined && b.modelPolicy !== null && !isAgentModelPolicy(b.modelPolicy)) {
+    return { ok: false, error: "modelPolicy must have preferredModels (string[]), fallbackModel (string), maxTokens (number), temperature (number), or provider (string)" };
+  }
+  if (b.executorPolicy !== undefined && b.executorPolicy !== null && !isAgentExecutorPolicy(b.executorPolicy)) {
+    return { ok: false, error: "executorPolicy must have executor (one of: self, codex, claude-code, opencode)" };
   }
   return {
     ok: true,
@@ -61,8 +71,18 @@ function validateUpdateInput(body: unknown): { ok: true; data: UpdateAgentProfil
     }
     data.description = b.description === null ? undefined : b.description;
   }
-  if (b.modelPolicy !== undefined) data.modelPolicy = b.modelPolicy;
-  if (b.executorPolicy !== undefined) data.executorPolicy = b.executorPolicy;
+  if (b.modelPolicy !== undefined) {
+    if (b.modelPolicy !== null && !isAgentModelPolicy(b.modelPolicy)) {
+      return { ok: false, error: "modelPolicy must have preferredModels (string[]), fallbackModel (string), maxTokens (number), temperature (number), or provider (string)" };
+    }
+    data.modelPolicy = b.modelPolicy ?? undefined;
+  }
+  if (b.executorPolicy !== undefined) {
+    if (b.executorPolicy !== null && !isAgentExecutorPolicy(b.executorPolicy)) {
+      return { ok: false, error: "executorPolicy must have executor (one of: self, codex, claude-code, opencode)" };
+    }
+    data.executorPolicy = b.executorPolicy;
+  }
   if (b.skills !== undefined) {
     if (!Array.isArray(b.skills)) return { ok: false, error: "skills must be an array" };
     data.skills = b.skills as string[];

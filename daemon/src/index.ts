@@ -39,7 +39,7 @@ async function seedDefaultAgent() {
         name: "Default Agent",
         description: "The default general-purpose agent with standard tools and skills.",
         isDefault: true,
-        modelPolicy: { preferred_models: ["mimo-v2.5-pro"], fallback: "mimo-v2.5" },
+        modelPolicy: { preferredModels: ["mimo-v2.5-pro"], fallbackModel: "mimo-v2.5" },
         skills: [],
         tools: [],
         permissions: ["chat", "task_management"],

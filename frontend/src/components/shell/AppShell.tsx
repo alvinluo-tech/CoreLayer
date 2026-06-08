@@ -12,6 +12,7 @@ import { HudDecorations } from './HudDecorations';
 import { BottomStatusBar } from './BottomStatusBar';
 import { ShellLayout } from './ShellLayout';
 import { GlobalRail } from './GlobalRail';
+import { ContextPane } from './ContextPane';
 import { AssistantView } from './views/AssistantView';
 import { TasksView } from './views/TasksView';
 import { RunsView } from './views/RunsView';
@@ -31,6 +32,8 @@ import { useReviewStore } from '@/stores/reviewStore';
 import { useApprovalStore } from '@/stores/approvalStore';
 import { useShellStore } from '@/stores/shellStore';
 import { useRunStore } from '@/stores/runStore';
+import { DaemonDisconnectedBanner } from '@/components/common/DaemonDisconnectedBanner';
+import { jarvisClient } from '@/lib/jarvisClient';
 
 export function AppShell() {
   const { messages, sendMessage, isLoading, activeConversationId, error } = useChat();
@@ -39,6 +42,22 @@ export function AppShell() {
   const paletteToggle = usePaletteStore((s) => s.toggle);
 
   const { activeView, setActiveView } = useShellStore();
+  const [daemonConnected, setDaemonConnected] = useState(true);
+
+  // Poll daemon health
+  useEffect(() => {
+    const checkHealth = async () => {
+      try {
+        await jarvisClient.get('/api/health');
+        setDaemonConnected(true);
+      } catch {
+        setDaemonConnected(false);
+      }
+    };
+    checkHealth();
+    const interval = setInterval(checkHealth, 15_000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Global keyboard shortcut: Alt+Space to toggle command palette
   useEffect(() => {
@@ -588,6 +607,19 @@ export function AppShell() {
     >
       <HudDecorations />
 
+      {!daemonConnected && (
+        <DaemonDisconnectedBanner
+          onReconnect={async () => {
+            try {
+              await jarvisClient.get('/api/health');
+              setDaemonConnected(true);
+            } catch {
+              setDaemonConnected(false);
+            }
+          }}
+        />
+      )}
+
       <TitleBar
         onSettings={() => {
           setInitialControlPage('overview');
@@ -604,6 +636,7 @@ export function AppShell() {
             runningRunCount={activeRunCount}
           />
         }
+        contextPane={<ContextPane />}
         mainSurface={renderMainContent()}
         inspector={<InspectorPane />}
       />

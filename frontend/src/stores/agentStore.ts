@@ -83,6 +83,10 @@ export const useAgentStore = create<AgentState>((set, get) => ({
   },
 
   deleteAgent: async (id) => {
+    const { agents } = get();
+    if (agents.length <= 1) {
+      throw new Error('Cannot delete the last agent profile');
+    }
     await jarvisClient.del(`/api/agent-profiles/${id}`);
     set((state) => ({
       agents: state.agents.filter((a) => a.id !== id),

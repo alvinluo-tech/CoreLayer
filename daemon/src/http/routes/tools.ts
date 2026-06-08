@@ -3,6 +3,7 @@ import type { ToolSource, RiskLevel } from "@jarvis/types";
 import { isApprovalRequiredResult } from "@jarvis/runtime-protocol";
 import { getRegistry, toolRuntime } from "../../runtimes/tool/public-api.js";
 import { getRepositories } from "../../persistence/factory.js";
+import { apiError, extractErrorMessage, logError, ErrorCodes } from "../../shared/errors.js";
 
 const app = new Hono();
 
@@ -14,8 +15,8 @@ app.get("/logs", async (c) => {
     const logs = await repos.toolCallLogs.getRecent(limit);
     return c.json({ logs });
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return c.json({ error: message }, 500);
+    logError("tools/logs", err);
+    return apiError(c, extractErrorMessage(err), 500, ErrorCodes.DB_ERROR);
   }
 });
 
@@ -61,7 +62,7 @@ app.get("/:id", (c) => {
   const tool = registry.resolveTool(toolId);
 
   if (!tool) {
-    return c.json({ error: "Tool not found" }, 404);
+    return apiError(c, `Tool not found: ${toolId}`, 404, ErrorCodes.NOT_FOUND);
   }
 
   return c.json({
@@ -101,8 +102,8 @@ app.post("/filter", async (c) => {
 
     return c.json({ tools, count: tools.length });
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return c.json({ error: message }, 500);
+    logError("tools/filter", err);
+    return apiError(c, extractErrorMessage(err), 500, ErrorCodes.VALIDATION);
   }
 });
 
@@ -114,7 +115,7 @@ app.post("/:id/execute", async (c) => {
 
   const tool = registry.resolveTool(toolId);
   if (!tool) {
-    return c.json({ error: "Tool not found" }, 404);
+    return apiError(c, `Tool not found: ${toolId}`, 404, ErrorCodes.NOT_FOUND);
   }
 
   try {
@@ -123,11 +124,9 @@ app.post("/:id/execute", async (c) => {
       return c.json({ error: "Approval required", approvalRequestId: executeResult.approvalRequestId }, 202);
     }
     return c.json(executeResult.result);
-  } catch {
-    return c.json({
-      success: false,
-      error: "Tool execution failed",
-    }, 500);
+  } catch (err) {
+    logError("tools/execute", err);
+    return apiError(c, `Tool execution failed: ${extractErrorMessage(err)}`, 500, ErrorCodes.RUNTIME_ERROR);
   }
 });
 
@@ -147,7 +146,7 @@ app.post("/confirm/:id", async (c) => {
   const resolved = guard.resolvePendingConfirmation(confirmationId, approved);
 
   if (!resolved) {
-    return c.json({ error: "Confirmation not found or already resolved" }, 404);
+    return apiError(c, "Confirmation not found or already resolved", 404, ErrorCodes.NOT_FOUND);
   }
 
   return c.json({ success: true, confirmationId, approved });

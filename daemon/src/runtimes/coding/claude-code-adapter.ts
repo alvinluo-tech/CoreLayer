@@ -5,20 +5,38 @@
  * the OSCapabilityBroker for permission enforcement.
  */
 
+import { execFileSync } from "child_process";
 import type {
   CodingRuntime,
   CodingTask,
   CodingRunInfo,
+  CodingRunInfoEvents,
   CodingRunEvent,
   CodingArtifact,
 } from "./types.js";
 import { getCapabilityBroker } from "../../capabilities/os-capability-broker.js";
-import { spawnProcess, killProcessTree } from "./process-spawner.js";
+import { spawnProcessLive, killProcessTree, isCommandAvailable } from "./process-spawner.js";
 
 /** In-memory store for run tracking */
 const runs = new Map<string, CodingRunInfo>();
+const eventQueues = new Map<string, CodingRunInfoEvents>();
 const processes = new Map<string, number>(); // runId → pid
 let sequenceCounter = 0;
+
+function emitEvent(runId: string, type: string, payload: unknown): void {
+  const queue = eventQueues.get(runId);
+  if (queue) {
+    const event: CodingRunEvent = {
+      runId,
+      sequence: ++sequenceCounter,
+      type: type as CodingRunEvent["type"],
+      payload,
+      createdAt: new Date().toISOString(),
+    };
+    queue.events.push(event);
+    queue.resolve();
+  }
+}
 
 export class ClaudeCodeAdapter implements CodingRuntime {
   readonly id = "claude-code";
@@ -28,11 +46,46 @@ export class ClaudeCodeAdapter implements CodingRuntime {
     const runId = crypto.randomUUID();
     const now = new Date().toISOString();
 
+    // Pre-flight: check if claude command exists
+    if (!isCommandAvailable("claude")) {
+      const info: CodingRunInfo = {
+        runId,
+        adapterId: this.id,
+        status: "failed",
+        task,
+        startedAt: now,
+        completedAt: now,
+        artifacts: [{ type: "error", content: "Claude Code CLI not found on PATH. Install with: npm install -g @anthropic-ai/claude-code" }],
+        error: "Claude Code CLI not found on PATH",
+      };
+      runs.set(runId, info);
+      return info;
+    }
+
+    // Validate working directory
+    const cwd = task.worktreePath ?? task.repoPath;
+    try {
+      execFileSync("ls", [cwd], { stdio: "ignore", timeout: 2_000 });
+    } catch {
+      const info: CodingRunInfo = {
+        runId,
+        adapterId: this.id,
+        status: "failed",
+        task,
+        startedAt: now,
+        completedAt: now,
+        artifacts: [{ type: "error", content: `Working directory does not exist: ${cwd}` }],
+        error: `Working directory does not exist: ${cwd}`,
+      };
+      runs.set(runId, info);
+      return info;
+    }
+
     // Permission check: shell exec for running claude CLI
     const broker = getCapabilityBroker();
     const decision = await broker.requestShellExec(
       "coding-runtime",
-      `claude --prompt "${task.taskPrompt.slice(0, 100)}..."`,
+      `claude --print "${task.taskPrompt.slice(0, 100)}..."`,
       {
         reason: `Claude Code run for repo: ${task.repoPath}`,
       },
@@ -53,60 +106,130 @@ export class ClaudeCodeAdapter implements CodingRuntime {
       return info;
     }
 
+    // If approval required, wait — don't spawn yet
+    if (decision.decision === "approval_required") {
+      const info: CodingRunInfo = {
+        runId,
+        adapterId: this.id,
+        status: "pending",
+        task,
+        startedAt: now,
+        artifacts: [],
+      };
+      runs.set(runId, info);
+      emitEvent(runId, "approval_required", { reason: decision.reason });
+      return info;
+    }
+
     const info: CodingRunInfo = {
       runId,
       adapterId: this.id,
-      status: decision.decision === "approval_required" ? "pending" : "running",
+      status: "running",
       task,
       startedAt: now,
       artifacts: [],
     };
     runs.set(runId, info);
 
-    // If approved, spawn claude subprocess
-    if (decision.decision === "allow" || decision.decision === "approval_required") {
-      this.spawnClaude(runId, task);
-    }
+    // Spawn claude subprocess with live tracking
+    this.spawnClaude(runId, task);
 
     return info;
   }
 
-  private async spawnClaude(runId: string, task: CodingTask): Promise<void> {
-    const args = ["--prompt", task.taskPrompt];
+  private spawnClaude(runId: string, task: CodingTask): void {
+    // Claude Code CLI uses --print for non-interactive mode with a prompt
+    const args = ["--print", task.taskPrompt];
+    const logDir = task.worktreePath
+      ? `${task.worktreePath}/.jarvis/logs`
+      : undefined;
 
-    try {
-      const result = await spawnProcess({
-        command: "claude",
-        args,
-        cwd: task.worktreePath ?? task.repoPath,
-        timeoutMs: task.timeoutMs ?? 300_000,
-      });
+    const handle = spawnProcessLive({
+      command: "claude",
+      args,
+      cwd: task.worktreePath ?? task.repoPath,
+      timeoutMs: task.timeoutMs ?? 300_000,
+      logDir,
+      onStdout: (chunk) => emitEvent(runId, "stdout", { text: chunk }),
+      onStderr: (chunk) => emitEvent(runId, "stderr", { text: chunk }),
+    });
 
+    // Track PID for cancellation
+    if (handle.pid) {
+      processes.set(runId, handle.pid);
+      emitEvent(runId, "process_spawned", { pid: handle.pid });
+    }
+
+    // Wait for process to complete
+    handle.process.on("close", (code) => {
       processes.delete(runId);
       const info = runs.get(runId);
       if (!info) return;
 
       info.completedAt = new Date().toISOString();
-      info.durationMs = result.durationMs;
+      info.durationMs = Date.now() - new Date(info.startedAt).getTime();
 
-      if (result.exitCode === 0) {
+      if (code === 0) {
         info.status = "succeeded";
         info.artifacts.push({
           type: "final_summary",
-          content: result.stdout || "Task completed successfully",
+          content: handle.stdout.join("") || "Task completed successfully",
         });
       } else {
         info.status = "failed";
-        info.error = result.stderr || `Exit code ${result.exitCode}`;
+        info.error = handle.stderr.join("") || `Exit code ${code}`;
         info.artifacts.push({ type: "error", content: info.error });
       }
-    } catch (err) {
+
+      // Collect changed files artifact via git diff
+      this.collectChangedFiles(info, task);
+      emitEvent(runId, "process_exited", { exitCode: code });
+      emitEvent(runId, "status_change", { status: info.status });
+    });
+
+    handle.process.on("error", (err) => {
+      processes.delete(runId);
       const info = runs.get(runId);
       if (!info) return;
+
       info.status = "failed";
-      info.error = err instanceof Error ? err.message : String(err);
+      info.error = err.message;
       info.completedAt = new Date().toISOString();
       info.artifacts.push({ type: "error", content: info.error });
+      emitEvent(runId, "process_exited", { exitCode: -1, error: err.message });
+    });
+  }
+
+  private collectChangedFiles(info: CodingRunInfo, task: CodingTask): void {
+    try {
+      const repoPath = task.worktreePath ?? task.repoPath;
+      const output = execFileSync("git", ["diff", "--name-only"], {
+        cwd: repoPath,
+        stdio: ["pipe", "pipe", "pipe"],
+        timeout: 5_000,
+      }).toString().trim();
+
+      if (output) {
+        info.artifacts.push({
+          type: "changed_files",
+          content: output,
+          metadata: { repoPath },
+        });
+      }
+    } catch {
+      // git diff failed — not critical
+    }
+
+    // Add log path artifact if available
+    const logDir = task.worktreePath
+      ? `${task.worktreePath}/.jarvis/logs`
+      : undefined;
+    if (logDir && info.completedAt) {
+      info.artifacts.push({
+        type: "log_path",
+        content: logDir,
+        metadata: { runId: info.runId },
+      });
     }
   }
 
@@ -120,6 +243,14 @@ export class ClaudeCodeAdapter implements CodingRuntime {
     const info = runs.get(runId);
     if (!info) throw new Error(`Coding run not found: ${runId}`);
 
+    // Set up event queue for this run
+    let resolve: () => void;
+    const eventQueue: CodingRunInfoEvents = {
+      events: [],
+      resolve: () => resolve?.(),
+    };
+    eventQueues.set(runId, eventQueue);
+
     yield {
       runId,
       sequence: ++sequenceCounter,
@@ -128,17 +259,25 @@ export class ClaudeCodeAdapter implements CodingRuntime {
       createdAt: new Date().toISOString(),
     };
 
-    // Poll for status changes
+    // Yield events as they arrive
     while (info.status === "running" || info.status === "pending") {
-      await new Promise((r) => setTimeout(r, 500));
-      yield {
-        runId,
-        sequence: ++sequenceCounter,
-        type: "status_change",
-        payload: { status: info.status },
-        createdAt: new Date().toISOString(),
-      };
+      await new Promise<void>((r) => {
+        resolve = r;
+        // Also check periodically in case events are missed
+        setTimeout(r, 500);
+      });
+
+      while (eventQueue.events.length > 0) {
+        yield eventQueue.events.shift()!;
+      }
     }
+
+    // Yield any remaining events
+    while (eventQueue.events.length > 0) {
+      yield eventQueue.events.shift()!;
+    }
+
+    eventQueues.delete(runId);
 
     // Final event
     yield {
@@ -164,7 +303,8 @@ export class ClaudeCodeAdapter implements CodingRuntime {
 
     info.status = "cancelled";
     info.completedAt = new Date().toISOString();
-    info.durationMs = new Date(info.completedAt).getTime() - new Date(info.startedAt).getTime();
+    info.durationMs = Date.now() - new Date(info.startedAt).getTime();
+    emitEvent(runId, "run_cancelled", {});
     return true;
   }
 

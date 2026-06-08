@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { MessageSquarePlus, ArrowDown, Loader2 } from 'lucide-react';
+import { ChatErrorCard } from '@/components/chat/ChatErrorCard';
 import { Streamdown } from 'streamdown';
 import { MessageBubble } from './MessageBubble';
 import { ChatInput } from './ChatInput';
@@ -272,18 +273,13 @@ export function ChatPanel({
           )}
 
           {error && (
-            <div className="flex justify-start">
-              <div
-                className="rounded-lg px-4 py-2 text-sm"
-                style={{
-                  background: 'rgba(255,61,90,0.1)',
-                  border: '1px solid rgba(255,61,90,0.2)',
-                  color: 'var(--rose)',
-                }}
-              >
-                {error}
-              </div>
-            </div>
+            <ChatErrorCard
+              error={error}
+              onRetry={() => {
+                const lastUserMsg = messages.filter((m) => m.role === 'user').pop();
+                if (lastUserMsg) onSend(lastUserMsg.content);
+              }}
+            />
           )}
         </div>
 

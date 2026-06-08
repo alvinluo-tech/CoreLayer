@@ -5,7 +5,10 @@
  * with proper cleanup on Windows and Unix.
  */
 
-import { spawn, type ChildProcess } from "child_process";
+import { spawn, execFileSync, type ChildProcess } from "child_process";
+import { mkdirSync, appendFileSync } from "fs";
+import { join } from "path";
+
 export interface SpawnOptions {
   command: string;
   args: string[];
@@ -32,6 +35,19 @@ export interface SpawnResult {
 }
 
 const activeProcesses = new Map<number, ChildProcess>();
+
+/**
+ * Check if a command is available on the system PATH.
+ */
+export function isCommandAvailable(command: string): boolean {
+  try {
+    const cmd = process.platform === "win32" ? "where" : "which";
+    execFileSync(cmd, [command], { stdio: "ignore", timeout: 3_000 });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Spawn a subprocess and collect its output.
@@ -94,6 +110,87 @@ export function spawnProcess(options: SpawnOptions): Promise<SpawnResult> {
 }
 
 /**
+ * Spawn a process and return a handle for live streaming/cancellation.
+ * Unlike spawnProcess, this does NOT wait for the process to complete.
+ * The caller must attach data handlers and wait for the 'close' event.
+ */
+export function spawnProcessLive(
+  options: SpawnOptions & {
+    onStdout?: (chunk: string) => void;
+    onStderr?: (chunk: string) => void;
+    logDir?: string;
+  },
+): SpawnedProcess {
+  const child = spawn(options.command, options.args, {
+    cwd: options.cwd,
+    env: { ...process.env, ...options.env },
+    stdio: ["pipe", "pipe", "pipe"],
+    shell: process.platform === "win32",
+  });
+
+  if (child.pid) {
+    activeProcesses.set(child.pid, child);
+  }
+
+  const stdout: string[] = [];
+  const stderr: string[] = [];
+
+  // Write to log files if logDir is provided
+  let logFile: string | undefined;
+  if (options.logDir && child.pid) {
+    try {
+      mkdirSync(options.logDir, { recursive: true });
+      logFile = join(options.logDir, `run-${child.pid}.log`);
+    } catch {
+      // Log dir creation failed — continue without persistence
+    }
+  }
+
+  child.stdout?.on("data", (data: Buffer) => {
+    const chunk = data.toString();
+    stdout.push(chunk);
+    options.onStdout?.(chunk);
+    if (logFile) {
+      try {
+        appendFileSync(logFile, `[STDOUT] ${chunk}`);
+      } catch {
+        // Write failure — continue
+      }
+    }
+  });
+
+  child.stderr?.on("data", (data: Buffer) => {
+    const chunk = data.toString();
+    stderr.push(chunk);
+    options.onStderr?.(chunk);
+    if (logFile) {
+      try {
+        appendFileSync(logFile, `[STDERR] ${chunk}`);
+      } catch {
+        // Write failure — continue
+      }
+    }
+  });
+
+  child.on("close", () => {
+    if (child.pid) activeProcesses.delete(child.pid);
+  });
+
+  child.on("error", () => {
+    if (child.pid) activeProcesses.delete(child.pid);
+  });
+
+  return {
+    pid: child.pid ?? 0,
+    process: child,
+    stdout,
+    stderr,
+    exitCode: null,
+    killed: false,
+  };
+}
+
+/**
  * Kill a process and its entire tree (cross-platform).
  * Windows: taskkill /F /T /PID
  * Unix: kill -TERM -PGID (process group)
@@ -102,19 +199,15 @@ export function killProcessTree(pid: number): void {
   if (!pid) return;
 
   if (process.platform === "win32") {
-    // Windows: use taskkill to kill the process tree
     try {
-      const { execFileSync } = require("child_process");
       execFileSync("taskkill", ["/F", "/T", "/PID", String(pid)], { stdio: "ignore" });
     } catch {
       // Process may already be dead
     }
   } else {
-    // Unix: kill process group
     try {
       process.kill(-pid, "SIGTERM");
     } catch {
-      // Fallback to killing just the process
       try {
         process.kill(pid, "SIGTERM");
       } catch {

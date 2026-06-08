@@ -6,12 +6,16 @@
  */
 
 import os from "os";
+import { statfsSync } from "fs";
+import { getActiveProcessCount } from "../runtimes/coding/process-spawner.js";
 
 export interface ResourceStatus {
   memoryPercent: number;
   freeMemoryMb: number;
   totalMemoryMb: number;
   cpuUsagePercent: number;
+  diskFreeGb: number;
+  externalProcessCount: number;
   uptimeSeconds: number;
   platform: string;
 }
@@ -45,6 +49,16 @@ function getCpuUsage(): number {
   return Math.round(((totalDiff - idleDiff) / totalDiff) * 100);
 }
 
+function getDiskFreeGb(): number {
+  try {
+    const cwd = process.cwd();
+    const stat = statfsSync(cwd);
+    return Math.round((stat.bfree * stat.bsize) / (1024 * 1024 * 1024));
+  } catch {
+    return 0;
+  }
+}
+
 export function getResourceStatus(): ResourceStatus {
   const totalMem = os.totalmem();
   const freeMem = os.freemem();
@@ -55,6 +69,8 @@ export function getResourceStatus(): ResourceStatus {
     freeMemoryMb: Math.round(freeMem / (1024 * 1024)),
     totalMemoryMb: Math.round(totalMem / (1024 * 1024)),
     cpuUsagePercent: getCpuUsage(),
+    diskFreeGb: getDiskFreeGb(),
+    externalProcessCount: getActiveProcessCount(),
     uptimeSeconds: Math.round(os.uptime()),
     platform: os.platform(),
   };

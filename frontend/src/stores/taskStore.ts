@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { Task, TaskStatus, CreateTaskInput, UpdateTaskInput } from '@/types/task';
 import * as tauri from '@/lib/tauri';
+import { jarvisClient } from '@/lib/jarvisClient';
 
 export type TaskFilterStatus = 'all' | TaskStatus;
 
@@ -46,6 +47,8 @@ interface TaskState {
   deleteTask: (taskId: string) => Promise<boolean>;
   selectTask: (id: string | null) => void;
   setFilterStatus: (status: TaskFilterStatus) => void;
+  startTask: (taskId: string) => Promise<string | null>;
+  cancelTask: (taskId: string) => Promise<boolean>;
 }
 
 export const useTaskStore = create<TaskState>((set) => ({
@@ -106,4 +109,24 @@ export const useTaskStore = create<TaskState>((set) => ({
 
   selectTask: (id) => set({ selectedTaskId: id }),
   setFilterStatus: (status) => set({ filterStatus: status }),
+
+  startTask: async (taskId: string) => {
+    try {
+      const raw = await jarvisClient.post<{ runId: string }>(`/api/tasks/${taskId}/start`);
+      return raw.runId;
+    } catch (error) {
+      set({ error: String(error) });
+      return null;
+    }
+  },
+
+  cancelTask: async (taskId: string) => {
+    try {
+      await jarvisClient.post(`/api/tasks/${taskId}/cancel`);
+      return true;
+    } catch (error) {
+      set({ error: String(error) });
+      return false;
+    }
+  },
 }));

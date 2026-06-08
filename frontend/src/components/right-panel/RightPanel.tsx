@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { CheckCircle2, Circle, BookOpen, Brain, ListTodo, ArrowUpRight } from 'lucide-react';
 import { useConversationStore } from '@/stores/conversationStore';
 import { useModelStore } from '@/stores/modelStore';
@@ -6,6 +6,7 @@ import { useTaskStore } from '@/stores/taskStore';
 import { useArticleStore } from '@/stores/articleStore';
 import { useReviewStore } from '@/stores/reviewStore';
 import { useToastStore } from '@/stores/toastStore';
+import { useMemoryStore, type Memory } from '@/stores/memoryStore';
 
 type RightPanelView = 'default' | 'todo' | 'reading';
 
@@ -298,34 +299,29 @@ function TodayOverviewCard() {
   );
 }
 
-function MemoryCard() {
-  const addToast = useToastStore((s) => s.addToast);
+function MemoryCard({ onSwitchView }: { onSwitchView: (v: RightPanelView) => void }) {
+  const { memories, isLoading, fetchMemories } = useMemoryStore();
 
-  const memories = [
-    {
-      icon: '🧠',
-      text: 'Prefers v2 sci-fi aesthetic over v3 clean style',
-      time: '2h ago',
-      color: 'cyan' as const,
-    },
-    {
-      icon: '⚡',
-      text: 'AI SDK v6 uses input/output not args/result',
-      time: '1d ago',
-      color: 'violet' as const,
-    },
-    {
-      icon: '📌',
-      text: 'Each phase merges to main after tests pass',
-      time: '3d ago',
-      color: 'emerald' as const,
-    },
-  ];
+  useEffect(() => {
+    fetchMemories();
+  }, [fetchMemories]);
 
-  const colorMap = {
-    cyan: { bg: 'rgba(0,212,255,0.03)', border: 'rgba(0,212,255,0.06)' },
-    violet: { bg: 'rgba(167,139,250,0.03)', border: 'rgba(167,139,250,0.06)' },
-    emerald: { bg: 'rgba(0,230,138,0.03)', border: 'rgba(0,230,138,0.06)' },
+  const recentMemories = memories.slice(0, 3);
+
+  const typeIcon: Record<string, string> = {
+    preference: '🧠',
+    fact: '⚡',
+    decision: '📌',
+    context: '📋',
+    skill: '🔧',
+  };
+
+  const colorMap: Record<string, { bg: string; border: string }> = {
+    preference: { bg: 'rgba(0,212,255,0.03)', border: 'rgba(0,212,255,0.06)' },
+    fact: { bg: 'rgba(167,139,250,0.03)', border: 'rgba(167,139,250,0.06)' },
+    decision: { bg: 'rgba(0,230,138,0.03)', border: 'rgba(0,230,138,0.06)' },
+    context: { bg: 'rgba(255,183,77,0.03)', border: 'rgba(255,183,77,0.06)' },
+    skill: { bg: 'rgba(239,83,80,0.03)', border: 'rgba(239,83,80,0.06)' },
   };
 
   return (
@@ -340,30 +336,43 @@ function MemoryCard() {
             letterSpacing: 0.5,
           }}
         >
-          recent
+          {isLoading ? 'loading...' : `${memories.length} total`}
         </span>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {memories.map((m, i) => {
-          const c = colorMap[m.color];
+        {recentMemories.length === 0 && !isLoading && (
+          <div
+            style={{
+              fontSize: 11,
+              color: 'var(--text-tertiary)',
+              textAlign: 'center',
+              padding: '8px 0',
+            }}
+          >
+            No memories yet
+          </div>
+        )}
+        {recentMemories.map((m: Memory) => {
+          const c = colorMap[m.type] ?? colorMap.context;
+          const icon = typeIcon[m.type] ?? '📋';
           return (
             <div
-              key={i}
+              key={m.id}
               style={{
                 display: 'flex',
                 alignItems: 'flex-start',
                 gap: 8,
                 padding: '6px 8px',
                 borderRadius: 'var(--r-sm)',
-                background: c.bg,
-                border: `1px solid ${c.border}`,
+                background: c?.bg ?? 'rgba(167,139,250,0.03)',
+                border: `1px solid ${c?.border ?? 'rgba(167,139,250,0.06)'}`,
               }}
             >
-              <span style={{ fontSize: 10, flexShrink: 0, marginTop: 1 }}>{m.icon}</span>
+              <span style={{ fontSize: 10, flexShrink: 0, marginTop: 1 }}>{icon}</span>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.4 }}>
-                  {m.text}
+                  {m.key}: {m.value}
                 </div>
                 <div
                   style={{
@@ -373,7 +382,7 @@ function MemoryCard() {
                     marginTop: 2,
                   }}
                 >
-                  {m.time}
+                  {m.scopeType}
                 </div>
               </div>
             </div>
@@ -382,7 +391,7 @@ function MemoryCard() {
       </div>
 
       <button
-        onClick={() => addToast('info', 'Memory', 'Full memory search coming soon')}
+        onClick={() => onSwitchView('default')}
         style={{
           width: '100%',
           marginTop: 8,
@@ -837,7 +846,7 @@ export function RightPanel({ onViewChange }: RightPanelProps) {
           <>
             <SessionCard />
             <TodayOverviewCard />
-            <MemoryCard />
+            <MemoryCard onSwitchView={handleSwitch} />
             <QuickActionsCard onSwitchView={handleSwitch} />
           </>
         )}

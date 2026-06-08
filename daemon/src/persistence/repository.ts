@@ -281,7 +281,7 @@ export interface AgentRunRow {
   agentId: string | null;
   userMessageId: string | null;
   assistantMessageId: string | null;
-  status: "running" | "succeeded" | "failed" | "cancelled" | "waiting_for_approval";
+  status: "queued" | "running" | "succeeded" | "failed" | "cancelled" | "waiting_for_approval";
   mode: "chat" | "voice" | "tick" | "scheduled" | "workflow" | "regenerate";
   selectedModel: string | null;
   routeReason: string | null;
@@ -625,8 +625,8 @@ export interface AgentProfileRow {
   id: string;
   name: string;
   description: string | null;
-  modelPolicy: unknown;
-  executorPolicy: unknown;
+  modelPolicy: import("../shared/agent-profile-types.js").AgentModelPolicy;
+  executorPolicy: import("../shared/agent-profile-types.js").AgentExecutorPolicy | null;
   skills: string[];
   tools: string[];
   knowledgeScopes: string[];
@@ -640,8 +640,8 @@ export interface AgentProfileRow {
 export interface CreateAgentProfileInput {
   name: string;
   description?: string;
-  modelPolicy?: unknown;
-  executorPolicy?: unknown;
+  modelPolicy?: import("../shared/agent-profile-types.js").AgentModelPolicy;
+  executorPolicy?: import("../shared/agent-profile-types.js").AgentExecutorPolicy | null;
   skills?: string[];
   tools?: string[];
   knowledgeScopes?: string[];
@@ -653,8 +653,8 @@ export interface CreateAgentProfileInput {
 export interface UpdateAgentProfileData {
   name?: string;
   description?: string;
-  modelPolicy?: unknown;
-  executorPolicy?: unknown;
+  modelPolicy?: import("../shared/agent-profile-types.js").AgentModelPolicy;
+  executorPolicy?: import("../shared/agent-profile-types.js").AgentExecutorPolicy | null;
   skills?: string[];
   tools?: string[];
   knowledgeScopes?: string[];

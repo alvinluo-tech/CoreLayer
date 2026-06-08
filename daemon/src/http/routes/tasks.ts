@@ -1,8 +1,9 @@
 import { Hono } from "hono";
 import { getRepositories } from "../../persistence/factory.js";
-import { apiError, extractErrorMessage, logError } from "../../shared/errors.js";
+import { apiError, extractErrorMessage, logError, ErrorCodes } from "../../shared/errors.js";
 import { TaskGraph } from "../../workspaces/task-graph-service.js";
 import { decomposeTask } from "../../runtimes/agent/public-api.js";
+import { enqueue } from "../../workflow/queue-service.js";
 
 const app = new Hono();
 const taskGraph = new TaskGraph();
@@ -216,6 +217,56 @@ app.post("/decompose", async (c) => {
     return c.json(result, 201);
   } catch (err) {
     logError("tasks/decompose", err);
+    return apiError(c, extractErrorMessage(err));
+  }
+});
+
+// POST /:id/start - Start executing a task (enqueue for execution)
+app.post("/:id/start", async (c) => {
+  const id = c.req.param("id");
+  try {
+    const repos = getRepositories();
+    const task = await repos.tasks.getById(id);
+    if (!task) {
+      return apiError(c, `Task not found: ${id}`, 404, ErrorCodes.NOT_FOUND);
+    }
+
+    const entry = await enqueue({
+      taskId: id,
+      mode: "workflow",
+    });
+
+    return c.json({ success: true, runId: entry.runId, entry });
+  } catch (err) {
+    logError("tasks/start", err);
+    return apiError(c, extractErrorMessage(err));
+  }
+});
+
+// POST /:id/cancel - Cancel a running task's active run
+app.post("/:id/cancel", async (c) => {
+  const id = c.req.param("id");
+  try {
+    const repos = getRepositories();
+    const task = await repos.tasks.getById(id);
+    if (!task) {
+      return apiError(c, `Task not found: ${id}`, 404, ErrorCodes.NOT_FOUND);
+    }
+
+    // Find the most recent run for this task and cancel it
+    const runs = await repos.agentRuns.getRecent(100);
+    const taskRun = runs.find((r) => r.taskId === id && (r.status === "running" || r.status === "queued"));
+
+    if (!taskRun) {
+      return apiError(c, "No active run found for this task", 400, ErrorCodes.VALIDATION);
+    }
+
+    const { cancelRun } = await import("../../workflow/run-dispatcher.js");
+    const cancelled = await cancelRun(taskRun.id);
+
+    return c.json({ success: cancelled, runId: taskRun.id });
+  } catch (err) {
+    logError("tasks/cancel", err);
     return apiError(c, extractErrorMessage(err));
   }
 });

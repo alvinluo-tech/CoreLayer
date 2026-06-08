@@ -2,12 +2,18 @@ import { useEffect, useState } from 'react';
 import { useConversationStore } from '@/stores/conversationStore';
 import { useRunStore } from '@/stores/runStore';
 import { useApprovalStore } from '@/stores/approvalStore';
+import { useAgentStore } from '@/stores/agentStore';
 import { jarvisClient } from '@/lib/jarvisClient';
 
 interface DaemonStatus {
   connected: boolean;
   runtimeMode?: string;
   uptime?: number;
+  memoryPercent?: number;
+  cpuUsagePercent?: number;
+  diskFreeGb?: number;
+  externalProcessCount?: number;
+  lastError?: string;
 }
 
 /**
@@ -17,10 +23,13 @@ export function BottomStatusBar() {
   const activeConversationId = useConversationStore((s) => s.activeConversationId);
   const runs = useRunStore((s) => s.runs);
   const pendingCount = useApprovalStore((s) => s.pendingCount);
+  const agents = useAgentStore((s) => s.agents);
 
   const [daemon, setDaemon] = useState<DaemonStatus>({ connected: false });
 
   const activeRunCount = runs.filter((r) => r.status === 'running').length;
+  const queuedRunCount = runs.filter((r) => r.status === 'queued').length;
+  const defaultAgent = agents.find((a) => a.isDefault);
 
   useEffect(() => {
     let alive = true;
@@ -33,6 +42,11 @@ export function BottomStatusBar() {
           connected: true,
           runtimeMode: data.runtimeMode as string | undefined,
           uptime: data.uptime as number | undefined,
+          memoryPercent: data.memoryPercent as number | undefined,
+          cpuUsagePercent: data.cpuUsagePercent as number | undefined,
+          diskFreeGb: data.diskFreeGb as number | undefined,
+          externalProcessCount: data.externalProcessCount as number | undefined,
+          lastError: data.lastError as string | undefined,
         });
       } catch {
         if (alive) setDaemon({ connected: false });
@@ -51,6 +65,8 @@ export function BottomStatusBar() {
     if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
     return `${Math.floor(seconds / 3600)}h`;
   };
+
+  const resourcePressure = (daemon.memoryPercent ?? 0) > 85 || (daemon.cpuUsagePercent ?? 0) > 90;
 
   return (
     <div
@@ -113,9 +129,25 @@ export function BottomStatusBar() {
         )}
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+        {defaultAgent && (
+          <span style={{ color: 'var(--text-secondary)' }}>AGENT: {defaultAgent.name}</span>
+        )}
         {activeRunCount > 0 && <span style={{ color: 'var(--cyan)' }}>RUNS {activeRunCount}</span>}
+        {queuedRunCount > 0 && (
+          <span style={{ color: 'var(--text-secondary)' }}>QUEUED {queuedRunCount}</span>
+        )}
         {pendingCount() > 0 && (
           <span style={{ color: 'var(--amber)' }}>PENDING {pendingCount()}</span>
+        )}
+        {resourcePressure && (
+          <span style={{ color: 'var(--amber)' }}>
+            CPU {daemon.cpuUsagePercent ?? 0}% · MEM {daemon.memoryPercent ?? 0}%
+          </span>
+        )}
+        {daemon.lastError && (
+          <span style={{ color: 'var(--rose)' }} title={daemon.lastError}>
+            ERROR
+          </span>
         )}
         <span>SESSION: {activeConversationId?.slice(0, 4).toUpperCase() ?? '—'}</span>
       </div>

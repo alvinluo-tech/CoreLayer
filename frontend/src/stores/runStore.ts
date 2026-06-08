@@ -33,6 +33,9 @@ interface RunState {
   clearSelection: () => void;
   setStatusFilter: (status: RunFilterStatus) => void;
   setModeFilter: (mode: RunFilterMode) => void;
+  cancelRun: (runId: string) => Promise<void>;
+  retryRun: (runId: string) => Promise<void>;
+  fetchRunWithFilter: (status?: string) => Promise<void>;
 }
 
 export const useRunStore = create<RunState>((set, get) => ({
@@ -78,5 +81,32 @@ export const useRunStore = create<RunState>((set, get) => ({
 
   setModeFilter: (mode) => {
     set({ filters: { ...get().filters, mode } });
+  },
+
+  cancelRun: async (runId: string) => {
+    await jarvisClient.post(`/api/runs/${runId}/cancel`);
+    set((state) => ({
+      runs: state.runs.map((r) => (r.id === runId ? { ...r, status: 'cancelled' as const } : r)),
+    }));
+  },
+
+  retryRun: async (runId: string) => {
+    await jarvisClient.post(`/api/runs/${runId}/retry`);
+    set((state) => ({
+      runs: state.runs.map((r) => (r.id === runId ? { ...r, status: 'queued' as const } : r)),
+    }));
+  },
+
+  fetchRunWithFilter: async (status?: string) => {
+    set({ isLoading: true, error: null });
+    try {
+      const url = status && status !== 'all' ? `/api/runs?status=${status}` : '/api/runs';
+      const raw = await jarvisClient.get(url);
+      const parsed = runListResponseSchema.parse(raw);
+      set({ runs: parsed.data, isLoading: false });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load runs';
+      set({ error: message, isLoading: false });
+    }
   },
 }));

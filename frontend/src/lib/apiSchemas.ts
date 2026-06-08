@@ -30,6 +30,7 @@ export const approvalListResponseSchema = z.object({
 // ---- AgentRun ----
 
 export const runStatusSchema = z.enum([
+  'queued',
   'running',
   'succeeded',
   'failed',
@@ -128,14 +129,31 @@ export const memoryListResponseSchema = z.object({
   data: z.array(memorySchema),
 });
 
+// ---- AgentModelPolicy ----
+
+export const agentModelPolicySchema = z.object({
+  preferredModels: z.array(z.string()).optional(),
+  fallbackModel: z.string().optional(),
+  maxTokens: z.number().optional(),
+  temperature: z.number().optional(),
+  provider: z.string().optional(),
+});
+
+export const agentExecutorPolicySchema = z.object({
+  executor: z.enum(['self', 'codex', 'claude-code', 'opencode']),
+  maxConcurrent: z.number().optional(),
+  workDir: z.string().optional(),
+  extraArgs: z.array(z.string()).optional(),
+});
+
 // ---- AgentProfile ----
 
 export const agentProfileSchema = z.object({
   id: z.string(),
   name: z.string(),
   description: z.string().nullable(),
-  modelPolicy: z.unknown(),
-  executorPolicy: z.unknown().nullable(),
+  modelPolicy: agentModelPolicySchema,
+  executorPolicy: agentExecutorPolicySchema.nullable(),
   skills: z.array(z.string()),
   tools: z.array(z.string()),
   knowledgeScopes: z.array(z.string()),
@@ -166,4 +184,6 @@ export type MemoryType = z.infer<typeof memoryTypeSchema>;
 export type MemoryTier = z.infer<typeof memoryTierSchema>;
 export type Memory = z.infer<typeof memorySchema>;
 
+export type AgentModelPolicy = z.infer<typeof agentModelPolicySchema>;
+export type AgentExecutorPolicy = z.infer<typeof agentExecutorPolicySchema>;
 export type AgentProfile = z.infer<typeof agentProfileSchema>;
