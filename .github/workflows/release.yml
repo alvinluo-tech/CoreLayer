@@ -69,21 +69,7 @@ jobs:
         run: pnpm build:daemon:sidecar
 
       - name: Smoke test sidecar
-        shell: bash
-        run: |
-          if [ "${{ matrix.platform }}" = "windows-latest" ]; then
-            SIDECAR=$(ls frontend/src-tauri/binaries/jarvis-daemon-*windows*.exe 2>/dev/null | head -1)
-          else
-            SIDECAR=$(ls frontend/src-tauri/binaries/jarvis-daemon-* | grep -v '.exe' | head -1)
-          fi
-          if [ -z "$SIDECAR" ]; then
-            echo "ERROR: Sidecar binary not found"
-            exit 1
-          fi
-          echo "Sidecar found: $SIDECAR ($(du -h "$SIDECAR" | cut -f1))"
-          # Try to run with --version or --help, accept any exit code (daemon may not have these flags)
-          timeout 5 "$SIDECAR" --version 2>/dev/null || true
-          echo "Smoke test passed"
+        run: node scripts/smoke-test-sidecar.mjs
 
       - name: Build and release
         uses: tauri-apps/tauri-action@v0

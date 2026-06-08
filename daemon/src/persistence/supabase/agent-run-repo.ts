@@ -18,6 +18,9 @@ export function createSupabaseAgentRunRepo(): AgentRunRepository {
     async getRecent(_limit?: number): Promise<AgentRunRow[]> {
       throw new Error("Supabase AgentRunRepository not implemented — use SQLite mode");
     },
+    async getQueued(_limit?: number): Promise<AgentRunRow[]> {
+      throw new Error("Supabase AgentRunRepository not implemented — use SQLite mode");
+    },
     async updateStatus(_id: string, _status: AgentRunRow["status"], _error?: string): Promise<void> {
       throw new Error("Supabase AgentRunRepository not implemented — use SQLite mode");
     },

@@ -55,27 +55,20 @@ export async function enqueue(input: {
 
 /**
  * Dequeue the next runnable entry.
- * Returns the oldest queued run, or null if queue is empty.
+ * Returns the oldest queued run (FIFO), or null if queue is empty.
  */
 export async function dequeue(): Promise<AgentRunRow | null> {
   const { agentRuns } = getRepositories();
-  const runs = await agentRuns.getRecent(100);
-
-  // Find the first queued run (status = queued, not yet dispatched)
-  const nextQueued = runs.find((r) => {
-    return r.status === "queued" && !r.completedAt;
-  });
-
-  return nextQueued ?? null;
+  const queued = await agentRuns.getQueued(1);
+  return queued[0] ?? null;
 }
 
 /**
- * Get all queued entries.
+ * Get all queued entries in FIFO order.
  */
 export async function getQueue(): Promise<AgentRunRow[]> {
   const { agentRuns } = getRepositories();
-  const runs = await agentRuns.getRecent(100);
-  return runs.filter((r) => r.status === "queued" && !r.completedAt);
+  return agentRuns.getQueued(100);
 }
 
 /**

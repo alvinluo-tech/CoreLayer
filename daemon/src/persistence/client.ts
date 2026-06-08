@@ -5,6 +5,7 @@ import { resolveAppPaths, ensureAppDirs } from "../config/app-paths.js";
 import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
+import { migrateAgentRunsStatusConstraint } from "./sqlite/agent-runs-migration.js";
 
 type BetterSqlite3Constructor = new (
   filename: string,
@@ -254,49 +255,11 @@ try { sqlite.exec(`ALTER TABLE agent_runs ADD COLUMN tool_calls TEXT DEFAULT '[]
 try { sqlite.exec(`ALTER TABLE agent_runs ADD COLUMN artifacts TEXT DEFAULT '[]'`); } catch {} // eslint-disable-line no-empty
 try { sqlite.exec(`ALTER TABLE agent_runs ADD COLUMN approvals TEXT DEFAULT '[]'`); } catch {} // eslint-disable-line no-empty
 
-// Migration: add `waiting_for_approval` to agent_runs CHECK constraint
-// SQLite does not support ALTER TABLE to modify CHECK constraints, so we recreate the table.
+// Migration: add queued/waiting_for_approval to agent_runs CHECK constraint.
 try {
-  const tableInfo = sqlite.prepare(`PRAGMA table_info(agent_runs)`).all() as Array<{ name: string }>;
-  if (tableInfo.length > 0) {
-    // Check if the CHECK constraint already includes waiting_for_approval
-    const createSql = sqlite.prepare(`SELECT sql FROM sqlite_master WHERE type='table' AND name='agent_runs'`).get() as { sql: string } | undefined;
-    if (createSql && !createSql.sql.includes("waiting_for_approval")) {
-      sqlite.exec(`BEGIN TRANSACTION`);
-      sqlite.exec(`CREATE TABLE agent_runs_new (
-        id TEXT PRIMARY KEY,
-        conversation_id TEXT,
-        workspace_id TEXT,
-        project_id TEXT,
-        task_id TEXT,
-        agent_id TEXT,
-        user_message_id TEXT,
-        assistant_message_id TEXT,
-        status TEXT NOT NULL DEFAULT 'queued' CHECK(status IN ('queued', 'running', 'succeeded', 'failed', 'cancelled', 'waiting_for_approval')),
-        mode TEXT NOT NULL DEFAULT 'chat',
-        selected_model TEXT,
-        route_reason TEXT,
-        selected_tools TEXT DEFAULT '[]',
-        memory_reads TEXT DEFAULT '[]',
-        memory_writes TEXT DEFAULT '[]',
-        tool_calls TEXT DEFAULT '[]',
-        tool_call_count INTEGER DEFAULT 0,
-        artifacts TEXT DEFAULT '[]',
-        approvals TEXT DEFAULT '[]',
-        started_at TEXT DEFAULT 'CURRENT_TIMESTAMP',
-        completed_at TEXT,
-        duration_ms INTEGER,
-        error TEXT
-      )`);
-      sqlite.exec(`INSERT INTO agent_runs_new SELECT * FROM agent_runs`);
-      sqlite.exec(`DROP TABLE agent_runs`);
-      sqlite.exec(`ALTER TABLE agent_runs_new RENAME TO agent_runs`);
-      sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_agent_runs_conversation ON agent_runs(conversation_id)`);
-      sqlite.exec(`COMMIT`);
-    }
-  }
-} catch {
-  // If migration fails, continue — the table may already have the new constraint
+  migrateAgentRunsStatusConstraint(sqlite);
+} catch (err) {
+  console.error("[Jarvis] Failed to migrate agent_runs status constraint:", err);
 }
 
 // Migration: add missing columns to conversations for existing databases
@@ -412,6 +375,7 @@ sqlite.exec(`
     knowledge_scopes TEXT NOT NULL DEFAULT '[]',
     permissions TEXT NOT NULL DEFAULT '[]',
     memory_scopes TEXT NOT NULL DEFAULT '[]',
+    executor_policy TEXT,
     is_default INTEGER NOT NULL DEFAULT 0,
     created_at TEXT DEFAULT 'CURRENT_TIMESTAMP',
     updated_at TEXT DEFAULT 'CURRENT_TIMESTAMP'
@@ -419,6 +383,9 @@ sqlite.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_projects_workspace_id ON projects(workspace_id);
 `);
+
+// Migration: add `executor_policy` column to existing agent_profiles tables
+try { sqlite.exec(`ALTER TABLE agent_profiles ADD COLUMN executor_policy TEXT`); } catch {} // eslint-disable-line no-empty
 
 // Migration: extend agent_runs table (Phase 1)
 try {

@@ -103,19 +103,24 @@ try {
     detached: false,
   });
 
+  function extractPort(line) {
+    // Match "Jarvis Daemon running on http://localhost:51919" or similar patterns
+    const portMatch = line.match(/(?:running on|Listening on|Server running at|started on).*?:(\d+)/i);
+    if (portMatch && !healthUrl) {
+      healthUrl = `http://127.0.0.1:${portMatch[1]}/api/health`;
+    }
+  }
+
   child.stdout?.on("data", (data) => {
     const line = data.toString().trim();
     if (line) console.log(`[daemon:stdout] ${line}`);
+    extractPort(line);
   });
 
   child.stderr?.on("data", (data) => {
     const line = data.toString().trim();
     if (line) console.log(`[daemon:stderr] ${line}`);
-    // Try to extract port from stderr output (common pattern: "Listening on :3456")
-    const portMatch = line.match(/(?:Listening on|Server running at|started on).*?:(\d+)/i);
-    if (portMatch && !healthUrl) {
-      healthUrl = `http://127.0.0.1:${portMatch[1]}/health`;
-    }
+    extractPort(line);
   });
 
   child.on("error", (err) => {
@@ -154,12 +159,10 @@ async function tryHealthCheck(url) {
 
 console.log("[smoke-test] Waiting for daemon health...");
 
-// If we didn't get port from output, try common defaults
-const fallbackPorts = [3001, 3002, 3003, 3004, 3005];
 let resolved = false;
 
 while (Date.now() - startTime < TIMEOUT_MS) {
-  // Try the port extracted from output
+  // Only check the port extracted from sidecar output — no fallback to common ports
   if (healthUrl) {
     if (await tryHealthCheck(healthUrl)) {
       console.log(`[smoke-test] PASS: health check OK at ${healthUrl}`);
@@ -167,18 +170,6 @@ while (Date.now() - startTime < TIMEOUT_MS) {
       break;
     }
   }
-
-  // Try fallback ports
-  for (const p of fallbackPorts) {
-    const url = `http://127.0.0.1:${p}/health`;
-    if (await tryHealthCheck(url)) {
-      console.log(`[smoke-test] PASS: health check OK at ${url}`);
-      resolved = true;
-      healthUrl = url;
-      break;
-    }
-  }
-  if (resolved) break;
 
   // Check if process already exited
   if (child.exitCode !== null) {

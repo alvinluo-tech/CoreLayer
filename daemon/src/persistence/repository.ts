@@ -512,6 +512,7 @@ export interface AgentRunRepository {
   getById(id: string): Promise<AgentRunRow | null>;
   getByConversation(conversationId: string): Promise<AgentRunRow[]>;
   getRecent(limit?: number): Promise<AgentRunRow[]>;
+  getQueued(limit?: number): Promise<AgentRunRow[]>;
   updateStatus(id: string, status: AgentRunRow["status"], error?: string): Promise<void>;
   updateArtifacts(id: string, artifacts: unknown[]): Promise<void>;
 }

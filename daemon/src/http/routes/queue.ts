@@ -32,7 +32,7 @@ queueRoutes.get("/status", async (c) => {
 });
 
 /**
- * GET /api/runtime/resources - Current resource usage
+ * GET /api/runtime/queue/resources - Current resource usage
  */
 queueRoutes.get("/resources", async (c) => {
   try {

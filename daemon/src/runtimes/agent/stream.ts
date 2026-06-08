@@ -11,7 +11,7 @@ import type {
   AgentRunEvent,
 } from "./domain/agent-run.js";
 import { getRepositories } from "../../persistence/factory.js";
-import { streamChat } from "./application/conversation.js";
+import { handleMessage, isAiConfigured, streamChat } from "./application/conversation.js";
 import { normalizeStream } from "../../shared/stream/sse-normalizer.js";
 import { withStreamTimeout } from "../../shared/stream/stream-timeout.js";
 import { configManager } from "../../config/config-manager.js";
@@ -130,6 +130,61 @@ export async function runStreamTurn(
   // Build the async iterable that yields AgentRunEvents
   const eventStream = async function* (): AsyncGenerator<AgentRunEvent> {
     yield emitAndPersist({ type: "run_started", runId: run.id, mode: request.mode });
+
+    if (!isAiConfigured()) {
+      try {
+        const localResult = await handleMessage(request.input);
+        fullText = localResult.reply;
+
+        for (const toolCall of localResult.toolCalls) {
+          toolCallsLog.push({
+            name: toolCall.name,
+            input: toolCall.args ?? null,
+            output: toolCall.result ?? null,
+          });
+          yield emitAndPersist({
+            type: "tool_call",
+            toolCall: {
+              id: toolCall.name,
+              name: toolCall.name,
+              args: toolCall.args ?? null,
+              result: toolCall.result ?? null,
+            },
+          });
+        }
+
+        if (fullText) {
+          yield emitAndPersist({ type: "delta", text: fullText });
+        }
+
+        const savedAssistantMessage = await conversations.addMessage(conversationId, {
+          role: "assistant",
+          content: fullText,
+          toolCalls: toolCallsLog.length > 0 ? JSON.stringify(toolCallsLog) : undefined,
+        });
+
+        await agentRuns.updateStatus(run.id, "succeeded");
+        const conversation = await conversations.getById(conversationId);
+        yield emitAndPersist({
+          type: "run_completed",
+          result: {
+            text: fullText,
+            conversationId,
+            userMessage: savedUserMessage,
+            assistantMessage: savedAssistantMessage,
+            conversation,
+          },
+        });
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        logError("runStreamTurn/localFallback", err);
+        yield emitAndPersist({ type: "run_failed", error: errorMsg });
+        await agentRuns.updateStatus(run.id, "failed", errorMsg);
+      } finally {
+        clearTimeout(watchdogId);
+      }
+      return;
+    }
 
     let stream: Awaited<ReturnType<typeof streamChat>>;
     try {

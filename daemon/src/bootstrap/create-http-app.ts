@@ -38,7 +38,7 @@ export function createHttpApp(): Hono {
     return c.json({ error: "Route not found" }, 404);
   });
 
-  app.get("/health", (c) => {
+  app.get("/api/health", (c) => {
     return c.json({
       status: "ok",
       timestamp: new Date().toISOString(),

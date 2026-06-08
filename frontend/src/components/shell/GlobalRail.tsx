@@ -51,28 +51,6 @@ export function GlobalRail({
         flexShrink: 0,
       }}
     >
-      {/* Logo / status orb */}
-      <div
-        className="mb-3 flex items-center justify-center"
-        style={{
-          width: 36,
-          height: 36,
-          borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(0,212,255,0.15) 0%, transparent 70%)',
-          border: '1px solid rgba(0,212,255,0.2)',
-        }}
-      >
-        <div
-          style={{
-            width: 8,
-            height: 8,
-            borderRadius: '50%',
-            background: 'var(--cyan)',
-            boxShadow: '0 0 8px var(--cyan-glow)',
-          }}
-        />
-      </div>
-
       {/* Navigation items */}
       <div className="flex-1 flex flex-col items-center gap-1">
         {navItems.map((item) => {

@@ -71,12 +71,8 @@ export function BottomStatusBar() {
   return (
     <div
       style={{
-        position: 'fixed',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        zIndex: 10,
         height: 28,
+        minHeight: 28,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -88,6 +84,9 @@ export function BottomStatusBar() {
         fontSize: 9,
         color: 'var(--text-tertiary)',
         letterSpacing: 1,
+        flexShrink: 0,
+        position: 'relative',
+        zIndex: 10,
       }}
     >
       <div

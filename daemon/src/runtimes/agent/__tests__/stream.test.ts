@@ -172,6 +172,8 @@ vi.mock("../../../persistence/factory.js", () => ({
 
 // Mock streamChat to return a fake stream with text-delta events (AI SDK shape)
 vi.mock("../application/conversation.js", () => ({
+  handleMessage: vi.fn().mockResolvedValue({ reply: "local reply", toolCalls: [] }),
+  isAiConfigured: vi.fn().mockReturnValue(true),
   streamChat: vi.fn().mockImplementation(
     (
       _messages: unknown,

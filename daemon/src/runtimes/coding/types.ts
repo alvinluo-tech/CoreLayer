@@ -15,6 +15,8 @@ export type CodingRunStatus =
 
 /** Input for creating a coding run */
 export interface CodingTask {
+  /** Optional DB run ID — adapters should use this instead of generating their own */
+  dbRunId?: string;
   /** Repository path (absolute) */
   repoPath: string;
   /** Worktree path for isolated execution (optional, auto-created if not provided) */

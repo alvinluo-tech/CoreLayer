@@ -9,6 +9,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // Mock the persistence factory before importing the module under test
 const mockCreate = vi.fn();
 const mockGetRecent = vi.fn();
+const mockGetQueued = vi.fn();
 const mockGetById = vi.fn();
 const mockUpdateStatus = vi.fn();
 
@@ -17,6 +18,7 @@ vi.mock("../../persistence/factory.js", () => ({
     agentRuns: {
       create: mockCreate,
       getRecent: mockGetRecent,
+      getQueued: mockGetQueued,
       getById: mockGetById,
       updateStatus: mockUpdateStatus,
     },
@@ -103,8 +105,7 @@ describe("enqueue", () => {
 describe("dequeue", () => {
   it("returns the next queued run", async () => {
     const queued = makeRun({ id: "run-queued", status: "queued", completedAt: null });
-    const running = makeRun({ id: "run-running", status: "running", completedAt: null });
-    mockGetRecent.mockResolvedValue([running, queued]);
+    mockGetQueued.mockResolvedValue([queued]);
 
     const result = await dequeue();
 
@@ -113,7 +114,7 @@ describe("dequeue", () => {
   });
 
   it("returns null when queue is empty", async () => {
-    mockGetRecent.mockResolvedValue([]);
+    mockGetQueued.mockResolvedValue([]);
 
     const result = await dequeue();
 
@@ -121,8 +122,7 @@ describe("dequeue", () => {
   });
 
   it("skips completed runs", async () => {
-    const completed = makeRun({ id: "run-done", status: "succeeded", completedAt: "2026-01-01T00:01:00Z" });
-    mockGetRecent.mockResolvedValue([completed]);
+    mockGetQueued.mockResolvedValue([]);
 
     const result = await dequeue();
 
@@ -130,8 +130,7 @@ describe("dequeue", () => {
   });
 
   it("skips cancelled runs", async () => {
-    const cancelled = makeRun({ id: "run-cancel", status: "cancelled", completedAt: null });
-    mockGetRecent.mockResolvedValue([cancelled]);
+    mockGetQueued.mockResolvedValue([]);
 
     const result = await dequeue();
 

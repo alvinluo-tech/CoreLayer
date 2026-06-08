@@ -28,17 +28,33 @@ const processes = new Map<string, number>(); // runId → pid
 let sequenceCounter = 0;
 
 function emitEvent(runId: string, type: string, payload: unknown): void {
+  const seq = ++sequenceCounter;
+  const event: CodingRunEvent = {
+    runId,
+    sequence: seq,
+    type: type as CodingRunEvent["type"],
+    payload,
+    createdAt: new Date().toISOString(),
+  };
+
+  // In-memory streaming
   const queue = eventQueues.get(runId);
   if (queue) {
-    const event: CodingRunEvent = {
-      runId,
-      sequence: ++sequenceCounter,
-      type: type as CodingRunEvent["type"],
-      payload,
-      createdAt: new Date().toISOString(),
-    };
     queue.events.push(event);
     queue.resolve();
+  }
+
+  // Persist to agent_run_events table (best-effort)
+  try {
+    const { agentRunEvents } = getRepositories();
+    agentRunEvents.create({
+      runId,
+      sequence: seq,
+      type,
+      payload,
+    }).catch(() => {});
+  } catch {
+    // DB persistence is best-effort
   }
 }
 
@@ -47,7 +63,7 @@ export class CodexAdapter implements CodingRuntime {
   readonly name = "Codex";
 
   async createRun(task: CodingTask): Promise<CodingRunInfo> {
-    const runId = crypto.randomUUID();
+    const runId = task.dbRunId ?? crypto.randomUUID();
     const now = new Date().toISOString();
 
     // Pre-flight: check if codex command exists

@@ -10,21 +10,48 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 // ---- Mocks ----
 
 const mockGetRecent = vi.fn();
+const mockGetQueued = vi.fn();
 const mockUpdateStatus = vi.fn();
 const mockGetById = vi.fn();
+const mockUpdateArtifacts = vi.fn();
+const mockAgentProfilesGetById = vi.fn();
+const mockTasksGetById = vi.fn();
 
 vi.mock("../../persistence/factory.js", () => ({
   getRepositories: vi.fn(() => ({
     agentRuns: {
       getRecent: (...args: unknown[]) => mockGetRecent(...args),
+      getQueued: (...args: unknown[]) => mockGetQueued(...args),
       updateStatus: (...args: unknown[]) => mockUpdateStatus(...args),
       getById: (...args: unknown[]) => mockGetById(...args),
+      updateArtifacts: (...args: unknown[]) => mockUpdateArtifacts(...args),
+    },
+    agentProfiles: {
+      getById: (...args: unknown[]) => mockAgentProfilesGetById(...args),
+    },
+    tasks: {
+      getById: (...args: unknown[]) => mockTasksGetById(...args),
+    },
+    agentRunEvents: {
+      create: vi.fn().mockResolvedValue({}),
     },
   })),
 }));
 
 vi.mock("../../runtimes/coding/process-spawner.js", () => ({
   getActiveProcessCount: vi.fn(() => 0),
+}));
+
+const mockCreateRun = vi.fn();
+const mockAdapterCancelRun = vi.fn().mockResolvedValue(true);
+vi.mock("../../runtimes/coding/registry.js", () => ({
+  getCodingRuntime: vi.fn(() => ({
+    id: "claude-code",
+    name: "Claude Code",
+    createRun: (...args: unknown[]) => mockCreateRun(...args),
+    cancelRun: (...args: unknown[]) => mockAdapterCancelRun(...args),
+    getRunStatus: vi.fn().mockResolvedValue({ status: "running", artifacts: [] }),
+  })),
 }));
 
 const mockCanStartAgentRun = vi.fn().mockReturnValue(true);
@@ -72,7 +99,7 @@ const { dispatchRuns, completeRun, cancelRun, retryRun, getDispatcherStatus } = 
 function createRun(overrides: { id?: string; status?: string; completedAt?: string | null } = {}) {
   return {
     id: overrides.id ?? "run-1",
-    status: overrides.status ?? "running",
+    status: overrides.status ?? "queued",
     completedAt: overrides.completedAt ?? null,
     conversationId: "conv-1",
     input: "test input",
@@ -89,8 +116,13 @@ beforeEach(() => {
   mockAcquireAgentRun.mockReturnValue(true);
   mockIsResourcePressureHigh.mockReturnValue(false);
   mockGetRecent.mockResolvedValue([]);
+  mockGetQueued.mockResolvedValue([]);
   mockGetById.mockResolvedValue(null);
   mockUpdateStatus.mockResolvedValue(undefined);
+  mockUpdateArtifacts.mockResolvedValue(undefined);
+  mockAgentProfilesGetById.mockResolvedValue(null);
+  mockTasksGetById.mockResolvedValue(null);
+  mockCreateRun.mockResolvedValue({ runId: "coding-run-1", status: "running" });
   mockReleaseAgentRun.mockImplementation(() => {});
   mockSetAgentRunQueueDepth.mockImplementation(() => {});
   mockGetUsage.mockReturnValue({
@@ -106,7 +138,7 @@ beforeEach(() => {
 
 describe("dispatchRuns", () => {
   it("returns empty result when no pending runs", async () => {
-    mockGetRecent.mockResolvedValue([]);
+    mockGetQueued.mockResolvedValue([]);
 
     const result = await dispatchRuns();
 
@@ -115,7 +147,7 @@ describe("dispatchRuns", () => {
   });
 
   it("dispatches pending runs when slots are available", async () => {
-    mockGetRecent.mockResolvedValue([
+    mockGetQueued.mockResolvedValue([
       createRun({ id: "run-1" }),
       createRun({ id: "run-2" }),
     ]);
@@ -142,7 +174,7 @@ describe("dispatchRuns", () => {
     });
     mockAcquireAgentRun.mockReturnValue(true);
 
-    mockGetRecent.mockResolvedValue([
+    mockGetQueued.mockResolvedValue([
       createRun({ id: "run-1" }),
       createRun({ id: "run-2" }),
       createRun({ id: "run-3" }),
@@ -164,7 +196,7 @@ describe("dispatchRuns", () => {
     expect(result.skipped).toBe(0);
     expect(result.reason).toBe("High resource pressure — deferring dispatch");
     // Should not query runs at all
-    expect(mockGetRecent).not.toHaveBeenCalled();
+    expect(mockGetQueued).not.toHaveBeenCalled();
   });
 
   it("returns early when no slots available", async () => {
@@ -175,26 +207,11 @@ describe("dispatchRuns", () => {
     expect(result.dispatched).toBe(0);
     expect(result.skipped).toBe(0);
     expect(result.reason).toBe("All agent run slots occupied");
-    expect(mockGetRecent).not.toHaveBeenCalled();
-  });
-
-  it("filters out completed runs from pending list", async () => {
-    mockGetRecent.mockResolvedValue([
-      createRun({ id: "run-1", status: "running" }),
-      createRun({ id: "run-2", status: "succeeded", completedAt: "2026-01-01T00:00:00Z" }),
-      createRun({ id: "run-3", status: "running" }),
-    ]);
-    mockAcquireAgentRun.mockReturnValue(true);
-
-    const result = await dispatchRuns();
-
-    // Only run-1 and run-3 are pending (running without completedAt)
-    expect(result.dispatched).toBe(2);
-    expect(mockAcquireAgentRun).not.toHaveBeenCalledWith("run-2");
+    expect(mockGetQueued).not.toHaveBeenCalled();
   });
 
   it("does not update queue depth when no pending runs", async () => {
-    mockGetRecent.mockResolvedValue([]);
+    mockGetQueued.mockResolvedValue([]);
     mockCanStartAgentRun.mockReturnValue(true);
 
     await dispatchRuns();
@@ -212,7 +229,7 @@ describe("dispatchRuns", () => {
     });
     mockAcquireAgentRun.mockReturnValue(true);
 
-    mockGetRecent.mockResolvedValue([
+    mockGetQueued.mockResolvedValue([
       createRun({ id: "run-1" }),
       createRun({ id: "run-2" }),
     ]);
@@ -226,7 +243,7 @@ describe("dispatchRuns", () => {
 
   it("sets queue depth to skipped count", async () => {
     mockCanStartAgentRun.mockReturnValue(false);
-    mockGetRecent.mockResolvedValue([
+    mockGetQueued.mockResolvedValue([
       createRun({ id: "run-1" }),
       createRun({ id: "run-2" }),
     ]);
@@ -238,7 +255,7 @@ describe("dispatchRuns", () => {
   });
 
   it("returns zero dispatched when acquireAgentRun fails", async () => {
-    mockGetRecent.mockResolvedValue([createRun({ id: "run-1" })]);
+    mockGetQueued.mockResolvedValue([createRun({ id: "run-1" })]);
     mockCanStartAgentRun.mockReturnValue(true);
     mockAcquireAgentRun.mockReturnValue(false);
 
@@ -328,13 +345,13 @@ describe("cancelRun", () => {
 // ---- retryRun ----
 
 describe("retryRun", () => {
-  it("retries a failed run by resetting to running", async () => {
+  it("retries a failed run by resetting to queued", async () => {
     mockGetById.mockResolvedValue(createRun({ id: "run-1", status: "failed" }));
 
     const result = await retryRun("run-1");
 
     expect(result).toBe(true);
-    expect(mockUpdateStatus).toHaveBeenCalledWith("run-1", "running");
+    expect(mockUpdateStatus).toHaveBeenCalledWith("run-1", "queued");
   });
 
   it("returns false when run does not exist", async () => {

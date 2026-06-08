@@ -1,4 +1,4 @@
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, asc } from "drizzle-orm";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import { db as defaultDb, schema } from "../client.js";
 import type {
@@ -96,29 +96,55 @@ export function createSqliteAgentRunRepo(database?: DrizzleDb): AgentRunReposito
       return rows.map(mapRow);
     },
 
+    async getQueued(limit = 100): Promise<AgentRunRow[]> {
+      const rows = db
+        .select()
+        .from(schema.agentRuns)
+        .where(eq(schema.agentRuns.status, "queued"))
+        .orderBy(asc(schema.agentRuns.startedAt))
+        .limit(limit)
+        .all();
+      return rows.map(mapRow);
+    },
+
     async updateStatus(
       id: string,
       status: AgentRunRow["status"],
       error?: string,
     ): Promise<void> {
+      const isTerminal = status === "succeeded" || status === "failed" || status === "cancelled";
       const now = new Date().toISOString();
-      const existing = db
-        .select()
-        .from(schema.agentRuns)
-        .where(eq(schema.agentRuns.id, id))
-        .get();
-      const durationMs = existing
-        ? Date.now() - new Date(existing.startedAt).getTime()
-        : null;
-      db.update(schema.agentRuns)
-        .set({
-          status,
-          completedAt: now,
-          durationMs,
-          error: error ?? null,
-        })
-        .where(eq(schema.agentRuns.id, id))
-        .run();
+
+      if (isTerminal) {
+        const existing = db
+          .select()
+          .from(schema.agentRuns)
+          .where(eq(schema.agentRuns.id, id))
+          .get();
+        const durationMs = existing
+          ? Date.now() - new Date(existing.startedAt).getTime()
+          : null;
+        db.update(schema.agentRuns)
+          .set({
+            status,
+            completedAt: now,
+            durationMs,
+            error: error ?? null,
+          })
+          .where(eq(schema.agentRuns.id, id))
+          .run();
+      } else {
+        // Non-terminal (queued, running, waiting_for_approval): clear terminal fields
+        db.update(schema.agentRuns)
+          .set({
+            status,
+            completedAt: null,
+            durationMs: null,
+            error: null,
+          })
+          .where(eq(schema.agentRuns.id, id))
+          .run();
+      }
     },
 
     async updateArtifacts(id: string, artifacts: unknown[]): Promise<void> {

@@ -8,6 +8,9 @@
 import { getRepositories } from "../persistence/factory.js";
 import { SlotManager } from "./slot-manager.js";
 import { getResourceStatus, isResourcePressureHigh } from "./resource-monitor.js";
+import { getCodingRuntime } from "../runtimes/coding/registry.js";
+import type { CodingTask } from "../runtimes/coding/types.js";
+import { isAgentExecutorPolicy } from "../shared/agent-profile-types.js";
 
 export interface DispatchResult {
   dispatched: number;
@@ -34,9 +37,8 @@ export async function dispatchRuns(): Promise<DispatchResult> {
     return { dispatched: 0, skipped: 0, reason: "All agent run slots occupied" };
   }
 
-  // Get queued runs (status "running" but not completed = newly created, awaiting dispatch)
-  const runs = await agentRuns.getRecent(100);
-  const pendingRuns = runs.filter((r) => r.status === "running" && !r.completedAt);
+  // Get queued runs awaiting dispatch (FIFO order by createdAt)
+  const pendingRuns = await agentRuns.getQueued(100);
 
   if (pendingRuns.length === 0) {
     return { dispatched: 0, skipped: 0 };
@@ -58,8 +60,15 @@ export async function dispatchRuns(): Promise<DispatchResult> {
       continue;
     }
 
-    // In a real implementation, this would invoke the runtime host
-    // For now, we just mark the run as dispatched
+    // Transition queued → running
+    await agentRuns.updateStatus(run.id, "running");
+
+    // Dispatch to coding executor
+    dispatchToCodingRuntime(run.id, run.agentId, run.taskId).catch((err) => {
+      // If dispatch fails, mark run as failed and release slot
+      completeRun(run.id, false, err instanceof Error ? err.message : String(err));
+    });
+
     dispatched++;
   }
 
@@ -67,6 +76,80 @@ export async function dispatchRuns(): Promise<DispatchResult> {
   slotManager.setAgentRunQueueDepth(skipped);
 
   return { dispatched, skipped };
+}
+
+/**
+ * Dispatch a single run to the coding runtime based on the agent's executor policy.
+ */
+async function dispatchToCodingRuntime(
+  runId: string,
+  agentId: string | null,
+  taskId: string | null,
+): Promise<void> {
+  const { agentRuns, agentProfiles, tasks } = getRepositories();
+
+  // Resolve adapter ID from agent profile's executor policy
+  let adapterId = "claude-code"; // default
+  let workDir: string | undefined;
+
+  if (agentId) {
+    const profile = await agentProfiles.getById(agentId);
+    if (profile?.executorPolicy && isAgentExecutorPolicy(profile.executorPolicy)) {
+      if (profile.executorPolicy.executor === "self") {
+        throw new Error("Executor 'self' is not supported for coding tasks — use 'claude-code', 'codex', or 'opencode'");
+      }
+      adapterId = profile.executorPolicy.executor;
+      workDir = profile.executorPolicy.workDir;
+    }
+  }
+
+  const adapter = getCodingRuntime(adapterId);
+  if (!adapter) {
+    throw new Error(`Unknown coding adapter: ${adapterId}`);
+  }
+
+  // Build CodingTask from task + run info
+  let taskPrompt = `Execute agent run ${runId}`;
+  let repoPath = workDir ?? process.cwd();
+
+  if (taskId) {
+    const task = await tasks.getById(taskId);
+    if (task) {
+      taskPrompt = task.objective ?? task.description ?? task.title;
+      // TODO: task may have a repoPath field in the future
+    }
+  }
+
+  const codingTask: CodingTask = {
+    dbRunId: runId,
+    repoPath,
+    taskPrompt,
+    timeoutMs: 300_000, // 5 min default
+  };
+
+  // Create run via adapter — adapter will spawn subprocess
+  const codingRun = await adapter.createRun(codingTask);
+
+  // Persist artifacts when adapter completes
+  const pollCompletion = async (): Promise<void> => {
+    const maxWait = codingTask.timeoutMs! + 10_000;
+    const start = Date.now();
+    while (Date.now() - start < maxWait) {
+      const info = await adapter.getRunStatus(codingRun.runId);
+      if (info.status === "succeeded" || info.status === "failed" || info.status === "cancelled") {
+        await agentRuns.updateArtifacts(runId, info.artifacts);
+        await completeRun(runId, info.status === "succeeded", info.error);
+        return;
+      }
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+    // Timeout — mark as failed
+    await completeRun(runId, false, "Coding run timed out");
+  };
+
+  pollCompletion().catch(() => {
+    // Best-effort completion tracking
+  });
 }
 
 /**
@@ -81,14 +164,31 @@ export async function completeRun(runId: string, success: boolean, error?: strin
 
 /**
  * Cancel a running or queued run.
+ * Also kills the external process if one was spawned.
  */
 export async function cancelRun(runId: string): Promise<boolean> {
-  const { agentRuns } = getRepositories();
+  const { agentRuns, agentProfiles } = getRepositories();
   const run = await agentRuns.getById(runId);
   if (!run) return false;
 
   if (run.status === "succeeded" || run.status === "failed" || run.status === "cancelled") {
     return false; // Already terminal
+  }
+
+  // Try to kill the external process via the adapter
+  if (run.agentId) {
+    try {
+      const profile = await agentProfiles.getById(run.agentId);
+      if (profile?.executorPolicy && isAgentExecutorPolicy(profile.executorPolicy)) {
+        const adapterId = profile.executorPolicy.executor === "self" ? "claude-code" : profile.executorPolicy.executor;
+        const adapter = getCodingRuntime(adapterId);
+        if (adapter) {
+          await adapter.cancelRun(runId).catch(() => {});
+        }
+      }
+    } catch {
+      // Best-effort process kill — DB update still proceeds
+    }
   }
 
   await agentRuns.updateStatus(runId, "cancelled");
@@ -108,8 +208,8 @@ export async function retryRun(runId: string): Promise<boolean> {
     return false; // Can only retry failed runs
   }
 
-  // Reset to queued state
-  await agentRuns.updateStatus(runId, "running");
+  // Reset to queued state so dispatcher picks it up
+  await agentRuns.updateStatus(runId, "queued");
   return true;
 }
 
