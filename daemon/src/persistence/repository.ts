@@ -626,6 +626,7 @@ export interface AgentProfileRow {
   name: string;
   description: string | null;
   modelPolicy: unknown;
+  executorPolicy: unknown;
   skills: string[];
   tools: string[];
   knowledgeScopes: string[];
@@ -640,6 +641,7 @@ export interface CreateAgentProfileInput {
   name: string;
   description?: string;
   modelPolicy?: unknown;
+  executorPolicy?: unknown;
   skills?: string[];
   tools?: string[];
   knowledgeScopes?: string[];
@@ -652,6 +654,7 @@ export interface UpdateAgentProfileData {
   name?: string;
   description?: string;
   modelPolicy?: unknown;
+  executorPolicy?: unknown;
   skills?: string[];
   tools?: string[];
   knowledgeScopes?: string[];

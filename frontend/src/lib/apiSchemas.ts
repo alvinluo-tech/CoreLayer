@@ -135,6 +135,7 @@ export const agentProfileSchema = z.object({
   name: z.string(),
   description: z.string().nullable(),
   modelPolicy: z.unknown(),
+  executorPolicy: z.unknown().nullable(),
   skills: z.array(z.string()),
   tools: z.array(z.string()),
   knowledgeScopes: z.array(z.string()),

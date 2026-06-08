@@ -4,6 +4,32 @@ import { agentProfileListResponseSchema, type AgentProfile } from '@/lib/apiSche
 
 export type { AgentProfile };
 
+interface CreateAgentInput {
+  name: string;
+  description?: string;
+  modelPolicy?: unknown;
+  executorPolicy?: unknown;
+  skills?: string[];
+  tools?: string[];
+  knowledgeScopes?: string[];
+  permissions?: string[];
+  memoryScopes?: string[];
+  isDefault?: boolean;
+}
+
+interface UpdateAgentInput {
+  name?: string;
+  description?: string | null;
+  modelPolicy?: unknown;
+  executorPolicy?: unknown;
+  skills?: string[];
+  tools?: string[];
+  knowledgeScopes?: string[];
+  permissions?: string[];
+  memoryScopes?: string[];
+  isDefault?: boolean;
+}
+
 interface AgentState {
   agents: AgentProfile[];
   selectedId: string | null;
@@ -12,9 +38,13 @@ interface AgentState {
 
   fetchAgents: () => Promise<void>;
   selectAgent: (id: string | null) => void;
+  createAgent: (input: CreateAgentInput) => Promise<AgentProfile>;
+  updateAgent: (id: string, data: UpdateAgentInput) => Promise<AgentProfile>;
+  deleteAgent: (id: string) => Promise<void>;
+  setDefaultAgent: (id: string) => Promise<AgentProfile>;
 }
 
-export const useAgentStore = create<AgentState>((set) => ({
+export const useAgentStore = create<AgentState>((set, get) => ({
   agents: [],
   selectedId: null,
   isLoading: false,
@@ -34,5 +64,39 @@ export const useAgentStore = create<AgentState>((set) => ({
 
   selectAgent: (id) => {
     set({ selectedId: id });
+  },
+
+  createAgent: async (input) => {
+    const raw = await jarvisClient.post<{ data: AgentProfile }>('/api/agent-profiles', input);
+    const profile = raw.data;
+    set((state) => ({ agents: [...state.agents, profile] }));
+    return profile;
+  },
+
+  updateAgent: async (id, data) => {
+    const raw = await jarvisClient.patch<{ data: AgentProfile }>(`/api/agent-profiles/${id}`, data);
+    const profile = raw.data;
+    set((state) => ({
+      agents: state.agents.map((a) => (a.id === id ? profile : a)),
+    }));
+    return profile;
+  },
+
+  deleteAgent: async (id) => {
+    await jarvisClient.del(`/api/agent-profiles/${id}`);
+    set((state) => ({
+      agents: state.agents.filter((a) => a.id !== id),
+      selectedId: state.selectedId === id ? null : state.selectedId,
+    }));
+  },
+
+  setDefaultAgent: async (id) => {
+    await jarvisClient.post(`/api/agent-profiles/${id}/set-default`);
+    set((state) => ({
+      agents: state.agents.map((a) =>
+        a.id === id ? { ...a, isDefault: true } : { ...a, isDefault: false }
+      ),
+    }));
+    return get().agents.find((a) => a.id === id)!;
   },
 }));

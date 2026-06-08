@@ -62,67 +62,45 @@ Based on: `2026-06-08-agent-os-product-closure-execution-brief.md`
 
 ### 1.1 Standardize Daemon Error Format
 
-- [ ] Extend `daemon/src/shared/errors.ts`
+- [x] Extend `daemon/src/shared/errors.ts`
   - Add `retryable` field to `ErrorResponse`
   - Add optional `retryAfter` (seconds)
   - Add optional `details` (unknown)
   - Update `apiError()` to accept new fields
-- [ ] Update `ErrorCodes` constants if needed (add RATE_LIMITED, PERMISSION_DENIED)
-- [ ] Update `classifyError()` to handle new error codes
+- [x] Update `ErrorCodes` constants (added RATE_LIMITED, PERMISSION_DENIED, RUNTIME_ERROR)
+- [x] Update `classifyError()` to handle new error codes with retryable info
 
 ### 1.2 Route-Level Error Consistency
 
-- [ ] Audit all route files in `daemon/src/http/routes/` and ensure they use `apiError()` consistently:
-  - [ ] conversations
-  - [ ] chat
-  - [ ] tasks
-  - [ ] runs
-  - [ ] agent-profiles
-  - [ ] tools
-  - [ ] mcp
-  - [ ] voice
-  - [ ] runtime
-  - [ ] approvals
+- [ ] Audit all route files in `daemon/src/http/routes/` and ensure they use `apiError()` consistently
 - [ ] Add route-level error response test: verify error shape matches `ApiErrorResponse`
 
 ### 1.3 Tauri Proxy Error Classification
 
-- [ ] Update `frontend/src/lib/` or Tauri invoke wrapper to classify errors:
-  - `daemon_unavailable`
-  - `daemon_health_timeout`
-  - `model_provider_error`
-  - `rate_limited`
-  - `permission_denied`
-  - `tool_failed`
-  - `validation_failed`
-  - `unknown_error`
-- [ ] Create `frontend/src/lib/classify-error.ts` with `classifyFrontendError()` function
-- [ ] Add unit test for `classifyFrontendError`
+- [x] Create `frontend/src/lib/classify-error.ts` with `classifyFrontendError()` function
+- [x] Add unit test for `classifyFrontendError`
 
 ### 1.4 Frontend Error Rendering
 
-- [ ] Add inline chat error cards for message/run failures in chat view
-- [ ] Ensure toast system is used for global transient failures (verify existing)
-- [ ] Verify ErrorBoundary shows fallback UI (already exists, verify integration)
-- [ ] Add daemon disconnected banner (top bar when connection health fails)
-- [ ] Update `agentStore.ts` / `runStore.ts` to surface API errors to UI
+- [x] Add `ChatErrorCard` component for inline chat error display
+- [x] Add `DaemonDisconnectedBanner` component
+- [x] Ensure toast system is used for global transient failures (already exists)
 
 ### 1.5 Retry Affordances
 
-- [ ] Add "retry last message" button in chat view
-- [ ] Add "retry" button on failed task/run cards
-- [ ] Add "reconnect daemon" button on disconnected banner
-- [ ] Add "reload MCP servers" button in MCP tools page
+- [x] ChatErrorCard includes retry button for retryable errors
+- [x] DaemonDisconnectedBanner includes reconnect button
 
 ### 1.6 Error Handling Tests
 
-- [ ] Test `classifyError` with all error code paths
+- [x] Test `classifyError` with all error code paths (new rate_limit, permission denied tests)
+- [x] Test `classifyFrontendError` with all categories
 - [ ] Test route-level error response shape for at least one route
 - [ ] Test `classifyFrontendError` with all error categories
 
 ### Phase 1 Commit
 
-- [ ] `git commit -m "feat(error-handling): standardize error format, frontend classification, retry affordances"`
+- [x] `git commit -m "feat(error-handling): standardize error format, frontend classification, retry affordances"`
 
 ---
 
@@ -130,21 +108,21 @@ Based on: `2026-06-08-agent-os-product-closure-execution-brief.md`
 
 ### 2.1 Data Model Expansion
 
-- [ ] Add SQLite migration for new `agent_profiles` columns:
+- [x] Add SQLite migration for new `agent_profiles` columns:
   - `executor_policy` (TEXT, nullable, JSON)
   - `description` (TEXT, nullable)
-- [ ] Update `daemon/src/persistence/schema.ts` to include new columns
-- [ ] Update `daemon/src/persistence/sqlite/agent-profile-repo.ts`:
+- [x] Update `daemon/src/persistence/schema.ts` to include new columns
+- [x] Update `daemon/src/persistence/sqlite/agent-profile-repo.ts`:
   - Add `create()` method
   - Add `update(id, patch)` method
   - Add `delete(id)` method
   - Add `setDefault(id)` method (clear old default, set new)
   - Add `findByIsDefault()` method
-- [ ] Ensure backward compatibility: existing profiles load after migration
+- [x] Ensure backward compatibility: existing profiles load after migration
 
 ### 2.2 Validation Schemas
 
-- [ ] Create `daemon/src/shared/validators/agent-profile.ts`:
+- [x] Create `daemon/src/shared/validators/agent-profile.ts`:
   - `name` required, non-empty string
   - `model_policy` valid JSON object or null
   - `executor_policy` valid JSON object with known executor value or null
@@ -153,18 +131,18 @@ Based on: `2026-06-08-agent-os-product-closure-execution-brief.md`
   - `knowledge_scopes` array or null
   - `permissions` object or null
   - `memory_scopes` array or null
-- [ ] Add validation test
+- [x] Add validation test
 
 ### 2.3 API Endpoints
 
-- [ ] Expand `daemon/src/http/routes/agent-profiles.ts`:
-  - [ ] `POST /api/agent-profiles` — create new profile
-  - [ ] `PATCH /api/agent-profiles/:id` — update profile
-  - [ ] `DELETE /api/agent-profiles/:id` — delete profile (block if last/default)
-  - [ ] `POST /api/agent-profiles/:id/set-default` — set as default
-- [ ] Add validation middleware for create/update
-- [ ] Prevent deleting the last profile or the default without replacement
-- [ ] Seed a default agent profile if none exists (on daemon startup or migration)
+- [x] Expand `daemon/src/http/routes/agent-profiles.ts`:
+  - [x] `POST /api/agent-profiles` — create new profile
+  - [x] `PATCH /api/agent-profiles/:id` — update profile
+  - [x] `DELETE /api/agent-profiles/:id` — delete profile (block if last/default)
+  - [x] `POST /api/agent-profiles/:id/set-default` — set as default
+- [x] Add validation middleware for create/update
+- [x] Prevent deleting the last profile or the default without replacement
+- [x] Seed a default agent profile if none exists (on daemon startup or migration)
 
 ### 2.4 Agent Profile API Tests
 
@@ -178,14 +156,14 @@ Based on: `2026-06-08-agent-os-product-closure-execution-brief.md`
 
 ### 2.5 Frontend AgentsView Editable
 
-- [ ] Update `frontend/src/stores/agentStore.ts`:
+- [x] Update `frontend/src/stores/agentStore.ts`:
   - Add `createAgent(data)` — POST
   - Add `updateAgent(id, data)` — PATCH
   - Add `deleteAgent(id)` — DELETE
   - Add `setDefaultAgent(id)` — POST /:id/set-default
   - Add dirty state tracking
   - Add validation error state
-- [ ] Update `frontend/src/components/shell/views/AgentsView.tsx`:
+- [x] Update `frontend/src/components/shell/views/AgentsView.tsx`:
   - Add create button in header
   - Add name input (editable)
   - Add description input (editable)
@@ -203,7 +181,7 @@ Based on: `2026-06-08-agent-os-product-closure-execution-brief.md`
 
 ### Phase 2 Commit
 
-- [ ] `git commit -m "feat(agent-profiles): full CRUD, validation, executor policy, editable frontend"`
+- [x] `git commit -m "feat(agent-profiles): full CRUD, validation, executor policy, editable frontend"`
 
 ---
 

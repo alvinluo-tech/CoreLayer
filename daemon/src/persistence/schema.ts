@@ -36,6 +36,7 @@ export const agentProfiles = sqliteTable("agent_profiles", {
   name: text("name").notNull(),
   description: text("description"),
   modelPolicy: text("model_policy").notNull().default("{}"), // JSON: preferred_models, fallback
+  executorPolicy: text("executor_policy"), // JSON: executor config
   skills: text("skills").notNull().default("[]"), // JSON array
   tools: text("tools").notNull().default("[]"), // JSON array
   knowledgeScopes: text("knowledge_scopes").notNull().default("[]"), // JSON array

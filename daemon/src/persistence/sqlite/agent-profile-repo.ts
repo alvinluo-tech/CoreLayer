@@ -20,6 +20,7 @@ export function createSqliteAgentProfileRepo(): AgentProfileRepository {
         name: input.name,
         description: input.description ?? null,
         modelPolicy: JSON.stringify(input.modelPolicy ?? {}),
+        executorPolicy: input.executorPolicy != null ? JSON.stringify(input.executorPolicy) : null,
         skills: JSON.stringify(input.skills ?? []),
         tools: JSON.stringify(input.tools ?? []),
         knowledgeScopes: JSON.stringify(input.knowledgeScopes ?? []),
@@ -63,6 +64,7 @@ export function createSqliteAgentProfileRepo(): AgentProfileRepository {
       if (data.name !== undefined) updateData.name = data.name;
       if (data.description !== undefined) updateData.description = data.description;
       if (data.modelPolicy !== undefined) updateData.modelPolicy = JSON.stringify(data.modelPolicy);
+      if (data.executorPolicy !== undefined) updateData.executorPolicy = data.executorPolicy != null ? JSON.stringify(data.executorPolicy) : null;
       if (data.skills !== undefined) updateData.skills = JSON.stringify(data.skills);
       if (data.tools !== undefined) updateData.tools = JSON.stringify(data.tools);
       if (data.knowledgeScopes !== undefined)
@@ -92,6 +94,7 @@ function mapRow(row: typeof agentProfiles.$inferSelect): AgentProfileRow {
     name: row.name,
     description: row.description,
     modelPolicy: JSON.parse(row.modelPolicy),
+    executorPolicy: row.executorPolicy ? JSON.parse(row.executorPolicy) : null,
     skills: JSON.parse(row.skills),
     tools: JSON.parse(row.tools),
     knowledgeScopes: JSON.parse(row.knowledgeScopes),

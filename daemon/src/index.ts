@@ -29,6 +29,30 @@ initializeRepositories(storageMode);
 // Register all tool connectors
 registerAllTools();
 
+// Seed default agent profile if none exists
+async function seedDefaultAgent() {
+  try {
+    const repos = getRepositories();
+    const existing = await repos.agentProfiles.getDefault();
+    if (!existing) {
+      await repos.agentProfiles.create({
+        name: "Default Agent",
+        description: "The default general-purpose agent with standard tools and skills.",
+        isDefault: true,
+        modelPolicy: { preferred_models: ["mimo-v2.5-pro"], fallback: "mimo-v2.5" },
+        skills: [],
+        tools: [],
+        permissions: ["chat", "task_management"],
+        memoryScopes: ["user"],
+      });
+      console.log("[Jarvis] Seeded default agent profile");
+    }
+  } catch (err) {
+    console.error("[Jarvis] Failed to seed default agent:", err);
+  }
+}
+seedDefaultAgent();
+
 // Create HTTP app
 const app = createHttpApp();
 
