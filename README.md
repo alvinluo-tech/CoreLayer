@@ -180,18 +180,18 @@ Coreling is the assistant avatar used in onboarding, voice mode, loading states,
 
 ## Tech Stack
 
-| Layer | Tech |
-|---|---|
-| Desktop | Tauri 2 |
-| Frontend | React 19, Vite, Tailwind CSS, shadcn/ui |
-| State | Zustand |
-| Daemon | Node.js, Hono |
-| Database | SQLite, Drizzle ORM |
-| AI SDK | Vercel AI SDK |
-| Models | MiMo, Groq, OpenRouter, Ollama, OpenAI-compatible |
-| Voice | Web Speech API, Groq Whisper, MiMo TTS |
-| Protocol | MCP (Model Context Protocol) |
-| Package Manager | pnpm workspaces |
+| Layer           | Tech                                              |
+| --------------- | ------------------------------------------------- |
+| Desktop         | Tauri 2                                           |
+| Frontend        | React 19, Vite, Tailwind CSS, shadcn/ui           |
+| State           | Zustand                                           |
+| Daemon          | Node.js, Hono                                     |
+| Database        | SQLite, Drizzle ORM                               |
+| AI SDK          | Vercel AI SDK                                     |
+| Models          | MiMo, Groq, OpenRouter, Ollama, OpenAI-compatible |
+| Voice           | Web Speech API, Groq Whisper, MiMo TTS            |
+| Protocol        | MCP (Model Context Protocol)                      |
+| Package Manager | pnpm workspaces                                   |
 
 ---
 
@@ -297,6 +297,29 @@ This starts the Hono daemon and Tauri desktop window concurrently.
 
 ---
 
+## Installation & Running FAQ
+
+### 1. macOS displays "App is damaged and should be moved to the Trash"
+
+- **Reason**: Because this application is not signed or notarized using a paid Apple Developer Account, macOS Gatekeeper automatically quarantines downloaded binaries and flags them as damaged.
+- **Solution**:
+  1. Drag `Jarvis.app` from the mounted `.dmg` into your **Applications** folder.
+  2. Open the **Terminal** app and run the following command (enter your Mac login password when prompted):
+     ```bash
+     sudo xattr -r -d com.apple.quarantine /Applications/Jarvis.app
+     ```
+  3. Re-open `Jarvis.app` to launch it normally.
+
+### 2. Windows Installer warns about locked files during override installation
+
+- **Reason**: The background `jarvis-daemon.exe` process from a previous installation is still running and locking native libraries (like `better_sqlite3.node`).
+- **Solution**: The installer package has automated hooks to terminate active processes. If you still see the file locking prompt, open Task Manager and manually end all `jarvis-daemon.exe` processes, or run the following command in Command Prompt before retrying:
+  ```cmd
+  taskkill /f /im jarvis-daemon.exe
+  ```
+
+---
+
 ## Example Commands
 
 Ask Jarvis:
@@ -335,11 +358,11 @@ What tools are currently enabled?
 
 CoreLayer classifies tools by risk level.
 
-| Risk | Behavior | Example |
-|---|---|---|
-| **Low** | Auto-execute | Reading current tasks |
-| **Medium** | Execute with notice | Creating a new task |
-| **High** | Requires confirmation | Deleting a project |
+| Risk         | Behavior                   | Example               |
+| ------------ | -------------------------- | --------------------- |
+| **Low**      | Auto-execute               | Reading current tasks |
+| **Medium**   | Execute with notice        | Creating a new task   |
+| **High**     | Requires confirmation      | Deleting a project    |
 | **Critical** | Explicit approval required | System-level commands |
 
 All tool calls are written to audit logs with duration, risk level, and result status.
@@ -385,11 +408,11 @@ Providers can be added via the Control Center UI with preset catalogs or custom 
 
 CoreLayer supports three storage modes, hot-swappable at runtime:
 
-| Mode | Description |
-|---|---|
+| Mode             | Description                                             |
+| ---------------- | ------------------------------------------------------- |
 | **Local SQLite** | Zero-config, offline-first, data stays on your machine. |
-| **Supabase** | One-click multi-device cloud sync. |
-| **PostgreSQL** | Compatible with AWS RDS, Neon, Aiven, or self-hosted. |
+| **Supabase**     | One-click multi-device cloud sync.                      |
+| **PostgreSQL**   | Compatible with AWS RDS, Neon, Aiven, or self-hosted.   |
 
 Switch databases in real-time without restarting the app.
 
