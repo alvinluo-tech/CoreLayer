@@ -2,7 +2,7 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::fs::OpenOptions;
 use std::net::TcpListener;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
@@ -37,6 +37,7 @@ pub struct DaemonSupervisor {
     selected_port: Option<u16>,
     log_path: Option<String>,
     sidecar_path: Option<PathBuf>,
+    resource_dir: Option<PathBuf>,
     last_health_check: Arc<Mutex<Option<String>>>,
     last_error: Arc<Mutex<Option<String>>>,
     app_data_dir: Option<PathBuf>,
@@ -56,6 +57,7 @@ impl DaemonSupervisor {
             selected_port: None,
             log_path: None,
             sidecar_path: None,
+            resource_dir: None,
             last_health_check: Arc::new(Mutex::new(None)),
             last_error: Arc::new(Mutex::new(None)),
             app_data_dir: None,
@@ -82,6 +84,7 @@ impl DaemonSupervisor {
         self.owns_process = true;
         self.selected_port = Some(allocate_port());
         self.url = format!("http://127.0.0.1:{}", self.selected_port.unwrap());
+        self.resource_dir = app_handle.path().resource_dir().ok();
         self.sidecar_path = match find_daemon_sidecar(app_handle) {
             Ok(path) => Some(path),
             Err(err) => {
@@ -127,21 +130,46 @@ impl DaemonSupervisor {
             sidecar_path.display()
         );
 
-        // Set up environment variables
-        let app_data_str = app_data.to_string_lossy().to_string();
+        // Set up environment variables and strip UNC prefixes for Node.js compatibility
+        let sidecar_path_clean = clean_path(&sidecar_path);
+        let app_data_clean = clean_path(app_data);
+        let app_data_str = app_data_clean.to_string_lossy().to_string();
+        let module_root = clean_path(find_sidecar_module_root(
+            &sidecar_path,
+            self.resource_dir.as_deref(),
+        ));
+        let log_dir = clean_path(app_data.join("logs"))
+            .to_string_lossy()
+            .to_string();
 
         let stdout_log = open_daemon_log(self.log_path.as_deref(), "stdout")?;
         let stderr_log = open_daemon_log(self.log_path.as_deref(), "stderr")?;
 
-        let mut cmd = Command::new(&sidecar_path);
+        let mut cmd = Command::new(&sidecar_path_clean);
+        if let Some(parent) = sidecar_path_clean.parent() {
+            cmd.current_dir(parent);
+        }
+
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::process::CommandExt;
+            let drives = ["C", "D", "E", "F", "G", "H"];
+            for drive in drives.iter() {
+                cmd.env(format!("={}:", drive), format!("{}:\\", drive));
+            }
+            // Prevent a black console window from popping up on Windows
+            cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+        }
+
         cmd.env("DAEMON_HOST", "127.0.0.1")
             .env("DAEMON_PORT", port.to_string())
             .env("JARVIS_RUNTIME_MODE", "sidecar")
             .env("JARVIS_APP_DATA_DIR", &app_data_str)
             .env(
-                "JARVIS_LOG_DIR",
-                app_data.join("logs").to_string_lossy().as_ref(),
+                "JARVIS_SIDECAR_MODULE_ROOT",
+                module_root.to_string_lossy().as_ref(),
             )
+            .env("JARVIS_LOG_DIR", &log_dir)
             .stdout(Stdio::from(stdout_log))
             .stderr(Stdio::from(stderr_log));
 
@@ -373,6 +401,41 @@ fn find_daemon_sidecar_error() -> String {
     )
 }
 
+fn find_sidecar_module_root(sidecar_path: &Path, resource_dir: Option<&Path>) -> PathBuf {
+    if let Some(dir) = resource_dir {
+        if dir.join("node_modules").exists() {
+            return dir.to_path_buf();
+        }
+        if dir.join("binaries").join("node_modules").exists() {
+            return dir.join("binaries");
+        }
+    }
+
+    if let Some(dir) = sidecar_path.parent() {
+        if dir.join("node_modules").exists() {
+            return dir.to_path_buf();
+        }
+        if dir.join("binaries").join("node_modules").exists() {
+            return dir.join("binaries");
+        }
+    }
+
+    sidecar_path
+        .parent()
+        .unwrap_or_else(|| Path::new("."))
+        .to_path_buf()
+}
+
+fn clean_path<P: AsRef<Path>>(path: P) -> PathBuf {
+    let path = path.as_ref();
+    let path_str = path.to_string_lossy();
+    if path_str.starts_with(r"\\?\") {
+        PathBuf::from(&path_str[4..])
+    } else {
+        path.to_path_buf()
+    }
+}
+
 fn sidecar_packaged_name() -> String {
     if cfg!(target_os = "windows") {
         "jarvis-daemon.exe".to_string()
@@ -478,4 +541,26 @@ pub async fn restart_daemon(
 ) -> Result<DaemonStatus, String> {
     let mut supervisor = state.0.lock().await;
     supervisor.restart(&app_handle).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_clean_path() {
+        let path = Path::new(r"\\?\C:\Users\test");
+        let cleaned = clean_path(path);
+        assert_eq!(cleaned.to_str().unwrap(), r"C:\Users\test");
+    }
+
+    #[test]
+    fn test_rust_env_equals() {
+        let mut cmd = Command::new("node");
+        cmd.arg("-e").arg("console.log(process.env['=C:'])");
+        cmd.env("=C:", "C:\\");
+        let output = cmd.output().unwrap();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert_eq!(stdout.trim(), "C:\\");
+    }
 }

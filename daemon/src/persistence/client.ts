@@ -1,18 +1,28 @@
-import Database from "better-sqlite3";
+import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import * as schema from "./schema.js";
 import { resolveAppPaths, ensureAppDirs } from "../config/app-paths.js";
 import { mkdirSync } from "node:fs";
-import { dirname } from "node:path";
+import { dirname, join } from "node:path";
+import { createRequire } from "node:module";
+
+type BetterSqlite3Constructor = new (
+  filename: string,
+  options?: import("better-sqlite3").Options,
+) => import("better-sqlite3").Database;
 
 const appPaths = resolveAppPaths();
 ensureAppDirs(appPaths);
 const dbPath = appPaths.sqlitePath;
 mkdirSync(dirname(dbPath), { recursive: true });
 
+const sidecarModuleRoot = process.env.JARVIS_SIDECAR_MODULE_ROOT || dirname(process.execPath);
+const requireFromSidecarDir = createRequire(join(sidecarModuleRoot, "package.json"));
+const Database = requireFromSidecarDir("better-sqlite3") as BetterSqlite3Constructor;
 const sqlite = new Database(dbPath);
 sqlite.pragma("journal_mode = WAL");
 sqlite.pragma("foreign_keys = ON");
+const db: BetterSQLite3Database<typeof schema> = drizzle(sqlite, { schema });
 
 // Create tables if they don't exist
 sqlite.exec(`
@@ -670,5 +680,5 @@ sqlite.exec(`
   CREATE INDEX IF NOT EXISTS idx_audit_log_created ON audit_log(created_at);
 `);
 
-export const db = drizzle(sqlite, { schema });
+export { db };
 export { schema };

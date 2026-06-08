@@ -1,16 +1,12 @@
 import type { Repositories } from "./repository.js";
 import { createSqliteRepositories } from "./sqlite/index.js";
+import { createSupabaseRepositories } from "./supabase/index.js";
 
 let currentRepositories: Repositories | null = null;
 let currentMode: "local" | "cloud" | "postgres" = "local";
 
 export function createRepositories(mode: "local" | "cloud" | "postgres"): Repositories {
   if (mode === "cloud") {
-    // Lazy import to avoid loading Supabase client when not needed
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { createSupabaseRepositories } = require("./supabase/index.js") as {
-      createSupabaseRepositories: () => Repositories;
-    };
     return createSupabaseRepositories();
   }
   

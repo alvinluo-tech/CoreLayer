@@ -63,3 +63,6 @@ frontend/mockups/
 
 # Codex config
 .codex/
+
+# Build artifacts
+.sea-temp/

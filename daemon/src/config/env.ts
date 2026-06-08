@@ -1,10 +1,9 @@
 import dotenv from "dotenv";
 import path from "path";
-import { fileURLToPath } from "url";
 
-// Load .env from project root (parent of daemon/)
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
+if (process.env.JARVIS_RUNTIME_MODE !== "sidecar") {
+  dotenv.config({ path: path.resolve(process.cwd(), ".env") });
+}
 
 function getEnvVar(key: string, fallbackKeys: string[] = [], defaultValue?: string): string {
   let value = process.env[key];
@@ -37,7 +36,7 @@ export const env = {
 
   // Server
   DAEMON_PORT: parseInt(getEnvVar("DAEMON_PORT", [], "3001"), 10),
-  DAEMON_HOST: getEnvVar("DAEMON_HOST", [], "localhost"),
+  DAEMON_HOST: getEnvVar("DAEMON_HOST", [], "127.0.0.1"),
 
   // Runtime (set by Tauri supervisor in sidecar mode)
   JARVIS_RUNTIME_MODE: getEnvVar("JARVIS_RUNTIME_MODE", [], "dev") as "dev" | "sidecar" | "external",

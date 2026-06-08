@@ -21,6 +21,7 @@
     "clean:app": "taskkill /f /im jarvis-app.exe /im Jarvis.exe 2>nul || exit 0",
     "clean:daemon": "for /f \"tokens=5\" %a in ('netstat -aon ^| findstr 3001') do taskkill /f /pid %a 2>nul || exit 0",
     "clean:all": "pnpm clean:app && pnpm clean:daemon",
+    "clean:sea": "rm -rf .sea-temp",
     "prepare": "husky",
     "commitlint": "commitlint --edit",
     "release": "standard-version",
@@ -37,13 +38,14 @@
     "eslint-plugin-react-hooks": "^5.0.0",
     "husky": "^9.0.0",
     "lint-staged": "^15.0.0",
+    "postject": "^1.0.0-alpha.6",
     "prettier": "^3.4.0",
     "standard-version": "^9.5.0",
     "typescript": "^5.7.0",
     "typescript-eslint": "^8.0.0"
   },
   "engines": {
-    "node": ">=20.0.0",
+    "node": ">=22.0.0",
     "pnpm": ">=9.0.0"
   },
   "pnpm": {
