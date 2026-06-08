@@ -12,7 +12,6 @@ import { HudDecorations } from './HudDecorations';
 import { BottomStatusBar } from './BottomStatusBar';
 import { ShellLayout } from './ShellLayout';
 import { GlobalRail } from './GlobalRail';
-import { ContextPane } from './ContextPane';
 import { AssistantView } from './views/AssistantView';
 import { TasksView } from './views/TasksView';
 import { RunsView } from './views/RunsView';
@@ -636,7 +635,7 @@ export function AppShell() {
             runningRunCount={activeRunCount}
           />
         }
-        contextPane={activeView === 'assistant' ? <ContextPane /> : undefined}
+        contextPane={undefined}
         mainSurface={renderMainContent()}
         inspector={<InspectorPane />}
       />
