@@ -1,6 +1,6 @@
 // frontend/src/components/data-panel/dataPanelTypes.ts
 
-export type PanelKind = 'list' | 'stats' | 'detail' | 'adaptive' | 'empty' | 'error';
+export type PanelKind = 'list' | 'stats' | 'detail' | 'adaptive' | 'chart' | 'empty' | 'error';
 export type DensityMode = 'detailed' | 'compact' | 'grid';
 
 export type FieldType =

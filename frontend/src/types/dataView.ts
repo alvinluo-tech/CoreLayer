@@ -1,4 +1,10 @@
-import type { DataViewSchema, DataViewType, DataViewItemShape, RenderHint } from '@jarvis/types';
+import type {
+  DataViewSchema,
+  DataViewType,
+  DataViewItemShape,
+  RenderHint,
+  ChartType,
+} from '@jarvis/types';
 
 export const STATUS_COLORS: Record<string, string> = {
   done: '#10b981',
@@ -12,4 +18,4 @@ export const STATUS_COLORS: Record<string, string> = {
   failed: '#ef4444',
 };
 
-export type { DataViewSchema, DataViewType, DataViewItemShape, RenderHint };
+export type { DataViewSchema, DataViewType, DataViewItemShape, RenderHint, ChartType };

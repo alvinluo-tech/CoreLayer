@@ -3,6 +3,7 @@ import { registerReadingTools } from "../runtimes/tool/adapters/native-tools/rea
 import { registerReviewTools } from "../runtimes/tool/adapters/native-tools/review/connector.js";
 import { registerConversationTools } from "../runtimes/tool/adapters/native-tools/conversation.js";
 import { registerMemoryTools } from "../runtimes/memory/connector.js";
+import { registerChartTools } from "../runtimes/tool/adapters/native-tools/chart.js";
 import { registerAllAdapters } from "../gateways/mcp/adapters/index.js";
 
 export function registerAllTools(): void {
@@ -11,5 +12,6 @@ export function registerAllTools(): void {
   registerReviewTools();
   registerConversationTools();
   registerMemoryTools();
+  registerChartTools();
   registerAllAdapters();
 }

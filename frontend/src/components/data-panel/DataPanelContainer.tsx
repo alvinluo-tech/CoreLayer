@@ -8,6 +8,7 @@ import { DataPanelList } from './renderers/DataPanelList';
 import { DataPanelStats } from './renderers/DataPanelStats';
 import { DataPanelDetail } from './renderers/DataPanelDetail';
 import { AdaptiveRenderer } from './renderers/AdaptiveRenderer';
+import { DataPanelChart } from './renderers/DataPanelChart';
 import { GenericJSON } from './renderers/GenericJSON';
 import type { DataPanelViewModel } from './dataPanelTypes';
 import './data-panel.css';
@@ -232,6 +233,8 @@ function getIcon(type: DataViewType | 'generic' | 'detail' | 'adaptive'): string
       return '▦';
     case 'timeline':
       return '⏱';
+    case 'chart':
+      return '◆';
     case 'adaptive':
       return '◇';
     default:
@@ -257,6 +260,8 @@ function renderContent(
       ) : (
         <GenericJSON data={data} />
       );
+    case 'chart':
+      return <DataPanelChart data={data} schema={schema} />;
     case 'adaptive':
       return viewModel?.detail?.fields ? (
         <AdaptiveRenderer fields={viewModel.detail.fields} density={viewModel.density} />

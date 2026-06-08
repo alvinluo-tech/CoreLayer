@@ -144,6 +144,8 @@ function mapKindToRendererType(kind: PanelKind): ResolvedRenderer['type'] {
       return 'detail';
     case 'adaptive':
       return 'adaptive';
+    case 'chart':
+      return 'chart';
     case 'empty':
       return 'generic';
     case 'error':

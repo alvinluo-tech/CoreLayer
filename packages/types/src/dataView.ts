@@ -1,4 +1,6 @@
-export type DataViewType = 'list' | 'stats' | 'detail' | 'table' | 'timeline';
+export type DataViewType = 'list' | 'stats' | 'detail' | 'table' | 'timeline' | 'chart';
+
+export type ChartType = 'line' | 'bar' | 'pie' | 'scatter';
 
 export interface DataViewItemShape {
   primary: string;
@@ -18,6 +20,11 @@ export interface DataViewSchema {
   groupBy?: string;
   sortBy?: string;
   actions?: string[];
+  /** Chart-specific config (only when type === 'chart'). */
+  chartType?: ChartType;
+  xKey?: string;
+  yKeys?: string[];
+  seriesKey?: string;
 }
 
 export interface RenderHint {
