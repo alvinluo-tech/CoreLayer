@@ -386,4 +386,195 @@ voiceRoutes.post("/realtime-session", async (c) => {
   }
 });
 
+/**
+ * GET /api/voice/providers
+ * Returns all registered voice provider definitions with availability status.
+ */
+voiceRoutes.get("/providers", (c) => {
+  const definitions = voiceRegistry.getDefinitions();
+  const result = definitions.map((def) => {
+    const isAsr = def.kind === "asr" || def.kind === "both";
+    const isTts = def.kind === "tts" || def.kind === "both";
+
+    let available = false;
+    if (isAsr) {
+      const asr = voiceRegistry.getASR(def.id);
+      if (asr?.isAvailable()) available = true;
+    }
+    if (isTts) {
+      const tts = voiceRegistry.getTTS(def.id);
+      if (tts?.isAvailable()) available = true;
+    }
+
+    return {
+      id: def.id,
+      name: def.name,
+      kind: def.kind,
+      models: def.models,
+      voices: def.voices,
+      requiresApiKey: def.requiresApiKey,
+      localOnly: def.localOnly,
+      available,
+      hasApiKey: configManager.getCredentials()[def.credentialKey] ? true : false,
+    };
+  });
+
+  return c.json({ providers: result });
+});
+
+/**
+ * GET /api/voice/config
+ * Returns current voice configuration.
+ */
+voiceRoutes.get("/config", (c) => {
+  const voiceConfig = configManager.getVoiceConfig();
+  return c.json({
+    asrProvider: voiceConfig.asrProvider ?? "",
+    asrModel: voiceConfig.asrModel ?? "",
+    ttsProvider: voiceConfig.ttsProvider ?? "",
+    ttsModel: voiceConfig.ttsModel ?? "mimo-v2.5-tts",
+    ttsVoice: voiceConfig.ttsVoice ?? "茉莉",
+    ttsSpeed: voiceConfig.ttsSpeed ?? 1.0,
+  });
+});
+
+/**
+ * PUT /api/voice/config
+ * Save voice configuration. Body: { asrProvider?, asrModel?, ttsProvider?, ttsModel?, ttsVoice?, ttsSpeed? }
+ * For API key updates, use PUT /api/voice/credentials.
+ */
+voiceRoutes.put("/config", async (c) => {
+  const body = await c.req.json<{
+    asrProvider?: string;
+    asrModel?: string;
+    ttsProvider?: string;
+    ttsModel?: string;
+    ttsVoice?: string;
+    ttsSpeed?: number;
+  }>().catch(() => null);
+
+  if (!body) {
+    return c.json({ error: "Invalid request body" }, 400);
+  }
+
+  configManager.updateVoiceConfig(body);
+  return c.json({ success: true, config: configManager.getVoiceConfig() });
+});
+
+/**
+ * PUT /api/voice/credentials
+ * Update API key for a voice provider. Body: { providerId, apiKey }
+ * Keys are stored in credentials.json (temporary path — migrate to SecretStore when ready).
+ */
+voiceRoutes.put("/credentials", async (c) => {
+  const body = await c.req.json<{ providerId: string; apiKey: string }>().catch(() => null);
+
+  if (!body?.providerId || !body.apiKey) {
+    return c.json({ error: "providerId and apiKey are required" }, 400);
+  }
+
+  const definition = voiceRegistry.getDefinition(body.providerId);
+  if (!definition) {
+    return c.json({ error: `Unknown provider: ${body.providerId}` }, 400);
+  }
+
+  if (!definition.requiresApiKey) {
+    return c.json({ error: `Provider ${body.providerId} does not require an API key` }, 400);
+  }
+
+  // Store in credentials.json using the provider's credentialKey
+  configManager.setCredential(definition.credentialKey, body.apiKey);
+  return c.json({ success: true });
+});
+
+/**
+ * POST /api/voice/test-tts
+ * Test TTS synthesis with sample text. Body: { providerId?, text?, voice?, speed? }
+ * Returns audio buffer on success, error on failure.
+ */
+voiceRoutes.post("/test-tts", async (c) => {
+  const body = await c.req.json<{
+    providerId?: string;
+    text?: string;
+    voice?: string;
+    speed?: number;
+  }>().catch(() => null);
+
+  const providerId = body?.ttsProvider ?? body?.providerId;
+  const testText = body?.text ?? "你好，我是 Jarvis 语音助手，正在测试语音合成功能。";
+  const voice = body?.voice;
+  const speed = body?.speed;
+
+  // Resolve provider
+  const provider = providerId
+    ? voiceRegistry.getTTS(providerId)
+    : voiceRegistry.getDefaultTTS();
+
+  if (!provider) {
+    return c.json({ error: "No TTS provider available" }, 503);
+  }
+
+  if (!provider.isAvailable()) {
+    return c.json({ error: `TTS provider "${provider.name}" is not available (API key missing)` }, 503);
+  }
+
+  try {
+    const result = await provider.synthesize({ text: testText, voice, speed });
+    return new Response(new Uint8Array(result.audio), {
+      headers: {
+        "Content-Type": "audio/wav",
+        "X-TTS-Provider": result.provider,
+      },
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return c.json({ error: `TTS test failed: ${message}` }, 500);
+  }
+});
+
+/**
+ * POST /api/voice/test-asr
+ * Test ASR transcription with a small audio sample. Accepts audio file upload.
+ * Body: multipart form with "audio" file and optional "providerId".
+ */
+voiceRoutes.post("/test-asr", async (c) => {
+  try {
+    const formData = await c.req.formData();
+    const audioFile = formData.get("audio");
+    const providerId = formData.get("providerId") as string | null;
+
+    if (!audioFile || !(audioFile instanceof File)) {
+      return c.json({ error: "Missing audio file" }, 400);
+    }
+
+    const arrayBuffer = await audioFile.arrayBuffer();
+    const audioBuffer = Buffer.from(arrayBuffer);
+    const filename = audioFile.name || "audio.webm";
+
+    // Resolve provider
+    const provider = providerId
+      ? voiceRegistry.getASR(providerId)
+      : voiceRegistry.getDefaultASR();
+
+    if (!provider) {
+      return c.json({ error: "No ASR provider available" }, 503);
+    }
+
+    if (!provider.isAvailable()) {
+      return c.json({ error: `ASR provider "${provider.name}" is not available (API key missing)` }, 503);
+    }
+
+    const result = await provider.transcribe({
+      audio: audioBuffer,
+      filename,
+      language: formData.get("language") as string | undefined,
+    });
+
+    return c.json(result);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return c.json({ error: `ASR test failed: ${message}` }, 500);
+  }
+});
+
 export default voiceRoutes;

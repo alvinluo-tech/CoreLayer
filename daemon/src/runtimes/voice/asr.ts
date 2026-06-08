@@ -5,7 +5,7 @@ import { tmpdir } from "os";
 import { join } from "path";
 import { createReadStream } from "fs";
 import type { ASRProvider, ASROptions, ASRResult } from "./providers.js";
-import { voiceRegistry } from "./providers.js";
+import { voiceRegistry, type VoiceProviderDefinition } from "./providers.js";
 
 export interface TranscriptionResult {
   text: string;
@@ -98,3 +98,16 @@ class GroqASRProvider implements ASRProvider {
 
 // Register on module load
 voiceRegistry.registerASR(new GroqASRProvider());
+
+voiceRegistry.registerDefinition({
+  id: "groq",
+  name: "Groq Whisper",
+  kind: "asr",
+  models: [
+    { id: "whisper-large-v3-turbo", name: "Whisper Large V3 Turbo" },
+    { id: "whisper-large-v3", name: "Whisper Large V3" },
+    { id: "whisper-medium", name: "Whisper Medium" },
+  ],
+  requiresApiKey: true,
+  credentialKey: "groq",
+} satisfies VoiceProviderDefinition);

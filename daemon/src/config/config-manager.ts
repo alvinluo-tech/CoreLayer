@@ -104,12 +104,26 @@ export interface JarvisConfig {
     modelId?: string;
     providerId?: string;
   };
+  voice?: VoiceConfig;
   migrated?: boolean;
+}
+
+export interface VoiceConfig {
+  asrProvider?: string;
+  asrModel?: string;
+  ttsProvider?: string;
+  ttsModel?: string;
+  ttsVoice?: string;
+  ttsSpeed?: number;
 }
 
 export type Credentials = Record<string, string>;
 
 // ---- Config directory ----
+// NOTE: credentials.json stores API keys in plaintext. This is a temporary
+// solution until SecretStore (Rust-side encrypted storage) is implemented.
+// Migration plan: move credential reads/writes to SecretStore, keeping
+// credentials.json as an unencrypted fallback for development only.
 
 function getConfigDir(): string {
   return process.env.JARVIS_HOME || join(homedir(), ".jarvis", "config");
@@ -356,6 +370,16 @@ class ConfigManager {
   updateTickConfig(partial: Partial<JarvisConfig["tick"]>): void {
     const current = this.getConfig();
     this.updateConfig({ tick: { ...current.tick, ...partial } });
+  }
+
+  getVoiceConfig(): VoiceConfig {
+    return this.getConfig().voice ?? {};
+  }
+
+  updateVoiceConfig(partial: Partial<VoiceConfig>): void {
+    const current = this.getConfig();
+    const merged = { ...current.voice, ...partial };
+    this.updateConfig({ voice: merged });
   }
 }
 

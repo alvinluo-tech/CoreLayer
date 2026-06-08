@@ -29,6 +29,13 @@ vi.mock("../../runtimes/voice/providers.js", () => ({
   voiceRegistry: {
     getAvailableASR: vi.fn().mockReturnValue([]),
     getAvailableTTS: vi.fn().mockReturnValue([]),
+    getDefinitions: vi.fn().mockReturnValue([]),
+    getDefinitionsByKind: vi.fn().mockReturnValue([]),
+    getDefinition: vi.fn().mockReturnValue(undefined),
+    getASR: vi.fn().mockReturnValue(undefined),
+    getTTS: vi.fn().mockReturnValue(undefined),
+    getDefaultASR: vi.fn().mockReturnValue(null),
+    getDefaultTTS: vi.fn().mockReturnValue(null),
   },
 }));
 
@@ -40,6 +47,16 @@ vi.mock("../../config/config-manager.js", () => ({
   configManager: {
     getCredentials: vi.fn(() => ({})),
     getProviderConfig: vi.fn(() => ({ baseURL: "", apiKey: "" })),
+    getVoiceConfig: vi.fn(() => ({
+      asrProvider: "",
+      asrModel: "",
+      ttsProvider: "",
+      ttsModel: "mimo-v2.5-tts",
+      ttsVoice: "茉莉",
+      ttsSpeed: 1.0,
+    })),
+    updateVoiceConfig: vi.fn(),
+    setCredential: vi.fn(),
   },
 }));
 
@@ -226,6 +243,132 @@ describe("voice routes", () => {
         body: JSON.stringify({ text: "hello" }),
       });
       expect(res.status).toBe(503);
+    });
+  });
+
+  describe("GET /api/voice/providers", () => {
+    it("returns provider definitions", async () => {
+      const { voiceRegistry } = await import("../../runtimes/voice/providers.js");
+      vi.mocked(voiceRegistry.getDefinitions).mockReturnValue([
+        {
+          id: "groq",
+          name: "Groq Whisper",
+          kind: "asr",
+          models: [{ id: "whisper-large-v3-turbo", name: "Whisper V3 Turbo" }],
+          requiresApiKey: true,
+          credentialKey: "groq",
+        },
+      ]);
+
+      const res = await app.request("/api/voice/providers");
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.providers).toHaveLength(1);
+      expect(body.providers[0].id).toBe("groq");
+    });
+  });
+
+  describe("GET /api/voice/config", () => {
+    it("returns voice configuration", async () => {
+      const res = await app.request("/api/voice/config");
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body).toHaveProperty("ttsModel");
+      expect(body).toHaveProperty("ttsVoice");
+      expect(body).toHaveProperty("ttsSpeed");
+    });
+  });
+
+  describe("PUT /api/voice/config", () => {
+    it("saves voice configuration", async () => {
+      const { configManager } = await import("../../config/config-manager.js");
+      const res = await app.request("/api/voice/config", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ttsProvider: "mimo", ttsSpeed: 1.2 }),
+      });
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.success).toBe(true);
+      expect(configManager.updateVoiceConfig).toHaveBeenCalledWith({ ttsProvider: "mimo", ttsSpeed: 1.2 });
+    });
+
+    it("returns 400 for invalid body", async () => {
+      const res = await app.request("/api/voice/config", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: "not json",
+      });
+      expect(res.status).toBe(400);
+    });
+  });
+
+  describe("PUT /api/voice/credentials", () => {
+    it("saves API key for known provider", async () => {
+      const { voiceRegistry } = await import("../../runtimes/voice/providers.js");
+      const { configManager } = await import("../../config/config-manager.js");
+      vi.mocked(voiceRegistry.getDefinition).mockReturnValue({
+        id: "groq",
+        name: "Groq Whisper",
+        kind: "asr",
+        models: [],
+        requiresApiKey: true,
+        credentialKey: "groq",
+      });
+
+      const res = await app.request("/api/voice/credentials", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ providerId: "groq", apiKey: "sk-test" }),
+      });
+      expect(res.status).toBe(200);
+      expect(configManager.setCredential).toHaveBeenCalledWith("groq", "sk-test");
+    });
+
+    it("returns 400 for unknown provider", async () => {
+      const { voiceRegistry } = await import("../../runtimes/voice/providers.js");
+      vi.mocked(voiceRegistry.getDefinition).mockReturnValue(undefined);
+
+      const res = await app.request("/api/voice/credentials", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ providerId: "unknown", apiKey: "key" }),
+      });
+      expect(res.status).toBe(400);
+    });
+
+    it("returns 400 for missing fields", async () => {
+      const res = await app.request("/api/voice/credentials", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ providerId: "groq" }),
+      });
+      expect(res.status).toBe(400);
+    });
+  });
+
+  describe("POST /api/voice/test-tts", () => {
+    it("returns 503 when no TTS provider available", async () => {
+      const { voiceRegistry } = await import("../../runtimes/voice/providers.js");
+      vi.mocked(voiceRegistry.getDefaultTTS).mockReturnValue(null);
+      vi.mocked(voiceRegistry.getTTS).mockReturnValue(undefined);
+
+      const res = await app.request("/api/voice/test-tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: "hello" }),
+      });
+      expect(res.status).toBe(503);
+    });
+  });
+
+  describe("POST /api/voice/test-asr", () => {
+    it("returns 400 for missing audio file", async () => {
+      const res = await app.request("/api/voice/test-asr", {
+        method: "POST",
+        body: new FormData(),
+      });
+      expect(res.status).toBe(400);
     });
   });
 });

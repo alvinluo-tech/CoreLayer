@@ -15,3 +15,4 @@ export { transcribeWithGroq, isAsrAvailable } from "./asr.js";
 export { synthesizeSpeech, isTtsAvailable, type TTSModel } from "./tts.js";
 export { StreamingTTS } from "./streaming-tts.js";
 export { voiceRegistry } from "./providers.js";
+export type { VoiceProviderDefinition, VoiceModel, VoiceDefinition } from "./providers.js";

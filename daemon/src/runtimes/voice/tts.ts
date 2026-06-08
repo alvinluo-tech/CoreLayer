@@ -1,6 +1,6 @@
 import { configManager } from "../../config/config-manager.js";
 import type { TTSProvider, TTSOptions as ProviderTTSOptions, TTSResult } from "./providers.js";
-import { voiceRegistry } from "./providers.js";
+import { voiceRegistry, type VoiceProviderDefinition } from "./providers.js";
 
 export type TTSModel = "mimo-v2.5-tts" | "mimo-v2.5-tts-voiceclone" | "mimo-v2.5-tts-voicedesign";
 
@@ -134,3 +134,20 @@ class MiMoTTSProvider implements TTSProvider {
 
 // Register on module load
 voiceRegistry.registerTTS(new MiMoTTSProvider());
+
+voiceRegistry.registerDefinition({
+  id: "mimo",
+  name: "MiMo TTS",
+  kind: "tts",
+  models: [
+    { id: "mimo-v2.5-tts", name: "MiMo V2.5 TTS" },
+    { id: "mimo-v2.5-tts-voiceclone", name: "MiMo V2.5 Voice Clone" },
+    { id: "mimo-v2.5-tts-voicedesign", name: "MiMo V2.5 Voice Design" },
+  ],
+  voices: [
+    { id: "茉莉", name: "茉莉 (Moli)" },
+    { id: "female-tianmei", name: "甜妹 (Tianmei)" },
+  ],
+  requiresApiKey: true,
+  credentialKey: "mimo",
+} satisfies VoiceProviderDefinition);
