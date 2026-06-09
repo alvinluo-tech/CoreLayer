@@ -29,6 +29,9 @@ export const projects = sqliteTable("projects", {
     .references(() => workspaces.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   description: text("description"),
+  spec: text("spec"),
+  techStack: text("tech_stack"),
+  rootPath: text("root_path"),
   status: text("status", { enum: ["active", "archived", "completed"] })
     .default("active")
     .notNull(),
