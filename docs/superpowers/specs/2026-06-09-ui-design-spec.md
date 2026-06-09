@@ -1388,20 +1388,104 @@ These fields exist in the database **today**:
 | role | text enum | user/assistant/system/tool |
 | content | text | |
 
-### 9.2 Missing Fields (Needed for Full Feature Set)
+### 9.2 Missing Domain Fields (Three-Layer Architecture)
 
-| Table | Field | Type | Purpose |
-|-------|-------|------|---------|
-| agent_profiles | role | text | Agent role (planner/coding/review/testing/research/general) |
-| agent_profiles | enabled | boolean | Enable/disable toggle |
-| workspaces | status | text enum | Workspace execution status |
-| workspaces | goal | text | User's goal description |
-| workspaces | progress | integer | Overall progress percentage |
-| workspaces | tokens_input | integer | Total input tokens used |
-| workspaces | tokens_output | integer | Total output tokens used |
-| workspaces | cost | text | Total cost string |
-| workspace_agents | (new table) | — | Maps agents to workspaces with role |
-| artifacts | (new table) | — | Structured artifact storage |
+> **Architecture**: DB Schema = stable domain facts → Domain Service = orchestration logic → API ViewModel = aggregated for frontend.
+> Don't put UI display fields (progress, tokens, cost) in the database. Derive them at the API layer.
+
+**Fields to add to existing tables (domain facts the Broker needs):**
+
+| Table | Field | Type | Why it's a domain fact |
+|-------|-------|------|----------------------|
+| agent_profiles | role | text | Broker needs role for agent selection |
+| agent_profiles | capabilities | text (JSON[]) | Structured capability declarations for Broker matching |
+| agent_profiles | enabled | boolean | Allow disabling agents without deleting |
+| workspaces | goal | text | User's original goal — core workspace identity |
+| workspaces | status | text enum | Workspace lifecycle state |
+| workspaces | active_project_id | text FK | Currently active project |
+| workspaces | completed_at | text | When workspace finished |
+
+**New tables (domain relationships):**
+
+| Table | Purpose |
+|-------|---------|
+| workspace_agents | Agent-to-workspace relationship with role, status, current task |
+| artifacts | First-class artifact entity for workspace-level aggregation |
+
+**Fields NOT in database (derived at API layer):**
+
+| Field | Derived From | Why not in DB |
+|-------|-------------|---------------|
+| progress | task statuses | Computed, not stored |
+| tokens | agent_runs sum | Aggregate, changes frequently |
+| cost | agent_runs sum | Aggregate, changes frequently |
+| agents list | workspace_agents + agent_profiles | Join, not JSON blob |
+| events/timeline | agent_run_events + approval_requests + tool_call_logs | Multi-table aggregation |
+| fileChanges | artifacts + tool_call_logs | Derived from events |
+
+**Target DB Schema:**
+
+```sql
+-- agent_profiles ( additions )
+ALTER TABLE agent_profiles ADD COLUMN role TEXT DEFAULT 'general';
+ALTER TABLE agent_profiles ADD COLUMN capabilities TEXT DEFAULT '[]'; -- JSON array
+ALTER TABLE agent_profiles ADD COLUMN enabled BOOLEAN DEFAULT 1;
+
+-- workspaces ( additions )
+ALTER TABLE workspaces ADD COLUMN goal TEXT;
+ALTER TABLE workspaces ADD COLUMN status TEXT DEFAULT 'draft';
+ALTER TABLE workspaces ADD COLUMN active_project_id TEXT REFERENCES projects(id);
+ALTER TABLE workspaces ADD COLUMN completed_at TEXT;
+
+-- workspace_agents ( new )
+CREATE TABLE workspace_agents (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES workspaces(id),
+  agent_profile_id TEXT NOT NULL REFERENCES agent_profiles(id),
+  role_in_workspace TEXT DEFAULT 'builder',
+  status TEXT DEFAULT 'idle',
+  current_task_id TEXT,
+  joined_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  left_at TEXT
+);
+
+-- artifacts ( new )
+CREATE TABLE artifacts (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES workspaces(id),
+  project_id TEXT REFERENCES projects(id),
+  task_id TEXT,
+  run_id TEXT REFERENCES agent_runs(id),
+  type TEXT NOT NULL,
+  title TEXT NOT NULL,
+  path TEXT,
+  content TEXT,
+  metadata TEXT, -- JSON
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+**Target API ViewModel (what frontend receives):**
+
+```typescript
+interface WorkspaceDetail {
+  workspace: Workspace;           // from workspaces table
+  activeProject: Project | null;  // from projects table
+  agents: WorkspaceAgentView[];   // from workspace_agents + agent_profiles
+  tasks: Task[];                  // from tasks table
+  runs: AgentRun[];               // from agent_runs table
+  timeline: WorkspaceTimelineItem[]; // aggregated from multiple tables
+  approvals: ApprovalRequest[];   // from approval_requests table
+  artifacts: Artifact[];          // from artifacts table
+  summary: {
+    progress: number;             // computed from task statuses
+    totalTasks: number;
+    completedTasks: number;
+    activeRuns: number;
+    blockedTasks: number;
+  };
+}
+```
 
 ### 9.3 Existing APIs (Currently Available)
 
@@ -1421,15 +1505,16 @@ These fields exist in the database **today**:
 
 ### 9.4 Missing APIs (Needed for Full Feature Set)
 
-| API | Purpose | Phase |
-|-----|---------|-------|
-| Get workspace detail | Aggregated workspace state | Phase 3 |
-| Get workspace timeline | Timeline events from multiple tables | Phase 3 |
-| Get workspace agents | Agent participation list | Phase 2 |
-| Create workspace from goal | User goal → workspace + agent team | Phase 4 |
-| Agent team proposal | Broker recommends agents | Phase 4 |
-| Workspace chat messages | Workspace-scoped conversation | Phase 5 |
-| Workspace artifacts | Structured artifact list | Phase 3 |
+| API | Purpose | Returns | Phase |
+|-----|---------|---------|-------|
+| `GET /api/workspaces/:id/detail` | Aggregated workspace state | `WorkspaceDetailViewModel` | Phase 2 |
+| `GET /api/workspaces/:id/timeline` | Timeline from multiple tables | `WorkspaceTimelineItem[]` | Phase 2 |
+| `GET /api/workspace-agents?workspaceId=X` | Agent participation list | `WorkspaceAgentView[]` | Phase 2 |
+| `POST /api/workspace-agents` | Add agent to workspace | `WorkspaceAgent` | Phase 2 |
+| `POST /api/workspaces/create-from-goal` | Goal → workspace + broker | `WorkspaceDetailViewModel` | Phase 4 |
+| `POST /api/agent-broker/propose-team` | Agent team recommendation | `AgentTeamProposal` | Phase 4 |
+| `GET /api/workspaces/:id/artifacts` | Artifact list | `Artifact[]` | Phase 2 |
+| `GET /api/conversations?workspaceId=X` | Workspace chat messages | `ChatMessage[]` | Phase 5 |
 
 ---
 

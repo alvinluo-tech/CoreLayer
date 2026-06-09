@@ -102,61 +102,135 @@
 
 ---
 
-## Phase 2: Backend Fields Alignment
+## Phase 2: Backend Domain Model Alignment
 
-**Goal**: Add missing fields to agent_profiles and create workspace_agents table.
-**Commit**: `feat(backend): add role, enabled, workspace_agents`
+**Goal**: Add core domain fields to backend schema. These are NOT UI mirror fields — they are product domain concepts the Agent Broker and orchestration engine need.
+**Commit**: `feat(backend): add domain fields for agent orchestration`
 
-### 2.1 Database Migration
+> **Architecture principle**: DB Schema = stable domain facts. API ViewModel = aggregated for frontend. Don't put UI display fields in the database.
 
-- [ ] Add `role` text field to `agent_profiles` (default: "general")
-- [ ] Add `enabled` boolean field to `agent_profiles` (default: true)
-- [ ] Create `workspace_agents` table (id, workspaceId, agentId, role, assignedTaskIds JSON)
+### 2.1 Database Migration — agent_profiles
+
+Add fields the Agent Broker needs for agent selection:
+
+- [ ] Add `role` text field to `agent_profiles` (default: "general") — Broker needs to know who is coding/review/planner
+- [ ] Add `capabilities` text (JSON array) to `agent_profiles` (default: "[]") — structured capability declarations (e.g. `["file_write", "shell_exec", "code_review"]`)
+- [ ] Add `enabled` boolean field to `agent_profiles` (default: true) — allow disabling agents without deleting
 - [ ] Update Drizzle schema in `daemon/src/persistence/schema.ts`
+- [ ] Write migration SQL
 
-### 2.2 Backend API Updates
+### 2.2 Database Migration — workspace_agents (new table)
 
-- [ ] Update agent create/update endpoints to handle `role` and `enabled`
-- [ ] Add workspace_agents CRUD endpoints
-- [ ] Update agent list endpoint to include `role` and `enabled` in response
+Agent-to-workspace relationship is a domain fact, not UI state:
 
-### 2.3 Frontend Schema Updates
+- [ ] Create `workspace_agents` table:
+  ```
+  id              TEXT PK
+  workspace_id    TEXT FK → workspaces
+  agent_profile_id TEXT FK → agent_profiles
+  role_in_workspace TEXT (owner/planner/builder/reviewer/tester/observer)
+  status          TEXT (idle/running/completed/failed/blocked)
+  current_task_id TEXT (nullable, FK → tasks)
+  joined_at       TEXT
+  left_at         TEXT (nullable)
+  ```
+- [ ] Update Drizzle schema
+- [ ] Write migration SQL
 
-- [ ] Update `agentProfileSchema` in `frontend/src/lib/apiSchemas.ts`
-- [ ] Add `role` and `enabled` to AgentProfile type
-- [ ] Add workspace_agents types
+### 2.3 Database Migration — workspaces
 
-### 2.4 AgentsView UI Updates
+Add minimal domain fields to workspaces (NOT derived/aggregate fields):
+
+- [ ] Add `goal` text field to `workspaces` — the user's original goal description
+- [ ] Add `status` text enum to `workspaces` (draft/planning/running/blocked/succeeded/failed/cancelled)
+- [ ] Add `active_project_id` text FK to `workspaces` (nullable)
+- [ ] Add `completed_at` text to `workspaces` (nullable)
+- [ ] Update Drizzle schema
+
+> **NOT added to workspaces table**: progress, tokens, cost, agents, tasks, events — these are derived at API layer.
+
+### 2.4 Database Migration — artifacts (new table)
+
+Artifacts as a first-class domain entity for workspace-level aggregation and search:
+
+- [ ] Create `artifacts` table:
+  ```
+  id              TEXT PK
+  workspace_id    TEXT FK → workspaces
+  project_id      TEXT FK → projects (nullable)
+  task_id         TEXT (nullable)
+  run_id          TEXT FK → agent_runs (nullable)
+  type            TEXT (spec/plan/file/report/scaffold)
+  title           TEXT
+  path            TEXT (nullable)
+  content         TEXT (nullable)
+  metadata        TEXT (JSON, nullable)
+  created_at      TEXT
+  ```
+- [ ] Update Drizzle schema
+- [ ] Write migration SQL
+
+### 2.5 Backend Domain Service — Agent Broker
+
+- [ ] Create `daemon/src/runtimes/agent-broker/` module
+- [ ] Implement rule-based filtering (role, capabilities, enabled)
+- [ ] Implement LLM-based ranking for agent team proposals
+- [ ] Return `AgentTeamProposal` with risk levels and permission requirements
+
+### 2.6 Backend Domain Service — Workspace Detail Aggregation
+
+- [ ] Create `daemon/src/services/workspace-detail.ts`
+- [ ] Implement `getWorkspaceDetail(workspaceId)` → aggregates from multiple tables:
+  ```
+  workspaces + projects + tasks + workspace_agents + agent_profiles
+  + agent_runs + agent_run_events + approval_requests + artifacts
+  ```
+- [ ] Return `WorkspaceDetailViewModel` (see design spec Section 5.3)
+- [ ] Compute `summary.progress` from task statuses (not stored in DB)
+- [ ] Compute `summary.totalTasks`, `completedTasks`, `activeRuns`, `blockedTasks`
+
+### 2.7 Backend API Endpoints
+
+- [ ] `GET /api/workspace-agents?workspaceId=X` — list agents in workspace
+- [ ] `POST /api/workspace-agents` — add agent to workspace
+- [ ] `DELETE /api/workspace-agents/:id` — remove agent from workspace
+- [ ] `GET /api/workspaces/:id/detail` — full aggregated workspace detail
+- [ ] `GET /api/workspaces/:id/timeline` — timeline events from multiple tables
+- [ ] `POST /api/workspaces/create-from-goal` — goal → workspace + broker → team proposal
+- [ ] `POST /api/agent-broker/propose-team` — get agent team recommendation
+- [ ] `GET /api/workspaces/:id/artifacts` — artifact list
+
+### 2.8 Frontend Schema Updates
+
+- [ ] Update `agentProfileSchema` in `frontend/src/lib/apiSchemas.ts` — add `role`, `capabilities`, `enabled`
+- [ ] Add `workspaceAgentSchema` type
+- [ ] Add `workspaceDetailSchema` type (aggregated ViewModel)
+- [ ] Add `artifactSchema` type
+- [ ] Update `workspaceSchema` — add `goal`, `status`, `activeProjectId`
+
+### 2.9 AgentsView UI Updates
 
 - [ ] Enable role selector dropdown in AgentEditPanel (general/planner/coding/review/testing/research)
 - [ ] Enable enabled/disabled toggle in AgentDetailPanel top bar
 - [ ] Show role badge with correct color in AgentCard and AgentDetailPanel
 - [ ] Enable "Used In" section in AgentInspectorPanel (from workspace_agents)
 - [ ] Filter agents by role in AgentListPanel
+- [ ] Show capabilities list in AgentDetailPanel (new section)
 
 ---
 
 ## Phase 3: WorkspaceView with Real Data
 
-**Goal**: Build WorkspaceView using real workspace/task/run data.
+**Goal**: Build WorkspaceView consuming the aggregated WorkspaceDetailViewModel from Phase 2 APIs.
 **Commit**: `feat(workspace-view): build with real data`
 
-### 3.1 Database Migration
+> Phase 2 already created the domain services and APIs. Phase 3 is frontend-only: consume the APIs and build the UI.
 
-- [ ] Add `status` text enum field to `workspaces` (default: "draft")
-- [ ] Add `goal` text field to `workspaces`
-- [ ] Add `progress` integer field to `workspaces` (default: 0)
-- [ ] Add `tokens_input` integer field to `workspaces` (default: 0)
-- [ ] Add `tokens_output` integer field to `workspaces` (default: 0)
-- [ ] Add `cost` text field to `workspaces` (default: "0")
+### 3.1 Workspace Store
 
-### 3.2 Backend APIs
-
-- [ ] Build workspace detail endpoint (aggregates tasks, runs, agents)
-- [ ] Build workspace timeline endpoint (aggregates agent_run_events, approval_requests, tool_call_logs, event_log)
-- [ ] Build workspace agents endpoint (from workspace_agents + agent_profiles)
-- [ ] Build workspace files endpoint (from tool_call_logs with file operations)
-- [ ] Build workspace artifacts endpoint (from agent_runs.artifacts + tasks.artifacts)
+- [ ] Create `frontend/src/stores/workspaceDetailStore.ts` — manages selected workspace detail
+- [ ] Fetch from `GET /api/workspaces/:id/detail`
+- [ ] State: workspaceDetail, timeline, approvals, isLoading, error
 
 ### 3.3 Workspace UI Primitives
 
