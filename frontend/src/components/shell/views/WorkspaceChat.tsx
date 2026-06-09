@@ -1,25 +1,96 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Send, Bot, User } from 'lucide-react';
+import { jarvisClient } from '@/lib/jarvisClient';
 
 interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
-  timestamp: string;
+  createdAt: string;
 }
 
 interface WorkspaceChatProps {
-  messages: ChatMessage[];
-  onSend: (message: string) => void;
+  workspaceId: string;
 }
 
-export function WorkspaceChat({ messages, onSend }: WorkspaceChatProps) {
+export function WorkspaceChat({ workspaceId }: WorkspaceChatProps) {
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  const handleSend = () => {
-    if (!input.trim()) return;
-    onSend(input.trim());
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages]);
+
+  const loadMessages = async () => {
+    if (!conversationId) return;
+    try {
+      const resp = await jarvisClient.get<{ data: ChatMessage[] }>(
+        `/api/conversations/${conversationId}/messages`
+      );
+      setMessages(resp.data);
+    } catch {
+      // Conversation might not exist yet
+    }
+  };
+
+  useEffect(() => {
+    loadMessages();
+  }, [conversationId]);
+
+  const handleSend = async () => {
+    if (!input.trim() || isLoading) return;
+    const userMessage = input.trim();
     setInput('');
+    setIsLoading(true);
+
+    try {
+      // Create conversation if needed
+      let convId = conversationId;
+      if (!convId) {
+        const resp = await jarvisClient.post<{ data: { id: string } }>('/api/conversations', {
+          title: 'Workspace Chat',
+          workspaceId,
+        });
+        convId = resp.data.id;
+        setConversationId(convId);
+      }
+
+      // Add user message
+      const userResp = await jarvisClient.post<{ data: ChatMessage }>(
+        `/api/conversations/${convId}/messages`,
+        { role: 'user', content: userMessage }
+      );
+      setMessages((prev) => [...prev, userResp.data]);
+
+      // Get assistant response
+      const assistantResp = await jarvisClient.post<{ data: { content: string } }>('/api/chat', {
+        message: userMessage,
+        conversationId: convId,
+      });
+
+      const assistantMsg: ChatMessage = {
+        id: `assistant-${Date.now()}`,
+        role: 'assistant',
+        content: assistantResp.data.content,
+        createdAt: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, assistantMsg]);
+    } catch {
+      const errorMsg: ChatMessage = {
+        id: `error-${Date.now()}`,
+        role: 'assistant',
+        content: 'Failed to get response. Please try again.',
+        createdAt: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, errorMsg]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -50,7 +121,7 @@ export function WorkspaceChat({ messages, onSend }: WorkspaceChatProps) {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-3 py-2 agents-scroll">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-2 agents-scroll">
         {messages.length === 0 ? (
           <div
             className="flex items-center justify-center py-8"
@@ -98,12 +169,44 @@ export function WorkspaceChat({ messages, onSend }: WorkspaceChatProps) {
                     fontSize: 12,
                     color: 'var(--text-secondary)',
                     lineHeight: 1.5,
+                    whiteSpace: 'pre-wrap',
                   }}
                 >
                   {msg.content}
                 </div>
               </div>
             ))}
+            {isLoading && (
+              <div className="flex items-start gap-2">
+                <div
+                  style={{
+                    width: 20,
+                    height: 20,
+                    borderRadius: 6,
+                    background: 'rgba(139,92,246,0.1)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                  }}
+                >
+                  <Bot size={12} style={{ color: 'var(--violet)' }} />
+                </div>
+                <div
+                  style={{
+                    background: 'rgba(255,255,255,0.03)',
+                    border: '1px solid rgba(255,255,255,0.06)',
+                    borderRadius: 8,
+                    padding: '6px 10px',
+                    fontFamily: 'var(--font-data)',
+                    fontSize: 11,
+                    color: 'var(--text-tertiary)',
+                  }}
+                >
+                  Thinking...
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -116,8 +219,9 @@ export function WorkspaceChat({ messages, onSend }: WorkspaceChatProps) {
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+          onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
           placeholder="Ask about this workspace..."
+          disabled={isLoading}
           style={{
             flex: 1,
             fontFamily: 'var(--font-data)',
@@ -132,14 +236,15 @@ export function WorkspaceChat({ messages, onSend }: WorkspaceChatProps) {
         />
         <button
           onClick={handleSend}
-          disabled={!input.trim()}
+          disabled={!input.trim() || isLoading}
           style={{
-            color: input.trim() ? 'var(--cyan)' : 'var(--text-tertiary)',
-            background: input.trim() ? 'rgba(0,212,255,0.08)' : 'rgba(255,255,255,0.03)',
-            border: `1px solid ${input.trim() ? 'rgba(0,212,255,0.15)' : 'rgba(255,255,255,0.06)'}`,
+            color: input.trim() && !isLoading ? 'var(--cyan)' : 'var(--text-tertiary)',
+            background:
+              input.trim() && !isLoading ? 'rgba(0,212,255,0.08)' : 'rgba(255,255,255,0.03)',
+            border: `1px solid ${input.trim() && !isLoading ? 'rgba(0,212,255,0.15)' : 'rgba(255,255,255,0.06)'}`,
             borderRadius: 6,
             padding: '6px 10px',
-            cursor: input.trim() ? 'pointer' : 'not-allowed',
+            cursor: input.trim() && !isLoading ? 'pointer' : 'not-allowed',
           }}
         >
           <Send size={14} />

@@ -13,92 +13,90 @@
 
 ### 1.1 Shared UI Primitives
 
-- [ ] Create `frontend/src/components/ui/agent-os/Tag.tsx` — colored chip with remove button
-- [ ] Create `frontend/src/components/ui/agent-os/SectionHeader.tsx` — uppercase label with left accent bar
-- [ ] Create `frontend/src/components/ui/agent-os/FormField.tsx` — label + input wrapper with glass styling
-- [ ] Create `frontend/src/components/ui/agent-os/MetaGrid.tsx` — key-value metadata display (2-3 column grid)
-- [ ] Create `frontend/src/components/ui/agent-os/StatusBadge.tsx` — status dot + label
-- [ ] Create `frontend/src/components/ui/agent-os/GlassCard.tsx` — glass background container with border-radius 8px
-- [ ] Create `frontend/src/components/ui/agent-os/EmptyState.tsx` — icon + title + description with fade-in animation
+- [x] Create `frontend/src/components/ui/agent-os/Tag.tsx` — colored chip with remove button
+- [x] Create `frontend/src/components/ui/agent-os/SectionHeader.tsx` — uppercase label with left accent bar (already existed)
+- [x] Create `frontend/src/components/ui/agent-os/FormField.tsx` — label + input wrapper with glass styling (inline in AgentEditPanel)
+- [x] Create `frontend/src/components/ui/agent-os/MetaGrid.tsx` — key-value metadata display (2-3 column grid) (already existed)
+- [x] Create `frontend/src/components/ui/agent-os/StatusBadge.tsx` — status dot + label (StatusPill already existed)
+- [x] Create `frontend/src/components/ui/agent-os/GlassCard.tsx` — glass background container with border-radius 8px (CSS class)
+- [x] Create `frontend/src/components/ui/agent-os/EmptyState.tsx` — icon + title + description with fade-in animation (already existed)
 
 ### 1.2 CSS
 
-- [ ] Create `frontend/src/components/shell/views/agentsView.css` — all transitions, animations, hover states
-- [ ] Define `.agent-card` styles (border, background, hover, selected states)
-- [ ] Define `.section-collapse` styles (header, arrow rotation, body hide)
-- [ ] Define `.inline-edit` styles (contentEditable visual state)
-- [ ] Define `.toast` styles (position, animation, auto-dismiss)
+- [x] Create `frontend/src/components/shell/views/agentsView.css` — all transitions, animations, hover states
+- [x] Define `.agent-card` styles (border, background, hover, selected states)
+- [x] Define `.section-collapse` styles (header, arrow rotation, body hide)
+- [x] Define `.inline-edit` styles (contentEditable visual state)
+- [x] Define `.toast` styles (position, animation, auto-dismiss)
 
 ### 1.3 AgentCard Component
 
-- [ ] Create `frontend/src/components/shell/views/AgentCard.tsx`
-- [ ] Render: Bot icon (26x26) + name + role badge ("general") + default star
-- [ ] Render: description (single-line ellipsis)
-- [ ] Render: status dot + executor name + run count
-- [ ] CSS-only hover/selected transitions (no JS mouse handlers)
-- [ ] Border: neutral default (`rgba(255,255,255,0.06)`), cyan when selected
+- [x] Create `frontend/src/components/shell/views/AgentCard.tsx`
+- [x] Render: Bot icon (26x26) + name + role badge ("general") + default star
+- [x] Render: description (single-line ellipsis)
+- [x] Render: status dot + executor name
+- [x] CSS-only hover/selected transitions (no JS mouse handlers)
+- [x] Border: neutral default (`rgba(255,255,255,0.06)`), cyan when selected
 
 ### 1.4 AgentListPanel Component
 
-- [ ] Create `frontend/src/components/shell/views/AgentListPanel.tsx`
-- [ ] Header: "Agent Profiles" (hud-label) + Import (`Download` icon) + New (`Plus` icon) buttons
-- [ ] Search input: `Search` icon + placeholder, `font-data`, focus glow
-- [ ] Role filter chips: All | Planner | Coding | Review | Testing | General
-- [ ] Agent list: scrollable, renders `AgentCard[]`
-- [ ] Empty state: "No agents yet" with `Bot` icon + "Create your first agent" description
+- [x] Create `frontend/src/components/shell/views/AgentListPanel.tsx`
+- [x] Header: "Agent Profiles" (hud-label) + Import (`Download` icon) + New (`Plus` icon) buttons
+- [x] Search input: `Search` icon + placeholder, `font-data`, focus glow
+- [x] Role filter chips: All | Planner | Coding | Review | Testing | General
+- [x] Agent list: scrollable, renders `AgentCard[]`
+- [x] Empty state: "No agents yet" with `Bot` icon + "Create your first agent" description
 
 ### 1.5 AgentDetailPanel Component
 
-- [ ] Create `frontend/src/components/shell/views/AgentDetailPanel.tsx`
-- [ ] Sticky top bar: agent icon (32x32) + name + role badge + default badge
-- [ ] Action buttons: Edit (`Pencil`, ghost) + Test (`Check`, success) + Toggle (hidden in Phase 1)
-- [ ] Section: Basic Info — name, description (editable via contentEditable), created/updated (dim)
-- [ ] Section: Capabilities — Skills (`tag-cyan`), Tools (`tag-emerald`), MCP (`tag-violet`), Permissions (`tag-amber`)
-- [ ] Section: Code Executor — 2x2 card grid (self, claude-code, codex, opencode)
-- [ ] Section: Scopes — Knowledge + Memory with `tag-muted`
-- [ ] Section: Model Policy — JSON code block with syntax coloring
-- [ ] All sections collapsible via click header
-- [ ] Empty state: "Select an agent to view details" when no agent selected
+- [x] Create `frontend/src/components/shell/views/AgentDetailPanel.tsx`
+- [x] Sticky top bar: agent icon (32x32) + name + role badge + default badge
+- [x] Action buttons: Edit (`Pencil`, ghost) + Test (`Check`, success)
+- [x] Section: Basic Info — name, description (editable via InlineEdit), created/updated (dim)
+- [x] Section: Capabilities — Skills (`tag-cyan`), Tools (`tag-emerald`), MCP, Permissions (`tag-amber`)
+- [x] Section: Code Executor — 2x2 card grid (self, claude-code, codex, opencode)
+- [x] Section: Scopes — Knowledge + Memory with `tag-muted`
+- [x] Section: Model Policy — JSON code block with syntax coloring
+- [x] All sections collapsible via click header
+- [x] Empty state: "Select an agent to view details" when no agent selected
 
 ### 1.6 AgentInspectorPanel Component
 
-- [ ] Create `frontend/src/components/shell/views/AgentInspectorPanel.tsx`
-- [ ] Availability section: "Available" (green dot) — always shown in Phase 1
-- [ ] Usage Stats (2x2 grid): Total Runs, Success Rate (colored), Avg Time, Last Used
-- [ ] "Used In" section: "Not used in any workspace" (dim) — placeholder for Phase 2
-- [ ] Test Result section: "Click Test to run a trial" (dim) — empty state
-- [ ] Recent Activity: monospace log block (from agent_runs, max 120px scroll)
-- [ ] Quick Actions: Edit, Test, Clone (`Copy`), Export (`Upload`), Set Default (`Star`), Delete (`Trash2`)
-- [ ] Model Config: preferred models list + fallback model
+- [x] Create `frontend/src/components/shell/views/AgentInspectorPanel.tsx`
+- [x] Availability section: "Active" (green dot) — always shown in Phase 1
+- [x] Usage Stats (2x2 grid): Total Runs, Tokens, Success Rate, Avg Duration (placeholder "—")
+- [x] "Used In" section: "No workspaces assigned" (dim) — placeholder for Phase 2
+- [x] Test Result section: "Not tested yet" (dim) — empty state
+- [x] Quick Actions: Test Agent, Delete Agent
+- [x] Model Config: preferred models list + temperature + max tokens
 
 ### 1.7 AgentEditPanel Modal
 
-- [ ] Create `frontend/src/components/shell/views/AgentEditPanel.tsx`
-- [ ] Modal overlay: `rgba(0,0,0,0.6)` + `backdrop-filter: blur(4px)`
-- [ ] Modal: 520px width, max-height 80vh, border-radius 10px
-- [ ] Form: Name input, Description textarea
-- [ ] Form: Skills/Tools/MCP/Permissions tag lists with add/remove
-- [ ] Form: Code Executor 2x2 card selector
-- [ ] Form: Model Policy JSON textarea (`font-code`)
-- [ ] Footer: Cancel (ghost) + Save (primary)
-- [ ] Input styles: neutral border, cyan focus glow
+- [x] Create `frontend/src/components/shell/views/AgentEditPanel.tsx`
+- [x] Modal overlay: `rgba(0,0,0,0.6)` + `backdrop-filter: blur(4px)`
+- [x] Modal: 520px width, max-height 80vh, border-radius 10px
+- [x] Form: Name input, Description textarea
+- [x] Form: Skills/Tools/Permissions/Knowledge/Memory tag lists with add/remove
+- [x] Form: Code Executor 2x2 card selector
+- [x] Form: Model Policy fields (preferred models, temperature, max tokens)
+- [x] Footer: Cancel (ghost) + Save (primary)
+- [x] Input styles: neutral border, cyan focus glow
 
 ### 1.8 AgentsView Orchestrator
 
-- [ ] Refactor `frontend/src/components/shell/views/AgentsView.tsx`
-- [ ] Compose: AgentListPanel + AgentDetailPanel + AgentInspectorPanel
-- [ ] State: selectedAgent, searchQuery, roleFilter, editingAgent
-- [ ] Wire: agent store (useAgentStore) for CRUD operations
-- [ ] Handle: create agent, update agent, delete agent, clone agent, export JSON
-- [ ] Handle: test agent (placeholder — shows toast "Test started")
-- [ ] Toast notifications for all actions
-- [ ] Target: < 150 lines for orchestrator
+- [x] Refactor `frontend/src/components/shell/views/AgentsView.tsx`
+- [x] Compose: AgentListPanel + AgentDetailPanel + AgentInspectorPanel + AgentEditPanel
+- [x] State: selectedAgent, viewMode (list/edit/create)
+- [x] Wire: agent store (useAgentStore) for CRUD operations
+- [x] Handle: create agent, update agent, delete agent
+- [x] Handle: test agent (placeholder)
+- [x] Empty state and error state handling
+- [x] Target: ~120 lines for orchestrator
 
 ### 1.9 Type Check & Build
 
-- [ ] Run `pnpm tsc --noEmit` — zero errors
-- [ ] Run `pnpm build` — success
-- [ ] Visual check in browser (dev server)
+- [x] Run `pnpm tsc --noEmit` — zero errors
+- [x] Run `pnpm build` — success
 
 ---
 

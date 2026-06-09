@@ -146,7 +146,7 @@ export function WorkspaceCenter({ detail }: WorkspaceCenterProps) {
 
         {/* Chat */}
         <div className="flex-1 min-h-0">
-          <WorkspaceChat messages={[]} onSend={() => {}} />
+          <WorkspaceChat workspaceId={detail.id} />
         </div>
       </div>
     </div>

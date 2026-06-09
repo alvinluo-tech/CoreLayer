@@ -1,12 +1,13 @@
-import { useState } from 'react';
-import { Bot, Play, AlertTriangle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Bot, Play, AlertTriangle, Check, X } from 'lucide-react';
 import type { WorkspaceDetail } from '@/lib/apiSchemas';
+import { useApprovalStore } from '@/stores/approvalStore';
 
 interface WorkspaceRightPanelProps {
   detail: WorkspaceDetail;
 }
 
-const tabs = ['Agents', 'Runs', 'Files', 'Artifacts'] as const;
+const tabs = ['Agents', 'Runs', 'Files', 'Artifacts', 'Approvals'] as const;
 type Tab = (typeof tabs)[number];
 
 const roleColors: Record<string, string> = {
@@ -27,8 +28,24 @@ const runStatusColors: Record<string, string> = {
   waiting_for_approval: 'var(--amber)',
 };
 
+const riskColors: Record<string, string> = {
+  low: 'var(--emerald)',
+  medium: 'var(--amber)',
+  high: 'var(--rose)',
+  critical: 'var(--rose)',
+};
+
 export function WorkspaceRightPanel({ detail }: WorkspaceRightPanelProps) {
   const [activeTab, setActiveTab] = useState<Tab>('Agents');
+  const { approvals, fetchApprovals, approve, deny } = useApprovalStore();
+
+  useEffect(() => {
+    if (activeTab === 'Approvals') {
+      fetchApprovals();
+    }
+  }, [activeTab, fetchApprovals]);
+
+  const pendingApprovals = approvals.filter((a) => a.status === 'pending');
 
   return (
     <div
@@ -56,9 +73,23 @@ export function WorkspaceRightPanel({ detail }: WorkspaceRightPanelProps) {
               padding: '8px 4px',
               cursor: 'pointer',
               transition: 'all 0.15s',
+              position: 'relative',
             }}
           >
             {tab}
+            {tab === 'Approvals' && pendingApprovals.length > 0 && (
+              <span
+                style={{
+                  position: 'absolute',
+                  top: 4,
+                  right: 2,
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  background: 'var(--amber)',
+                }}
+              />
+            )}
           </button>
         ))}
       </div>
@@ -186,61 +217,108 @@ export function WorkspaceRightPanel({ detail }: WorkspaceRightPanelProps) {
           </div>
         )}
 
-        {activeTab === 'Files' && <EmptyTab message="File tracking coming in Phase 5" />}
+        {activeTab === 'Files' && <EmptyTab message="File tracking coming soon" />}
 
-        {activeTab === 'Artifacts' && <EmptyTab message="Artifacts coming in Phase 5" />}
-      </div>
+        {activeTab === 'Artifacts' && <EmptyTab message="Artifacts coming soon" />}
 
-      {/* Pending Approvals */}
-      {detail.pendingApprovals.length > 0 && (
-        <div className="px-3 py-2" style={{ borderTop: '1px solid var(--glass-border)' }}>
-          <div className="flex items-center gap-1.5 mb-1.5">
-            <AlertTriangle size={10} style={{ color: 'var(--amber)' }} />
-            <span
-              style={{
-                fontFamily: 'var(--font-data)',
-                fontSize: 10,
-                color: 'var(--amber)',
-              }}
-            >
-              Pending Approvals
-            </span>
+        {activeTab === 'Approvals' && (
+          <div className="flex flex-col gap-1.5">
+            {pendingApprovals.length === 0 ? (
+              <EmptyTab message="No pending approvals" />
+            ) : (
+              pendingApprovals.map((approval) => {
+                const riskColor = riskColors[approval.risk] ?? 'var(--text-tertiary)';
+                return (
+                  <div
+                    key={approval.id}
+                    className="flex flex-col gap-2 px-2 py-2"
+                    style={{
+                      borderRadius: 6,
+                      background: 'rgba(255,184,0,0.03)',
+                      border: '1px solid rgba(255,184,0,0.12)',
+                    }}
+                  >
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle size={12} style={{ color: riskColor, flexShrink: 0 }} />
+                      <div className="flex-1 min-w-0">
+                        <div
+                          className="truncate"
+                          style={{
+                            fontFamily: 'var(--font-body)',
+                            fontSize: 12,
+                            color: 'var(--text-secondary)',
+                          }}
+                        >
+                          {approval.toolName}
+                        </div>
+                        <div
+                          style={{
+                            fontFamily: 'var(--font-data)',
+                            fontSize: 9,
+                            color: riskColor,
+                          }}
+                        >
+                          Risk: {approval.risk}
+                        </div>
+                      </div>
+                    </div>
+                    {approval.preview && (
+                      <div
+                        style={{
+                          fontFamily: 'var(--font-data)',
+                          fontSize: 10,
+                          color: 'var(--text-tertiary)',
+                          lineHeight: 1.4,
+                          maxHeight: 40,
+                          overflow: 'hidden',
+                        }}
+                      >
+                        {approval.preview}
+                      </div>
+                    )}
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => approve(approval.id)}
+                        className="flex items-center gap-1"
+                        style={{
+                          fontFamily: 'var(--font-data)',
+                          fontSize: 10,
+                          color: 'var(--emerald)',
+                          background: 'rgba(52,211,153,0.08)',
+                          border: '1px solid rgba(52,211,153,0.15)',
+                          borderRadius: 4,
+                          padding: '3px 8px',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <Check size={10} />
+                        Approve
+                      </button>
+                      <button
+                        onClick={() => deny(approval.id)}
+                        className="flex items-center gap-1"
+                        style={{
+                          fontFamily: 'var(--font-data)',
+                          fontSize: 10,
+                          color: 'var(--rose)',
+                          background: 'rgba(244,63,94,0.08)',
+                          border: '1px solid rgba(244,63,94,0.15)',
+                          borderRadius: 4,
+                          padding: '3px 8px',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <X size={10} />
+                        Deny
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
-          {detail.pendingApprovals.map((approval) => (
-            <div
-              key={approval.id}
-              className="flex items-center gap-2 px-2 py-1.5 mb-1"
-              style={{
-                borderRadius: 6,
-                background: 'rgba(255,184,0,0.05)',
-                border: '1px solid rgba(255,184,0,0.15)',
-              }}
-            >
-              <div className="flex-1 min-w-0">
-                <div
-                  className="truncate"
-                  style={{
-                    fontFamily: 'var(--font-body)',
-                    fontSize: 11,
-                    color: 'var(--text-secondary)',
-                  }}
-                >
-                  {approval.toolName}
-                </div>
-                <div
-                  style={{
-                    fontFamily: 'var(--font-data)',
-                    fontSize: 9,
-                    color: 'var(--text-tertiary)',
-                  }}
-                >
-                  Risk: {approval.risk}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
