@@ -38,6 +38,15 @@ interface WorkspaceDetailViewModel {
     risk: string;
     createdAt: string;
   }>;
+  projects: Array<{
+    id: string;
+    name: string;
+    description: string | null;
+    status: string;
+    taskCount: number;
+    completedTasks: number;
+    progress: number;
+  }>;
 }
 
 export async function getWorkspaceDetail(
@@ -81,6 +90,37 @@ export async function getWorkspaceDetail(
   const completedTasks = tasks.filter((t) => t.status === "completed" || t.status === "done").length;
   const blockedTasks = tasks.filter((t) => t.status === "blocked").length;
   const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
+  const projectsList = db
+    .select()
+    .from(schema.projects)
+    .where(eq(schema.projects.workspaceId, workspaceId))
+    .all();
+
+  const projects = projectsList.map((project) => {
+    const pTasks = db
+      .select({ status: schema.tasks.status })
+      .from(schema.tasks)
+      .where(eq(schema.tasks.projectId, project.id))
+      .all();
+    const taskCount = pTasks.length;
+    const completedProjectTasks = pTasks.filter(
+      (t) => t.status === "completed" || t.status === "done"
+    ).length;
+    const projectProgress = taskCount > 0
+      ? Math.round((completedProjectTasks / taskCount) * 100)
+      : 0;
+
+    return {
+      id: project.id,
+      name: project.name,
+      description: project.description,
+      status: project.status,
+      taskCount,
+      completedTasks: completedProjectTasks,
+      progress: projectProgress,
+    };
+  });
 
   // Get recent runs
   const recentRuns = db
@@ -141,6 +181,7 @@ export async function getWorkspaceDetail(
       activeRuns,
       blockedTasks,
     },
+    projects,
     agents: workspaceAgents.map((a) => ({
       id: a.id,
       name: a.agentName,
