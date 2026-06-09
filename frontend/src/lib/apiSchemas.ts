@@ -240,6 +240,17 @@ export const workspaceDetailSchema = z.object({
     activeRuns: z.number(),
     blockedTasks: z.number(),
   }),
+  projects: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      description: z.string().nullable(),
+      status: z.string(),
+      taskCount: z.number(),
+      completedTasks: z.number(),
+      progress: z.number(),
+    })
+  ),
   agents: z.array(
     z.object({
       id: z.string(),
