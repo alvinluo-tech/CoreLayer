@@ -1,30 +1,34 @@
 /**
- * Coding Runtime Registry — manages multiple coding tool adapters.
+ * Coding Runtime Adapter Registry — manages multiple coding tool adapters.
  *
  * Push/PR operations are high-risk and go through the OSCapabilityBroker.
  */
 
-import type { CodingRuntime, CodingTask, CodingRunInfo, CodingArtifact } from "./types.js";
-import { ClaudeCodeAdapter } from "./claude-code-adapter.js";
-import { CodexAdapter } from "./codex-adapter.js";
+import type { CodingAgentAdapter, CodingTask, CodingRunInfo, CodingArtifact } from "./types.js";
+import { ClaudeCodeCliAdapter } from "./adapters/claude-code/cli-adapter.js";
+import { CodexCliAdapter } from "./adapters/codex/cli-adapter.js";
+import { OpenCodeCliAdapter } from "./adapters/opencode/cli-adapter.js";
 import { getCapabilityBroker } from "../../capabilities/os-capability-broker.js";
 
-const adapters = new Map<string, CodingRuntime>();
+const adapters = new Map<string, CodingAgentAdapter>();
 
 /** Register built-in adapters */
 function registerDefaults(): void {
   if (!adapters.has("claude-code")) {
-    adapters.set("claude-code", new ClaudeCodeAdapter());
+    adapters.set("claude-code", new ClaudeCodeCliAdapter());
   }
   if (!adapters.has("codex")) {
-    adapters.set("codex", new CodexAdapter());
+    adapters.set("codex", new CodexCliAdapter());
+  }
+  if (!adapters.has("opencode")) {
+    adapters.set("opencode", new OpenCodeCliAdapter());
   }
 }
 
 /**
  * Get a registered coding runtime adapter by ID.
  */
-export function getCodingRuntime(adapterId: string): CodingRuntime | undefined {
+export function getCodingRuntime(adapterId: string): CodingAgentAdapter | undefined {
   registerDefaults();
   return adapters.get(adapterId);
 }
@@ -34,7 +38,7 @@ export function getCodingRuntime(adapterId: string): CodingRuntime | undefined {
  */
 export function listCodingRuntimes(): Array<{ id: string; name: string }> {
   registerDefaults();
-  return Array.from(adapters.values()).map((a) => ({ id: a.id, name: a.name }));
+  return Array.from(adapters.values()).map((a) => ({ id: a.id, name: a.displayName }));
 }
 
 /**
@@ -46,7 +50,11 @@ export async function createCodingRun(
 ): Promise<CodingRunInfo> {
   const adapter = getCodingRuntime(adapterId);
   if (!adapter) throw new Error(`Unknown coding runtime: ${adapterId}`);
-  return adapter.createRun(task);
+
+  const handle = await adapter.startRun(task);
+
+  // Return full CodingRunInfo by querying the adapter
+  return adapter.getRunStatus(handle.runId);
 }
 
 /**

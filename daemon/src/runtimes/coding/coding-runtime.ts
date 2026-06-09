@@ -233,12 +233,21 @@ export class CodingRuntime implements ManagedRuntime {
   }
 
   /**
-   * List available coding adapters.
+   * List available coding adapters with their availability status.
    */
-  async listAdapters(): Promise<Array<{ id: string; name: string }>> {
-    const { listCodingRuntimes } = await import("./registry.js");
+  async listAdapters(): Promise<Array<{ id: string; name: string; available: boolean }>> {
+    const { listCodingRuntimes, getCodingRuntime } = await import("./registry.js");
 
-    return listCodingRuntimes();
+    const basics = listCodingRuntimes();
+    const results = await Promise.all(
+      basics.map(async (b) => {
+        const adapter = getCodingRuntime(b.id);
+        const availability = adapter ? await adapter.discover() : { available: false };
+        return { id: b.id, name: b.name, available: availability.available };
+      }),
+    );
+
+    return results;
   }
 
   /**

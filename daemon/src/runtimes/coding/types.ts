@@ -2,8 +2,13 @@
  * Coding Runtime types.
  *
  * Defines the contract for integrating external coding tools (Claude Code,
- * Codex, CloudCode) as controlled Jarvis tool runtimes.
+ * Codex, OpenCode) as controlled Jarvis tool runtimes.
+ *
+ * All adapters implement `CodingAgentAdapter` and emit `NormalizedEvent`
+ * from the events module. The frontend consumes only those canonical types.
  */
+
+import type { NormalizedEvent } from "./events/coding-event.js";
 
 /** Status of a coding run */
 export type CodingRunStatus =
@@ -42,13 +47,24 @@ export interface CodingArtifact {
   metadata?: Record<string, unknown>;
 }
 
-/** Internal event queue for streaming events from a run */
-export interface CodingRunInfoEvents {
-  events: CodingRunEvent[];
-  resolve: () => void;
+/** Adapter availability after discovery */
+export interface AdapterAvailability {
+  available: boolean;
+  version?: string;
+  reason?: string;
+  transport: "sdk" | "cli";
 }
 
-/** Status of a coding run */
+/** Handle returned when a run is started */
+export interface CodingRunHandle {
+  runId: string;
+  adapterId: string;
+  status: CodingRunStatus;
+  pid?: number;
+  startedAt: string;
+}
+
+/** Status of a coding run (full info) */
 export interface CodingRunInfo {
   runId: string;
   adapterId: string;
@@ -61,33 +77,35 @@ export interface CodingRunInfo {
   error?: string;
 }
 
-/** Events emitted during a coding run */
-export interface CodingRunEvent {
-  runId: string;
-  sequence: number;
-  type: "status_change" | "output" | "artifact" | "error" | "approval_required"
-    | "process_spawned" | "stdout" | "stderr" | "process_exited" | "run_cancelled";
-  payload: unknown;
-  createdAt: string;
-}
-
 /**
- * CodingRuntime contract — implemented by each coding tool adapter.
+ * CodingAgentAdapter — the core contract implemented by each coding tool adapter.
+ *
+ * Each adapter (Claude Code, Codex, OpenCode) implements this interface.
+ * Adapters are registered in the adapter registry and selected by the
+ * Agent Broker based on the agent profile's executor policy.
  */
-export interface CodingRuntime {
+export interface CodingAgentAdapter {
   /** Unique adapter identifier */
-  readonly id: string;
+  readonly id: "claude-code" | "codex" | "opencode";
   /** Human-readable name */
+  readonly displayName: string;
+  /** @deprecated Use displayName instead */
   readonly name: string;
 
-  /** Create and start a coding run */
+  /** Check if this adapter's CLI/SDK is available on this machine */
+  discover(): Promise<AdapterAvailability>;
+
+  /** Create and start a coding run (returns lightweight handle) */
+  startRun(task: CodingTask): Promise<CodingRunHandle>;
+
+  /** @deprecated Use startRun() instead. Returns full CodingRunInfo. */
   createRun(task: CodingTask): Promise<CodingRunInfo>;
 
   /** Get the current status of a run */
   getRunStatus(runId: string): Promise<CodingRunInfo>;
 
-  /** Stream events from a run (returns async iterable) */
-  streamRunEvents(runId: string): AsyncIterable<CodingRunEvent>;
+  /** Stream normalized events from a run */
+  streamRunEvents(runId: string): AsyncIterable<NormalizedEvent>;
 
   /** Cancel a running task */
   cancelRun(runId: string): Promise<boolean>;
@@ -95,3 +113,8 @@ export interface CodingRuntime {
   /** Collect artifacts from a completed run */
   collectArtifacts(runId: string): Promise<CodingArtifact[]>;
 }
+
+/**
+ * @deprecated Use `CodingAgentAdapter` instead. Kept for backward compatibility.
+ */
+export type CodingRuntime = CodingAgentAdapter;

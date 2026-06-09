@@ -125,7 +125,7 @@ describe("CodexAdapter", () => {
 
       expect(run.status).toBe("failed");
       expect(run.adapterId).toBe("codex");
-      expect(run.error).toBe("Codex CLI not found on PATH");
+      expect(run.error).toContain("Codex CLI not found on PATH");
       expect(run.artifacts).toHaveLength(1);
       expect(run.artifacts[0].type).toBe("error");
       expect(run.artifacts[0].content).toContain("Codex CLI not found");

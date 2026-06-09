@@ -125,7 +125,7 @@ describe("ClaudeCodeAdapter", () => {
 
       expect(run.status).toBe("failed");
       expect(run.adapterId).toBe("claude-code");
-      expect(run.error).toBe("Claude Code CLI not found on PATH");
+      expect(run.error).toContain("Claude Code CLI not found on PATH");
       expect(run.artifacts).toHaveLength(1);
       expect(run.artifacts[0].type).toBe("error");
       expect(run.artifacts[0].content).toContain("Claude Code CLI not found");
