@@ -121,7 +121,7 @@ export function WorkspaceChat({ workspaceId }: WorkspaceChatProps) {
       </div>
 
       {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-2 agents-scroll">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-2 workspace-scroll">
         {messages.length === 0 ? (
           <div
             className="flex items-center justify-center py-8"
@@ -134,7 +134,7 @@ export function WorkspaceChat({ workspaceId }: WorkspaceChatProps) {
             {messages.map((msg) => (
               <div
                 key={msg.id}
-                className="flex items-start gap-2"
+                className="chat-message flex items-start gap-2"
                 style={{
                   flexDirection: msg.role === 'user' ? 'row-reverse' : 'row',
                 }}

@@ -62,19 +62,7 @@ export function WorkspaceRightPanel({ detail }: WorkspaceRightPanelProps) {
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            style={{
-              flex: 1,
-              fontFamily: 'var(--font-data)',
-              fontSize: 10,
-              color: activeTab === tab ? 'var(--text-primary)' : 'var(--text-tertiary)',
-              background: 'none',
-              border: 'none',
-              borderBottom: `2px solid ${activeTab === tab ? 'var(--cyan)' : 'transparent'}`,
-              padding: '8px 4px',
-              cursor: 'pointer',
-              transition: 'all 0.15s',
-              position: 'relative',
-            }}
+            className={`workspace-tab ${activeTab === tab ? 'active' : ''}`}
           >
             {tab}
             {tab === 'Approvals' && pendingApprovals.length > 0 && (
@@ -95,7 +83,7 @@ export function WorkspaceRightPanel({ detail }: WorkspaceRightPanelProps) {
       </div>
 
       {/* Tab content */}
-      <div className="flex-1 overflow-y-auto px-3 py-2 agents-scroll">
+      <div className="flex-1 overflow-y-auto px-3 py-2 workspace-scroll">
         {activeTab === 'Agents' && (
           <div className="flex flex-col gap-1.5">
             {detail.agents.length === 0 ? (
@@ -229,15 +217,7 @@ export function WorkspaceRightPanel({ detail }: WorkspaceRightPanelProps) {
               pendingApprovals.map((approval) => {
                 const riskColor = riskColors[approval.risk] ?? 'var(--text-tertiary)';
                 return (
-                  <div
-                    key={approval.id}
-                    className="flex flex-col gap-2 px-2 py-2"
-                    style={{
-                      borderRadius: 6,
-                      background: 'rgba(255,184,0,0.03)',
-                      border: '1px solid rgba(255,184,0,0.12)',
-                    }}
-                  >
+                  <div key={approval.id} className="approval-card flex flex-col gap-2 px-2 py-2">
                     <div className="flex items-center gap-2">
                       <AlertTriangle size={12} style={{ color: riskColor, flexShrink: 0 }} />
                       <div className="flex-1 min-w-0">
@@ -277,37 +257,11 @@ export function WorkspaceRightPanel({ detail }: WorkspaceRightPanelProps) {
                       </div>
                     )}
                     <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => approve(approval.id)}
-                        className="flex items-center gap-1"
-                        style={{
-                          fontFamily: 'var(--font-data)',
-                          fontSize: 10,
-                          color: 'var(--emerald)',
-                          background: 'rgba(52,211,153,0.08)',
-                          border: '1px solid rgba(52,211,153,0.15)',
-                          borderRadius: 4,
-                          padding: '3px 8px',
-                          cursor: 'pointer',
-                        }}
-                      >
+                      <button onClick={() => approve(approval.id)} className="approval-approve-btn">
                         <Check size={10} />
                         Approve
                       </button>
-                      <button
-                        onClick={() => deny(approval.id)}
-                        className="flex items-center gap-1"
-                        style={{
-                          fontFamily: 'var(--font-data)',
-                          fontSize: 10,
-                          color: 'var(--rose)',
-                          background: 'rgba(244,63,94,0.08)',
-                          border: '1px solid rgba(244,63,94,0.15)',
-                          borderRadius: 4,
-                          padding: '3px 8px',
-                          cursor: 'pointer',
-                        }}
-                      >
+                      <button onClick={() => deny(approval.id)} className="approval-deny-btn">
                         <X size={10} />
                         Deny
                       </button>

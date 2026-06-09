@@ -32,6 +32,7 @@ const navItems: Omit<RailItem, 'badge'>[] = [
   { view: 'approvals', icon: <ShieldCheck size={20} />, label: 'Approvals' },
   { view: 'projects', icon: <FolderKanban size={20} />, label: 'Projects' },
   { view: 'agents', icon: <Bot size={20} />, label: 'Agents' },
+  { view: 'workspace', icon: <FolderKanban size={20} />, label: 'Workspace' },
 ];
 
 export function GlobalRail({

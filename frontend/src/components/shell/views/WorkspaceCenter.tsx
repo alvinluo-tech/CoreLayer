@@ -93,21 +93,12 @@ export function WorkspaceCenter({ detail }: WorkspaceCenterProps) {
           </div>
         )}
         {/* Progress bar */}
-        <div
-          style={{
-            height: 3,
-            borderRadius: 2,
-            background: 'rgba(255,255,255,0.06)',
-            overflow: 'hidden',
-          }}
-        >
+        <div className="progress-bar">
           <div
+            className="progress-bar-fill"
             style={{
-              height: '100%',
               width: `${progress}%`,
-              borderRadius: 2,
               background: color,
-              transition: 'width 0.3s ease',
             }}
           />
         </div>

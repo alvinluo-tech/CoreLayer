@@ -19,6 +19,7 @@ import { MemoryView } from './views/MemoryView';
 import { ApprovalsView } from './views/ApprovalsView';
 import { ProjectsView } from './views/ProjectsView';
 import { AgentsView } from './views/AgentsView';
+import { WorkspaceView } from './views/WorkspaceView';
 import { logger } from '@/lib/logger';
 import { useChat } from '@/hooks/useChat';
 import { useVoice } from '@/hooks/useVoice';
@@ -576,6 +577,8 @@ export function AppShell() {
         return <ProjectsView />;
       case 'agents':
         return <AgentsView />;
+      case 'workspace':
+        return <WorkspaceView />;
       case 'assistant':
       default:
         return (

@@ -34,7 +34,7 @@ export function WorkspaceCard({ workspace, isSelected, onSelect }: WorkspaceCard
 
   return (
     <button
-      className={`agent-card w-full text-left px-3 py-2.5 ${isSelected ? 'selected' : ''}`}
+      className={`workspace-card w-full text-left px-3 py-2.5 ${isSelected ? 'selected' : ''}`}
       onClick={() => onSelect(workspace.id)}
     >
       <div className="flex items-center gap-2 mb-1">

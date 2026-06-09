@@ -8,6 +8,7 @@ export type ShellView =
   | 'approvals'
   | 'projects'
   | 'agents'
+  | 'workspace'
   | 'control-center';
 
 interface ShellState {

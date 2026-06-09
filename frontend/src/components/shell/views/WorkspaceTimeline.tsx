@@ -43,17 +43,7 @@ export function WorkspaceTimeline({ events }: WorkspaceTimelineProps) {
           <button
             key={tab}
             onClick={() => setFilter(tab)}
-            style={{
-              fontFamily: 'var(--font-data)',
-              fontSize: 10,
-              color: filter === tab ? 'var(--text-primary)' : 'var(--text-tertiary)',
-              background: filter === tab ? 'rgba(0,212,255,0.08)' : 'rgba(255,255,255,0.02)',
-              border: `1px solid ${filter === tab ? 'rgba(0,212,255,0.2)' : 'rgba(255,255,255,0.06)'}`,
-              borderRadius: 4,
-              padding: '3px 8px',
-              cursor: 'pointer',
-              transition: 'all 0.15s',
-            }}
+            className={`filter-chip ${filter === tab ? 'active' : ''}`}
           >
             {tab}
           </button>
@@ -84,7 +74,10 @@ export function WorkspaceTimeline({ events }: WorkspaceTimelineProps) {
           filtered.map((event) => {
             const { icon: Icon, color } = getTypeIcon(event.type);
             return (
-              <div key={event.id} className="flex items-start gap-2 py-1.5 pl-0 pr-2">
+              <div
+                key={event.id}
+                className="timeline-event flex items-start gap-2 py-1.5 pl-0 pr-2"
+              >
                 <div
                   style={{
                     width: 22,

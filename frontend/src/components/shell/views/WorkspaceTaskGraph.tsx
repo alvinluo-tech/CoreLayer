@@ -44,15 +44,7 @@ export function WorkspaceTaskGraph({ tasks }: WorkspaceTaskGraphProps) {
       {tasks.map((task, i) => {
         const color = statusColors[task.status] ?? 'var(--text-tertiary)';
         return (
-          <div
-            key={task.id}
-            className="flex items-center gap-2 px-2 py-1.5"
-            style={{
-              borderRadius: 6,
-              background: 'rgba(255,255,255,0.02)',
-              border: '1px solid rgba(255,255,255,0.04)',
-            }}
-          >
+          <div key={task.id} className="task-item flex items-center gap-2 px-2 py-1.5">
             <span
               style={{
                 fontFamily: 'var(--font-data)',
