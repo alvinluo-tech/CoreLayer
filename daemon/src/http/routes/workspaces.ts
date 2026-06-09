@@ -41,13 +41,23 @@ workspaceRoutes.get("/:id", async (c) => {
  */
 workspaceRoutes.post("/", async (c) => {
   try {
-    const { workspaces } = getRepositories();
+    const { workspaces, projects } = getRepositories();
     const body = await c.req.json<{ name?: string; description?: string }>();
     const ws = await workspaces.create({
       name: body.name,
       description: body.description,
       ownerId: "default",
     });
+
+    const projectName = body.name
+      ? body.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
+      : "default";
+    await projects.create({
+      workspaceId: ws.id,
+      name: projectName,
+      description: body.description,
+    });
+
     return c.json({ data: ws }, 201);
   } catch (err) {
     logError("workspaces/create", err);
