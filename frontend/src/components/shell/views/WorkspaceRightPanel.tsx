@@ -60,6 +60,15 @@ export function WorkspaceRightPanel({ detail }: WorkspaceRightPanelProps) {
     });
   };
 
+  const toggleProjSelectAll = () => {
+    if (!detail) return;
+    if (selectedProjIds.size === detail.projects.length) {
+      setSelectedProjIds(new Set());
+    } else {
+      setSelectedProjIds(new Set(detail.projects.map((p) => p.id)));
+    }
+  };
+
   const handleProjBatchDelete = async () => {
     if (selectedProjIds.size === 0) return;
     if (
@@ -248,16 +257,34 @@ export function WorkspaceRightPanel({ detail }: WorkspaceRightPanelProps) {
               <div className="space-y-2.5">
                 {/* Actions row */}
                 <div className="flex items-center justify-between px-1 mb-2">
-                  <span
-                    style={{
-                      fontFamily: 'var(--font-hud)',
-                      fontSize: 10,
-                      color: 'var(--text-tertiary)',
-                      letterSpacing: 0.5,
-                    }}
-                  >
-                    {isProjMultiSelect ? `Selected ${selectedProjIds.size}` : 'Project List'}
-                  </span>
+                  <div className="flex items-center gap-1.5 select-none">
+                    {isProjMultiSelect && (
+                      <input
+                        type="checkbox"
+                        checked={
+                          detail.projects.length > 0 &&
+                          selectedProjIds.size === detail.projects.length
+                        }
+                        onChange={toggleProjSelectAll}
+                        style={{
+                          width: 13,
+                          height: 13,
+                          accentColor: 'var(--cyan)',
+                          cursor: 'pointer',
+                        }}
+                      />
+                    )}
+                    <span
+                      style={{
+                        fontFamily: 'var(--font-hud)',
+                        fontSize: 10,
+                        color: 'var(--text-tertiary)',
+                        letterSpacing: 0.5,
+                      }}
+                    >
+                      {isProjMultiSelect ? `Selected ${selectedProjIds.size}` : 'Project List'}
+                    </span>
+                  </div>
                   <div className="flex items-center gap-1.5">
                     {isProjMultiSelect ? (
                       <>

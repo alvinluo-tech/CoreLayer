@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { jarvisClient } from '@/lib/jarvisClient';
+import { useConversationStore } from '@/stores/conversationStore';
 import {
   approvalListResponseSchema,
   type ApprovalRequest,
@@ -33,6 +34,19 @@ interface ApprovalState {
   pendingCount: () => number;
 }
 
+function refreshConversationsAfterAsyncResume() {
+  const refresh = () => {
+    useConversationStore
+      .getState()
+      .fetchConversations()
+      .catch(() => {});
+  };
+
+  refresh();
+  window.setTimeout(refresh, 1_000);
+  window.setTimeout(refresh, 3_000);
+}
+
 export const useApprovalStore = create<ApprovalState>((set, get) => ({
   approvals: [],
   selectedId: null,
@@ -60,6 +74,7 @@ export const useApprovalStore = create<ApprovalState>((set, get) => ({
     try {
       await jarvisClient.post(`/api/approvals/${id}/approve`);
       await get().fetchApprovals();
+      refreshConversationsAfterAsyncResume();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to approve';
       set({ error: message });
@@ -81,6 +96,7 @@ export const useApprovalStore = create<ApprovalState>((set, get) => ({
       set({ isLoading: true, error: null });
       await jarvisClient.post('/api/approvals/batch/approve', { ids });
       await get().fetchApprovals();
+      refreshConversationsAfterAsyncResume();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to approve batch';
       set({ error: message, isLoading: false });

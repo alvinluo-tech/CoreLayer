@@ -45,6 +45,22 @@ app.get("/:id", async (c) => {
   }
 });
 
+// POST /batch-delete - Delete multiple conversations
+app.post("/batch-delete", async (c) => {
+  try {
+    const body = await c.req.json<{ ids: string[] }>();
+    const ids = body.ids ?? [];
+    if (ids.length === 0) {
+      return c.json({ deleted: 0 });
+    }
+    const deleted = await getRepositories().conversations.deleteMany(ids);
+    return c.json({ deleted });
+  } catch (err) {
+    logError("conversations/batch-delete", err);
+    return apiError(c, "Failed to delete conversations", 500);
+  }
+});
+
 // DELETE /:id - Delete conversation
 app.delete("/:id", async (c) => {
   try {

@@ -342,6 +342,7 @@ export interface ConversationRepository {
   getById(id: string): Promise<ConversationRow | null>;
   update(id: string, data: { title?: string; modelUsed?: string }): Promise<ConversationRow>;
   delete(id: string): Promise<boolean>;
+  deleteMany(ids: string[]): Promise<number>;
   addMessage(conversationId: string, data: MessageInput): Promise<MessageRow>;
   getMessages(conversationId: string): Promise<MessageRow[]>;
   clear(): Promise<number>;

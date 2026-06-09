@@ -42,6 +42,7 @@ export function useChat() {
 
   const [streamingContent, setStreamingContent] = useState<string>('');
   const [isStreaming, setIsStreaming] = useState(false);
+  const [streamConversationId, setStreamConversationId] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const messages: Message[] = rawMessages.map(convertMessage);
@@ -62,6 +63,7 @@ export function useChat() {
 
       setIsStreaming(true);
       setIsSending(true);
+      setStreamConversationId(conversationId!);
       setStreamingContent('');
 
       const abortController = new AbortController();
@@ -90,8 +92,16 @@ export function useChat() {
         createdAt: new Date().toISOString(),
       };
 
+      const isTargetConversationActive = () =>
+        useConversationStore.getState().activeConversationId === conversationId;
+      const setMessagesIfActive = (nextMessages: ConversationMessage[]) => {
+        if (isTargetConversationActive()) {
+          setMessages(nextMessages);
+        }
+      };
+
       const currentMessages = [...rawMessages, optimisticUserMsg, optimisticAssistantMsg];
-      setMessages(currentMessages);
+      setMessagesIfActive(currentMessages);
 
       try {
         let fullText = '';
@@ -111,7 +121,9 @@ export function useChat() {
               } catch {
                 fullText += data;
               }
-              setStreamingContent(fullText);
+              if (isTargetConversationActive()) {
+                setStreamingContent(fullText);
+              }
               messageListUpdated = true;
             } else if (event === 'thinking') {
               // Thinking tokens are not displayed in the main chat UI yet.
@@ -152,7 +164,7 @@ export function useChat() {
                     ? resultPayload.data
                     : payload.output;
 
-                if (panelData != null) {
+                if (panelData != null && isTargetConversationActive()) {
                   useDataPanelStore.getState().addEntry({
                     toolCallId: payload.toolCallId,
                     toolName: payload.name,
@@ -174,7 +186,7 @@ export function useChat() {
                   if (m.id === assistantTempId) return payload.assistantMessage;
                   return m;
                 });
-                setMessages(updatedFromDb);
+                setMessagesIfActive(updatedFromDb);
                 tauri
                   .listConversations()
                   .then(setConversations)
@@ -192,7 +204,7 @@ export function useChat() {
                 toolCalls:
                   toolCallsMap.size > 0 ? JSON.stringify(Array.from(toolCallsMap.values())) : null,
               };
-              setMessages(
+              setMessagesIfActive(
                 currentMessages.map((m) => (m.id === assistantTempId ? updatedAssistant : m))
               );
             }
@@ -210,7 +222,7 @@ export function useChat() {
                 if (m.id === assistantTempId) return result.assistantMessage;
                 return m;
               });
-              setMessages(updatedFromDb);
+              setMessagesIfActive(updatedFromDb);
 
               try {
                 const convs = await tauri.listConversations();
@@ -226,18 +238,19 @@ export function useChat() {
               error: fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr),
             });
           }
-          setMessages(rawMessages);
+          setMessagesIfActive(rawMessages);
         }
       } finally {
         setIsStreaming(false);
         setIsSending(false);
+        setStreamConversationId(null);
         abortControllerRef.current = null;
         setStreamingContent('');
       }
     },
     [
       activeConversationId,
-      createConversation,
+      getOrCreateDefaultConversation,
       rawMessages,
       setMessages,
       setIsSending,
@@ -258,8 +271,8 @@ export function useChat() {
     sendMessage,
     stopStreaming,
     startNewChat,
-    isLoading: isSending,
-    isStreaming,
+    isLoading: isSending && activeConversationId === streamConversationId,
+    isStreaming: isStreaming && activeConversationId === streamConversationId,
     streamingContent,
     activeConversationId,
     error,

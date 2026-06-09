@@ -215,4 +215,74 @@ describe('useConversationStore', () => {
       expect(useConversationStore.getState().activeConversationId).toBe('conv-2');
     });
   });
+
+  describe('selectConversation', () => {
+    it('does not let a stale slower selection overwrite the active conversation messages', async () => {
+      const conv1 = baseConversation;
+      const conv2 = { ...baseConversation, id: 'conv-2', title: 'Second conversation' };
+
+      let resolveConv1!: (value: unknown) => void;
+      let resolveConv2!: (value: unknown) => void;
+
+      const conv1Promise = new Promise((resolve) => {
+        resolveConv1 = resolve;
+      });
+      const conv2Promise = new Promise((resolve) => {
+        resolveConv2 = resolve;
+      });
+
+      useConversationStore.setState({
+        conversations: [conv1, conv2],
+        activeConversationId: null,
+        messages: [],
+      });
+
+      mockInvoke.mockImplementation((name: string, id: string) => {
+        if (name === 'getConversation' && id === 'conv-1') return conv1Promise;
+        if (name === 'getConversation' && id === 'conv-2') return conv2Promise;
+        throw new Error(`Unexpected call: ${name}`);
+      });
+
+      const firstSelect = useConversationStore.getState().selectConversation('conv-1');
+      const secondSelect = useConversationStore.getState().selectConversation('conv-2');
+
+      resolveConv2({
+        conversation: conv2,
+        messages: [
+          {
+            id: 'm2',
+            conversationId: 'conv-2',
+            role: 'assistant',
+            content: 'second',
+            toolCalls: null,
+            toolCallId: null,
+            createdAt: '',
+          },
+        ],
+      });
+      await secondSelect;
+
+      resolveConv1({
+        conversation: conv1,
+        messages: [
+          {
+            id: 'm1',
+            conversationId: 'conv-1',
+            role: 'assistant',
+            content: 'first',
+            toolCalls: null,
+            toolCallId: null,
+            createdAt: '',
+          },
+        ],
+      });
+      await firstSelect;
+
+      const state = useConversationStore.getState();
+      expect(state.activeConversationId).toBe('conv-2');
+      expect(state.messages).toHaveLength(1);
+      expect(state.messages[0]!.conversationId).toBe('conv-2');
+      expect(state.messages[0]!.content).toBe('second');
+    });
+  });
 });

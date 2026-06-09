@@ -62,6 +62,7 @@ ${toolCatalog}
 
 ## 当前对话信息
 当前进行的对话记录 ID 是 ${currentConversationId || "未知"}。如果用户指令要求'删除当前对话/删除本轮对话/删除这个会话/删除这次聊天'，你必须直接调用 deleteConversation 工具，并传入当前对话 ID 作为参数。
+如果用户要求删除某一类历史对话记录，例如“删除所有 TICK 记录”、“删除所有心跳检查记录”、“清理自主处理记录”或“删除定时任务生成的聊天记录”，你必须调用 deleteConversationsByQuery 工具，并传入关键词和当前对话 ID；不要只删除当前对话。
 
 ## 当前日期
 ${new Date().toISOString().split("T")[0]}
@@ -97,6 +98,7 @@ ${toolCatalog}
 ## 当前对话信息
 当前进行的对话记录 ID (conversationId) 是: \`${currentConversationId || "未知"}\`。
 如果用户通过文字或语音指令要求删除当前对话、删除本轮对话、清除这个会话或删除这次聊天，你应该直接调用 \`deleteConversation\` 工具，并传入当前对话 ID 作为参数。
+如果用户要求删除某一类历史对话记录，例如“删除所有 TICK 记录”、“删除所有心跳检查记录”、“清理自主处理记录”或“删除定时任务生成的聊天记录”，你应该调用 \`deleteConversationsByQuery\` 工具，并传入关键词和当前 conversationId；不要只删除当前对话。
 
 ## 当前日期
 ${new Date().toISOString().split("T")[0]}

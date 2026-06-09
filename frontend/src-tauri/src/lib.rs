@@ -295,6 +295,16 @@ async fn delete_conversation(id: String) -> Result<serde_json::Value, String> {
 }
 
 #[tauri::command]
+async fn delete_conversations(ids: Vec<String>) -> Result<serde_json::Value, String> {
+    daemon_post(
+        get_daemon_client(),
+        "/api/conversations/batch-delete",
+        serde_json::json!({ "ids": ids }),
+    )
+    .await
+}
+
+#[tauri::command]
 async fn update_conversation(id: String, title: String) -> Result<Conversation, String> {
     let resp: serde_json::Value = daemon_patch(
         get_daemon_client(),
@@ -1270,6 +1280,7 @@ pub fn run() {
             create_conversation,
             get_conversation,
             delete_conversation,
+            delete_conversations,
             update_conversation,
             send_conversation_message,
             query_tasks,

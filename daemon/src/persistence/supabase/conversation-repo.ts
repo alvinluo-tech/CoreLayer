@@ -116,6 +116,16 @@ export function createSupabaseConversationRepo(): ConversationRepository {
       return !error;
     },
 
+    async deleteMany(ids: string[]): Promise<number> {
+      if (ids.length === 0) return 0;
+      for (const id of ids) {
+        await client.from("messages").delete().eq("conversation_id", id);
+      }
+      const { error } = await client.from("conversations").delete().in("id", ids);
+      if (error) return 0;
+      return ids.length;
+    },
+
     async addMessage(conversationId: string, data: MessageInput): Promise<MessageRow> {
       const id = crypto.randomUUID();
       const now = new Date().toISOString();

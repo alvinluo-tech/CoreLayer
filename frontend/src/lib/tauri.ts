@@ -72,6 +72,10 @@ export async function deleteConversation(id: string): Promise<void> {
   await invoke('delete_conversation', { id });
 }
 
+export async function deleteConversations(ids: string[]): Promise<{ deleted: number }> {
+  return invoke('delete_conversations', { ids });
+}
+
 export async function updateConversation(id: string, title: string): Promise<Conversation> {
   return invoke<Conversation>('update_conversation', { id, title });
 }

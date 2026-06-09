@@ -30,6 +30,14 @@ export function ProjectList() {
     });
   };
 
+  const toggleSelectAll = () => {
+    if (selectedIds.size === projects.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(projects.map((p) => p.id)));
+    }
+  };
+
   const handleBatchDelete = async () => {
     if (selectedIds.size === 0) return;
     if (
@@ -102,7 +110,7 @@ export function ProjectList() {
       </div>
 
       {/* Batch delete toolbar */}
-      {isMultiSelectMode && selectedIds.size > 0 && (
+      {isMultiSelectMode && (
         <div
           className="mx-3 my-1 flex items-center justify-between px-3 py-1.5 rounded"
           style={{
@@ -110,28 +118,43 @@ export function ProjectList() {
             border: '1px solid rgba(255,61,90,0.15)',
           }}
         >
-          <span
-            style={{
-              fontFamily: 'var(--font-data)',
-              fontSize: 10,
-              color: 'var(--rose)',
-            }}
-          >
-            Selected {selectedIds.size}
-          </span>
-          <button
-            onClick={handleBatchDelete}
-            className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] transition-colors"
-            style={{
-              fontFamily: 'var(--font-data)',
-              color: 'var(--rose)',
-              background: 'rgba(255,61,90,0.1)',
-              border: '1px solid rgba(255,61,90,0.2)',
-            }}
-          >
-            <Trash2 size={10} />
-            Delete
-          </button>
+          <div className="flex items-center gap-2 select-none">
+            <input
+              type="checkbox"
+              checked={projects.length > 0 && selectedIds.size === projects.length}
+              onChange={toggleSelectAll}
+              style={{
+                width: 13,
+                height: 13,
+                accentColor: 'var(--cyan)',
+                cursor: 'pointer',
+              }}
+            />
+            <span
+              style={{
+                fontFamily: 'var(--font-data)',
+                fontSize: 10,
+                color: 'var(--rose)',
+              }}
+            >
+              Selected {selectedIds.size}
+            </span>
+          </div>
+          {selectedIds.size > 0 && (
+            <button
+              onClick={handleBatchDelete}
+              className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] transition-colors"
+              style={{
+                fontFamily: 'var(--font-data)',
+                color: 'var(--rose)',
+                background: 'rgba(255,61,90,0.1)',
+                border: '1px solid rgba(255,61,90,0.2)',
+              }}
+            >
+              <Trash2 size={10} />
+              Delete
+            </button>
+          )}
         </div>
       )}
 

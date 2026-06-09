@@ -105,6 +105,19 @@ export function createSqliteConversationRepo(): ConversationRepository {
       return result.changes > 0;
     },
 
+    async deleteMany(ids: string[]): Promise<number> {
+      if (ids.length === 0) return 0;
+      let total = 0;
+      for (const id of ids) {
+        const result = db
+          .delete(schema.conversations)
+          .where(eq(schema.conversations.id, id))
+          .run();
+        total += result.changes;
+      }
+      return total;
+    },
+
     async addMessage(conversationId: string, data: MessageInput): Promise<MessageRow> {
       const id = crypto.randomUUID();
       const now = new Date().toISOString();

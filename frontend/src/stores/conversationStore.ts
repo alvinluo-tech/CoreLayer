@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import type { Conversation, ConversationMessage, SendMessageResponse } from '@/lib/tauri';
 import * as tauri from '@/lib/tauri';
 
+let selectConversationRequestSeq = 0;
+
 interface ConversationState {
   conversations: Conversation[];
   activeConversationId: string | null;
@@ -97,12 +99,23 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
   },
 
   selectConversation: async (id: string) => {
+    const requestSeq = ++selectConversationRequestSeq;
     set({ isLoading: true, error: null, activeConversationId: id });
     try {
       const { messages } = await tauri.getConversation(id);
-      set({ messages, isLoading: false });
+      set((state) => {
+        if (requestSeq !== selectConversationRequestSeq || state.activeConversationId !== id) {
+          return state;
+        }
+        return { messages, isLoading: false };
+      });
     } catch (error) {
-      set({ error: String(error), isLoading: false });
+      set((state) => {
+        if (requestSeq !== selectConversationRequestSeq || state.activeConversationId !== id) {
+          return state;
+        }
+        return { error: String(error), isLoading: false };
+      });
     }
   },
 
@@ -126,9 +139,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
   deleteConversations: async (ids: string[]) => {
     const idSet = new Set(ids);
     try {
-      for (const id of ids) {
-        await tauri.deleteConversation(id);
-      }
+      await tauri.deleteConversations(ids);
       set((state) => {
         const newConversations = state.conversations.filter((c) => !idSet.has(c.id));
         const activeStillExists = newConversations.some((c) => c.id === state.activeConversationId);
@@ -190,16 +201,23 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
       const result = await tauri.sendConversationMessage(conversationId!, content);
 
       // Replace temp user message with real one, add assistant message
-      set((state) => ({
-        messages: [
-          ...state.messages.map((m) => (m.id === tempId ? result.userMessage : m)),
-          result.assistantMessage,
-        ],
-        isSending: false,
-        conversations: state.conversations.map((c) =>
-          c.id === result.conversation.id ? result.conversation : c
-        ),
-      }));
+      set((state) => {
+        const updatedConversations = result.conversation
+          ? state.conversations.map((c) =>
+              c.id === result.conversation.id ? result.conversation : c
+            )
+          : state.conversations;
+        return {
+          messages: [
+            ...state.messages.map((m) => (m.id === tempId ? result.userMessage : m)),
+            result.assistantMessage,
+          ],
+          isSending: false,
+          conversations: updatedConversations,
+        };
+      });
+
+      await get().fetchConversations();
 
       return result;
     } catch (error) {
@@ -230,5 +248,14 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
   },
   setMessages: (messages) => set({ messages }),
   setIsSending: (isSending) => set({ isSending }),
-  setConversations: (conversations) => set({ conversations }),
+  setConversations: (conversations) => {
+    set((state) => {
+      const activeStillExists = conversations.some((c) => c.id === state.activeConversationId);
+      return {
+        conversations,
+        activeConversationId: activeStillExists ? state.activeConversationId : null,
+        messages: activeStillExists ? state.messages : [],
+      };
+    });
+  },
 }));

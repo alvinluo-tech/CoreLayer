@@ -43,6 +43,14 @@ export function WorkspaceSidebar({ selectedId, onSelect, onCreate }: WorkspaceSi
     });
   }, []);
 
+  const toggleSelectAll = useCallback(() => {
+    if (selectedIds.size === filtered.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filtered.map((w) => w.id)));
+    }
+  }, [selectedIds, filtered]);
+
   const handleBatchDelete = async () => {
     if (selectedIds.size === 0) return;
     if (
@@ -160,7 +168,7 @@ export function WorkspaceSidebar({ selectedId, onSelect, onCreate }: WorkspaceSi
       </div>
 
       {/* Batch delete toolbar */}
-      {isMultiSelectMode && selectedIds.size > 0 && (
+      {isMultiSelectMode && (
         <div
           className="mx-3 mb-2 flex items-center justify-between px-3 py-2 rounded-lg"
           style={{
@@ -168,28 +176,43 @@ export function WorkspaceSidebar({ selectedId, onSelect, onCreate }: WorkspaceSi
             border: '1px solid rgba(255,61,90,0.15)',
           }}
         >
-          <span
-            style={{
-              fontFamily: 'var(--font-data)',
-              fontSize: 11,
-              color: 'var(--rose)',
-            }}
-          >
-            Selected {selectedIds.size}
-          </span>
-          <button
-            onClick={handleBatchDelete}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors"
-            style={{
-              fontFamily: 'var(--font-data)',
-              color: 'var(--rose)',
-              background: 'rgba(255,61,90,0.1)',
-              border: '1px solid rgba(255,61,90,0.2)',
-            }}
-          >
-            <Trash2 size={11} />
-            Delete
-          </button>
+          <div className="flex items-center gap-2 select-none">
+            <input
+              type="checkbox"
+              checked={filtered.length > 0 && selectedIds.size === filtered.length}
+              onChange={toggleSelectAll}
+              style={{
+                width: 14,
+                height: 14,
+                accentColor: 'var(--cyan)',
+                cursor: 'pointer',
+              }}
+            />
+            <span
+              style={{
+                fontFamily: 'var(--font-data)',
+                fontSize: 11,
+                color: 'var(--rose)',
+              }}
+            >
+              Selected {selectedIds.size}
+            </span>
+          </div>
+          {selectedIds.size > 0 && (
+            <button
+              onClick={handleBatchDelete}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors"
+              style={{
+                fontFamily: 'var(--font-data)',
+                color: 'var(--rose)',
+                background: 'rgba(255,61,90,0.1)',
+                border: '1px solid rgba(255,61,90,0.2)',
+              }}
+            >
+              <Trash2 size={11} />
+              Delete
+            </button>
+          )}
         </div>
       )}
 
