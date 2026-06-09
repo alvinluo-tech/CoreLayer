@@ -223,25 +223,27 @@ export function WorkspaceCenter({ detail, onShowSpec, onShowProposal }: Workspac
         </div>
       </div>
 
-      {/* Scrollable content: Task Graph + Timeline + Chat */}
-      <div className="flex-1 overflow-y-auto workspace-scroll">
-        {/* Task Graph */}
-        <div className="task-tree">
-          <div className="task-tree-title">Task Graph ({tasks.length})</div>
-          <WorkspaceTaskGraph tasks={tasks} onRetry={handleRetryTask} />
-        </div>
+      {/* Task Graph */}
+      <div className="task-tree" style={{ maxHeight: 280, overflowY: 'auto', flexShrink: 0 }}>
+        <div className="task-tree-title">Task Graph ({tasks.length})</div>
+        <WorkspaceTaskGraph tasks={tasks} onRetry={handleRetryTask} />
+      </div>
 
-        {/* Timeline */}
-        <div className="timeline">
-          <div className="timeline-header">
-            <div className="timeline-title">Timeline</div>
-          </div>
-          <WorkspaceTimeline events={timelineEvents} />
+      {/* Timeline */}
+      <div className="timeline" style={{ flex: 1, overflowY: 'auto' }}>
+        <div className="timeline-header">
+          <div className="timeline-title">Timeline</div>
         </div>
+        <WorkspaceTimeline events={timelineEvents} />
+      </div>
 
-        {/* Chat */}
-        <div className="chat-embed">
-          <div className="chat-embed-header">Workspace Chat</div>
+      {/* Chat */}
+      <div
+        className="chat-embed flex-shrink-0"
+        style={{ height: 180, display: 'flex', flexDirection: 'column' }}
+      >
+        <div className="chat-embed-header mb-1">Workspace Chat</div>
+        <div className="flex-grow flex-1 min-h-0">
           <WorkspaceChat workspaceId={detail.id} />
         </div>
       </div>

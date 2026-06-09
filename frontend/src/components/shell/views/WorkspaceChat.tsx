@@ -116,9 +116,12 @@ export function WorkspaceChat({ workspaceId }: WorkspaceChatProps) {
   };
 
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-1.5 h-full overflow-hidden">
       {/* Messages */}
-      <div ref={scrollRef} className="flex flex-col gap-1.5">
+      <div
+        ref={scrollRef}
+        className="flex-1 overflow-y-auto workspace-scroll flex flex-col gap-1.5"
+      >
         {messages.length === 0 ? (
           <div
             className="flex items-center justify-center py-4"
@@ -162,7 +165,7 @@ export function WorkspaceChat({ workspaceId }: WorkspaceChatProps) {
       </div>
 
       {/* Input */}
-      <div className="chat-input-row">
+      <div className="chat-input-row flex-shrink-0">
         <input
           ref={inputRef}
           className="chat-input"

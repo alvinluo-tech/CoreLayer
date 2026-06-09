@@ -41,7 +41,7 @@ export function WorkspaceTaskGraph({ tasks, onRetry }: WorkspaceTaskGraphProps) 
   }
 
   return (
-    <div className="flex flex-col gap-1" style={{ maxHeight: 280, overflowY: 'auto' }}>
+    <div className="flex flex-col gap-1">
       {tasks.map((task, i) => {
         const color = statusColors[task.status] ?? 'var(--text-tertiary)';
         return (
