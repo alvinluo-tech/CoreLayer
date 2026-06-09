@@ -110,7 +110,7 @@ async function dispatchToCodingRuntime(
 
   // Build CodingTask from task + run info
   let taskPrompt = `Execute agent run ${runId}`;
-  let repoPath = workDir ?? process.cwd();
+  const repoPath = workDir ?? process.cwd();
 
   if (taskId) {
     const task = await tasks.getById(taskId);

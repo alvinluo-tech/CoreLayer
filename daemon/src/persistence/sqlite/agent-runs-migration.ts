@@ -112,6 +112,6 @@ export function migrateAgentRunsStatusConstraint(sqlite: SqliteDatabase): void {
   } finally {
     try {
       sqlite.exec(`PRAGMA foreign_keys = ON`);
-    } catch {}
+    } catch {} // eslint-disable-line no-empty
   }
 }

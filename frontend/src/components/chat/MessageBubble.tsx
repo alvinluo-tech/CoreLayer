@@ -52,13 +52,15 @@ export function MessageBubble({ message }: MessageBubbleProps) {
   const [isThoughtExpanded, setIsThoughtExpanded] = useState(!isThoughtClosed);
   const [copied, setCopied] = useState(false);
 
+  const hasThought = !!thought;
+
   useEffect(() => {
     if (isThoughtClosed) {
       setIsThoughtExpanded(false);
-    } else if (thought) {
+    } else if (hasThought) {
       setIsThoughtExpanded(true);
     }
-  }, [isThoughtClosed, !!thought]);
+  }, [isThoughtClosed, hasThought]);
 
   const handleCopyText = async () => {
     try {
