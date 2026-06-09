@@ -50,7 +50,7 @@ workspaceRoutes.post("/", async (c) => {
     });
 
     const projectName = body.name
-      ? body.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
+      ? body.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "default"
       : "default";
     await projects.create({
       workspaceId: ws.id,
