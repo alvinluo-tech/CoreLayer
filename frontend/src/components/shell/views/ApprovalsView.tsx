@@ -87,15 +87,19 @@ function FilterTabs() {
   const { filterStatus, setFilterStatus, approvals } = useApprovalStore();
 
   const pending = approvals.filter((a) => a.status === 'pending').length;
+  const executing = approvals.filter((a) => a.status === 'executing').length;
   const approved = approvals.filter((a) => a.status === 'approved').length;
   const denied = approvals.filter((a) => a.status === 'denied').length;
+  const failed = approvals.filter((a) => a.status === 'failed').length;
   const expired = approvals.filter((a) => a.status === 'expired').length;
 
   const tabs: { value: ApprovalFilterStatus; label: string; count: number }[] = [
     { value: 'all', label: 'All', count: approvals.length },
     { value: 'pending', label: 'Pending', count: pending },
+    { value: 'executing', label: 'Executing', count: executing },
     { value: 'approved', label: 'Approved', count: approved },
     { value: 'denied', label: 'Denied', count: denied },
+    { value: 'failed', label: 'Failed', count: failed },
     { value: 'expired', label: 'Expired', count: expired },
   ];
 
@@ -132,11 +136,19 @@ function FilterTabs() {
                 background:
                   tab.value === 'pending' && tab.count > 0
                     ? 'rgba(255,184,0,0.15)'
-                    : 'rgba(255,255,255,0.06)',
+                    : tab.value === 'executing' && tab.count > 0
+                      ? 'rgba(0,212,255,0.15)'
+                      : tab.value === 'failed' && tab.count > 0
+                        ? 'rgba(239,68,68,0.15)'
+                        : 'rgba(255,255,255,0.06)',
                 color:
                   tab.value === 'pending' && tab.count > 0
                     ? 'var(--amber)'
-                    : 'var(--text-tertiary)',
+                    : tab.value === 'executing' && tab.count > 0
+                      ? 'var(--cyan)'
+                      : tab.value === 'failed' && tab.count > 0
+                        ? 'var(--red)'
+                        : 'var(--text-tertiary)',
                 padding: '0 4px',
                 borderRadius: 3,
               }}
@@ -222,9 +234,13 @@ function ApprovalCard({
         {/* Status indicator */}
         {isPending ? (
           <Clock size={12} style={{ color: 'var(--amber)' }} />
+        ) : approval.status === 'executing' ? (
+          <Loader2 size={12} className="animate-spin" style={{ color: 'var(--cyan)' }} />
         ) : approval.status === 'approved' ? (
           <CheckCircle2 size={12} style={{ color: 'var(--emerald)' }} />
         ) : approval.status === 'denied' ? (
+          <XCircle size={12} style={{ color: 'var(--red)' }} />
+        ) : approval.status === 'failed' ? (
           <XCircle size={12} style={{ color: 'var(--red)' }} />
         ) : (
           <AlertTriangle size={12} style={{ color: 'var(--text-tertiary)' }} />
@@ -610,17 +626,19 @@ function ApprovalDetail({ approval }: { approval: ApprovalRequest }) {
               color:
                 approval.status === 'pending'
                   ? 'var(--amber)'
-                  : approval.status === 'approved'
-                    ? 'var(--emerald)'
-                    : approval.status === 'denied'
-                      ? 'var(--red)'
-                      : 'var(--text-tertiary)',
+                  : approval.status === 'executing'
+                    ? 'var(--cyan)'
+                    : approval.status === 'approved'
+                      ? 'var(--emerald)'
+                      : approval.status === 'denied' || approval.status === 'failed'
+                        ? 'var(--red)'
+                        : 'var(--text-tertiary)',
               textTransform: 'uppercase',
               fontWeight: 600,
               letterSpacing: 0.5,
             }}
           >
-            {approval.status}
+            {approval.status === 'executing' ? 'EXECUTING...' : approval.status}
           </span>
         </div>
       </div>

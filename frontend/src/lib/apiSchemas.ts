@@ -2,7 +2,14 @@ import { z } from 'zod';
 
 // ---- ApprovalRequest ----
 
-export const approvalStatusSchema = z.enum(['pending', 'approved', 'denied', 'expired']);
+export const approvalStatusSchema = z.enum([
+  'pending',
+  'approved',
+  'denied',
+  'expired',
+  'executing',
+  'failed',
+]);
 export const approvalRiskSchema = z.enum(['low', 'medium', 'high', 'critical']);
 
 export const approvalRequestSchema = z.object({

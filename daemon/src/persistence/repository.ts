@@ -745,7 +745,7 @@ export interface ApprovalRequestRow {
   toolName: string;
   args: unknown;
   risk: string;
-  status: "pending" | "approved" | "denied" | "expired";
+  status: "pending" | "approved" | "denied" | "expired" | "executing" | "failed";
   projectScope: boolean;
   decidedAt: number | null;
   createdAt: number;
@@ -783,6 +783,8 @@ export interface ApprovalRequestRepository {
   findByToolCallId(toolCallId: string): Promise<ApprovalRequestRow | null>;
   approve(id: string): Promise<ApprovalRequestRow>;
   deny(id: string): Promise<ApprovalRequestRow>;
+  markExecuting(id: string): Promise<ApprovalRequestRow>;
+  markFailed(id: string, error: string): Promise<ApprovalRequestRow>;
   expireStale(maxAgeMs?: number): Promise<{ count: number; ids: string[] }>;
 }
 

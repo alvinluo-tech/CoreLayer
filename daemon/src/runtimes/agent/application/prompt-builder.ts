@@ -61,8 +61,13 @@ ${toolCatalog}
 - 执行完工具后，将结果以流畅、自然的口语化语句整合到最终回复中，绝对不要输出表格！
 
 ## 当前对话信息
-当前进行的对话记录 ID 是 ${currentConversationId || "未知"}。如果用户指令要求'删除当前对话/删除本轮对话/删除这个会话/删除这次聊天'，你必须直接调用 deleteConversation 工具，并传入当前对话 ID 作为参数。
-如果用户要求删除某一类历史对话记录，例如“删除所有 TICK 记录”、“删除所有心跳检查记录”、“清理自主处理记录”或“删除定时任务生成的聊天记录”，你必须调用 deleteConversationsByQuery 工具，并传入关键词和当前对话 ID；不要只删除当前对话。
+当前进行的对话记录 ID 是 ${currentConversationId || "未知"}。
+
+### 删除操作规则（严格遵守）
+1. 删除当前对话：仅当用户明确说"删除当前对话"、"删除本轮对话"、"这个会话"时，才调用 deleteConversation，并传入当前对话 ID 作为 conversationId 和 currentConversationId。
+2. 批量删除：当用户要求删除某一类记录（如 TICK、心跳、定时任务）时，必须先调用 previewConversationCleanup 预览匹配结果，展示给用户确认后，再调用 deleteConversationsByQuery 执行删除。
+3. 严禁：不要在用户未明确要求的情况下删除当前活跃对话。不要用 deleteConversation 循环删除多条记录，必须用 deleteConversationsByQuery 批量处理。
+4. 多个单条删除：如果你需要删除多条特定记录，不要逐个调用 deleteConversation，改用 deleteConversationsByQuery 按关键词批量删除。
 
 ## 当前日期
 ${new Date().toISOString().split("T")[0]}
@@ -97,8 +102,12 @@ ${toolCatalog}
 
 ## 当前对话信息
 当前进行的对话记录 ID (conversationId) 是: \`${currentConversationId || "未知"}\`。
-如果用户通过文字或语音指令要求删除当前对话、删除本轮对话、清除这个会话或删除这次聊天，你应该直接调用 \`deleteConversation\` 工具，并传入当前对话 ID 作为参数。
-如果用户要求删除某一类历史对话记录，例如“删除所有 TICK 记录”、“删除所有心跳检查记录”、“清理自主处理记录”或“删除定时任务生成的聊天记录”，你应该调用 \`deleteConversationsByQuery\` 工具，并传入关键词和当前 conversationId；不要只删除当前对话。
+
+### 删除操作规则（严格遵守）
+1. **删除当前对话**：仅当用户明确说"删除当前对话"、"删除本轮对话"、"这个会话"时，才调用 \`deleteConversation\`，并传入当前对话 ID 作为 \`conversationId\` 和 \`currentConversationId\`。
+2. **批量删除**：当用户要求删除某一类记录（如 TICK、心跳、定时任务）时，必须先调用 \`previewConversationCleanup\` 预览匹配结果，展示给用户确认后，再调用 \`deleteConversationsByQuery\` 执行删除。
+3. **严禁**：不要在用户未明确要求的情况下删除当前活跃对话。不要用 \`deleteConversation\` 循环删除多条记录——必须用 \`deleteConversationsByQuery\` 批量处理。
+4. **多个单条删除**：如果你需要删除多条特定记录，不要逐个调用 \`deleteConversation\`——改用 \`deleteConversationsByQuery\` 按关键词批量删除。
 
 ## 当前日期
 ${new Date().toISOString().split("T")[0]}

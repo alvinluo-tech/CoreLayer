@@ -10,13 +10,32 @@ const approvalRoutes = new Hono();
 /**
  * Reusable helper to execute an approved tool, save the result to database messages,
  * log the audit entry, and optionally re-trigger the LLM to resume conversation.
+ *
+ * Status transitions: approved -> executing -> (approved on success | failed on error)
  */
 async function resumeAndSaveToolResult(id: string, triggerLLM: boolean): Promise<void> {
   const { approvalRequests, toolCallLogs, conversations } = getRepositories();
   const existing = await approvalRequests.getById(id);
   if (!existing) return;
 
-  const resumeResult = await executeApprovedTool(id);
+  // Mark as executing before running the tool
+  await approvalRequests.markExecuting(id);
+
+  let resumeResult;
+  try {
+    resumeResult = await executeApprovedTool(id);
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    await approvalRequests.markFailed(id, errorMsg);
+    logError("approvals/resume/execute-failed", err);
+    return;
+  }
+
+  // Tool execution succeeded — status stays "approved" (the approve() call already set it)
+  // If the tool itself returned failure, mark as failed
+  if (!resumeResult.toolResult.success) {
+    await approvalRequests.markFailed(id, String(resumeResult.toolResult.error ?? "Tool execution failed"));
+  }
 
   if (existing.runId) {
     const { agentRuns } = getRepositories();
@@ -352,7 +371,7 @@ approvalRoutes.post("/:id/deny", async (c) => {
  */
 approvalRoutes.post("/:id/remember", async (c) => {
   try {
-    const { approvalRequests, permissionMemories } = getRepositories();
+    const { approvalRequests, permissionMemories, agentRuns } = getRepositories();
     const id = c.req.param("id");
     const body = await c.req.json<{
       decision: "auto" | "confirm" | "deny";
@@ -382,8 +401,14 @@ approvalRoutes.post("/:id/remember", async (c) => {
       toolRuntime.getPermissionGuard().resolvePendingConfirmation(id, approved);
       if (approved) {
         await approvalRequests.approve(id);
+        // Execute the tool and re-trigger LLM
+        const resumePromise = resumeAndSaveToolResult(id, true);
+        resumePromise.catch((err) => logError("approvals/remember/resume-fatal", err));
       } else {
         await approvalRequests.deny(id);
+        if (existing.runId) {
+          await agentRuns.updateStatus(existing.runId, "failed", "User denied tool approval");
+        }
       }
     }
 

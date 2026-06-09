@@ -92,6 +92,8 @@ const ALWAYS_AVAILABLE_TOOLS = new Set([
   "glob",
   "grep",
   "deleteConversation",
+  "deleteConversationsByQuery",
+  "previewConversationCleanup",
 ]);
 
 /** Maximum tools from RAG selection (excluding always-available) */

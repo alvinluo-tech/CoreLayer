@@ -136,6 +136,33 @@ export function createSqliteApprovalRepo(database?: DrizzleDb): ApprovalRequestR
       return mapRow(row);
     },
 
+    async markExecuting(id: string): Promise<ApprovalRequestRow> {
+      db.update(schema.approvalRequests)
+        .set({ status: "executing" })
+        .where(eq(schema.approvalRequests.id, id))
+        .run();
+      const row = db
+        .select()
+        .from(schema.approvalRequests)
+        .where(eq(schema.approvalRequests.id, id))
+        .get()!;
+      return mapRow(row);
+    },
+
+    async markFailed(id: string, error: string): Promise<ApprovalRequestRow> {
+      const now = Date.now();
+      db.update(schema.approvalRequests)
+        .set({ status: "failed", decidedAt: now, preview: `Failed: ${error}` })
+        .where(eq(schema.approvalRequests.id, id))
+        .run();
+      const row = db
+        .select()
+        .from(schema.approvalRequests)
+        .where(eq(schema.approvalRequests.id, id))
+        .get()!;
+      return mapRow(row);
+    },
+
     async expireStale(maxAgeMs = 300_000): Promise<{ count: number; ids: string[] }> {
       const cutoff = Date.now() - maxAgeMs;
       // Select IDs before updating so we can return them

@@ -348,7 +348,7 @@ export const approvalRequests = sqliteTable("approval_requests", {
   toolName: text("tool_name").notNull(),
   args: text("args").notNull(), // JSON stored as text
   risk: text("risk").notNull(),
-  status: text("status", { enum: ["pending", "approved", "denied", "expired"] })
+  status: text("status", { enum: ["pending", "approved", "denied", "expired", "executing", "failed"] })
     .default("pending")
     .notNull(),
   projectScope: integer("project_scope", { mode: "boolean" }).default(false).notNull(),
