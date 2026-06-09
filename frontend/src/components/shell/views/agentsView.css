@@ -1,0 +1,240 @@
+/* ============================================================
+   AGENTS VIEW — Transitions, animations, hover states
+   ============================================================ */
+
+/* ---- Agent Card ---- */
+
+.agent-card {
+  transition: all 0.15s ease;
+  border-left: 2px solid transparent;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.agent-card:hover {
+  background: rgba(0, 212, 255, 0.03);
+  border-left-color: rgba(0, 212, 255, 0.1);
+}
+
+.agent-card.selected {
+  background: rgba(0, 212, 255, 0.06);
+  border-left-color: #00d4ff;
+  box-shadow: 0 0 12px rgba(0, 212, 255, 0.05);
+}
+
+.agent-card .action-buttons {
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.agent-card:hover .action-buttons {
+  opacity: 1;
+}
+
+/* ---- Section Collapse ---- */
+
+.section-header {
+  cursor: pointer;
+  user-select: none;
+}
+
+.section-header:hover {
+  background: rgba(0, 212, 255, 0.02);
+}
+
+.section-header .collapse-arrow {
+  transition: transform 0.15s ease;
+}
+
+.section-header.collapsed .collapse-arrow {
+  transform: rotate(-90deg);
+}
+
+.section-body {
+  overflow: hidden;
+}
+
+.section-body.collapsed {
+  display: none;
+}
+
+/* ---- Inline Edit ---- */
+
+.inline-edit {
+  cursor: text;
+  border-radius: 4px;
+  padding: 2px 6px;
+  margin: -2px -6px;
+  transition: all 0.15s ease;
+}
+
+.inline-edit:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.inline-edit:focus {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(0, 212, 255, 0.15);
+  outline: none;
+  color: var(--text-primary);
+}
+
+/* ---- Executor Card ---- */
+
+.executor-card {
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.015);
+  border-radius: 8px;
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+
+.executor-card:hover {
+  border-color: rgba(0, 212, 255, 0.12);
+  background: rgba(0, 212, 255, 0.03);
+}
+
+.executor-card.selected {
+  border-color: #00d4ff;
+  background: rgba(0, 212, 255, 0.05);
+  box-shadow: 0 0 12px rgba(0, 212, 255, 0.06);
+}
+
+/* ---- Toggle Switch ---- */
+
+.toggle-switch {
+  width: 36px;
+  height: 20px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  position: relative;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.toggle-switch.on {
+  background: rgba(0, 212, 255, 0.2);
+  border: 1px solid rgba(0, 212, 255, 0.3);
+}
+
+.toggle-switch .knob {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.4);
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  transition: all 0.2s ease;
+}
+
+.toggle-switch.on .knob {
+  left: 19px;
+  background: #00d4ff;
+  box-shadow: 0 0 6px rgba(0, 212, 255, 0.4);
+}
+
+/* ---- Toast ---- */
+
+.toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: rgba(0, 212, 255, 0.1);
+  border: 1px solid rgba(0, 212, 255, 0.2);
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-family: var(--font-data);
+  font-size: 11px;
+  color: #00d4ff;
+  animation: toast-in 0.3s ease;
+  z-index: 1000;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ---- Modal ---- */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  animation: overlay-in 0.2s ease;
+}
+
+@keyframes overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.modal-content {
+  background: rgba(12, 16, 30, 0.98);
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  width: 520px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  animation: modal-in 0.2s ease;
+}
+
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ---- Inspector Stats Grid ---- */
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.stat-cell {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 6px;
+  padding: 8px;
+}
+
+/* ---- Scrollbar ---- */
+
+.agents-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+
+.agents-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.agents-scroll::-webkit-scrollbar-thumb {
+  background: rgba(0, 212, 255, 0.12);
+  border-radius: 2px;
+}
+
+/* ---- Pulse Animation ---- */
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}

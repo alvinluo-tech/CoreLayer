@@ -6,3 +6,4 @@ export { ScopeBadge } from './ScopeBadge';
 export { EntityLink } from './EntityLink';
 export { Timeline } from './Timeline';
 export { MetricCell } from './MetricCell';
+export { Tag, TagInput } from './Tag';
