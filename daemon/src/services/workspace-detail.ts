@@ -81,7 +81,7 @@ export async function getWorkspaceDetail(
 
   // Get tasks for summary
   const tasks = db
-    .select({ status: schema.tasks.status })
+    .select({ status: schema.tasks.status, projectId: schema.tasks.projectId })
     .from(schema.tasks)
     .where(eq(schema.tasks.workspaceId, workspaceId))
     .all();
@@ -97,12 +97,17 @@ export async function getWorkspaceDetail(
     .where(eq(schema.projects.workspaceId, workspaceId))
     .all();
 
+  const tasksByProject = new Map<string, typeof tasks>();
+  for (const task of tasks) {
+    if (task.projectId) {
+      const arr = tasksByProject.get(task.projectId) ?? [];
+      arr.push(task);
+      tasksByProject.set(task.projectId, arr);
+    }
+  }
+
   const projects = projectsList.map((project) => {
-    const pTasks = db
-      .select({ status: schema.tasks.status })
-      .from(schema.tasks)
-      .where(eq(schema.tasks.projectId, project.id))
-      .all();
+    const pTasks = tasksByProject.get(project.id) ?? [];
     const taskCount = pTasks.length;
     const completedProjectTasks = pTasks.filter(
       (t) => t.status === "completed" || t.status === "done"
