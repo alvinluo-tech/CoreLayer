@@ -11,7 +11,7 @@ interface WorkspaceSidebarProps {
 }
 
 export function WorkspaceSidebar({ selectedId, onSelect, onCreate }: WorkspaceSidebarProps) {
-  const { workspaces } = useWorkspaceStore();
+  const { workspaces, deleteWorkspace } = useWorkspaceStore();
   const { fetchDetail } = useWorkspaceDetailStore();
   const [search, setSearch] = useState('');
 
@@ -22,13 +22,21 @@ export function WorkspaceSidebar({ selectedId, onSelect, onCreate }: WorkspaceSi
     fetchDetail(id);
   };
 
+  const handleDelete = async (id: string) => {
+    const ws = workspaces.find((w) => w.id === id);
+    if (!ws) return;
+    if (!window.confirm(`Delete workspace "${ws.name}"? This cannot be undone.`)) return;
+    await deleteWorkspace(id);
+  };
+
   return (
     <div
       className="flex flex-col"
       style={{
         width: 260,
         borderRight: '1px solid var(--glass-border)',
-        background: 'var(--glass-bg)',
+        background: 'rgba(4,6,14,0.6)',
+        backdropFilter: 'blur(12px)',
       }}
     >
       {/* Header */}
@@ -36,17 +44,19 @@ export function WorkspaceSidebar({ selectedId, onSelect, onCreate }: WorkspaceSi
         className="flex items-center justify-between px-3 py-2.5"
         style={{ borderBottom: '1px solid var(--glass-border)' }}
       >
-        <span className="hud-label">Workspaces</span>
-        <button
-          onClick={onCreate}
+        <span
           style={{
+            fontFamily: 'var(--font-hud)',
+            fontSize: 11,
+            fontWeight: 600,
+            letterSpacing: '2px',
             color: 'var(--text-tertiary)',
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            padding: 4,
+            textTransform: 'uppercase',
           }}
         >
+          Workspaces
+        </span>
+        <button className="workspace-action-btn" onClick={onCreate} title="New Workspace">
           <Plus size={14} />
         </button>
       </div>
@@ -100,6 +110,7 @@ export function WorkspaceSidebar({ selectedId, onSelect, onCreate }: WorkspaceSi
                 workspace={ws}
                 isSelected={ws.id === selectedId}
                 onSelect={handleSelect}
+                onDelete={handleDelete}
               />
             ))}
           </div>

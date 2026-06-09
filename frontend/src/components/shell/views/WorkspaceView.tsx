@@ -7,6 +7,7 @@ import { WorkspaceCenter } from './WorkspaceCenter';
 import { WorkspaceRightPanel } from './WorkspaceRightPanel';
 import { AgentTeamProposalModal } from './AgentTeamProposalModal';
 import { ProjectSpecModal } from './ProjectSpecModal';
+import './workspaceView.css';
 
 interface ProposedAgent {
   id: string;
@@ -76,7 +77,13 @@ export function WorkspaceView() {
   };
 
   return (
-    <div className="flex h-full" style={{ background: 'var(--bg-primary)' }}>
+    <div
+      className="flex h-full"
+      style={{
+        background: 'var(--bg-void)',
+        gridTemplateColumns: '260px 1fr 320px',
+      }}
+    >
       <WorkspaceSidebar
         selectedId={currentWorkspace?.id ?? null}
         onSelect={selectWorkspace}
@@ -92,7 +99,11 @@ export function WorkspaceView() {
         </div>
       ) : detail ? (
         <>
-          <WorkspaceCenter detail={detail} />
+          <WorkspaceCenter
+            detail={detail}
+            onShowSpec={() => setShowSpecModal(true)}
+            onShowProposal={() => setShowTeamModal(true)}
+          />
           <WorkspaceRightPanel detail={detail} />
         </>
       ) : (

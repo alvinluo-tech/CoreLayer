@@ -7,6 +7,7 @@ interface TimelineEvent {
   message: string;
   timestamp: string;
   agentName?: string;
+  payload?: unknown;
 }
 
 interface WorkspaceTimelineProps {
@@ -27,6 +28,49 @@ const defaultTypeIcon = { icon: Settings, color: 'var(--text-tertiary)' };
 
 function getTypeIcon(type: string) {
   return typeIcons[type] ?? defaultTypeIcon;
+}
+
+function renderDiff(diffText: string) {
+  if (!diffText || typeof diffText !== 'string') return null;
+  return (
+    <div
+      className="timeline-diff"
+      style={{
+        fontFamily: 'var(--font-code, JetBrains Mono, monospace)',
+        fontSize: 10,
+        background: 'rgba(0,0,0,0.3)',
+        border: '1px solid rgba(0,212,255,0.05)',
+        borderRadius: 4,
+        padding: '6px 8px',
+        marginTop: 4,
+        lineHeight: 1.5,
+        overflowX: 'auto',
+        whiteSpace: 'pre',
+      }}
+    >
+      {diffText.split('\n').map((line, idx) => {
+        if (line.startsWith('+')) {
+          return (
+            <div key={idx} className="diff-add" style={{ color: '#00e68a' }}>
+              {line}
+            </div>
+          );
+        } else if (line.startsWith('-')) {
+          return (
+            <div key={idx} className="diff-del" style={{ color: '#ff3d5a' }}>
+              {line}
+            </div>
+          );
+        } else {
+          return (
+            <div key={idx} className="diff-ctx" style={{ color: 'rgba(255,255,255,0.25)' }}>
+              {line}
+            </div>
+          );
+        }
+      })}
+    </div>
+  );
 }
 
 export function WorkspaceTimeline({ events }: WorkspaceTimelineProps) {
@@ -73,6 +117,35 @@ export function WorkspaceTimeline({ events }: WorkspaceTimelineProps) {
         ) : (
           filtered.map((event) => {
             const { icon: Icon, color } = getTypeIcon(event.type);
+
+            // Parse payload for extra file & diff fields
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            let payload: any = null;
+            if (event.payload) {
+              if (typeof event.payload === 'string') {
+                try {
+                  payload = JSON.parse(event.payload);
+                } catch (e) {
+                  void e;
+                }
+              } else {
+                payload = event.payload;
+              }
+            }
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const file =
+              (payload as any)?.file ||
+              (payload as any)?.path ||
+              (payload as any)?.args?.path ||
+              (payload as any)?.args?.filepath ||
+              (payload as any)?.filepath;
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const diff =
+              (payload as any)?.diff ||
+              (payload as any)?.patch ||
+              (payload as any)?.result?.diff ||
+              (payload as any)?.args?.content;
+
             return (
               <div
                 key={event.id}
@@ -95,20 +168,23 @@ export function WorkspaceTimeline({ events }: WorkspaceTimelineProps) {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div
-                    className="truncate"
+                    className="timeline-msg"
                     style={{
                       fontFamily: 'var(--font-body)',
                       fontSize: 12,
                       color: 'var(--text-secondary)',
+                      lineHeight: 1.4,
                     }}
-                  >
-                    {event.message}
-                  </div>
+                    dangerouslySetInnerHTML={{ __html: event.message }}
+                  />
+                  {file && <div className="timeline-file">📄 {file}</div>}
+                  {diff && renderDiff(diff)}
                   <div
                     style={{
                       fontFamily: 'var(--font-data)',
                       fontSize: 9,
                       color: 'var(--text-tertiary)',
+                      marginTop: 2,
                     }}
                   >
                     {event.timestamp}

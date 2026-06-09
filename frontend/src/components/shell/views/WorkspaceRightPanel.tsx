@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Bot, AlertTriangle, Check, X } from 'lucide-react';
 import type { WorkspaceDetail } from '@/lib/apiSchemas';
 import { useApprovalStore } from '@/stores/approvalStore';
+import { jarvisClient } from '@/lib/jarvisClient';
 
 interface WorkspaceRightPanelProps {
   detail: WorkspaceDetail;
@@ -29,6 +30,8 @@ const riskColors: Record<string, string> = {
 export function WorkspaceRightPanel({ detail }: WorkspaceRightPanelProps) {
   const [activeTab, setActiveTab] = useState<Tab>('Agents');
   const { approvals, fetchApprovals, approve, deny } = useApprovalStore();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [artifacts, setArtifacts] = useState<any[]>([]);
 
   useEffect(() => {
     if (activeTab === 'Agents') {
@@ -36,13 +39,30 @@ export function WorkspaceRightPanel({ detail }: WorkspaceRightPanelProps) {
     }
   }, [activeTab, fetchApprovals]);
 
+  useEffect(() => {
+    const loadArtifacts = async () => {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const resp = await jarvisClient.get<{ data: any[] }>(
+          `/api/workspaces/${detail.id}/artifacts`
+        );
+        setArtifacts(resp.data || []);
+      } catch {
+        setArtifacts([]);
+      }
+    };
+    if (detail.id && activeTab === 'Artifacts') {
+      loadArtifacts();
+    }
+  }, [detail.id, activeTab]);
+
   const pendingApprovals = approvals.filter((a) => a.status === 'pending');
 
   return (
     <div
       className="flex flex-col"
       style={{
-        width: 280,
+        width: 320,
         borderLeft: '1px solid var(--glass-border)',
         background: 'rgba(4,6,14,0.3)',
       }}
@@ -233,8 +253,37 @@ export function WorkspaceRightPanel({ detail }: WorkspaceRightPanelProps) {
         )}
 
         {activeTab === 'Artifacts' && (
-          <div>
-            <EmptyTab message="No artifacts yet" />
+          <div className="flex flex-col gap-1.5">
+            {artifacts.length === 0 ? (
+              <EmptyTab message="No artifacts yet" />
+            ) : (
+              artifacts.map((art) => (
+                <div
+                  key={art.id}
+                  className="artifact-card"
+                  onClick={() =>
+                    window.alert(`Viewing ${art.title}\nPath: ${art.path || 'no path'}`)
+                  }
+                >
+                  <div className="artifact-header">
+                    <span style={{ fontSize: 14 }}>
+                      {art.type === 'spec'
+                        ? '📋'
+                        : art.type === 'plan'
+                          ? '📊'
+                          : art.type === 'file'
+                            ? '📄'
+                            : '✅'}
+                    </span>
+                    <span className="artifact-title">{art.title}</span>
+                  </div>
+                  <div className="artifact-meta">
+                    {art.type} · {art.path || 'no path'} ·{' '}
+                    {new Date(art.createdAt).toLocaleTimeString()}
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         )}
       </div>

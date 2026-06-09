@@ -602,6 +602,78 @@ export function AppShell() {
     }
   };
 
+  // Workspace view renders its own full layout (sidebar + center + right panel)
+  // without the global inspector pane
+  if (activeView === 'workspace') {
+    return (
+      <div
+        className="flex flex-col h-screen overflow-hidden"
+        style={{ background: 'var(--bg-void)' }}
+      >
+        <HudDecorations />
+
+        {!daemonConnected && (
+          <DaemonDisconnectedBanner
+            onReconnect={async () => {
+              try {
+                await jarvisClient.get('/api/health');
+                setDaemonConnected(true);
+              } catch {
+                setDaemonConnected(false);
+              }
+            }}
+          />
+        )}
+
+        <TitleBar
+          onSettings={() => {
+            setInitialControlPage('overview');
+            setActiveView('control-center');
+          }}
+        />
+
+        <div className="flex flex-1 overflow-hidden relative z-10">
+          <GlobalRail
+            activeView={activeView}
+            onViewChange={setActiveView}
+            pendingApprovalCount={pendingApprovalCount()}
+            runningRunCount={activeRunCount}
+          />
+          <WorkspaceView />
+        </div>
+
+        <CommandPalette
+          onChat={handlePaletteChat}
+          onNavigate={handlePaletteNavigate}
+          onVoiceToggle={handleVoiceToggle}
+        />
+
+        {isMainWindowFocused && (
+          <JarvisVoiceOverlay
+            state={voiceConv.state}
+            interimTranscript={voiceConv.interimTranscript}
+            finalTranscript={voiceConv.finalTranscript}
+            assistantText={voiceConv.assistantText}
+            thinkingText={voiceConv.thinkingText}
+            isConnected={voiceConv.isConnected}
+            onClose={voiceConv.stopConversation}
+            onStop={voiceConv.state === 'listening' ? voiceConv.finishListening : voiceConv.bargeIn}
+            onRetry={voiceConv.retryLastAction}
+            onOpenSettings={() => {
+              setInitialControlPage('models');
+              setActiveView('control-center');
+            }}
+            layoutMode="centered"
+          />
+        )}
+
+        <ToastContainer />
+        <ShortcutsOverlay />
+        <BottomStatusBar />
+      </div>
+    );
+  }
+
   return (
     <div
       className="flex flex-col h-screen overflow-hidden"

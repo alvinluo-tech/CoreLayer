@@ -5,6 +5,7 @@ import {
   Brain,
   ShieldCheck,
   FolderKanban,
+  Layers,
   Bot,
   Settings,
 } from 'lucide-react';
@@ -30,7 +31,7 @@ const navItems: Omit<RailItem, 'badge'>[] = [
   { view: 'runs', icon: <Activity size={20} />, label: 'Runs' },
   { view: 'memory', icon: <Brain size={20} />, label: 'Memory' },
   { view: 'approvals', icon: <ShieldCheck size={20} />, label: 'Approvals' },
-  { view: 'projects', icon: <FolderKanban size={20} />, label: 'Projects' },
+  { view: 'projects', icon: <Layers size={20} />, label: 'Projects' },
   { view: 'agents', icon: <Bot size={20} />, label: 'Agents' },
   { view: 'workspace', icon: <FolderKanban size={20} />, label: 'Workspace' },
 ];
