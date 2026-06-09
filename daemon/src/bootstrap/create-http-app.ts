@@ -48,6 +48,16 @@ export function createHttpApp(): Hono {
     });
   });
 
+  app.get("/health", (c) => {
+    return c.json({
+      status: "ok",
+      timestamp: new Date().toISOString(),
+      storageMode: getCurrentMode(),
+      aiProvider: env.AI_PROVIDER,
+      aiModel: env.AI_MODEL,
+    });
+  });
+
   // Runtime status & shutdown (for Tauri supervisor)
   app.get("/api/runtime/status", async (c) => {
     const paths = resolveAppPaths();

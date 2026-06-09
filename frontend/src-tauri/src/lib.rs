@@ -72,6 +72,7 @@ pub struct ConversationMessage {
     pub tool_calls: Option<String>,
     pub tool_call_id: Option<String>,
     pub created_at: String,
+    pub model_used: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

@@ -1,4 +1,5 @@
 import { getSupabaseClient } from "./client.js";
+import { configManager } from "../../config/config-manager.js";
 import type {
   ConversationRepository,
   ConversationRow,
@@ -35,6 +36,7 @@ function toMessageRow(row: Record<string, unknown>): MessageRow {
     parentMessageId: (row.parent_message_id as string) ?? null,
     tokenCount: (row.token_count as number) ?? null,
     compressed: (row.compressed as boolean) ?? false,
+    modelUsed: (row.model_used as string) ?? null,
     createdAt: (row.created_at as string) ?? "",
   };
 }
@@ -47,6 +49,7 @@ export function createSupabaseConversationRepo(): ConversationRepository {
       const id = crypto.randomUUID();
       const now = new Date().toISOString();
       const convTitle = title ?? "New Chat";
+      const activeModel = configManager.getActiveModel();
 
       const { data, error } = await client
         .from("conversations")
@@ -56,7 +59,7 @@ export function createSupabaseConversationRepo(): ConversationRepository {
           title: convTitle,
           workspace_id: options?.workspaceId ?? null,
           project_id: options?.projectId ?? null,
-          model_used: "mimo-v2.5-pro",
+          model_used: activeModel,
           message_count: 0,
           created_at: now,
           updated_at: now,
@@ -128,6 +131,7 @@ export function createSupabaseConversationRepo(): ConversationRepository {
           tool_call_id: data.toolCallId ?? null,
           token_count: data.tokenCount ?? null,
           compressed: false,
+          model_used: data.modelUsed ?? null,
           created_at: now,
         })
         .select()

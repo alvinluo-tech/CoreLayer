@@ -66,3 +66,6 @@ frontend/mockups/
 
 # Build artifacts
 .sea-temp/
+
+# Superpowers brainstorm config/state
+.superpowers/

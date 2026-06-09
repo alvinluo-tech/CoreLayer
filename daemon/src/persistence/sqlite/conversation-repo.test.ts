@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import * as schema from "../schema.js";
+import { configManager } from "../../config/config-manager.js";
 
 function createTestDb() {
   const sqlite = new Database(":memory:");
@@ -31,6 +32,7 @@ function createTestDb() {
       parent_message_id TEXT,
       token_count INTEGER,
       compressed INTEGER NOT NULL DEFAULT 0,
+      model_used TEXT,
       created_at TEXT DEFAULT 'CURRENT_TIMESTAMP'
     );
     CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
@@ -77,7 +79,7 @@ describe("Conversation Repository", () => {
       expect(conv.id).toBeDefined();
       expect(conv.title).toBe("New Chat");
       expect(conv.userId).toBe("default");
-      expect(conv.modelUsed).toBe("mimo-v2.5-pro");
+      expect(conv.modelUsed).toBe(configManager.getActiveModel());
       expect(conv.messageCount).toBe(0);
       expect(conv.createdAt).toBeDefined();
       expect(conv.updatedAt).toBeDefined();

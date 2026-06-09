@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import * as schema from "../../../persistence/schema.js";
+import { configManager } from "../../../config/config-manager.js";
 
 // Create in-memory test DB with scheduled_tasks table
 function createTestDb() {
@@ -45,6 +46,7 @@ function createTestDb() {
       parent_message_id TEXT,
       token_count INTEGER,
       compressed INTEGER NOT NULL DEFAULT 0,
+      model_used TEXT,
       created_at TEXT DEFAULT 'CURRENT_TIMESTAMP'
     );
     CREATE TABLE IF NOT EXISTS memories (
@@ -480,8 +482,21 @@ describe("Scheduler", () => {
   // ---- TICK system ----
 
   describe("TICK system", () => {
+    let getConfigSpy: any;
+
     beforeEach(() => {
       resetTickState();
+      getConfigSpy = vi.spyOn(configManager, "getConfig").mockReturnValue({
+        ...configManager.getConfig(),
+        tick: {
+          enabled: true,
+          intervalMinutes: 30,
+        },
+      });
+    });
+
+    afterEach(() => {
+      getConfigSpy.mockRestore();
     });
 
     it("canRunTick returns true when no TICK has run", () => {

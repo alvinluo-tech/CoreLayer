@@ -137,6 +137,7 @@ export const messages = sqliteTable("messages", {
   parentMessageId: text("parent_message_id"),
   tokenCount: integer("token_count"),
   compressed: integer("compressed", { mode: "boolean" }).default(false).notNull(),
+  modelUsed: text("model_used"),
   createdAt: text("created_at").default("CURRENT_TIMESTAMP").notNull(),
 });
 

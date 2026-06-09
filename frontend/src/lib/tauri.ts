@@ -29,6 +29,7 @@ export interface ConversationMessage {
   toolCalls: string | null;
   toolCallId: string | null;
   createdAt: string;
+  modelUsed?: string | null;
 }
 
 export interface ConversationWithMessages {

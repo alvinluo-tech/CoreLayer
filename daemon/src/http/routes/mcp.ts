@@ -5,6 +5,26 @@ import type { MCPServerConfig } from "@jarvis/types";
 
 const app = new Hono();
 
+const VIRTUAL_AUTO_PROFILE = {
+  id: "auto",
+  provider: "system",
+  modelName: "auto",
+  displayName: "Auto (智能路由)",
+  capabilities: {
+    text: true,
+    streaming: true,
+    toolCalling: true,
+    vision: true,
+    audioInput: true,
+    tts: true,
+    jsonMode: true,
+    longContext: true,
+  },
+  limits: { contextWindow: 1000000, maxOutputTokens: 8192 },
+  cost: { input: 0, output: 0 },
+};
+
+
 // List all MCP server connections
 app.get("/servers", (c) => {
   const manager = getMCPManager();
@@ -154,7 +174,7 @@ app.get("/models", async (c) => {
     const { getModelGateway } = await import("../../gateways/model/gateway.js");
     const gateway = getModelGateway();
     return c.json({
-      profiles: gateway.getAllProfiles(),
+      profiles: [VIRTUAL_AUTO_PROFILE, ...gateway.getAllProfiles()],
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

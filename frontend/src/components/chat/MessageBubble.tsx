@@ -21,6 +21,7 @@ interface Message {
   timestamp: Date;
   toolCalls?: { name: string; input: unknown; output: unknown }[];
   isStreaming?: boolean;
+  modelUsed?: string | null;
 }
 
 interface MessageBubbleProps {
@@ -274,19 +275,40 @@ export function MessageBubble({ message }: MessageBubbleProps) {
           className="flex items-center justify-between gap-4 mt-2.5 pt-2"
           style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}
         >
-          <time
-            style={{
-              fontFamily: 'var(--font-data)',
-              fontSize: 9,
-              color: 'var(--text-tertiary)',
-              letterSpacing: 0.5,
-            }}
-          >
-            {message.timestamp.toLocaleTimeString('zh-CN', {
-              hour: '2-digit',
-              minute: '2-digit',
-            })}
-          </time>
+          <div className="flex items-center gap-2">
+            <time
+              style={{
+                fontFamily: 'var(--font-data)',
+                fontSize: 9,
+                color: 'var(--text-tertiary)',
+                letterSpacing: 0.5,
+              }}
+            >
+              {message.timestamp.toLocaleTimeString('zh-CN', {
+                hour: '2-digit',
+                minute: '2-digit',
+              })}
+            </time>
+
+            {!isUser && message.modelUsed && (
+              <div
+                className="flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-medium transition-all duration-300"
+                style={{
+                  fontFamily: 'var(--font-data)',
+                  background: 'rgba(0, 212, 255, 0.05)',
+                  border: '1px solid rgba(0, 212, 255, 0.12)',
+                  color: 'var(--cyan)',
+                  letterSpacing: 0.2,
+                }}
+              >
+                <span
+                  className="w-1 h-1 rounded-full animate-pulse"
+                  style={{ background: 'var(--cyan)' }}
+                />
+                <span>{message.modelUsed}</span>
+              </div>
+            )}
+          </div>
 
           {!isUser && !message.isStreaming && (
             <div className="flex items-center gap-1 opacity-0 group-hover/bubble:opacity-100 transition-all duration-200">

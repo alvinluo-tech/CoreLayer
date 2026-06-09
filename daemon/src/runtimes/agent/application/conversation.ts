@@ -332,16 +332,26 @@ function selectModelForConversation(
   hasTools: boolean,
   historyLength: number,
 ): string {
+  const activeModel = configManager.getActiveModel();
+
+  // If a specific model is selected (not "auto"), bypass routing rules entirely
+  if (activeModel && activeModel !== "auto") {
+    return activeModel;
+  }
+
   try {
     const gateway = getModelGateway();
     const criteria = inferTaskContext(userMessage, hasTools, historyLength);
     const selected = gateway.selectModel(criteria);
+    // Validate model availability: this throws if the provider is not configured/enabled
+    gateway.getModel(selected);
     const profile = gateway.getProfile(selected);
     console.info(`[Router] selected model: ${selected} (${profile?.displayName ?? selected})`);
     return selected;
   } catch (err) {
     logError("selectModelForConversation/fallback", err);
-    return configManager.getActiveModel();
+    // Fall back to a safe default model profile ID
+    return "mimo-2.5-pro";
   }
 }
 
@@ -726,6 +736,7 @@ export async function streamMessageInConversation(
       role: "assistant",
       content: reply,
       toolCalls: toolCallsLog.length > 0 ? JSON.stringify(toolCallsLog) : undefined,
+      modelUsed: selectedModel,
     });
 
     // Trigger compression if needed after response is saved
@@ -969,7 +980,7 @@ export async function streamChat(
   abortController?: AbortController,
   runtimeContext?: { runId?: string; projectId?: string; mode?: string },
   onMemoryRead?: (memoryIds: string[]) => void,
-): Promise<{ stream: ReturnType<typeof streamText>; abortController: AbortController }> {
+): Promise<{ stream: ReturnType<typeof streamText>; abortController: AbortController; selectedModel: string }> {
   try {
     const selectedModel = selectModelForConversation(messages[0]?.content?.toString() ?? "", false, 0);
 
@@ -1067,7 +1078,7 @@ export async function streamChat(
         : {}),
     });
 
-    return { stream, abortController: controller };
+    return { stream, abortController: controller, selectedModel };
   } catch (err) {
     logError("streamChat", err);
     const { code } = classifyError(err);

@@ -252,6 +252,7 @@ app.post("/db-config/migrate", async (c) => {
         tool_calls TEXT,
         tool_call_id TEXT,
         token_count INTEGER,
+        model_used TEXT,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL
       );
 

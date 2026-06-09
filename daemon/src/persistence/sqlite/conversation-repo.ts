@@ -1,5 +1,6 @@
 import { eq, desc, sql } from "drizzle-orm";
 import { db, schema } from "../client.js";
+import { configManager } from "../../config/config-manager.js";
 import type {
   ConversationRepository,
   ConversationRow,
@@ -31,6 +32,7 @@ export function createSqliteConversationRepo(): ConversationRepository {
       const id = crypto.randomUUID();
       const now = new Date().toISOString();
       const convTitle = title ?? "New Chat";
+      const activeModel = configManager.getActiveModel();
 
       db.insert(schema.conversations)
         .values({
@@ -38,6 +40,7 @@ export function createSqliteConversationRepo(): ConversationRepository {
           title: convTitle,
           workspaceId: options?.workspaceId ?? null,
           projectId: options?.projectId ?? null,
+          modelUsed: activeModel,
           createdAt: now,
           updatedAt: now,
         })
@@ -49,7 +52,7 @@ export function createSqliteConversationRepo(): ConversationRepository {
         workspaceId: options?.workspaceId ?? null,
         projectId: options?.projectId ?? null,
         title: convTitle,
-        modelUsed: "mimo-v2.5-pro",
+        modelUsed: activeModel,
         messageCount: 0,
         promptTokens: 0,
         completionTokens: 0,
@@ -117,6 +120,7 @@ export function createSqliteConversationRepo(): ConversationRepository {
           parentMessageId: data.parentMessageId ?? null,
           tokenCount: data.tokenCount ?? null,
           compressed: false,
+          modelUsed: data.modelUsed ?? null,
           createdAt: now,
         })
         .run();
@@ -139,6 +143,7 @@ export function createSqliteConversationRepo(): ConversationRepository {
         parentMessageId: data.parentMessageId ?? null,
         tokenCount: data.tokenCount ?? null,
         compressed: false,
+        modelUsed: data.modelUsed ?? null,
         createdAt: now,
       };
     },

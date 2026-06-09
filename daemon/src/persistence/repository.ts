@@ -1,4 +1,4 @@
-﻿// Repository interfaces for storage abstraction
+// Repository interfaces for storage abstraction
 // Both SQLite and Supabase implementations conform to these interfaces
 
 // ---- Row Types (normalized, no storage-specific types leak through) ----
@@ -94,6 +94,7 @@ export interface MessageRow {
   parentMessageId: string | null;
   tokenCount: number | null;
   compressed: boolean;
+  modelUsed?: string | null;
   createdAt: string;
 }
 
@@ -192,6 +193,7 @@ export interface MessageInput {
   toolCallId?: string;
   parentMessageId?: string;
   tokenCount?: number;
+  modelUsed?: string | null;
 }
 
 export interface MessageTreeNode {

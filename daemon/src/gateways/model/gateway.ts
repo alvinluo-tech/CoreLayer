@@ -61,6 +61,9 @@ export function getModelGateway(): ModelGateway {
   const customRules = configManager.getRoutingRules();
   const routingRules = customRules.length > 0 ? customRules : DEFAULT_ROUTING_RULES;
   const activeModelId = configManager.getActiveModel();
+  const activeProvider = configManager.getActiveProvider();
+  const activeModelProfile = profiles.find((p) => p.id === activeModelId);
+  const activeModelProvider = activeModelProfile?.provider;
 
   // Build providers from configManager
   const storedProviders = configManager.getProviders();
@@ -70,6 +73,13 @@ export function getModelGateway(): ModelGateway {
     for (const sp of storedProviders) {
       if (!sp.enabled) continue;
       const resolved = resolveProvider(sp.id);
+
+      // Skip provider if it requires an API key but none is configured (and it's not active)
+      const requiresApiKey = sp.type !== "ollama" && !resolved.baseURL.includes("localhost") && !resolved.baseURL.includes("127.0.0.1");
+      if (requiresApiKey && !resolved.apiKey && sp.id !== activeProvider && sp.id !== activeModelProvider) {
+        continue;
+      }
+
       providers[sp.id] = {
         baseURL: resolved.baseURL,
         apiKey: resolved.apiKey,
@@ -78,11 +88,24 @@ export function getModelGateway(): ModelGateway {
     }
   }
 
-  // Ensure all profile providers have an entry
+  // Ensure all profile providers have an entry, unless disabled or not configured
   const profileProviders = new Set(profiles.map((p) => p.provider));
   for (const provName of profileProviders) {
     if (!providers[provName]) {
+      const stored = storedProviders.find((sp) => sp.id === provName);
+      if (stored && !stored.enabled) {
+        continue;
+      }
       const resolved = resolveProvider(provName);
+
+      // Skip provider if it requires an API key but none is configured (and it's not active)
+      const requiresApiKey = stored?.type !== "ollama" && provName !== "ollama" &&
+                             !resolved.baseURL.includes("localhost") &&
+                             !resolved.baseURL.includes("127.0.0.1");
+      if (requiresApiKey && !resolved.apiKey && provName !== activeProvider && provName !== activeModelProvider) {
+        continue;
+      }
+
       providers[provName] = {
         baseURL: resolved.baseURL,
         apiKey: resolved.apiKey,

@@ -7,6 +7,26 @@ import { apiError, logError } from "../../shared/errors.js";
 
 const app = new Hono();
 
+const VIRTUAL_AUTO_PROFILE = {
+  id: "auto",
+  provider: "system",
+  modelName: "auto",
+  displayName: "Auto (智能路由)",
+  capabilities: {
+    text: true,
+    streaming: true,
+    toolCalling: true,
+    vision: true,
+    audioInput: true,
+    tts: true,
+    jsonMode: true,
+    longContext: true,
+  },
+  limits: { contextWindow: 1000000, maxOutputTokens: 8192 },
+  cost: { input: 0, output: 0 },
+};
+
+
 // ---- Routing Rules ----
 
 app.get("/routing-rules", (c) => {
@@ -52,7 +72,7 @@ app.get("/active-model", (c) => {
   try {
     const activeId = configManager.getActiveModel();
     const gateway = getModelGateway();
-    const profile = gateway.getProfile(activeId);
+    const profile = activeId === "auto" ? VIRTUAL_AUTO_PROFILE : gateway.getProfile(activeId);
 
     return c.json({
       modelId: activeId,
@@ -72,14 +92,16 @@ app.put("/active-model", async (c) => {
       return apiError(c, "modelId is required", 400);
     }
 
-    const gateway = getModelGateway();
-    const profile = gateway.getProfile(body.modelId);
-    if (!profile) {
-      const repos = getRepositories();
-      const dbProfiles = await repos.modelProfiles.getAll();
-      const found = dbProfiles.find((p) => p.id === body.modelId);
-      if (!found) {
-        return apiError(c, `Model profile not found: ${body.modelId}`, 400);
+    if (body.modelId !== "auto") {
+      const gateway = getModelGateway();
+      const profile = gateway.getProfile(body.modelId);
+      if (!profile) {
+        const repos = getRepositories();
+        const dbProfiles = await repos.modelProfiles.getAll();
+        const found = dbProfiles.find((p) => p.id === body.modelId);
+        if (!found) {
+          return apiError(c, `Model profile not found: ${body.modelId}`, 400);
+        }
       }
     }
 
@@ -98,7 +120,8 @@ app.put("/active-model", async (c) => {
 app.get("/model-profiles", (c) => {
   try {
     const gateway = getModelGateway();
-    return c.json({ profiles: gateway.getAllProfiles() });
+    const profiles = [VIRTUAL_AUTO_PROFILE, ...gateway.getAllProfiles()];
+    return c.json({ profiles });
   } catch (err) {
     logError("settings/model-profiles/list", err);
     return apiError(c, "Failed to list model profiles", 500);

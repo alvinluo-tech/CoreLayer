@@ -92,6 +92,7 @@ sqlite.exec(`
     tool_call_id TEXT,
     parent_message_id TEXT,
     token_count INTEGER,
+    model_used TEXT,
     created_at TEXT DEFAULT 'CURRENT_TIMESTAMP'
   );
 
@@ -220,6 +221,38 @@ try {
   // Column already exists — ignore
 }
 
+// Migration: add model_used to messages (Phase 16 - Premium Design)
+try {
+  sqlite.exec(`ALTER TABLE messages ADD COLUMN model_used TEXT`);
+} catch {
+  // Column already exists — ignore
+}
+
+// Migration: clean up legacy '*🤖 via' footers in message content and set model_used structurally
+try {
+  const stmt = sqlite.prepare("SELECT id, content, model_used FROM messages WHERE role = 'assistant' AND content LIKE '%\n\n*🤖 via %*'");
+  const rows = stmt.all() as { id: string; content: string; model_used: string | null }[];
+  if (rows.length > 0) {
+    const updateStmt = sqlite.prepare("UPDATE messages SET content = ?, model_used = ? WHERE id = ?");
+    for (const row of rows) {
+      const index = row.content.lastIndexOf("\n\n*🤖 via ");
+      if (index !== -1) {
+        const cleanContent = row.content.substring(0, index);
+        const footerStart = index + "\n\n*🤖 via ".length;
+        const footerEnd = row.content.lastIndexOf("*");
+        let modelUsed = row.model_used;
+        if (!modelUsed && footerEnd > footerStart) {
+          modelUsed = row.content.substring(footerStart, footerEnd);
+        }
+        updateStmt.run(cleanContent, modelUsed, row.id);
+      }
+    }
+    console.info(`[Migration] Cleaned up ${rows.length} legacy message footers and migrated to model_used column.`);
+  }
+} catch (err) {
+  console.error("[Migration] Failed to clean up legacy message footers:", err);
+}
+
 // Migration: add missing columns to memories for existing databases
 try { sqlite.exec(`ALTER TABLE memories ADD COLUMN scope_type TEXT NOT NULL DEFAULT 'user'`); } catch {} // eslint-disable-line no-empty
 try { sqlite.exec(`ALTER TABLE memories ADD COLUMN scope_id TEXT`); } catch {} // eslint-disable-line no-empty
@@ -267,9 +300,22 @@ try { sqlite.exec(`ALTER TABLE conversations ADD COLUMN workspace_id TEXT`); } c
 try { sqlite.exec(`ALTER TABLE conversations ADD COLUMN project_id TEXT`); } catch {} // eslint-disable-line no-empty
 
 // Migration: FTS5 for message search (Phase 15)
+try {
+  const row = sqlite.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='messages_fts'").get() as { sql: string } | undefined;
+  if (row && !row.sql.includes("content='messages'")) {
+    console.info("[Migration] Re-creating messages_fts virtual table with correct content='messages' reference...");
+    sqlite.exec("DROP TABLE IF EXISTS messages_fts");
+    sqlite.exec("DROP TRIGGER IF EXISTS messages_ai");
+    sqlite.exec("DROP TRIGGER IF EXISTS messages_ad");
+    sqlite.exec("DROP TRIGGER IF EXISTS messages_au");
+  }
+} catch (err) {
+  console.error("[Migration] Failed to check/fix messages_fts table schema:", err);
+}
+
 sqlite.exec(`
   CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
-    content, role, conversation_id, content_rowid='rowid'
+    content, role, conversation_id, content='messages', content_rowid='rowid'
   );
 
   CREATE TRIGGER IF NOT EXISTS messages_ai AFTER INSERT ON messages BEGIN
@@ -289,6 +335,12 @@ sqlite.exec(`
     VALUES (new.rowid, new.content, new.role, new.conversation_id);
   END;
 `);
+
+try {
+  sqlite.exec(`INSERT OR IGNORE INTO messages_fts(rowid, content, role, conversation_id) SELECT rowid, content, role, conversation_id FROM messages`);
+} catch (err) {
+  console.error("[Migration] Failed to populate messages_fts index:", err);
+}
 
 // Migration: FTS5 for memory search
 sqlite.exec(`

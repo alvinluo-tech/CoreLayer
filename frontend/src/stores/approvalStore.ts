@@ -21,6 +21,8 @@ interface ApprovalState {
   selectApproval: (id: string | null) => void;
   approve: (id: string) => Promise<void>;
   deny: (id: string) => Promise<void>;
+  approveBatch: (ids: string[]) => Promise<void>;
+  denyBatch: (ids: string[]) => Promise<void>;
   remember: (
     id: string,
     decision: 'auto' | 'confirm' | 'deny',
@@ -71,6 +73,28 @@ export const useApprovalStore = create<ApprovalState>((set, get) => ({
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to deny';
       set({ error: message });
+    }
+  },
+
+  approveBatch: async (ids) => {
+    try {
+      set({ isLoading: true, error: null });
+      await jarvisClient.post('/api/approvals/batch/approve', { ids });
+      await get().fetchApprovals();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to approve batch';
+      set({ error: message, isLoading: false });
+    }
+  },
+
+  denyBatch: async (ids) => {
+    try {
+      set({ isLoading: true, error: null });
+      await jarvisClient.post('/api/approvals/batch/deny', { ids });
+      await get().fetchApprovals();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to deny batch';
+      set({ error: message, isLoading: false });
     }
   },
 

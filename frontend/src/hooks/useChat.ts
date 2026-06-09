@@ -12,6 +12,7 @@ export interface Message {
   timestamp: Date;
   toolCalls?: { name: string; input: unknown; output: unknown }[];
   isStreaming?: boolean;
+  modelUsed?: string | null;
 }
 
 function convertMessage(msg: ConversationMessage): Message {
@@ -22,6 +23,7 @@ function convertMessage(msg: ConversationMessage): Message {
     timestamp: new Date(msg.createdAt),
     toolCalls: msg.toolCalls ? JSON.parse(msg.toolCalls) : undefined,
     isStreaming: msg.id.startsWith('temp-assistant-'),
+    modelUsed: msg.modelUsed,
   };
 }
 

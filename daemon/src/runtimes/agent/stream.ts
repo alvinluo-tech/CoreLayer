@@ -273,6 +273,7 @@ export async function runStreamTurn(
         role: "assistant",
         content: fullText,
         toolCalls: toolCallsLog.length > 0 ? JSON.stringify(toolCallsLog) : undefined,
+        modelUsed: stream?.selectedModel,
       });
 
       await agentRuns.updateStatus(run.id, "succeeded");
@@ -291,6 +292,7 @@ export async function runStreamTurn(
         await conversations.addMessage(conversationId, {
           role: "assistant",
           content: fullText,
+          modelUsed: stream?.selectedModel,
         });
       }
 

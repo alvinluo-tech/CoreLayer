@@ -50,6 +50,37 @@ function formatArgs(args: unknown): string {
   }
 }
 
+// ---- Batch Grouping ----
+
+type ListItem =
+  | { type: 'single'; data: ApprovalRequest }
+  | { type: 'batch'; runId: string; approvals: ApprovalRequest[] };
+
+function groupPendingApprovals(list: ApprovalRequest[]): ListItem[] {
+  const pendingGroups: Record<string, ApprovalRequest[]> = {};
+  const processedList: ListItem[] = [];
+
+  for (const item of list) {
+    if (item.status === 'pending' && item.runId) {
+      const group = pendingGroups[item.runId] ?? [];
+      group.push(item);
+      pendingGroups[item.runId] = group;
+    } else {
+      processedList.push({ type: 'single', data: item });
+    }
+  }
+
+  for (const [runId, group] of Object.entries(pendingGroups)) {
+    if (group.length > 1) {
+      processedList.push({ type: 'batch', runId, approvals: group });
+    } else if (group.length === 1 && group[0]) {
+      processedList.push({ type: 'single', data: group[0] });
+    }
+  }
+
+  return processedList;
+}
+
 // ---- Filter Tabs ----
 
 function FilterTabs() {
@@ -282,6 +313,252 @@ function ApprovalCard({
         </div>
       )}
     </button>
+  );
+}
+
+// ---- Batch Approval Card ----
+
+function BatchApprovalCard({
+  item,
+  isSelected,
+}: {
+  item: { type: 'batch'; runId: string; approvals: ApprovalRequest[] };
+  isSelected: boolean;
+}) {
+  const { selectApproval } = useApprovalStore();
+  const shellSelectApproval = useShellStore((s) => s.selectApproval);
+  const batchId = `batch-${item.runId}`;
+
+  const highestRisk = item.approvals.reduce((max, a) => {
+    const r = (a.risk as ApprovalRisk) ?? 'low';
+    const order = { low: 0, medium: 1, high: 2, critical: 3 };
+    return order[r] > order[max] ? r : max;
+  }, 'low' as ApprovalRisk);
+
+  const handleClick = () => {
+    selectApproval(batchId);
+    shellSelectApproval(batchId);
+  };
+
+  return (
+    <button
+      className="w-full text-left px-3 py-3 transition-all duration-150"
+      style={{
+        background: isSelected ? 'rgba(255,184,0,0.06)' : 'transparent',
+        borderLeft: isSelected ? '2px solid var(--amber)' : '2px solid var(--amber)',
+        borderBottom: '1px solid rgba(255,255,255,0.03)',
+      }}
+      onClick={handleClick}
+      onMouseEnter={(e) => {
+        if (!isSelected) e.currentTarget.style.background = 'rgba(255,184,0,0.04)';
+      }}
+      onMouseLeave={(e) => {
+        if (!isSelected) e.currentTarget.style.background = 'transparent';
+      }}
+    >
+      {/* Header row */}
+      <div className="flex items-center gap-2 mb-1.5">
+        <AlertTriangle size={14} style={{ color: 'var(--amber)' }} />
+        <span
+          className="flex-1 truncate"
+          style={{
+            fontFamily: 'var(--font-body)',
+            fontSize: 13,
+            fontWeight: 600,
+            color: 'var(--amber)',
+          }}
+        >
+          Batch ({item.approvals.length} items)
+        </span>
+        <span
+          style={{
+            fontFamily: 'var(--font-data)',
+            fontSize: 9,
+            fontWeight: 600,
+            color: riskColors[highestRisk],
+            background: `${riskColors[highestRisk]}15`,
+            padding: '1px 5px',
+            borderRadius: 3,
+            letterSpacing: 0.5,
+          }}
+        >
+          {riskLabels[highestRisk]}
+        </span>
+        <Clock size={12} style={{ color: 'var(--amber)' }} />
+      </div>
+
+      {/* Tool names preview */}
+      <div
+        className="truncate mb-1"
+        style={{
+          fontFamily: 'var(--font-data)',
+          fontSize: 11,
+          color: 'var(--text-tertiary)',
+        }}
+      >
+        {item.approvals.map((a) => a.toolName).join(', ')}
+      </div>
+
+      {/* Footer */}
+      <div className="flex items-center gap-3">
+        <span
+          style={{
+            fontFamily: 'var(--font-data)',
+            fontSize: 10,
+            color: 'var(--text-tertiary)',
+          }}
+        >
+          {item.approvals[0] ? formatTimeAgo(item.approvals[0].createdAt) : ''}
+        </span>
+      </div>
+    </button>
+  );
+}
+
+// ---- Batch Approval Detail ----
+
+function BatchApprovalDetail({
+  item,
+}: {
+  item: { type: 'batch'; runId: string; approvals: ApprovalRequest[] };
+}) {
+  const { approveBatch, denyBatch } = useApprovalStore();
+
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {/* Header */}
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <AlertTriangle size={16} style={{ color: 'var(--amber)' }} />
+            <span
+              style={{
+                fontFamily: 'var(--font-hud)',
+                fontSize: 14,
+                fontWeight: 600,
+                color: 'var(--amber)',
+              }}
+            >
+              Batch Approval ({item.approvals.length} items)
+            </span>
+          </div>
+          <div
+            style={{
+              fontFamily: 'var(--font-data)',
+              fontSize: 11,
+              color: 'var(--text-tertiary)',
+            }}
+          >
+            AI is requesting to execute multiple sensitive tool calls. Approving will run all tools
+            concurrently and resume the conversation once.
+          </div>
+        </div>
+
+        {/* Tool list */}
+        <div className="space-y-3">
+          {item.approvals.map((app) => {
+            const risk = (app.risk as ApprovalRisk) ?? 'low';
+            return (
+              <div
+                key={app.id}
+                className="p-3 rounded-lg"
+                style={{
+                  background: 'rgba(255,255,255,0.02)',
+                  border: '1px solid var(--glass-border)',
+                }}
+              >
+                <div className="flex justify-between items-center mb-2">
+                  <div className="flex items-center gap-2">
+                    <Wrench size={12} style={{ color: 'var(--text-secondary)' }} />
+                    <span
+                      style={{
+                        fontFamily: 'var(--font-body)',
+                        fontSize: 12,
+                        fontWeight: 500,
+                        color: 'var(--text-primary)',
+                      }}
+                    >
+                      {app.toolName}
+                    </span>
+                  </div>
+                  <span
+                    style={{
+                      fontFamily: 'var(--font-data)',
+                      fontSize: 9,
+                      fontWeight: 600,
+                      color: riskColors[risk],
+                      background: `${riskColors[risk]}15`,
+                      padding: '1px 5px',
+                      borderRadius: 3,
+                    }}
+                  >
+                    {riskLabels[risk]}
+                  </span>
+                </div>
+                <pre
+                  className="p-2 overflow-x-auto"
+                  style={{
+                    fontFamily: 'var(--font-data)',
+                    fontSize: 10,
+                    color: 'var(--text-tertiary)',
+                    background: 'rgba(0,0,0,0.2)',
+                    borderRadius: 4,
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-all',
+                    maxHeight: 80,
+                    overflowY: 'auto',
+                  }}
+                >
+                  {formatArgs(app.args)}
+                </pre>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Action buttons */}
+      <div
+        className="flex items-center gap-3 p-4"
+        style={{ borderTop: '1px solid var(--glass-border)' }}
+      >
+        <button
+          onClick={() => approveBatch(item.approvals.map((a) => a.id))}
+          className="flex-1"
+          style={{
+            fontFamily: 'var(--font-data)',
+            fontSize: 12,
+            fontWeight: 600,
+            padding: '8px 16px',
+            borderRadius: 6,
+            border: '1px solid rgba(255,184,0,0.4)',
+            background: 'rgba(255,184,0,0.12)',
+            color: 'var(--amber)',
+            cursor: 'pointer',
+            transition: 'all 0.15s',
+          }}
+        >
+          Approve All ({item.approvals.length})
+        </button>
+        <button
+          onClick={() => denyBatch(item.approvals.map((a) => a.id))}
+          style={{
+            fontFamily: 'var(--font-data)',
+            fontSize: 12,
+            fontWeight: 600,
+            padding: '8px 16px',
+            borderRadius: 6,
+            border: '1px solid rgba(239,68,68,0.3)',
+            background: 'rgba(239,68,68,0.08)',
+            color: 'var(--red)',
+            cursor: 'pointer',
+            transition: 'all 0.15s',
+          }}
+        >
+          Deny All
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -565,7 +842,19 @@ export function ApprovalsView() {
     return true;
   });
 
-  const selectedApproval = approvals.find((a) => a.id === selectedId) ?? null;
+  // Group pending approvals by runId for batch display
+  const displayItems = groupPendingApprovals(filtered);
+
+  // Determine selected item (single or batch)
+  const isBatchSelected = selectedId?.startsWith('batch-');
+  const selectedBatchRunId = isBatchSelected ? selectedId?.replace('batch-', '') : null;
+  const selectedBatch = isBatchSelected
+    ? (displayItems.find((item) => item.type === 'batch' && item.runId === selectedBatchRunId) ??
+      null)
+    : null;
+  const selectedApproval = !isBatchSelected
+    ? (approvals.find((a) => a.id === selectedId) ?? null)
+    : null;
 
   // Loading
   if (isLoading && approvals.length === 0) {
@@ -631,7 +920,7 @@ export function ApprovalsView() {
       >
         <FilterTabs />
         <div className="flex-1 overflow-y-auto">
-          {filtered.length === 0 ? (
+          {displayItems.length === 0 ? (
             <div className="flex items-center justify-center py-8">
               <span
                 style={{
@@ -644,20 +933,34 @@ export function ApprovalsView() {
               </span>
             </div>
           ) : (
-            filtered.map((approval) => (
-              <ApprovalCard
-                key={approval.id}
-                approval={approval}
-                isSelected={approval.id === selectedId}
-              />
-            ))
+            displayItems.map((item) => {
+              if (item.type === 'single') {
+                return (
+                  <ApprovalCard
+                    key={item.data.id}
+                    approval={item.data}
+                    isSelected={item.data.id === selectedId}
+                  />
+                );
+              } else {
+                return (
+                  <BatchApprovalCard
+                    key={`batch-${item.runId}`}
+                    item={item}
+                    isSelected={selectedId === `batch-${item.runId}`}
+                  />
+                );
+              }
+            })
           )}
         </div>
       </div>
 
       {/* Right: Detail */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {selectedApproval ? (
+        {isBatchSelected && selectedBatch && selectedBatch.type === 'batch' ? (
+          <BatchApprovalDetail item={selectedBatch} />
+        ) : selectedApproval ? (
           <ApprovalDetail approval={selectedApproval} />
         ) : (
           <div className="flex-1 flex items-center justify-center">
