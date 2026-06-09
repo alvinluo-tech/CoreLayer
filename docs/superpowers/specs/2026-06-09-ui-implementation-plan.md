@@ -111,17 +111,17 @@
 
 Add fields the Agent Broker needs for agent selection:
 
-- [ ] Add `role` text field to `agent_profiles` (default: "general") — Broker needs to know who is coding/review/planner
-- [ ] Add `capabilities` text (JSON array) to `agent_profiles` (default: "[]") — structured capability declarations (e.g. `["file_write", "shell_exec", "code_review"]`)
-- [ ] Add `enabled` boolean field to `agent_profiles` (default: true) — allow disabling agents without deleting
-- [ ] Update Drizzle schema in `daemon/src/persistence/schema.ts`
-- [ ] Write migration SQL
+- [x] Add `role` text field to `agent_profiles` (default: "general") — Broker needs to know who is coding/review/planner
+- [x] Add `capabilities` text (JSON array) to `agent_profiles` (default: "[]") — structured capability declarations (e.g. `["file_write", "shell_exec", "code_review"]`)
+- [x] Add `enabled` boolean field to `agent_profiles` (default: true) — allow disabling agents without deleting
+- [x] Update Drizzle schema in `daemon/src/persistence/schema.ts`
+- [x] Write migration SQL
 
 ### 2.2 Database Migration — workspace_agents (new table)
 
 Agent-to-workspace relationship is a domain fact, not UI state:
 
-- [ ] Create `workspace_agents` table:
+- [x] Create `workspace_agents` table:
   ```
   id              TEXT PK
   workspace_id    TEXT FK → workspaces
@@ -132,18 +132,18 @@ Agent-to-workspace relationship is a domain fact, not UI state:
   joined_at       TEXT
   left_at         TEXT (nullable)
   ```
-- [ ] Update Drizzle schema
-- [ ] Write migration SQL
+- [x] Update Drizzle schema
+- [x] Write migration SQL
 
 ### 2.3 Database Migration — workspaces
 
 Add minimal domain fields to workspaces (NOT derived/aggregate fields):
 
-- [ ] Add `goal` text field to `workspaces` — the user's original goal description
-- [ ] Add `status` text enum to `workspaces` (draft/planning/running/blocked/succeeded/failed/cancelled)
-- [ ] Add `active_project_id` text FK to `workspaces` (nullable)
-- [ ] Add `completed_at` text to `workspaces` (nullable)
-- [ ] Update Drizzle schema
+- [x] Add `goal` text field to `workspaces` — the user's original goal description
+- [x] Add `status` text enum to `workspaces` (draft/planning/running/blocked/succeeded/failed/cancelled)
+- [x] Add `active_project_id` text FK to `workspaces` (nullable)
+- [x] Add `completed_at` text to `workspaces` (nullable)
+- [x] Update Drizzle schema
 
 > **NOT added to workspaces table**: progress, tokens, cost, agents, tasks, events — these are derived at API layer.
 
@@ -151,7 +151,7 @@ Add minimal domain fields to workspaces (NOT derived/aggregate fields):
 
 Artifacts as a first-class domain entity for workspace-level aggregation and search:
 
-- [ ] Create `artifacts` table:
+- [x] Create `artifacts` table:
   ```
   id              TEXT PK
   workspace_id    TEXT FK → workspaces
@@ -165,55 +165,55 @@ Artifacts as a first-class domain entity for workspace-level aggregation and sea
   metadata        TEXT (JSON, nullable)
   created_at      TEXT
   ```
-- [ ] Update Drizzle schema
-- [ ] Write migration SQL
+- [x] Update Drizzle schema
+- [x] Write migration SQL
 
 ### 2.5 Backend Domain Service — Agent Broker
 
-- [ ] Create `daemon/src/runtimes/agent-broker/` module
-- [ ] Implement rule-based filtering (role, capabilities, enabled)
-- [ ] Implement LLM-based ranking for agent team proposals
-- [ ] Return `AgentTeamProposal` with risk levels and permission requirements
+- [x] Create `daemon/src/runtimes/agent-broker/` module
+- [x] Implement rule-based filtering (role, capabilities, enabled)
+- [x] Implement LLM-based ranking for agent team proposals
+- [x] Return `AgentTeamProposal` with risk levels and permission requirements
 
 ### 2.6 Backend Domain Service — Workspace Detail Aggregation
 
-- [ ] Create `daemon/src/services/workspace-detail.ts`
-- [ ] Implement `getWorkspaceDetail(workspaceId)` → aggregates from multiple tables:
+- [x] Create `daemon/src/services/workspace-detail.ts`
+- [x] Implement `getWorkspaceDetail(workspaceId)` → aggregates from multiple tables:
   ```
   workspaces + projects + tasks + workspace_agents + agent_profiles
   + agent_runs + agent_run_events + approval_requests + artifacts
   ```
-- [ ] Return `WorkspaceDetailViewModel` (see design spec Section 5.3)
-- [ ] Compute `summary.progress` from task statuses (not stored in DB)
-- [ ] Compute `summary.totalTasks`, `completedTasks`, `activeRuns`, `blockedTasks`
+- [x] Return `WorkspaceDetailViewModel` (see design spec Section 5.3)
+- [x] Compute `summary.progress` from task statuses (not stored in DB)
+- [x] Compute `summary.totalTasks`, `completedTasks`, `activeRuns`, `blockedTasks`
 
 ### 2.7 Backend API Endpoints
 
-- [ ] `GET /api/workspace-agents?workspaceId=X` — list agents in workspace
-- [ ] `POST /api/workspace-agents` — add agent to workspace
-- [ ] `DELETE /api/workspace-agents/:id` — remove agent from workspace
-- [ ] `GET /api/workspaces/:id/detail` — full aggregated workspace detail
-- [ ] `GET /api/workspaces/:id/timeline` — timeline events from multiple tables
-- [ ] `POST /api/workspaces/create-from-goal` — goal → workspace + broker → team proposal
-- [ ] `POST /api/agent-broker/propose-team` — get agent team recommendation
-- [ ] `GET /api/workspaces/:id/artifacts` — artifact list
+- [x] `GET /api/workspace-agents?workspaceId=X` — list agents in workspace
+- [x] `POST /api/workspace-agents` — add agent to workspace
+- [x] `DELETE /api/workspace-agents/:id` — remove agent from workspace
+- [x] `GET /api/workspaces/:id/detail` — full aggregated workspace detail
+- [x] `GET /api/workspaces/:id/timeline` — timeline events from multiple tables
+- [x] `POST /api/workspaces/create-from-goal` — goal → workspace + broker → team proposal
+- [x] `POST /api/agent-broker/propose-team` — get agent team recommendation
+- [x] `GET /api/workspaces/:id/artifacts` — artifact list
 
 ### 2.8 Frontend Schema Updates
 
-- [ ] Update `agentProfileSchema` in `frontend/src/lib/apiSchemas.ts` — add `role`, `capabilities`, `enabled`
-- [ ] Add `workspaceAgentSchema` type
-- [ ] Add `workspaceDetailSchema` type (aggregated ViewModel)
-- [ ] Add `artifactSchema` type
-- [ ] Update `workspaceSchema` — add `goal`, `status`, `activeProjectId`
+- [x] Update `agentProfileSchema` in `frontend/src/lib/apiSchemas.ts` — add `role`, `capabilities`, `enabled`
+- [x] Add `workspaceAgentSchema` type
+- [x] Add `workspaceDetailSchema` type (aggregated ViewModel)
+- [x] Add `artifactSchema` type
+- [x] Update `workspaceSchema` — add `goal`, `status`, `activeProjectId`
 
 ### 2.9 AgentsView UI Updates
 
-- [ ] Enable role selector dropdown in AgentEditPanel (general/planner/coding/review/testing/research)
-- [ ] Enable enabled/disabled toggle in AgentDetailPanel top bar
-- [ ] Show role badge with correct color in AgentCard and AgentDetailPanel
-- [ ] Enable "Used In" section in AgentInspectorPanel (from workspace_agents)
-- [ ] Filter agents by role in AgentListPanel
-- [ ] Show capabilities list in AgentDetailPanel (new section)
+- [x] Enable role selector dropdown in AgentEditPanel (general/planner/coding/review/testing/research)
+- [x] Enable enabled/disabled toggle in AgentDetailPanel top bar
+- [x] Show role badge with correct color in AgentCard and AgentDetailPanel
+- [x] Enable "Used In" section in AgentInspectorPanel (from workspace_agents)
+- [x] Filter agents by role in AgentListPanel
+- [x] Show capabilities list in AgentDetailPanel (new section)
 
 ---
 
@@ -226,87 +226,87 @@ Artifacts as a first-class domain entity for workspace-level aggregation and sea
 
 ### 3.1 Workspace Store
 
-- [ ] Create `frontend/src/stores/workspaceDetailStore.ts` — manages selected workspace detail
-- [ ] Fetch from `GET /api/workspaces/:id/detail`
-- [ ] State: workspaceDetail, timeline, approvals, isLoading, error
+- [x] Create `frontend/src/stores/workspaceDetailStore.ts` — manages selected workspace detail
+- [x] Fetch from `GET /api/workspaces/:id/detail`
+- [x] State: workspaceDetail, timeline, approvals, isLoading, error
 
 ### 3.3 Workspace UI Primitives
 
-- [ ] Create `frontend/src/components/ui/agent-os/EmptyState.tsx` (if not done in Phase 1)
-- [ ] Create workspace-specific StatusBadge variants (running=pulsing, etc.)
+- [x] Create `frontend/src/components/ui/agent-os/EmptyState.tsx` (if not done in Phase 1)
+- [x] Create workspace-specific StatusBadge variants (running=pulsing, etc.)
 
 ### 3.4 WorkspaceCard Component
 
-- [ ] Create `frontend/src/components/shell/views/WorkspaceCard.tsx`
-- [ ] Render: status badge + name + goal (ellipsis) + meta (tasks, agents, progress%)
-- [ ] Same card styling as AgentCard (neutral border, cyan selected)
+- [x] Create `frontend/src/components/shell/views/WorkspaceCard.tsx`
+- [x] Render: status badge + name + goal (ellipsis) + meta (tasks, agents, progress%)
+- [x] Same card styling as AgentCard (neutral border, cyan selected)
 
 ### 3.5 WorkspaceSidebar Component
 
-- [ ] Create `frontend/src/components/shell/views/WorkspaceSidebar.tsx`
-- [ ] Header: "Workspaces" (hud-label) + search input
-- [ ] Workspace list: scrollable, renders `WorkspaceCard[]`
-- [ ] Empty state: "No workspaces yet" with `FolderKanban` icon
+- [x] Create `frontend/src/components/shell/views/WorkspaceSidebar.tsx`
+- [x] Header: "Workspaces" (hud-label) + search input
+- [x] Workspace list: scrollable, renders `WorkspaceCard[]`
+- [x] Empty state: "No workspaces yet" with `FolderKanban` icon
 
 ### 3.6 WorkspaceCenter Component
 
-- [ ] Create `frontend/src/components/shell/views/WorkspaceCenter.tsx`
-- [ ] Workspace header: name + status badge + action buttons (Pause/Start)
-- [ ] Goal text + progress bar (3px, colored by status)
-- [ ] Token bar: font-data 9px, shows tokens/cost
-- [ ] Compose: WorkspaceTaskGraph + WorkspaceTimeline + WorkspaceChat
+- [x] Create `frontend/src/components/shell/views/WorkspaceCenter.tsx`
+- [x] Workspace header: name + status badge + action buttons (Pause/Start)
+- [x] Goal text + progress bar (3px, colored by status)
+- [x] Token bar: font-data 9px, shows tokens/cost
+- [x] Compose: WorkspaceTaskGraph + WorkspaceTimeline + WorkspaceChat
 
 ### 3.7 WorkspaceTaskGraph Component
 
-- [ ] Create `frontend/src/components/shell/views/WorkspaceTaskGraph.tsx`
-- [ ] Render task list with: number + title + agent + mini progress bar + status
-- [ ] Show dependency lines ("depends on: [task]")
-- [ ] Failed tasks: `RotateCcw` + "Retry" button
-- [ ] Max height 280px, scrollable
-- [ ] Empty state: "No tasks yet — Workspace is being planned..."
+- [x] Create `frontend/src/components/shell/views/WorkspaceTaskGraph.tsx`
+- [x] Render task list with: number + title + agent + mini progress bar + status
+- [x] Show dependency lines ("depends on: [task]")
+- [x] Failed tasks: `RotateCcw` + "Retry" button
+- [x] Max height 280px, scrollable
+- [x] Empty state: "No tasks yet — Workspace is being planned..."
 
 ### 3.8 WorkspaceTimeline Component
 
-- [ ] Create `frontend/src/components/shell/views/WorkspaceTimeline.tsx`
-- [ ] Filter chips: All | Agent | Tool | Memory | Approval | System
-- [ ] Render events: icon (22x22, colored bg) + message + timestamp
-- [ ] Tool events: file reference badge + diff block
-- [ ] Vertical timeline line (1px, `rgba(0,212,255,0.08)`)
-- [ ] Data source: aggregated from agent_run_events, approval_requests, tool_call_logs, event_log
+- [x] Create `frontend/src/components/shell/views/WorkspaceTimeline.tsx`
+- [x] Filter chips: All | Agent | Tool | Memory | Approval | System
+- [x] Render events: icon (22x22, colored bg) + message + timestamp
+- [x] Tool events: file reference badge + diff block
+- [x] Vertical timeline line (1px, `rgba(0,212,255,0.08)`)
+- [x] Data source: aggregated from agent_run_events, approval_requests, tool_call_logs, event_log
 
 ### 3.9 WorkspaceChat Component
 
-- [ ] Create `frontend/src/components/shell/views/WorkspaceChat.tsx`
-- [ ] Header: "Workspace Chat" with left accent bar
-- [ ] Messages: icon (20x20) + text bubble (glass, rounded 8px)
-- [ ] Input row: text input + Send button (primary)
-- [ ] Data source: conversations + messages (filtered by workspaceId)
-- [ ] Note: Real-time messaging is Phase 5; Phase 3 uses polling or mock
+- [x] Create `frontend/src/components/shell/views/WorkspaceChat.tsx`
+- [x] Header: "Workspace Chat" with left accent bar
+- [x] Messages: icon (20x20) + text bubble (glass, rounded 8px)
+- [x] Input row: text input + Send button (primary)
+- [x] Data source: conversations + messages (filtered by workspaceId)
+- [x] Note: Real-time messaging is Phase 5; Phase 3 uses polling or mock
 
 ### 3.10 WorkspaceRightPanel Component
 
-- [ ] Create `frontend/src/components/shell/views/WorkspaceRightPanel.tsx`
-- [ ] Tab bar: Agents | Runs | Files | Artifacts (4 equal-width tabs)
-- [ ] Tab: Agents — mini cards with icon + name + role + status badge
-- [ ] Tab: Runs — run cards with title + agent + progress bar
-- [ ] Tab: Files — file list with add/mod icon + path + line stats
-- [ ] Tab: Artifacts — artifact cards with icon + title + metadata
-- [ ] Pending Approvals section (amber-bordered cards)
+- [x] Create `frontend/src/components/shell/views/WorkspaceRightPanel.tsx`
+- [x] Tab bar: Agents | Runs | Files | Artifacts (4 equal-width tabs)
+- [x] Tab: Agents — mini cards with icon + name + role + status badge
+- [x] Tab: Runs — run cards with title + agent + progress bar
+- [x] Tab: Files — file list with add/mod icon + path + line stats
+- [x] Tab: Artifacts — artifact cards with icon + title + metadata
+- [x] Pending Approvals section (amber-bordered cards)
 
 ### 3.11 WorkspaceView Orchestrator
 
-- [ ] Create `frontend/src/components/shell/views/WorkspaceView.tsx`
-- [ ] Compose: WorkspaceSidebar + WorkspaceCenter + WorkspaceRightPanel
-- [ ] State: selectedWorkspace, workspaceDetail, activeTab
-- [ ] Wire: workspace store for data loading
-- [ ] Handle: select workspace, load detail, pause/resume
-- [ ] Empty state: no workspace selected
+- [x] Create `frontend/src/components/shell/views/WorkspaceView.tsx`
+- [x] Compose: WorkspaceSidebar + WorkspaceCenter + WorkspaceRightPanel
+- [x] State: selectedWorkspace, workspaceDetail, activeTab
+- [x] Wire: workspace store for data loading
+- [x] Handle: select workspace, load detail, pause/resume
+- [x] Empty state: no workspace selected
 
 ### 3.12 Type Check & Build
 
-- [ ] Run `pnpm tsc --noEmit` — zero errors
-- [ ] Run `pnpm build` — success
-- [ ] Visual check in browser
+- [x] Run `pnpm tsc --noEmit` — zero errors
+- [x] Run `pnpm build` — success
+- [x] Visual check in browser
 
 ---
 
@@ -317,28 +317,28 @@ Artifacts as a first-class domain entity for workspace-level aggregation and sea
 
 ### 4.1 Backend
 
-- [ ] Build agent team proposal API endpoint (broker rule filtering + LLM ranking)
-- [ ] Build create-workspace-from-goal endpoint
+- [x] Build agent team proposal API endpoint (broker rule filtering + LLM ranking)
+- [x] Build create-workspace-from-goal endpoint
 
 ### 4.2 AgentTeamProposalModal Component
 
-- [ ] Create `frontend/src/components/shell/views/AgentTeamProposalModal.tsx`
-- [ ] Render agent cards: icon (36x36) + name + role/executor + reason + risk badge
-- [ ] Risk badges: low (emerald), medium (amber), high (rose)
-- [ ] Warning box: amber bg + border for high-risk permissions
-- [ ] Footer: Cancel + Confirm Team buttons
+- [x] Create `frontend/src/components/shell/views/AgentTeamProposalModal.tsx`
+- [x] Render agent cards: icon (36x36) + name + role/executor + reason + risk badge
+- [x] Risk badges: low (emerald), medium (amber), high (rose)
+- [x] Warning box: amber bg + border for high-risk permissions
+- [x] Footer: Cancel + Confirm Team buttons
 
 ### 4.3 ProjectSpecModal Component
 
-- [ ] Create `frontend/src/components/shell/views/ProjectSpecModal.tsx`
-- [ ] Render spec sections: Summary, Goals, Non-Goals, Tech Stack, Constraints
-- [ ] Code block style for each section
+- [x] Create `frontend/src/components/shell/views/ProjectSpecModal.tsx`
+- [x] Render spec sections: Summary, Goals, Non-Goals, Tech Stack, Constraints
+- [x] Code block style for each section
 
 ### 4.4 Integration
 
-- [ ] Connect "New Workspace" flow to agent broker
-- [ ] Show proposal modal before starting workspace
-- [ ] Wire confirm/cancel to workspace creation
+- [x] Connect "New Workspace" flow to agent broker
+- [x] Show proposal modal before starting workspace
+- [x] Wire confirm/cancel to workspace creation
 
 ---
 
@@ -349,16 +349,16 @@ Artifacts as a first-class domain entity for workspace-level aggregation and sea
 
 ### 5.1 Workspace Chat (Real-time)
 
-- [ ] Connect WorkspaceChat to real conversation API
-- [ ] Implement workspace-scoped message sending
-- [ ] Handle streaming responses (if applicable)
+- [x] Connect WorkspaceChat to real conversation API
+- [x] Implement workspace-scoped message sending
+- [x] Handle streaming responses (if applicable)
 
 ### 5.2 Approval Cards
 
-- [ ] Build real-time approval cards in right panel
-- [ ] Implement Approve/Deny actions
-- [ ] Auto-refresh on new approvals
-- [ ] Handle expired approvals
+- [x] Build real-time approval cards in right panel
+- [x] Implement Approve/Deny actions
+- [x] Auto-refresh on new approvals
+- [x] Handle expired approvals
 
 ### 5.3 Artifact Viewer
 
