@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Bot, Play, AlertTriangle, Check, X } from 'lucide-react';
+import { Bot, AlertTriangle, Check, X } from 'lucide-react';
 import type { WorkspaceDetail } from '@/lib/apiSchemas';
 import { useApprovalStore } from '@/stores/approvalStore';
 
@@ -7,7 +7,7 @@ interface WorkspaceRightPanelProps {
   detail: WorkspaceDetail;
 }
 
-const tabs = ['Agents', 'Runs', 'Files', 'Artifacts', 'Approvals'] as const;
+const tabs = ['Agents', 'Runs', 'Projects', 'Artifacts'] as const;
 type Tab = (typeof tabs)[number];
 
 const roleColors: Record<string, string> = {
@@ -17,15 +17,6 @@ const roleColors: Record<string, string> = {
   testing: 'var(--amber)',
   research: '#f472b6',
   general: 'var(--text-tertiary)',
-};
-
-const runStatusColors: Record<string, string> = {
-  queued: 'var(--text-tertiary)',
-  running: 'var(--cyan)',
-  succeeded: 'var(--emerald)',
-  failed: 'var(--rose)',
-  cancelled: 'var(--text-tertiary)',
-  waiting_for_approval: 'var(--amber)',
 };
 
 const riskColors: Record<string, string> = {
@@ -40,7 +31,7 @@ export function WorkspaceRightPanel({ detail }: WorkspaceRightPanelProps) {
   const { approvals, fetchApprovals, approve, deny } = useApprovalStore();
 
   useEffect(() => {
-    if (activeTab === 'Approvals') {
+    if (activeTab === 'Agents') {
       fetchApprovals();
     }
   }, [activeTab, fetchApprovals]);
@@ -53,151 +44,187 @@ export function WorkspaceRightPanel({ detail }: WorkspaceRightPanelProps) {
       style={{
         width: 280,
         borderLeft: '1px solid var(--glass-border)',
-        background: 'var(--glass-bg)',
+        background: 'rgba(4,6,14,0.3)',
       }}
     >
       {/* Tab bar */}
-      <div className="flex" style={{ borderBottom: '1px solid var(--glass-border)' }}>
+      <div className="ws-right-tabs">
         {tabs.map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`workspace-tab ${activeTab === tab ? 'active' : ''}`}
+            className={`ws-right-tab ${activeTab === tab ? 'active' : ''}`}
           >
             {tab}
-            {tab === 'Approvals' && pendingApprovals.length > 0 && (
-              <span
-                style={{
-                  position: 'absolute',
-                  top: 4,
-                  right: 2,
-                  width: 8,
-                  height: 8,
-                  borderRadius: '50%',
-                  background: 'var(--amber)',
-                }}
-              />
-            )}
           </button>
         ))}
       </div>
 
       {/* Tab content */}
-      <div className="flex-1 overflow-y-auto px-3 py-2 workspace-scroll">
+      <div className="ws-right-body workspace-scroll">
         {activeTab === 'Agents' && (
-          <div className="flex flex-col gap-1.5">
+          <div>
             {detail.agents.length === 0 ? (
               <EmptyTab message="No agents assigned" />
             ) : (
               detail.agents.map((agent) => (
-                <div
-                  key={agent.id}
-                  className="flex items-center gap-2 px-2 py-1.5"
-                  style={{
-                    borderRadius: 6,
-                    background: 'rgba(255,255,255,0.02)',
-                    border: '1px solid rgba(255,255,255,0.04)',
-                  }}
-                >
+                <div key={agent.id} className="agent-mini">
                   <div
+                    className="agent-mini-icon"
                     style={{
-                      width: 22,
-                      height: 22,
-                      borderRadius: 6,
-                      background: `${roleColors[agent.role] ?? 'var(--text-tertiary)'}15`,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexShrink: 0,
+                      background: `${roleColors[agent.role] ?? 'var(--text-tertiary)'}1a`,
+                      border: `1px solid ${roleColors[agent.role] ?? 'var(--text-tertiary)'}26`,
                     }}
                   >
                     <Bot
-                      size={12}
+                      size={14}
                       style={{ color: roleColors[agent.role] ?? 'var(--text-tertiary)' }}
                     />
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div
-                      className="truncate"
-                      style={{
-                        fontFamily: 'var(--font-body)',
-                        fontSize: 12,
-                        color: 'var(--text-secondary)',
-                      }}
-                    >
-                      {agent.name}
-                    </div>
-                    <div
-                      style={{
-                        fontFamily: 'var(--font-data)',
-                        fontSize: 9,
-                        color: 'var(--text-tertiary)',
-                      }}
-                    >
-                      {agent.role}
+                  <div className="agent-mini-info">
+                    <div className="agent-mini-name">{agent.name}</div>
+                    <div className="agent-mini-role">
+                      {agent.role} · {agent.status}
                     </div>
                   </div>
                   <span
-                    style={{
-                      width: 6,
-                      height: 6,
-                      borderRadius: '50%',
-                      background:
-                        agent.status === 'running'
-                          ? 'var(--cyan)'
-                          : agent.status === 'completed'
-                            ? 'var(--emerald)'
-                            : 'var(--text-tertiary)',
-                    }}
-                  />
+                    className={`status-badge status-${agent.status === 'running' ? 'running' : agent.status === 'completed' ? 'succeeded' : 'queued'}`}
+                  >
+                    <span
+                      className={`status-dot dot-${agent.status === 'running' ? 'blue' : agent.status === 'completed' ? 'green' : 'gray'}`}
+                    />
+                    {agent.status}
+                  </span>
                 </div>
               ))
+            )}
+            {pendingApprovals.length > 0 && (
+              <div className="mt-3">
+                <div className="task-tree-title" style={{ marginBottom: 8 }}>
+                  Pending Approvals
+                </div>
+                {pendingApprovals.map((approval) => {
+                  const riskColor = riskColors[approval.risk] ?? 'var(--text-tertiary)';
+                  return (
+                    <div key={approval.id} className="approval-card">
+                      <div className="approval-header">
+                        <AlertTriangle size={14} style={{ color: riskColor }} />
+                        <span className="approval-title">{approval.toolName}</span>
+                        <span
+                          className={`status-badge status-${approval.risk === 'high' ? 'failed' : 'blocked'}`}
+                          style={{ fontSize: 8 }}
+                        >
+                          {approval.risk} risk
+                        </span>
+                      </div>
+                      {approval.preview && <div className="approval-desc">{approval.preview}</div>}
+                      <div className="approval-actions">
+                        <button onClick={() => approve(approval.id)} className="btn btn-success">
+                          <Check size={10} /> Approve
+                        </button>
+                        <button onClick={() => deny(approval.id)} className="btn btn-danger">
+                          <X size={10} /> Deny
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
         )}
 
         {activeTab === 'Runs' && (
-          <div className="flex flex-col gap-1.5">
+          <div>
             {detail.recentRuns.length === 0 ? (
               <EmptyTab message="No runs yet" />
             ) : (
-              detail.recentRuns.map((run) => (
-                <div
-                  key={run.id}
-                  className="flex items-center gap-2 px-2 py-1.5"
-                  style={{
-                    borderRadius: 6,
-                    background: 'rgba(255,255,255,0.02)',
-                    border: '1px solid rgba(255,255,255,0.04)',
-                  }}
-                >
-                  <Play
-                    size={12}
-                    style={{
-                      color: runStatusColors[run.status] ?? 'var(--text-tertiary)',
-                      flexShrink: 0,
-                    }}
-                  />
-                  <div className="flex-1 min-w-0">
-                    <div
-                      className="truncate"
-                      style={{
-                        fontFamily: 'var(--font-body)',
-                        fontSize: 12,
-                        color: 'var(--text-secondary)',
-                      }}
-                    >
-                      {run.agentName}
+              detail.recentRuns.map((run) => {
+                const duration = run.completedAt
+                  ? `${Math.round((new Date(run.completedAt).getTime() - new Date(run.startedAt).getTime()) / 1000)}s`
+                  : 'running...';
+                return (
+                  <div key={run.id} className="run-card">
+                    <div className="run-card-header">
+                      <span className="run-card-title">{run.agentName}</span>
+                      <span className={`status-badge status-${run.status}`} style={{ fontSize: 8 }}>
+                        {run.status}
+                      </span>
                     </div>
+                    <div className="run-card-meta">
+                      <span>Duration: {duration}</span>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        )}
+
+        {activeTab === 'Projects' && (
+          <div>
+            {detail.projects.length === 0 ? (
+              <EmptyTab message="No projects yet" />
+            ) : (
+              detail.projects.map((project) => (
+                <div key={project.id} className="run-card">
+                  <div className="run-card-header">
+                    <span className="run-card-title">{project.name}</span>
+                    <span
+                      className={`status-badge status-${project.status === 'active' ? 'running' : project.status === 'completed' ? 'succeeded' : 'queued'}`}
+                    >
+                      <span
+                        className={`status-dot dot-${project.status === 'active' ? 'blue' : project.status === 'completed' ? 'green' : 'gray'}`}
+                      />
+                      {project.status}
+                    </span>
+                  </div>
+                  {project.description && (
                     <div
                       style={{
                         fontFamily: 'var(--font-data)',
-                        fontSize: 9,
+                        fontSize: 10,
                         color: 'var(--text-tertiary)',
+                        marginTop: 4,
                       }}
                     >
-                      {run.status}
+                      {project.description}
                     </div>
+                  )}
+                  <div
+                    style={{
+                      display: 'flex',
+                      gap: 8,
+                      marginTop: 6,
+                      fontFamily: 'var(--font-data)',
+                      fontSize: 9,
+                      color: 'var(--text-tertiary)',
+                    }}
+                  >
+                    <span>
+                      {project.completedTasks}/{project.taskCount} tasks
+                    </span>
+                    <span>{project.progress}%</span>
+                  </div>
+                  <div
+                    style={{
+                      height: 2,
+                      background: 'rgba(255,255,255,0.06)',
+                      borderRadius: 1,
+                      marginTop: 6,
+                      overflow: 'hidden',
+                    }}
+                  >
+                    <div
+                      style={{
+                        height: '100%',
+                        width: `${project.progress}%`,
+                        background:
+                          project.status === 'active' ? 'var(--cyan)' : 'var(--text-tertiary)',
+                        borderRadius: 1,
+                        transition: 'width 0.5s',
+                      }}
+                    />
                   </div>
                 </div>
               ))
@@ -205,71 +232,9 @@ export function WorkspaceRightPanel({ detail }: WorkspaceRightPanelProps) {
           </div>
         )}
 
-        {activeTab === 'Files' && <EmptyTab message="File tracking coming soon" />}
-
-        {activeTab === 'Artifacts' && <EmptyTab message="Artifacts coming soon" />}
-
-        {activeTab === 'Approvals' && (
-          <div className="flex flex-col gap-1.5">
-            {pendingApprovals.length === 0 ? (
-              <EmptyTab message="No pending approvals" />
-            ) : (
-              pendingApprovals.map((approval) => {
-                const riskColor = riskColors[approval.risk] ?? 'var(--text-tertiary)';
-                return (
-                  <div key={approval.id} className="approval-card flex flex-col gap-2 px-2 py-2">
-                    <div className="flex items-center gap-2">
-                      <AlertTriangle size={12} style={{ color: riskColor, flexShrink: 0 }} />
-                      <div className="flex-1 min-w-0">
-                        <div
-                          className="truncate"
-                          style={{
-                            fontFamily: 'var(--font-body)',
-                            fontSize: 12,
-                            color: 'var(--text-secondary)',
-                          }}
-                        >
-                          {approval.toolName}
-                        </div>
-                        <div
-                          style={{
-                            fontFamily: 'var(--font-data)',
-                            fontSize: 9,
-                            color: riskColor,
-                          }}
-                        >
-                          Risk: {approval.risk}
-                        </div>
-                      </div>
-                    </div>
-                    {approval.preview && (
-                      <div
-                        style={{
-                          fontFamily: 'var(--font-data)',
-                          fontSize: 10,
-                          color: 'var(--text-tertiary)',
-                          lineHeight: 1.4,
-                          maxHeight: 40,
-                          overflow: 'hidden',
-                        }}
-                      >
-                        {approval.preview}
-                      </div>
-                    )}
-                    <div className="flex items-center gap-1">
-                      <button onClick={() => approve(approval.id)} className="approval-approve-btn">
-                        <Check size={10} />
-                        Approve
-                      </button>
-                      <button onClick={() => deny(approval.id)} className="approval-deny-btn">
-                        <X size={10} />
-                        Deny
-                      </button>
-                    </div>
-                  </div>
-                );
-              })
-            )}
+        {activeTab === 'Artifacts' && (
+          <div>
+            <EmptyTab message="No artifacts yet" />
           </div>
         )}
       </div>
