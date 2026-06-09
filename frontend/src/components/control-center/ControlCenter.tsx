@@ -12,6 +12,7 @@ import {
   Activity,
   Database,
   Palette,
+  Bot,
 } from 'lucide-react';
 import { OverviewPage } from './OverviewPage';
 import { SystemPage } from './SystemPage';
@@ -23,6 +24,7 @@ import { VoicePage } from './VoicePage';
 import { DaemonPage } from './DaemonPage';
 import { DbPage } from './DbPage';
 import { AppearancePage } from './AppearancePage';
+import { AgentRuntimesPage } from './AgentRuntimesPage';
 
 export type ControlPage =
   | 'overview'
@@ -31,6 +33,7 @@ export type ControlPage =
   | 'apps'
   | 'tools'
   | 'permission'
+  | 'runtimes'
   | 'voice'
   | 'daemon'
   | 'db'
@@ -48,6 +51,7 @@ const navItems: { id: ControlPage; label: string; icon: typeof LayoutDashboard }
   { id: 'apps', label: 'Apps & MCP', icon: Plug },
   { id: 'tools', label: 'Tools', icon: Wrench },
   { id: 'permission', label: 'Permissions', icon: Shield },
+  { id: 'runtimes', label: 'Agent Runtimes', icon: Bot },
   { id: 'voice', label: 'Voice', icon: Mic },
   { id: 'daemon', label: 'Daemon', icon: Activity },
   { id: 'db', label: 'Database', icon: Database },
@@ -61,6 +65,7 @@ const pages: Record<ControlPage, React.ComponentType> = {
   apps: AppsPage,
   tools: ToolsPage,
   permission: PermissionPage,
+  runtimes: AgentRuntimesPage,
   voice: VoicePage,
   daemon: DaemonPage,
   db: DbPage,

@@ -103,6 +103,21 @@ export function isCommandAvailable(command: string): boolean {
 }
 
 /**
+ * Resolve the full path of a command on the system PATH.
+ * Returns the executable path or null if not found.
+ */
+export function getExecutablePath(command: string): string | null {
+  try {
+    const cmd = process.platform === "win32" ? "where" : "which";
+    const output = execFileSync(cmd, [command], { encoding: "utf-8", timeout: 3_000 }).trim();
+    // `where` on Windows can return multiple lines; take the first
+    return output.split("\n")[0]?.trim() ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Spawn a subprocess and collect its output.
  * Resolves when the process exits, rejects on timeout or spawn error.
  */
