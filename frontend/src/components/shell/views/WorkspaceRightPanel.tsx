@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Bot, AlertTriangle, Check, X } from 'lucide-react';
+import { Bot, AlertTriangle, Check, X, FileText, Layout, File, CheckCircle } from 'lucide-react';
 import type { WorkspaceDetail } from '@/lib/apiSchemas';
 import { useApprovalStore } from '@/stores/approvalStore';
 import { jarvisClient } from '@/lib/jarvisClient';
@@ -276,15 +276,17 @@ export function WorkspaceRightPanel({ detail }: WorkspaceRightPanelProps) {
                   }
                 >
                   <div className="artifact-header">
-                    <span style={{ fontSize: 14 }}>
-                      {art.type === 'spec'
-                        ? '📋'
-                        : art.type === 'plan'
-                          ? '📊'
-                          : art.type === 'file'
-                            ? '📄'
-                            : '✅'}
-                    </span>
+                    <div className="flex items-center justify-center mr-1">
+                      {art.type === 'spec' ? (
+                        <FileText size={14} style={{ color: 'var(--violet)' }} />
+                      ) : art.type === 'plan' ? (
+                        <Layout size={14} style={{ color: 'var(--cyan)' }} />
+                      ) : art.type === 'file' ? (
+                        <File size={14} style={{ color: 'var(--emerald)' }} />
+                      ) : (
+                        <CheckCircle size={14} style={{ color: 'var(--emerald)' }} />
+                      )}
+                    </div>
                     <span className="artifact-title">{art.title}</span>
                   </div>
                   <div className="artifact-meta">

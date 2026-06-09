@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Bot, Wrench, Brain, ShieldCheck, Settings } from 'lucide-react';
+import { Bot, Wrench, Brain, ShieldCheck, Settings, FileText } from 'lucide-react';
 
 interface TimelineEvent {
   id: string;
@@ -172,7 +172,12 @@ export function WorkspaceTimeline({ events }: WorkspaceTimelineProps) {
                     }}
                     dangerouslySetInnerHTML={{ __html: event.message }}
                   />
-                  {file && <div className="timeline-file">📄 {file}</div>}
+                  {file && (
+                    <div className="timeline-file flex items-center gap-1">
+                      <FileText size={10} style={{ color: 'var(--emerald)' }} />
+                      {file}
+                    </div>
+                  )}
                   {diff && renderDiff(diff)}
                   <div
                     style={{

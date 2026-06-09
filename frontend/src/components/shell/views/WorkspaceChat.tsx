@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { User, Bot } from 'lucide-react';
 import { jarvisClient } from '@/lib/jarvisClient';
 
 interface ChatMessage {
@@ -140,7 +141,11 @@ export function WorkspaceChat({ workspaceId }: WorkspaceChatProps) {
                   border: `1px solid ${msg.role === 'user' ? 'rgba(255,255,255,0.08)' : 'rgba(0,212,255,0.15)'}`,
                 }}
               >
-                {msg.role === 'user' ? '👤' : '🤖'}
+                {msg.role === 'user' ? (
+                  <User size={12} />
+                ) : (
+                  <Bot size={12} style={{ color: 'var(--cyan)' }} />
+                )}
               </div>
               <div className="chat-msg-text">{msg.content}</div>
             </div>
@@ -155,7 +160,7 @@ export function WorkspaceChat({ workspaceId }: WorkspaceChatProps) {
                 border: '1px solid rgba(167,139,250,0.15)',
               }}
             >
-              🤖
+              <Bot size={12} style={{ color: 'var(--violet)' }} />
             </div>
             <div className="chat-msg-text" style={{ color: 'var(--text-tertiary)' }}>
               Thinking...

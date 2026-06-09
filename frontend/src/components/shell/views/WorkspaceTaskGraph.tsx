@@ -6,10 +6,12 @@ interface Task {
   status: string;
   assignedAgentId?: string | null;
   dependencies?: string[];
+  projectId?: string;
 }
 
 interface WorkspaceTaskGraphProps {
   tasks: Task[];
+  projects?: Array<{ id: string; name: string }>;
   onRetry?: (taskId: string) => void;
 }
 
@@ -26,7 +28,7 @@ const statusColors: Record<string, string> = {
   in_progress: 'var(--cyan)',
 };
 
-export function WorkspaceTaskGraph({ tasks, onRetry }: WorkspaceTaskGraphProps) {
+export function WorkspaceTaskGraph({ tasks, projects, onRetry }: WorkspaceTaskGraphProps) {
   if (tasks.length === 0) {
     return (
       <div
@@ -44,6 +46,7 @@ export function WorkspaceTaskGraph({ tasks, onRetry }: WorkspaceTaskGraphProps) 
     <div className="flex flex-col gap-1">
       {tasks.map((task, i) => {
         const color = statusColors[task.status] ?? 'var(--text-tertiary)';
+        const project = projects?.find((p) => p.id === task.projectId);
         return (
           <div key={task.id} className="flex flex-col mb-1">
             <div className="task-item flex items-center gap-2 px-2 py-1.5">
@@ -68,6 +71,24 @@ export function WorkspaceTaskGraph({ tasks, onRetry }: WorkspaceTaskGraphProps) 
                     color: 'var(--text-secondary)',
                   }}
                 >
+                  {project && (
+                    <span
+                      style={{
+                        fontFamily: 'var(--font-data)',
+                        fontSize: 9,
+                        color: 'var(--cyan)',
+                        marginRight: 6,
+                        background: 'rgba(0, 212, 255, 0.05)',
+                        border: '1px solid rgba(0, 212, 255, 0.15)',
+                        borderRadius: 3,
+                        padding: '1px 3px',
+                        textTransform: 'uppercase',
+                        display: 'inline-block',
+                      }}
+                    >
+                      {project.name}
+                    </span>
+                  )}
                   {task.title}
                 </div>
               </div>
