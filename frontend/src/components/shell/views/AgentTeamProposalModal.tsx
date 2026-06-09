@@ -83,7 +83,7 @@ export function AgentTeamProposalModal({
         </div>
 
         {/* Warnings */}
-        {warnings.length > 0 && (
+        {warnings && warnings.length > 0 && (
           <div
             className="mx-4 mt-3 flex items-start gap-2 px-3 py-2"
             style={{
@@ -114,117 +114,118 @@ export function AgentTeamProposalModal({
           className="flex flex-col gap-2 px-4 py-3"
           style={{ maxHeight: 400, overflowY: 'auto' }}
         >
-          {agents.map((agent) => {
-            const risk = getRiskStyle(agent.risk);
-            const roleColor = roleColors[agent.role] ?? 'var(--text-tertiary)';
-            return (
-              <div
-                key={agent.id}
-                className="flex items-start gap-3 px-3 py-2.5"
-                style={{
-                  borderRadius: 8,
-                  background: 'rgba(255,255,255,0.02)',
-                  border: '1px solid rgba(255,255,255,0.06)',
-                }}
-              >
+          {agents &&
+            agents.map((agent) => {
+              const risk = getRiskStyle(agent.risk);
+              const roleColor = roleColors[agent.role] ?? 'var(--text-tertiary)';
+              return (
                 <div
+                  key={agent.id}
+                  className="flex items-start gap-3 px-3 py-2.5"
                   style={{
-                    width: 36,
-                    height: 36,
                     borderRadius: 8,
-                    background: `${roleColor}15`,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0,
+                    background: 'rgba(255,255,255,0.02)',
+                    border: '1px solid rgba(255,255,255,0.06)',
                   }}
                 >
-                  <Bot size={18} style={{ color: roleColor }} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <span
-                      style={{
-                        fontFamily: 'var(--font-body)',
-                        fontSize: 13,
-                        fontWeight: 500,
-                        color: 'var(--text-primary)',
-                      }}
-                    >
-                      {agent.name}
-                    </span>
-                    <span
-                      style={{
-                        fontFamily: 'var(--font-data)',
-                        fontSize: 9,
-                        color: roleColor,
-                        background: `${roleColor}15`,
-                        padding: '1px 5px',
-                        borderRadius: 4,
-                        textTransform: 'uppercase',
-                      }}
-                    >
-                      {agent.role}
-                    </span>
-                    <span
-                      style={{
-                        fontFamily: 'var(--font-data)',
-                        fontSize: 9,
-                        color: risk.text,
-                        background: risk.bg,
-                        border: `1px solid ${risk.border}`,
-                        padding: '1px 5px',
-                        borderRadius: 4,
-                        textTransform: 'uppercase',
-                      }}
-                    >
-                      {agent.risk}
-                    </span>
-                  </div>
                   <div
                     style={{
-                      fontFamily: 'var(--font-data)',
-                      fontSize: 11,
-                      color: 'var(--text-tertiary)',
-                      lineHeight: 1.4,
+                      width: 36,
+                      height: 36,
+                      borderRadius: 8,
+                      background: `${roleColor}15`,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
                     }}
                   >
-                    {agent.reason}
+                    <Bot size={18} style={{ color: roleColor }} />
                   </div>
-                  {agent.permissions.length > 0 && (
-                    <div className="flex items-center gap-1 mt-1 flex-wrap">
-                      {agent.permissions.slice(0, 4).map((p) => (
-                        <span
-                          key={p}
-                          style={{
-                            fontFamily: 'var(--font-data)',
-                            fontSize: 9,
-                            color: 'var(--text-tertiary)',
-                            background: 'rgba(255,255,255,0.04)',
-                            padding: '1px 4px',
-                            borderRadius: 3,
-                          }}
-                        >
-                          {p}
-                        </span>
-                      ))}
-                      {agent.permissions.length > 4 && (
-                        <span
-                          style={{
-                            fontFamily: 'var(--font-data)',
-                            fontSize: 9,
-                            color: 'var(--text-tertiary)',
-                          }}
-                        >
-                          +{agent.permissions.length - 4}
-                        </span>
-                      )}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span
+                        style={{
+                          fontFamily: 'var(--font-body)',
+                          fontSize: 13,
+                          fontWeight: 500,
+                          color: 'var(--text-primary)',
+                        }}
+                      >
+                        {agent.name}
+                      </span>
+                      <span
+                        style={{
+                          fontFamily: 'var(--font-data)',
+                          fontSize: 9,
+                          color: roleColor,
+                          background: `${roleColor}15`,
+                          padding: '1px 5px',
+                          borderRadius: 4,
+                          textTransform: 'uppercase',
+                        }}
+                      >
+                        {agent.role}
+                      </span>
+                      <span
+                        style={{
+                          fontFamily: 'var(--font-data)',
+                          fontSize: 9,
+                          color: risk.text,
+                          background: risk.bg,
+                          border: `1px solid ${risk.border}`,
+                          padding: '1px 5px',
+                          borderRadius: 4,
+                          textTransform: 'uppercase',
+                        }}
+                      >
+                        {agent.risk}
+                      </span>
                     </div>
-                  )}
+                    <div
+                      style={{
+                        fontFamily: 'var(--font-data)',
+                        fontSize: 11,
+                        color: 'var(--text-tertiary)',
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      {agent.reason}
+                    </div>
+                    {agent.permissions && agent.permissions.length > 0 && (
+                      <div className="flex items-center gap-1 mt-1 flex-wrap">
+                        {agent.permissions.slice(0, 4).map((p) => (
+                          <span
+                            key={p}
+                            style={{
+                              fontFamily: 'var(--font-data)',
+                              fontSize: 9,
+                              color: 'var(--text-tertiary)',
+                              background: 'rgba(255,255,255,0.04)',
+                              padding: '1px 4px',
+                              borderRadius: 3,
+                            }}
+                          >
+                            {p}
+                          </span>
+                        ))}
+                        {agent.permissions.length > 4 && (
+                          <span
+                            style={{
+                              fontFamily: 'var(--font-data)',
+                              fontSize: 9,
+                              color: 'var(--text-tertiary)',
+                            }}
+                          >
+                            +{agent.permissions.length - 4}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
         </div>
 
         {/* Footer */}
