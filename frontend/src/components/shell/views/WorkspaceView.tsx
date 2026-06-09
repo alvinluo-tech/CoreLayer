@@ -52,18 +52,15 @@ export function WorkspaceView() {
     setShowSpecModal(false);
     setIsProposing(true);
     try {
-      const resp = await jarvisClient.post<{ agents: ProposedAgent[]; warnings: string[] }>(
-        '/api/agent-broker/propose-team',
-        { goal: goal.trim(), maxAgents: 5 }
-      );
-      setProposedAgents(resp.agents);
-      setTeamWarnings(resp.warnings);
+      const resp = await jarvisClient.post<{
+        data: { agents: ProposedAgent[]; warnings: string[] };
+      }>('/api/agent-broker/propose-team', { goal: goal.trim(), maxAgents: 5 });
+      setProposedAgents(resp.data.agents);
+      setTeamWarnings(resp.data.warnings);
       setShowTeamModal(true);
     } catch {
-      // If broker fails, create workspace directly
-      const ws = await createWorkspace('Workspace', goal.trim());
-      setGoal('');
-      selectWorkspace(ws.id);
+      // If broker fails, go straight to orchestrator
+      await handleConfirmTeam();
     } finally {
       setIsProposing(false);
     }
@@ -71,9 +68,24 @@ export function WorkspaceView() {
 
   const handleConfirmTeam = async () => {
     setShowTeamModal(false);
-    const ws = await createWorkspace('Workspace', goal.trim());
-    setGoal('');
-    selectWorkspace(ws.id);
+    setIsProposing(true);
+    try {
+      // Use the full orchestrator pipeline: goal → workspace → spec → tasks → agents
+      const resp = await jarvisClient.post<{ data: { workspace: { id: string } } }>(
+        '/api/workspaces/from-goal',
+        { goal: goal.trim() }
+      );
+      setGoal('');
+      await loadWorkspaces();
+      selectWorkspace(resp.data.workspace.id);
+    } catch {
+      // Fallback: create workspace directly
+      const ws = await createWorkspace('Workspace', goal.trim());
+      setGoal('');
+      selectWorkspace(ws.id);
+    } finally {
+      setIsProposing(false);
+    }
   };
 
   return (

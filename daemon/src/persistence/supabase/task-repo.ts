@@ -63,6 +63,8 @@ export function createSupabaseTaskRepo(): TaskRepository {
           run_history: [],
           manual_intervention_required: false,
           rollback_plan: input.rollbackPlan ?? null,
+          workspace_id: input.workspaceId ?? null,
+          project_id: input.projectId ?? null,
           created_at: now,
           updated_at: now,
         })
@@ -80,6 +82,8 @@ export function createSupabaseTaskRepo(): TaskRepository {
       if (filters?.priority) query = query.eq("priority", filters.priority);
       if (filters?.dueDateFrom) query = query.gte("due_date", filters.dueDateFrom);
       if (filters?.dueDateTo) query = query.lte("due_date", filters.dueDateTo);
+      if (filters?.projectId) query = query.eq("project_id", filters.projectId);
+      if (filters?.workspaceId) query = query.eq("workspace_id", filters.workspaceId);
 
       const { data, error } = await query;
       if (error) throw new Error(`Failed to query tasks: ${error.message}`);
@@ -117,6 +121,8 @@ export function createSupabaseTaskRepo(): TaskRepository {
       if (data.runHistory !== undefined) updates.run_history = data.runHistory;
       if (data.manualInterventionRequired !== undefined) updates.manual_intervention_required = data.manualInterventionRequired;
       if (data.rollbackPlan !== undefined) updates.rollback_plan = data.rollbackPlan;
+      if (data.workspaceId !== undefined) updates.workspace_id = data.workspaceId;
+      if (data.projectId !== undefined) updates.project_id = data.projectId;
 
       const { data: row, error } = await client
         .from(TABLE)
@@ -161,6 +167,17 @@ export function createSupabaseTaskRepo(): TaskRepository {
         .neq("status", "deleted");
 
       if (error) throw new Error(`Failed to get tasks by project: ${error.message}`);
+      return (data ?? []).map(toTaskRow);
+    },
+
+    async getByWorkspaceId(workspaceId: string): Promise<TaskRow[]> {
+      const { data, error } = await client
+        .from(TABLE)
+        .select("*")
+        .eq("workspace_id", workspaceId)
+        .neq("status", "deleted");
+
+      if (error) throw new Error(`Failed to get tasks by workspace: ${error.message}`);
       return (data ?? []).map(toTaskRow);
     },
 

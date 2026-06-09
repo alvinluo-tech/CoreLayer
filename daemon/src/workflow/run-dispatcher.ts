@@ -11,6 +11,10 @@ import { getResourceStatus, isResourcePressureHigh } from "./resource-monitor.js
 import { getCodingRuntime } from "../runtimes/coding/registry.js";
 import type { CodingTask } from "../runtimes/coding/types.js";
 import { isAgentExecutorPolicy } from "../shared/agent-profile-types.js";
+import { TaskGraph } from "../workspaces/task-graph-service.js";
+import { enqueue } from "./queue-service.js";
+
+const taskGraph = new TaskGraph();
 
 export interface DispatchResult {
   dispatched: number;
@@ -51,6 +55,15 @@ export async function dispatchRuns(): Promise<DispatchResult> {
     if (!slotManager.canStartAgentRun()) {
       skipped++;
       continue;
+    }
+
+    // Check task dependencies before dispatching
+    if (run.taskId) {
+      const canExecute = await taskGraph.canExecute(run.taskId);
+      if (!canExecute) {
+        skipped++;
+        continue;
+      }
     }
 
     // Mark as actually running and acquire slot
@@ -138,6 +151,13 @@ async function dispatchToCodingRuntime(
       const info = await adapter.getRunStatus(codingRun.runId);
       if (info.status === "succeeded" || info.status === "failed" || info.status === "cancelled") {
         await agentRuns.updateArtifacts(runId, info.artifacts);
+
+        // Sync coding artifacts to the artifacts table
+        if (info.artifacts.length > 0) {
+          const runRecord = await agentRuns.getById(runId);
+          await syncArtifactsToTable(runId, info.artifacts, runRecord?.workspaceId ?? null, runRecord?.projectId ?? null);
+        }
+
         await completeRun(runId, info.status === "succeeded", info.error);
         return;
       }
@@ -153,13 +173,49 @@ async function dispatchToCodingRuntime(
 }
 
 /**
- * Mark a run as completed and release its slot.
+ * Mark a run as completed, update task status, unlock dependents, and enqueue newly ready tasks.
  */
 export async function completeRun(runId: string, success: boolean, error?: string): Promise<void> {
-  const { agentRuns } = getRepositories();
+  const { agentRuns, tasks } = getRepositories();
   const status = success ? "succeeded" : "failed";
   await agentRuns.updateStatus(runId, status, error);
   slotManager.releaseAgentRun(runId);
+
+  // Update the associated task status
+  const run = await agentRuns.getById(runId);
+  if (run?.taskId) {
+    const task = await tasks.getById(run.taskId);
+    if (task) {
+      const taskStatus = success ? "completed" : "failed";
+      await tasks.update(run.taskId, {
+        status: taskStatus,
+        ...(success ? { completedAt: new Date().toISOString() } : {}),
+      });
+
+      // If task succeeded, unlock downstream tasks and enqueue newly ready ones
+      if (success && task.projectId) {
+        await taskGraph.completeTask(run.taskId);
+
+        // Find and enqueue any tasks that are now unblocked
+        const executableTasks = await taskGraph.getExecutableTasks(task.projectId);
+        for (const readyTask of executableTasks) {
+          if (readyTask.status === "queued" && !readyTask.assignedAgentId) {
+            // Assign an agent and enqueue
+            await tasks.update(readyTask.id, {
+              assignedAgentId: run.agentId ?? undefined,
+            });
+            await enqueue({
+              taskId: readyTask.id,
+              agentId: run.agentId ?? undefined,
+              workspaceId: readyTask.workspaceId ?? undefined,
+              projectId: readyTask.projectId ?? undefined,
+              mode: "workflow",
+            });
+          }
+        }
+      }
+    }
+  }
 }
 
 /**
@@ -221,6 +277,39 @@ export function getDispatcherStatus() {
     slots: slotManager.getUsage(),
     resources: getResourceStatus(),
   };
+}
+
+/**
+ * Sync coding run artifacts to the first-class artifacts table.
+ * This ensures workspace detail views can display them.
+ */
+async function syncArtifactsToTable(
+  runId: string,
+  artifacts: Array<{ type: string; metadata?: Record<string, unknown> }>,
+  workspaceId: string | null,
+  projectId: string | null,
+): Promise<void> {
+  if (!workspaceId) return;
+
+  const { db, schema } = await import("../persistence/client.js");
+
+  for (const artifact of artifacts) {
+    const title = artifact.metadata?.title
+      ?? artifact.metadata?.file
+      ?? `${artifact.type} artifact`;
+
+    await db.insert(schema.artifacts).values({
+      id: crypto.randomUUID(),
+      workspaceId,
+      projectId: projectId ?? undefined,
+      runId,
+      type: artifact.type === "changed_files" ? "file" : "report",
+      title: String(title),
+      content: artifact.metadata ? JSON.stringify(artifact.metadata) : null,
+    }).catch(() => {
+      // Best-effort — don't fail the run over artifact persistence
+    });
+  }
 }
 
 export { slotManager };

@@ -112,6 +112,8 @@ export interface CreateTaskInput {
   dependencies?: string[];
   acceptanceCriteria?: string[];
   rollbackPlan?: string;
+  workspaceId?: string;
+  projectId?: string;
 }
 
 export interface TaskFilters {
@@ -120,6 +122,7 @@ export interface TaskFilters {
   dueDateFrom?: string;
   dueDateTo?: string;
   projectId?: string;
+  workspaceId?: string;
 }
 
 export interface UpdateTaskData {
@@ -139,6 +142,8 @@ export interface UpdateTaskData {
   runHistory?: unknown[];
   manualInterventionRequired?: boolean;
   rollbackPlan?: string;
+  workspaceId?: string;
+  projectId?: string;
 }
 
 export interface CreateArticleInput {
@@ -310,6 +315,7 @@ export interface TaskRepository {
   delete(id: string): Promise<boolean>;
   getTodayTasks(): Promise<TaskRow[]>;
   getByProjectId(projectId: string): Promise<TaskRow[]>;
+  getByWorkspaceId(workspaceId: string): Promise<TaskRow[]>;
   getByParentId(parentTaskId: string): Promise<TaskRow[]>;
   clear(): Promise<number>;
 }
@@ -559,6 +565,10 @@ export interface WorkspaceRow {
   name: string;
   description: string | null;
   ownerId: string;
+  goal: string | null;
+  status: "draft" | "planning" | "running" | "blocked" | "succeeded" | "failed" | "cancelled";
+  activeProjectId: string | null;
+  completedAt: string | null;
   settings: unknown | null;
   createdAt: string;
   updatedAt: string;
@@ -568,12 +578,19 @@ export interface CreateWorkspaceInput {
   name?: string;
   description?: string;
   ownerId: string;
+  goal?: string;
+  status?: WorkspaceRow["status"];
+  activeProjectId?: string;
   settings?: unknown;
 }
 
 export interface UpdateWorkspaceData {
   name?: string;
   description?: string;
+  goal?: string;
+  status?: WorkspaceRow["status"];
+  activeProjectId?: string;
+  completedAt?: string;
   settings?: unknown;
 }
 
@@ -593,6 +610,9 @@ export interface ProjectRow {
   workspaceId: string;
   name: string;
   description: string | null;
+  spec: string | null;
+  techStack: string | null;
+  rootPath: string | null;
   status: "active" | "archived" | "completed";
   settings: unknown | null;
   createdAt: string;
@@ -603,6 +623,9 @@ export interface CreateProjectInput {
   workspaceId: string;
   name: string;
   description?: string;
+  spec?: string;
+  techStack?: string;
+  rootPath?: string;
   status?: ProjectRow["status"];
   settings?: unknown;
 }
@@ -610,6 +633,9 @@ export interface CreateProjectInput {
 export interface UpdateProjectData {
   name?: string;
   description?: string;
+  spec?: string;
+  techStack?: string;
+  rootPath?: string;
   status?: ProjectRow["status"];
   settings?: unknown;
 }

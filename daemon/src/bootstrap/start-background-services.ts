@@ -3,6 +3,7 @@ import { registerDefaultReportSchedules } from "../runtimes/scheduler/reports/ge
 import { registerSensor, startSensors, setSensorChangeHandler } from "../runtimes/scheduler/sensors/registry.js";
 import { createTodoSensor } from "../runtimes/scheduler/sensors/todo-sensor.js";
 import { createReadingSensor } from "../runtimes/scheduler/sensors/reading-sensor.js";
+import { dispatchRuns } from "../workflow/run-dispatcher.js";
 
 export async function startBackgroundServices(): Promise<void> {
   // Start scheduler and register default report schedules
@@ -19,4 +20,9 @@ export async function startBackgroundServices(): Promise<void> {
   registerSensor(createTodoSensor());
   registerSensor(createReadingSensor());
   startSensors();
+
+  // Periodic dispatcher tick — picks up any queued runs that weren't dispatched immediately
+  setInterval(() => {
+    dispatchRuns().catch(() => {});
+  }, 5_000);
 }

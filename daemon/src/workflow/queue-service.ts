@@ -7,6 +7,7 @@
 
 import { getRepositories } from "../persistence/factory.js";
 import type { AgentRunRow } from "../persistence/repository.js";
+import { dispatchRuns } from "./run-dispatcher.js";
 
 export interface QueueEntry {
   runId: string;
@@ -31,6 +32,8 @@ export interface QueueStatus {
 export async function enqueue(input: {
   taskId?: string;
   agentId?: string;
+  workspaceId?: string;
+  projectId?: string;
   conversationId?: string;
   mode?: AgentRunRow["mode"];
   selectedModel?: string;
@@ -39,10 +42,15 @@ export async function enqueue(input: {
   const run = await agentRuns.create({
     taskId: input.taskId,
     agentId: input.agentId,
+    workspaceId: input.workspaceId,
+    projectId: input.projectId,
     conversationId: input.conversationId,
     mode: input.mode ?? "chat",
     selectedModel: input.selectedModel,
   });
+
+  // Trigger dispatch immediately so queued runs don't wait for a tick
+  triggerDispatch();
 
   return {
     runId: run.id,
@@ -51,6 +59,17 @@ export async function enqueue(input: {
     priority: 0,
     enqueuedAt: run.startedAt,
   };
+}
+
+/**
+ * Trigger dispatch after enqueue. Non-blocking — errors are logged but don't propagate.
+ */
+async function triggerDispatch(): Promise<void> {
+  try {
+    await dispatchRuns();
+  } catch {
+    // Dispatch is best-effort; failures will be caught on next tick
+  }
 }
 
 /**

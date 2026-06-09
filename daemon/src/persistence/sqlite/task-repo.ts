@@ -42,6 +42,8 @@ export function createSqliteTaskRepo(): TaskRepository {
           dependencies: input.dependencies ? JSON.stringify(input.dependencies) : "[]",
           acceptanceCriteria: input.acceptanceCriteria ? JSON.stringify(input.acceptanceCriteria) : "[]",
           rollbackPlan: input.rollbackPlan ?? null,
+          workspaceId: input.workspaceId ?? null,
+          projectId: input.projectId ?? null,
           createdAt: now,
           updatedAt: now,
         })
@@ -57,6 +59,7 @@ export function createSqliteTaskRepo(): TaskRepository {
       if (filters?.dueDateFrom) conditions.push(gte(schema.tasks.dueDate, filters.dueDateFrom));
       if (filters?.dueDateTo) conditions.push(lte(schema.tasks.dueDate, filters.dueDateTo));
       if (filters?.projectId) conditions.push(eq(schema.tasks.projectId, filters.projectId));
+      if (filters?.workspaceId) conditions.push(eq(schema.tasks.workspaceId, filters.workspaceId));
 
       const rows = db.select().from(schema.tasks).where(and(...conditions)).all();
       return rows.map(normalizeTask);
@@ -89,6 +92,8 @@ export function createSqliteTaskRepo(): TaskRepository {
       if (data.runHistory !== undefined) updates.runHistory = JSON.stringify(data.runHistory);
       if (data.manualInterventionRequired !== undefined) updates.manualInterventionRequired = data.manualInterventionRequired ? 1 : 0;
       if (data.rollbackPlan !== undefined) updates.rollbackPlan = data.rollbackPlan;
+      if (data.workspaceId !== undefined) updates.workspaceId = data.workspaceId;
+      if (data.projectId !== undefined) updates.projectId = data.projectId;
 
       db.update(schema.tasks).set(updates).where(eq(schema.tasks.id, id)).run();
       const row = db.select().from(schema.tasks).where(eq(schema.tasks.id, id)).get()!;
@@ -135,6 +140,20 @@ export function createSqliteTaskRepo(): TaskRepository {
         .select()
         .from(schema.tasks)
         .where(eq(schema.tasks.parentTaskId, parentTaskId))
+        .all();
+      return rows.map(normalizeTask);
+    },
+
+    async getByWorkspaceId(workspaceId: string): Promise<TaskRow[]> {
+      const rows = db
+        .select()
+        .from(schema.tasks)
+        .where(
+          and(
+            eq(schema.tasks.workspaceId, workspaceId),
+            ne(schema.tasks.status, "deleted" as const),
+          ),
+        )
         .all();
       return rows.map(normalizeTask);
     },

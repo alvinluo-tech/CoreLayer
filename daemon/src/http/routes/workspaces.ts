@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { getRepositories } from "../../persistence/factory.js";
 import { apiError, extractErrorMessage, logError } from "../../shared/errors.js";
 import { getWorkspaceDetail } from "../../services/workspace-detail.js";
+import { orchestrateFromGoal } from "../../services/workspace-orchestrator.js";
 import { db, schema } from "../../persistence/client.js";
 import { eq, and } from "drizzle-orm";
 
@@ -22,16 +23,38 @@ workspaceRoutes.get("/", async (c) => {
 });
 
 /**
- * GET /api/workspaces/:id - Get a workspace by ID
+ * GET /api/workspaces/default - Get or create default workspace
+ * MUST be before /:id to avoid being caught by the param route
  */
-workspaceRoutes.get("/:id", async (c) => {
+workspaceRoutes.get("/default", async (c) => {
   try {
     const { workspaces } = getRepositories();
-    const ws = await workspaces.getById(c.req.param("id"));
-    if (!ws) return apiError(c, "Workspace not found", 404);
+    let ws = await workspaces.getDefault("default");
+    if (!ws) {
+      ws = await workspaces.create({ name: "Default Workspace", ownerId: "default" });
+    }
     return c.json({ data: ws });
   } catch (err) {
-    logError("workspaces/get", err);
+    logError("workspaces/default", err);
+    return apiError(c, extractErrorMessage(err), 500);
+  }
+});
+
+/**
+ * POST /api/workspaces/from-goal - Full orchestrator pipeline
+ * Creates workspace + project + spec + tasks + agents from a goal string
+ */
+workspaceRoutes.post("/from-goal", async (c) => {
+  try {
+    const body = await c.req.json<{ goal: string }>();
+    if (!body.goal?.trim()) {
+      return apiError(c, "Goal is required", 400);
+    }
+
+    const result = await orchestrateFromGoal(body.goal);
+    return c.json({ data: result }, 201);
+  } catch (err) {
+    logError("workspaces/from-goal", err);
     return apiError(c, extractErrorMessage(err), 500);
   }
 });
@@ -66,6 +89,21 @@ workspaceRoutes.post("/", async (c) => {
 });
 
 /**
+ * GET /api/workspaces/:id - Get a workspace by ID
+ */
+workspaceRoutes.get("/:id", async (c) => {
+  try {
+    const { workspaces } = getRepositories();
+    const ws = await workspaces.getById(c.req.param("id"));
+    if (!ws) return apiError(c, "Workspace not found", 404);
+    return c.json({ data: ws });
+  } catch (err) {
+    logError("workspaces/get", err);
+    return apiError(c, extractErrorMessage(err), 500);
+  }
+});
+
+/**
  * PATCH /api/workspaces/:id - Update a workspace
  */
 workspaceRoutes.patch("/:id", async (c) => {
@@ -74,8 +112,11 @@ workspaceRoutes.patch("/:id", async (c) => {
     const id = c.req.param("id");
     const existing = await workspaces.getById(id);
     if (!existing) return apiError(c, "Workspace not found", 404);
-    const body = await c.req.json<{ name?: string; description?: string }>();
-    const updated = await workspaces.update(id, body);
+    const body = await c.req.json<{ name?: string; description?: string; goal?: string; status?: string }>();
+    const updated = await workspaces.update(id, {
+      ...body,
+      status: body.status as "draft" | "planning" | "running" | "blocked" | "succeeded" | "failed" | "cancelled" | undefined,
+    });
     return c.json({ data: updated });
   } catch (err) {
     logError("workspaces/update", err);
@@ -94,23 +135,6 @@ workspaceRoutes.delete("/:id", async (c) => {
     return c.json({ success: true });
   } catch (err) {
     logError("workspaces/delete", err);
-    return apiError(c, extractErrorMessage(err), 500);
-  }
-});
-
-/**
- * GET /api/workspaces/default - Get or create default workspace
- */
-workspaceRoutes.get("/default", async (c) => {
-  try {
-    const { workspaces } = getRepositories();
-    let ws = await workspaces.getDefault("default");
-    if (!ws) {
-      ws = await workspaces.create({ name: "Default Workspace", ownerId: "default" });
-    }
-    return c.json({ data: ws });
-  } catch (err) {
-    logError("workspaces/default", err);
     return apiError(c, extractErrorMessage(err), 500);
   }
 });

@@ -20,6 +20,10 @@ export function createSqliteWorkspaceRepo(): WorkspaceRepository {
         name: input.name ?? "Default Workspace",
         description: input.description ?? null,
         ownerId: input.ownerId,
+        goal: input.goal ?? null,
+        status: input.status ?? "draft" as const,
+        activeProjectId: input.activeProjectId ?? null,
+        completedAt: null,
         settings: input.settings ? JSON.stringify(input.settings) : null,
         createdAt: now,
         updatedAt: now,
@@ -60,6 +64,10 @@ export function createSqliteWorkspaceRepo(): WorkspaceRepository {
 
       if (data.name !== undefined) updateData.name = data.name;
       if (data.description !== undefined) updateData.description = data.description;
+      if (data.goal !== undefined) updateData.goal = data.goal;
+      if (data.status !== undefined) updateData.status = data.status;
+      if (data.activeProjectId !== undefined) updateData.activeProjectId = data.activeProjectId;
+      if (data.completedAt !== undefined) updateData.completedAt = data.completedAt;
       if (data.settings !== undefined) updateData.settings = JSON.stringify(data.settings);
 
       await db.update(workspaces).set(updateData).where(eq(workspaces.id, id));
@@ -82,6 +90,10 @@ function mapRow(row: typeof workspaces.$inferSelect): WorkspaceRow {
     name: row.name,
     description: row.description,
     ownerId: row.ownerId,
+    goal: row.goal ?? null,
+    status: (row.status ?? "draft") as WorkspaceRow["status"],
+    activeProjectId: row.activeProjectId ?? null,
+    completedAt: row.completedAt ?? null,
     settings: row.settings ? JSON.parse(row.settings) : null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,

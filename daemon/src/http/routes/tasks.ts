@@ -233,6 +233,9 @@ app.post("/:id/start", async (c) => {
 
     const entry = await enqueue({
       taskId: id,
+      agentId: task.assignedAgentId ?? undefined,
+      workspaceId: task.workspaceId ?? undefined,
+      projectId: task.projectId ?? undefined,
       mode: "workflow",
     });
 

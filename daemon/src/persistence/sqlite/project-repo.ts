@@ -20,6 +20,9 @@ export function createSqliteProjectRepo(): ProjectRepository {
         workspaceId: input.workspaceId,
         name: input.name,
         description: input.description ?? null,
+        spec: input.spec ?? null,
+        techStack: input.techStack ?? null,
+        rootPath: input.rootPath ?? null,
         status: input.status ?? "active",
         settings: input.settings ? JSON.stringify(input.settings) : null,
         createdAt: now,
@@ -60,6 +63,9 @@ export function createSqliteProjectRepo(): ProjectRepository {
 
       if (data.name !== undefined) updateData.name = data.name;
       if (data.description !== undefined) updateData.description = data.description;
+      if (data.spec !== undefined) updateData.spec = data.spec;
+      if (data.techStack !== undefined) updateData.techStack = data.techStack;
+      if (data.rootPath !== undefined) updateData.rootPath = data.rootPath;
       if (data.status !== undefined) updateData.status = data.status;
       if (data.settings !== undefined) updateData.settings = JSON.stringify(data.settings);
 
@@ -83,6 +89,9 @@ function mapRow(row: typeof projects.$inferSelect): ProjectRow {
     workspaceId: row.workspaceId,
     name: row.name,
     description: row.description,
+    spec: row.spec ?? null,
+    techStack: row.techStack ?? null,
+    rootPath: row.rootPath ?? null,
     status: row.status as ProjectRow["status"],
     settings: row.settings ? JSON.parse(row.settings) : null,
     createdAt: row.createdAt,
