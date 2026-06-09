@@ -5,7 +5,7 @@ import { useApprovalStore } from '@/stores/approvalStore';
 import { jarvisClient } from '@/lib/jarvisClient';
 
 interface WorkspaceRightPanelProps {
-  detail: WorkspaceDetail;
+  detail: WorkspaceDetail | null | undefined;
 }
 
 const tabs = ['Agents', 'Runs', 'Projects', 'Artifacts'] as const;
@@ -41,6 +41,7 @@ export function WorkspaceRightPanel({ detail }: WorkspaceRightPanelProps) {
 
   useEffect(() => {
     const loadArtifacts = async () => {
+      if (!detail?.id) return;
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const resp = await jarvisClient.get<{ data: any[] }>(
@@ -51,10 +52,10 @@ export function WorkspaceRightPanel({ detail }: WorkspaceRightPanelProps) {
         setArtifacts([]);
       }
     };
-    if (detail.id && activeTab === 'Artifacts') {
+    if (detail?.id && activeTab === 'Artifacts') {
       loadArtifacts();
     }
-  }, [detail.id, activeTab]);
+  }, [detail?.id, activeTab]);
 
   const pendingApprovals = approvals.filter((a) => a.status === 'pending');
 
@@ -85,7 +86,9 @@ export function WorkspaceRightPanel({ detail }: WorkspaceRightPanelProps) {
       <div className="ws-right-body workspace-scroll">
         {activeTab === 'Agents' && (
           <div>
-            {detail.agents.length === 0 ? (
+            {!detail ? (
+              <EmptyTab message="Select a workspace to view agents" />
+            ) : detail.agents.length === 0 ? (
               <EmptyTab message="No agents assigned" />
             ) : (
               detail.agents.map((agent) => (
@@ -119,7 +122,7 @@ export function WorkspaceRightPanel({ detail }: WorkspaceRightPanelProps) {
                 </div>
               ))
             )}
-            {pendingApprovals.length > 0 && (
+            {detail && pendingApprovals.length > 0 && (
               <div className="mt-3">
                 <div className="task-tree-title" style={{ marginBottom: 8 }}>
                   Pending Approvals
@@ -157,7 +160,9 @@ export function WorkspaceRightPanel({ detail }: WorkspaceRightPanelProps) {
 
         {activeTab === 'Runs' && (
           <div>
-            {detail.recentRuns.length === 0 ? (
+            {!detail ? (
+              <EmptyTab message="Select a workspace to view runs" />
+            ) : detail.recentRuns.length === 0 ? (
               <EmptyTab message="No runs yet" />
             ) : (
               detail.recentRuns.map((run) => {
@@ -184,7 +189,9 @@ export function WorkspaceRightPanel({ detail }: WorkspaceRightPanelProps) {
 
         {activeTab === 'Projects' && (
           <div>
-            {detail.projects.length === 0 ? (
+            {!detail ? (
+              <EmptyTab message="Select a workspace to view projects" />
+            ) : detail.projects.length === 0 ? (
               <EmptyTab message="No projects yet" />
             ) : (
               detail.projects.map((project) => (
@@ -255,7 +262,9 @@ export function WorkspaceRightPanel({ detail }: WorkspaceRightPanelProps) {
 
         {activeTab === 'Artifacts' && (
           <div className="flex flex-col gap-1.5">
-            {artifacts.length === 0 ? (
+            {!detail ? (
+              <EmptyTab message="Select a workspace to view artifacts" />
+            ) : artifacts.length === 0 ? (
               <EmptyTab message="No artifacts yet" />
             ) : (
               artifacts.map((art) => (

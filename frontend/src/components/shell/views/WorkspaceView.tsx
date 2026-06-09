@@ -90,115 +90,118 @@ export function WorkspaceView() {
         onCreate={() => setShowGoalInput(true)}
       />
 
-      {isLoading && !detail ? (
-        <div
-          className="flex-1 flex items-center justify-center"
-          style={{ color: 'var(--text-tertiary)' }}
-        >
-          <span style={{ fontFamily: 'var(--font-data)', fontSize: 12 }}>Loading...</span>
-        </div>
-      ) : detail ? (
-        <>
+      {/* Middle column */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {isLoading && !detail ? (
+          <div
+            className="flex-1 flex items-center justify-center"
+            style={{ color: 'var(--text-tertiary)' }}
+          >
+            <span style={{ fontFamily: 'var(--font-data)', fontSize: 12 }}>Loading...</span>
+          </div>
+        ) : detail ? (
           <WorkspaceCenter
             detail={detail}
             onShowSpec={() => setShowSpecModal(true)}
             onShowProposal={() => setShowTeamModal(true)}
           />
-          <WorkspaceRightPanel detail={detail} />
-        </>
-      ) : (
-        <div
-          className="flex-1 flex flex-col items-center justify-center gap-3"
-          style={{ color: 'var(--text-tertiary)' }}
-        >
-          {showGoalInput ? (
-            <div className="flex flex-col items-center gap-3 px-4" style={{ maxWidth: 400 }}>
-              <span
-                style={{
-                  fontFamily: 'var(--font-hud)',
-                  fontSize: 14,
-                  fontWeight: 500,
-                  color: 'var(--text-primary)',
-                }}
-              >
-                What do you want to build?
-              </span>
-              <textarea
-                value={goal}
-                onChange={(e) => setGoal(e.target.value)}
-                placeholder="Describe your project goal..."
-                rows={3}
-                autoFocus
-                style={{
-                  width: '100%',
-                  fontFamily: 'var(--font-data)',
-                  fontSize: 12,
-                  color: 'var(--text-primary)',
-                  background: 'rgba(0,0,0,0.3)',
-                  border: '1px solid rgba(255,255,255,0.06)',
-                  borderRadius: 6,
-                  padding: '8px 10px',
-                  outline: 'none',
-                  resize: 'vertical',
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleCreateWorkspace();
-                  }
-                }}
-              />
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setShowGoalInput(false)}
+        ) : (
+          <div
+            className="flex-1 flex flex-col items-center justify-center gap-3"
+            style={{ color: 'var(--text-tertiary)' }}
+          >
+            {showGoalInput ? (
+              <div className="flex flex-col items-center gap-3 px-4" style={{ maxWidth: 400 }}>
+                <span
                   style={{
+                    fontFamily: 'var(--font-hud)',
+                    fontSize: 14,
+                    fontWeight: 500,
+                    color: 'var(--text-primary)',
+                  }}
+                >
+                  What do you want to build?
+                </span>
+                <textarea
+                  value={goal}
+                  onChange={(e) => setGoal(e.target.value)}
+                  placeholder="Describe your project goal..."
+                  rows={3}
+                  autoFocus
+                  style={{
+                    width: '100%',
                     fontFamily: 'var(--font-data)',
-                    fontSize: 11,
-                    color: 'var(--text-tertiary)',
-                    background: 'rgba(255,255,255,0.03)',
+                    fontSize: 12,
+                    color: 'var(--text-primary)',
+                    background: 'rgba(0,0,0,0.3)',
                     border: '1px solid rgba(255,255,255,0.06)',
                     borderRadius: 6,
-                    padding: '6px 14px',
-                    cursor: 'pointer',
+                    padding: '8px 10px',
+                    outline: 'none',
+                    resize: 'vertical',
                   }}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleCreateWorkspace}
-                  disabled={!goal.trim() || isProposing}
-                  style={{
-                    fontFamily: 'var(--font-data)',
-                    fontSize: 11,
-                    color: goal.trim() && !isProposing ? 'var(--cyan)' : 'var(--text-tertiary)',
-                    background:
-                      goal.trim() && !isProposing
-                        ? 'rgba(0,212,255,0.08)'
-                        : 'rgba(255,255,255,0.03)',
-                    border: `1px solid ${goal.trim() && !isProposing ? 'rgba(0,212,255,0.15)' : 'rgba(255,255,255,0.06)'}`,
-                    borderRadius: 6,
-                    padding: '6px 14px',
-                    cursor: goal.trim() && !isProposing ? 'pointer' : 'not-allowed',
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleCreateWorkspace();
+                    }
                   }}
-                >
-                  {isProposing ? 'Proposing...' : 'Next'}
-                </button>
+                />
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setShowGoalInput(false)}
+                    style={{
+                      fontFamily: 'var(--font-data)',
+                      fontSize: 11,
+                      color: 'var(--text-tertiary)',
+                      background: 'rgba(255,255,255,0.03)',
+                      border: '1px solid rgba(255,255,255,0.06)',
+                      borderRadius: 6,
+                      padding: '6px 14px',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleCreateWorkspace}
+                    disabled={!goal.trim() || isProposing}
+                    style={{
+                      fontFamily: 'var(--font-data)',
+                      fontSize: 11,
+                      color: goal.trim() && !isProposing ? 'var(--cyan)' : 'var(--text-tertiary)',
+                      background:
+                        goal.trim() && !isProposing
+                          ? 'rgba(0,212,255,0.08)'
+                          : 'rgba(255,255,255,0.03)',
+                      border: `1px solid ${goal.trim() && !isProposing ? 'rgba(0,212,255,0.15)' : 'rgba(255,255,255,0.06)'}`,
+                      borderRadius: 6,
+                      padding: '6px 14px',
+                      cursor: goal.trim() && !isProposing ? 'pointer' : 'not-allowed',
+                    }}
+                  >
+                    {isProposing ? 'Proposing...' : 'Next'}
+                  </button>
+                </div>
               </div>
-            </div>
-          ) : (
-            <>
-              <span style={{ fontFamily: 'var(--font-hud)', fontSize: 14, fontWeight: 500 }}>
-                {workspaces.length === 0 ? 'No workspaces yet' : 'Select a workspace'}
-              </span>
-              <span style={{ fontFamily: 'var(--font-data)', fontSize: 11 }}>
-                {workspaces.length === 0
-                  ? 'Create a workspace to get started'
-                  : 'Choose a workspace from the sidebar'}
-              </span>
-            </>
-          )}
-        </div>
-      )}
+            ) : (
+              <>
+                <span style={{ fontFamily: 'var(--font-hud)', fontSize: 14, fontWeight: 500 }}>
+                  {workspaces.length === 0 ? 'No workspaces yet' : 'Select a workspace'}
+                </span>
+                <span style={{ fontFamily: 'var(--font-data)', fontSize: 11 }}>
+                  {workspaces.length === 0
+                    ? 'Create a workspace to get started'
+                    : 'Choose a workspace from the sidebar'}
+                </span>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Right column */}
+      <WorkspaceRightPanel detail={detail} />
 
       {showSpecModal && (
         <ProjectSpecModal

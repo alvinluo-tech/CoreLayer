@@ -15,8 +15,11 @@ interface WorkspaceDetailViewModel {
     progress: number;
     totalTasks: number;
     completedTasks: number;
-    activeRuns: number;
+    activeTasks: number;
     blockedTasks: number;
+    failedTasks: number;
+    queuedTasks: number;
+    activeRuns: number;
   };
   agents: Array<{
     id: string;
@@ -88,8 +91,25 @@ export async function getWorkspaceDetail(
 
   const totalTasks = tasks.length;
   const completedTasks = tasks.filter((t) => t.status === "completed" || t.status === "done").length;
+  const activeTasks = tasks.filter((t) => t.status === "running" || t.status === "in_progress").length;
   const blockedTasks = tasks.filter((t) => t.status === "blocked").length;
+  const failedTasks = tasks.filter((t) => t.status === "failed").length;
+  const queuedTasks = tasks.filter((t) => t.status === "queued" || t.status === "pending" || t.status === "draft").length;
   const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
+  // Derive workspace status from task states
+  let derivedStatus = workspace.status;
+  if (totalTasks > 0) {
+    if (failedTasks > 0) {
+      derivedStatus = "failed";
+    } else if (activeTasks > 0) {
+      derivedStatus = "running";
+    } else if (blockedTasks > 0) {
+      derivedStatus = "blocked";
+    } else if (completedTasks === totalTasks) {
+      derivedStatus = "succeeded";
+    }
+  }
 
   const projectsList = db
     .select()
@@ -174,7 +194,7 @@ export async function getWorkspaceDetail(
     name: workspace.name,
     description: workspace.description,
     goal: workspace.goal,
-    status: workspace.status,
+    status: derivedStatus,
     activeProjectId: workspace.activeProjectId,
     completedAt: workspace.completedAt,
     createdAt: workspace.createdAt,
@@ -183,8 +203,11 @@ export async function getWorkspaceDetail(
       progress,
       totalTasks,
       completedTasks,
-      activeRuns,
+      activeTasks,
       blockedTasks,
+      failedTasks,
+      queuedTasks,
+      activeRuns,
     },
     projects,
     agents: workspaceAgents.map((a) => ({

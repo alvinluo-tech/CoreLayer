@@ -237,8 +237,11 @@ export const workspaceDetailSchema = z.object({
     progress: z.number(),
     totalTasks: z.number(),
     completedTasks: z.number(),
-    activeRuns: z.number(),
+    activeTasks: z.number(),
     blockedTasks: z.number(),
+    failedTasks: z.number(),
+    queuedTasks: z.number(),
+    activeRuns: z.number(),
   }),
   projects: z.array(
     z.object({
