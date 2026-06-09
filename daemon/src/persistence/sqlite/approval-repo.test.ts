@@ -12,6 +12,10 @@ function createTestDb() {
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       owner_id TEXT NOT NULL DEFAULT 'default',
+      goal TEXT,
+      status TEXT NOT NULL DEFAULT 'draft',
+      active_project_id TEXT,
+      completed_at TEXT,
       settings TEXT,
       created_at TEXT DEFAULT 'CURRENT_TIMESTAMP',
       updated_at TEXT DEFAULT 'CURRENT_TIMESTAMP'
@@ -21,7 +25,11 @@ function createTestDb() {
       workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
       name TEXT NOT NULL,
       description TEXT,
+      spec TEXT,
+      tech_stack TEXT,
+      root_path TEXT,
       status TEXT NOT NULL DEFAULT 'active',
+      settings TEXT,
       created_at TEXT DEFAULT 'CURRENT_TIMESTAMP',
       updated_at TEXT DEFAULT 'CURRENT_TIMESTAMP'
     );
