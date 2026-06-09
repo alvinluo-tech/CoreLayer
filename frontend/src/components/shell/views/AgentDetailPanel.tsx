@@ -21,6 +21,15 @@ interface AgentDetailPanelProps {
   onUpdate: (data: Record<string, unknown>) => Promise<void>;
 }
 
+const roleColors: Record<string, string> = {
+  planner: 'var(--violet)',
+  coding: 'var(--cyan)',
+  review: 'var(--emerald)',
+  testing: 'var(--amber)',
+  research: '#f472b6',
+  general: 'var(--text-tertiary)',
+};
+
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString([], {
     month: 'short',
@@ -227,14 +236,14 @@ export function AgentDetailPanel({ agent, onEdit, onTest, onUpdate }: AgentDetai
                 style={{
                   fontFamily: 'var(--font-data)',
                   fontSize: 9,
-                  color: 'var(--text-tertiary)',
-                  background: 'rgba(255,255,255,0.05)',
+                  color: roleColors[agent.role || 'general'] ?? 'var(--text-tertiary)',
+                  background: `${roleColors[agent.role || 'general'] ?? 'var(--text-tertiary)'}15`,
                   padding: '1px 6px',
                   borderRadius: 4,
                   textTransform: 'uppercase',
                 }}
               >
-                general
+                {agent.role || 'general'}
               </span>
               {agent.isDefault && (
                 <span

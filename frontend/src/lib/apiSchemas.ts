@@ -164,6 +164,11 @@ export const agentProfileSchema = z.object({
   id: z.string(),
   name: z.string(),
   description: z.string().nullable(),
+  role: z
+    .enum(['general', 'planner', 'coding', 'review', 'testing', 'research'])
+    .default('general'),
+  capabilities: z.array(z.string()).default([]),
+  enabled: z.boolean().default(true),
   modelPolicy: agentModelPolicySchema,
   executorPolicy: agentExecutorPolicySchema.nullable(),
   skills: z.array(z.string()),
@@ -200,3 +205,85 @@ export type Memory = z.infer<typeof memorySchema>;
 export type AgentModelPolicy = z.infer<typeof agentModelPolicySchema>;
 export type AgentExecutorPolicy = z.infer<typeof agentExecutorPolicySchema>;
 export type AgentProfile = z.infer<typeof agentProfileSchema>;
+
+// ---- Workspace Agent ----
+
+export const workspaceAgentSchema = z.object({
+  id: z.string(),
+  workspaceId: z.string(),
+  agentProfileId: z.string(),
+  roleInWorkspace: z.enum(['owner', 'planner', 'builder', 'reviewer', 'tester', 'observer']),
+  status: z.enum(['idle', 'running', 'completed', 'failed', 'blocked']),
+  currentTaskId: z.string().nullable(),
+  joinedAt: z.string(),
+  leftAt: z.string().nullable(),
+});
+
+export type WorkspaceAgent = z.infer<typeof workspaceAgentSchema>;
+
+// ---- Workspace Detail ----
+
+export const workspaceDetailSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string().nullable(),
+  goal: z.string().nullable(),
+  status: z.enum(['draft', 'planning', 'running', 'blocked', 'succeeded', 'failed', 'cancelled']),
+  activeProjectId: z.string().nullable(),
+  completedAt: z.string().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  summary: z.object({
+    progress: z.number(),
+    totalTasks: z.number(),
+    completedTasks: z.number(),
+    activeRuns: z.number(),
+    blockedTasks: z.number(),
+  }),
+  agents: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      role: z.string(),
+      status: z.string(),
+      joinedAt: z.string(),
+    })
+  ),
+  recentRuns: z.array(
+    z.object({
+      id: z.string(),
+      agentName: z.string(),
+      status: z.string(),
+      startedAt: z.string(),
+      completedAt: z.string().nullable(),
+    })
+  ),
+  pendingApprovals: z.array(
+    z.object({
+      id: z.string(),
+      toolName: z.string(),
+      risk: z.string(),
+      createdAt: z.string(),
+    })
+  ),
+});
+
+export type WorkspaceDetail = z.infer<typeof workspaceDetailSchema>;
+
+// ---- Artifact ----
+
+export const artifactSchema = z.object({
+  id: z.string(),
+  workspaceId: z.string(),
+  projectId: z.string().nullable(),
+  taskId: z.string().nullable(),
+  runId: z.string().nullable(),
+  type: z.enum(['spec', 'plan', 'file', 'report', 'scaffold']),
+  title: z.string(),
+  path: z.string().nullable(),
+  content: z.string().nullable(),
+  metadata: z.string().nullable(),
+  createdAt: z.string(),
+});
+
+export type Artifact = z.infer<typeof artifactSchema>;

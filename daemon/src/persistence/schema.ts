@@ -7,6 +7,14 @@ export const workspaces = sqliteTable("workspaces", {
   name: text("name").notNull().default("Default Workspace"),
   description: text("description"),
   ownerId: text("owner_id").notNull(),
+  goal: text("goal"), // User's original goal description
+  status: text("status", {
+    enum: ["draft", "planning", "running", "blocked", "succeeded", "failed", "cancelled"],
+  })
+    .default("draft")
+    .notNull(),
+  activeProjectId: text("active_project_id"),
+  completedAt: text("completed_at"),
   settings: text("settings"), // JSON stored as text
   createdAt: text("created_at").default("CURRENT_TIMESTAMP").notNull(),
   updatedAt: text("updated_at").default("CURRENT_TIMESTAMP").notNull(),
@@ -29,12 +37,60 @@ export const projects = sqliteTable("projects", {
   updatedAt: text("updated_at").default("CURRENT_TIMESTAMP").notNull(),
 });
 
+// ---- Workspace Agents (agent-to-workspace relationship) ----
+
+export const workspaceAgents = sqliteTable("workspace_agents", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  agentProfileId: text("agent_profile_id")
+    .notNull()
+    .references(() => agentProfiles.id, { onDelete: "cascade" }),
+  roleInWorkspace: text("role_in_workspace", {
+    enum: ["owner", "planner", "builder", "reviewer", "tester", "observer"],
+  })
+    .default("builder")
+    .notNull(),
+  status: text("status", {
+    enum: ["idle", "running", "completed", "failed", "blocked"],
+  })
+    .default("idle")
+    .notNull(),
+  currentTaskId: text("current_task_id"),
+  joinedAt: text("joined_at").default("CURRENT_TIMESTAMP").notNull(),
+  leftAt: text("left_at"),
+});
+
+// ---- Artifacts ----
+
+export const artifacts = sqliteTable("artifacts", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  projectId: text("project_id").references(() => projects.id),
+  taskId: text("task_id"),
+  runId: text("run_id"),
+  type: text("type", { enum: ["spec", "plan", "file", "report", "scaffold"] }).notNull(),
+  title: text("title").notNull(),
+  path: text("path"),
+  content: text("content"),
+  metadata: text("metadata"), // JSON stored as text
+  createdAt: text("created_at").default("CURRENT_TIMESTAMP").notNull(),
+});
+
 // ---- Agent Profiles ----
 
 export const agentProfiles = sqliteTable("agent_profiles", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   description: text("description"),
+  role: text("role", { enum: ["general", "planner", "coding", "review", "testing", "research"] })
+    .default("general")
+    .notNull(),
+  capabilities: text("capabilities").notNull().default("[]"), // JSON array: ["file_write", "shell_exec", "code_review"]
+  enabled: integer("enabled", { mode: "boolean" }).default(true).notNull(),
   modelPolicy: text("model_policy").notNull().default("{}"), // JSON: preferred_models, fallback
   executorPolicy: text("executor_policy"), // JSON: executor config
   skills: text("skills").notNull().default("[]"), // JSON array

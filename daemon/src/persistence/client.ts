@@ -699,5 +699,54 @@ sqlite.exec(`
   CREATE INDEX IF NOT EXISTS idx_audit_log_created ON audit_log(created_at);
 `);
 
+// Migration: UI Redesign - Backend Domain Model Alignment (Phase 2)
+// Add role, capabilities, enabled to agent_profiles
+try { sqlite.exec(`ALTER TABLE agent_profiles ADD COLUMN role TEXT NOT NULL DEFAULT 'general'`); } catch {} // eslint-disable-line no-empty
+try { sqlite.exec(`ALTER TABLE agent_profiles ADD COLUMN capabilities TEXT NOT NULL DEFAULT '[]'`); } catch {} // eslint-disable-line no-empty
+try { sqlite.exec(`ALTER TABLE agent_profiles ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1`); } catch {} // eslint-disable-line no-empty
+
+// Add goal, status, active_project_id, completed_at to workspaces
+try { sqlite.exec(`ALTER TABLE workspaces ADD COLUMN goal TEXT`); } catch {} // eslint-disable-line no-empty
+try { sqlite.exec(`ALTER TABLE workspaces ADD COLUMN status TEXT NOT NULL DEFAULT 'draft'`); } catch {} // eslint-disable-line no-empty
+try { sqlite.exec(`ALTER TABLE workspaces ADD COLUMN active_project_id TEXT`); } catch {} // eslint-disable-line no-empty
+try { sqlite.exec(`ALTER TABLE workspaces ADD COLUMN completed_at TEXT`); } catch {} // eslint-disable-line no-empty
+
+// Create workspace_agents table
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS workspace_agents (
+    id TEXT PRIMARY KEY,
+    workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    agent_profile_id TEXT NOT NULL REFERENCES agent_profiles(id) ON DELETE CASCADE,
+    role_in_workspace TEXT NOT NULL DEFAULT 'builder' CHECK(role_in_workspace IN ('owner', 'planner', 'builder', 'reviewer', 'tester', 'observer')),
+    status TEXT NOT NULL DEFAULT 'idle' CHECK(status IN ('idle', 'running', 'completed', 'failed', 'blocked')),
+    current_task_id TEXT,
+    joined_at TEXT NOT NULL DEFAULT 'CURRENT_TIMESTAMP',
+    left_at TEXT
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_workspace_agents_workspace ON workspace_agents(workspace_id);
+  CREATE INDEX IF NOT EXISTS idx_workspace_agents_agent ON workspace_agents(agent_profile_id);
+`);
+
+// Create artifacts table
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS artifacts (
+    id TEXT PRIMARY KEY,
+    workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    project_id TEXT REFERENCES projects(id),
+    task_id TEXT,
+    run_id TEXT,
+    type TEXT NOT NULL CHECK(type IN ('spec', 'plan', 'file', 'report', 'scaffold')),
+    title TEXT NOT NULL,
+    path TEXT,
+    content TEXT,
+    metadata TEXT,
+    created_at TEXT NOT NULL DEFAULT 'CURRENT_TIMESTAMP'
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_artifacts_workspace ON artifacts(workspace_id);
+  CREATE INDEX IF NOT EXISTS idx_artifacts_project ON artifacts(project_id);
+`);
+
 export { db };
 export { schema };

@@ -1,6 +1,9 @@
 import { Hono } from "hono";
 import { getRepositories } from "../../persistence/factory.js";
 import { apiError, extractErrorMessage, logError } from "../../shared/errors.js";
+import { getWorkspaceDetail } from "../../services/workspace-detail.js";
+import { db, schema } from "../../persistence/client.js";
+import { eq, and } from "drizzle-orm";
 
 const workspaceRoutes = new Hono();
 
@@ -98,6 +101,86 @@ workspaceRoutes.get("/default", async (c) => {
     return c.json({ data: ws });
   } catch (err) {
     logError("workspaces/default", err);
+    return apiError(c, extractErrorMessage(err), 500);
+  }
+});
+
+/**
+ * GET /api/workspaces/:id/detail - Get full aggregated workspace detail
+ */
+workspaceRoutes.get("/:id/detail", async (c) => {
+  try {
+    const detail = await getWorkspaceDetail(c.req.param("id"));
+    if (!detail) return apiError(c, "Workspace not found", 404);
+    return c.json({ data: detail });
+  } catch (err) {
+    logError("workspaces/detail", err);
+    return apiError(c, extractErrorMessage(err), 500);
+  }
+});
+
+/**
+ * POST /api/workspaces/:id/agents - Add agent to workspace
+ */
+workspaceRoutes.post("/:id/agents", async (c) => {
+  try {
+    const workspaceId = c.req.param("id");
+    const body = await c.req.json<{ agentProfileId: string; roleInWorkspace?: string }>();
+
+    const id = crypto.randomUUID();
+    await db.insert(schema.workspaceAgents).values({
+      id,
+      workspaceId,
+      agentProfileId: body.agentProfileId,
+      roleInWorkspace: (body.roleInWorkspace as "builder") || "builder",
+    });
+
+    return c.json({ data: { id, workspaceId, ...body } }, 201);
+  } catch (err) {
+    logError("workspaces/add-agent", err);
+    return apiError(c, extractErrorMessage(err), 500);
+  }
+});
+
+/**
+ * DELETE /api/workspaces/:id/agents/:agentId - Remove agent from workspace
+ */
+workspaceRoutes.delete("/:id/agents/:agentId", async (c) => {
+  try {
+    const workspaceId = c.req.param("id");
+    const agentId = c.req.param("agentId");
+
+    await db
+      .delete(schema.workspaceAgents)
+      .where(
+        and(
+          eq(schema.workspaceAgents.workspaceId, workspaceId),
+          eq(schema.workspaceAgents.agentProfileId, agentId)
+        )
+      );
+
+    return c.json({ success: true });
+  } catch (err) {
+    logError("workspaces/remove-agent", err);
+    return apiError(c, extractErrorMessage(err), 500);
+  }
+});
+
+/**
+ * GET /api/workspaces/:id/artifacts - Get artifacts for workspace
+ */
+workspaceRoutes.get("/:id/artifacts", async (c) => {
+  try {
+    const workspaceId = c.req.param("id");
+    const artifactsList = db
+      .select()
+      .from(schema.artifacts)
+      .where(eq(schema.artifacts.workspaceId, workspaceId))
+      .all();
+
+    return c.json({ data: artifactsList });
+  } catch (err) {
+    logError("workspaces/artifacts", err);
     return apiError(c, extractErrorMessage(err), 500);
   }
 });

@@ -23,6 +23,8 @@ export function AgentCard({ agent, isSelected, onSelect }: AgentCardProps) {
     return ep.executor ?? null;
   })();
 
+  const role = agent.role || 'general';
+
   return (
     <button
       className={`agent-card w-full text-left px-3 py-2.5 ${isSelected ? 'selected' : ''}`}
@@ -34,20 +36,14 @@ export function AgentCard({ agent, isSelected, onSelect }: AgentCardProps) {
             width: 26,
             height: 26,
             borderRadius: 6,
-            background: 'rgba(255,255,255,0.04)',
+            background: `${roleColors[role] ?? 'var(--text-tertiary)'}15`,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             flexShrink: 0,
           }}
         >
-          <Bot
-            size={14}
-            style={{
-              color:
-                roleColors[agent.description ? 'general' : 'general'] ?? 'var(--text-tertiary)',
-            }}
-          />
+          <Bot size={14} style={{ color: roleColors[role] ?? 'var(--text-tertiary)' }} />
         </div>
         <span
           className="flex-1 truncate"
@@ -59,6 +55,19 @@ export function AgentCard({ agent, isSelected, onSelect }: AgentCardProps) {
           }}
         >
           {agent.name}
+        </span>
+        <span
+          style={{
+            fontFamily: 'var(--font-data)',
+            fontSize: 9,
+            color: roleColors[role] ?? 'var(--text-tertiary)',
+            background: `${roleColors[role] ?? 'var(--text-tertiary)'}15`,
+            padding: '1px 5px',
+            borderRadius: 4,
+            textTransform: 'uppercase',
+          }}
+        >
+          {role}
         </span>
         {agent.isDefault && (
           <span
@@ -73,7 +82,6 @@ export function AgentCard({ agent, isSelected, onSelect }: AgentCardProps) {
             }}
           >
             <Star size={8} />
-            Default
           </span>
         )}
       </div>
@@ -95,7 +103,7 @@ export function AgentCard({ agent, isSelected, onSelect }: AgentCardProps) {
           style={{
             fontFamily: 'var(--font-data)',
             fontSize: 10,
-            color: 'var(--text-tertiary)',
+            color: agent.enabled !== false ? 'var(--emerald)' : 'var(--text-tertiary)',
           }}
         >
           <span
@@ -103,10 +111,10 @@ export function AgentCard({ agent, isSelected, onSelect }: AgentCardProps) {
               width: 5,
               height: 5,
               borderRadius: '50%',
-              background: 'var(--emerald)',
+              background: agent.enabled !== false ? 'var(--emerald)' : 'var(--text-tertiary)',
             }}
           />
-          Active
+          {agent.enabled !== false ? 'Active' : 'Disabled'}
         </span>
         {executorName && (
           <span

@@ -629,6 +629,9 @@ export interface AgentProfileRow {
   id: string;
   name: string;
   description: string | null;
+  role: "general" | "planner" | "coding" | "review" | "testing" | "research";
+  capabilities: string[];
+  enabled: boolean;
   modelPolicy: import("../shared/agent-profile-types.js").AgentModelPolicy;
   executorPolicy: import("../shared/agent-profile-types.js").AgentExecutorPolicy | null;
   skills: string[];
@@ -644,6 +647,9 @@ export interface AgentProfileRow {
 export interface CreateAgentProfileInput {
   name: string;
   description?: string;
+  role?: "general" | "planner" | "coding" | "review" | "testing" | "research";
+  capabilities?: string[];
+  enabled?: boolean;
   modelPolicy?: import("../shared/agent-profile-types.js").AgentModelPolicy;
   executorPolicy?: import("../shared/agent-profile-types.js").AgentExecutorPolicy | null;
   skills?: string[];
@@ -657,6 +663,9 @@ export interface CreateAgentProfileInput {
 export interface UpdateAgentProfileData {
   name?: string;
   description?: string;
+  role?: "general" | "planner" | "coding" | "review" | "testing" | "research";
+  capabilities?: string[];
+  enabled?: boolean;
   modelPolicy?: import("../shared/agent-profile-types.js").AgentModelPolicy;
   executorPolicy?: import("../shared/agent-profile-types.js").AgentExecutorPolicy | null;
   skills?: string[];

@@ -4,6 +4,7 @@ import { TagInput } from '@/components/ui/agent-os';
 import type { AgentProfile } from '@/stores/agentStore';
 
 type ExecutorType = 'self' | 'claude-code' | 'codex' | 'opencode';
+type RoleType = 'general' | 'planner' | 'coding' | 'review' | 'testing' | 'research';
 
 interface AgentEditPanelProps {
   agent: AgentProfile | null;
@@ -14,6 +15,8 @@ interface AgentEditPanelProps {
 interface FormData {
   name: string;
   description: string;
+  role: RoleType;
+  enabled: boolean;
   skills: string[];
   tools: string[];
   permissions: string[];
@@ -30,6 +33,8 @@ function toFormData(agent: AgentProfile | null): FormData {
     return {
       name: '',
       description: '',
+      role: 'general',
+      enabled: true,
       skills: [],
       tools: [],
       permissions: [],
@@ -48,6 +53,8 @@ function toFormData(agent: AgentProfile | null): FormData {
   return {
     name: agent.name,
     description: agent.description ?? '',
+    role: (agent.role as RoleType) ?? 'general',
+    enabled: agent.enabled !== false,
     skills: [...agent.skills],
     tools: [...agent.tools],
     permissions: [...agent.permissions],
@@ -79,6 +86,8 @@ export function AgentEditPanel({ agent, onSave, onClose }: AgentEditPanelProps) 
       const data: Record<string, unknown> = {
         name: form.name.trim(),
         description: form.description.trim() || null,
+        role: form.role,
+        enabled: form.enabled,
         skills: form.skills,
         tools: form.tools,
         permissions: form.permissions,
@@ -177,6 +186,47 @@ export function AgentEditPanel({ agent, onSave, onClose }: AgentEditPanelProps) 
               rows={2}
               style={{ ...inputStyle, resize: 'vertical' }}
             />
+          </div>
+
+          {/* Role */}
+          <div>
+            <label style={labelStyle}>Role</label>
+            <div className="grid grid-cols-3 gap-2">
+              {(['general', 'planner', 'coding', 'review', 'testing', 'research'] as const).map(
+                (r) => (
+                  <button
+                    key={r}
+                    onClick={() => update('role', r)}
+                    style={{
+                      fontFamily: 'var(--font-data)',
+                      fontSize: 11,
+                      color: form.role === r ? 'var(--text-primary)' : 'var(--text-tertiary)',
+                      background:
+                        form.role === r ? 'rgba(0,212,255,0.08)' : 'rgba(255,255,255,0.02)',
+                      border: `1px solid ${form.role === r ? 'rgba(0,212,255,0.2)' : 'rgba(255,255,255,0.06)'}`,
+                      borderRadius: 6,
+                      padding: '6px 8px',
+                      cursor: 'pointer',
+                      textAlign: 'center',
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    {r}
+                  </button>
+                )
+              )}
+            </div>
+          </div>
+
+          {/* Enabled */}
+          <div className="flex items-center justify-between">
+            <label style={labelStyle}>Enabled</label>
+            <button
+              onClick={() => update('enabled', !form.enabled)}
+              className={`toggle-switch ${form.enabled ? 'on' : ''}`}
+            >
+              <div className="knob" />
+            </button>
           </div>
 
           {/* Skills */}

@@ -19,6 +19,7 @@ import agentProfileRoutes from "../http/routes/agent-profiles.js";
 import eventRoutes from "../http/routes/events.js";
 import auditRoutes from "../http/routes/audit.js";
 import runtimeRoutes from "../http/routes/runtime.js";
+import agentBrokerRoutes from "../http/routes/agent-broker.js";
 
 export function registerRoutes(app: Hono): void {
   app.route("/api/chat", chatRoutes);
@@ -41,4 +42,5 @@ export function registerRoutes(app: Hono): void {
   app.route("/api/events", eventRoutes);
   app.route("/api/audit", auditRoutes);
   app.route("/api/runtime", runtimeRoutes);
+  app.route("/api/agent-broker", agentBrokerRoutes);
 }

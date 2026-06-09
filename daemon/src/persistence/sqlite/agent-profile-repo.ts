@@ -19,6 +19,9 @@ export function createSqliteAgentProfileRepo(): AgentProfileRepository {
         id,
         name: input.name,
         description: input.description ?? null,
+        role: input.role ?? "general",
+        capabilities: JSON.stringify(input.capabilities ?? []),
+        enabled: input.enabled ?? true,
         modelPolicy: JSON.stringify(input.modelPolicy ?? {}),
         executorPolicy: input.executorPolicy != null ? JSON.stringify(input.executorPolicy) : null,
         skills: JSON.stringify(input.skills ?? []),
@@ -72,6 +75,9 @@ export function createSqliteAgentProfileRepo(): AgentProfileRepository {
       if (data.permissions !== undefined) updateData.permissions = JSON.stringify(data.permissions);
       if (data.memoryScopes !== undefined)
         updateData.memoryScopes = JSON.stringify(data.memoryScopes);
+      if (data.role !== undefined) updateData.role = data.role;
+      if (data.capabilities !== undefined) updateData.capabilities = JSON.stringify(data.capabilities);
+      if (data.enabled !== undefined) updateData.enabled = data.enabled;
       if (data.isDefault !== undefined) updateData.isDefault = data.isDefault;
 
       await db.update(agentProfiles).set(updateData).where(eq(agentProfiles.id, id));
@@ -93,6 +99,9 @@ function mapRow(row: typeof agentProfiles.$inferSelect): AgentProfileRow {
     id: row.id,
     name: row.name,
     description: row.description,
+    role: row.role as AgentProfileRow["role"],
+    capabilities: JSON.parse(row.capabilities),
+    enabled: row.enabled,
     modelPolicy: JSON.parse(row.modelPolicy),
     executorPolicy: row.executorPolicy ? JSON.parse(row.executorPolicy) : null,
     skills: JSON.parse(row.skills),
