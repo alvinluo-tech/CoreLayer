@@ -34,6 +34,7 @@ export function WorkspaceSidebar({ selectedId, onSelect, onCreate }: WorkspaceSi
       className="flex flex-col"
       style={{
         width: 260,
+        flexShrink: 0,
         borderRight: '1px solid var(--glass-border)',
         background: 'rgba(4,6,14,0.6)',
         backdropFilter: 'blur(12px)',

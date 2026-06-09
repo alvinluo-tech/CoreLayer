@@ -78,10 +78,10 @@ export function WorkspaceView() {
 
   return (
     <div
-      className="flex h-full"
+      className="flex-1 flex h-full"
       style={{
         background: 'var(--bg-void)',
-        gridTemplateColumns: '260px 1fr 320px',
+        gridTemplateColumns: '260px 1fr 280px',
       }}
     >
       <WorkspaceSidebar

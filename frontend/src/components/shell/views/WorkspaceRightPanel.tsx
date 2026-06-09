@@ -60,9 +60,10 @@ export function WorkspaceRightPanel({ detail }: WorkspaceRightPanelProps) {
 
   return (
     <div
-      className="flex flex-col"
+      className="ws-right flex flex-col"
       style={{
-        width: 320,
+        width: 280,
+        flexShrink: 0,
         borderLeft: '1px solid var(--glass-border)',
         background: 'rgba(4,6,14,0.3)',
       }}

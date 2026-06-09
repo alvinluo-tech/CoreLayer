@@ -132,19 +132,14 @@ export function WorkspaceTimeline({ events }: WorkspaceTimelineProps) {
                 payload = event.payload;
               }
             }
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const file =
-              (payload as any)?.file ||
-              (payload as any)?.path ||
-              (payload as any)?.args?.path ||
-              (payload as any)?.args?.filepath ||
-              (payload as any)?.filepath;
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              payload?.file ||
+              payload?.path ||
+              payload?.args?.path ||
+              payload?.args?.filepath ||
+              payload?.filepath;
             const diff =
-              (payload as any)?.diff ||
-              (payload as any)?.patch ||
-              (payload as any)?.result?.diff ||
-              (payload as any)?.args?.content;
+              payload?.diff || payload?.patch || payload?.result?.diff || payload?.args?.content;
 
             return (
               <div
