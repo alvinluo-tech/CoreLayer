@@ -15,6 +15,7 @@ interface ConversationState {
   getOrCreateDefaultConversation: () => Promise<Conversation>;
   selectConversation: (id: string) => Promise<void>;
   deleteConversation: (id: string) => Promise<void>;
+  deleteConversations: (ids: string[]) => Promise<void>;
   renameConversation: (id: string, title: string) => Promise<void>;
   sendMessage: (content: string) => Promise<SendMessageResponse | null>;
   clearActive: () => void;
@@ -115,6 +116,26 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
           conversations: newConversations,
           activeConversationId: newActiveId,
           messages: newActiveId === null ? [] : state.messages,
+        };
+      });
+    } catch (error) {
+      set({ error: String(error) });
+    }
+  },
+
+  deleteConversations: async (ids: string[]) => {
+    const idSet = new Set(ids);
+    try {
+      for (const id of ids) {
+        await tauri.deleteConversation(id);
+      }
+      set((state) => {
+        const newConversations = state.conversations.filter((c) => !idSet.has(c.id));
+        const activeStillExists = newConversations.some((c) => c.id === state.activeConversationId);
+        return {
+          conversations: newConversations,
+          activeConversationId: activeStillExists ? state.activeConversationId : null,
+          messages: activeStillExists ? state.messages : [],
         };
       });
     } catch (error) {

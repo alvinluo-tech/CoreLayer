@@ -36,6 +36,20 @@ export interface SpawnResult {
 
 const activeProcesses = new Map<number, ChildProcess>();
 
+function quoteWindowsShellArg(arg: string): string {
+  if (arg.length === 0) return "\"\"";
+  if (!/[\s"&|<>^]/.test(arg)) return arg;
+
+  // Node's Windows shell mode does not reliably preserve argv boundaries for
+  // arguments containing spaces. Wrap those args so prompts stay single values.
+  return `"${arg.replace(/"/g, "\\\"")}"`;
+}
+
+function normalizeSpawnArgs(args: string[]): string[] {
+  if (process.platform !== "win32") return args;
+  return args.map(quoteWindowsShellArg);
+}
+
 export interface WorkdirPolicyResult {
   allowed: boolean;
   reason?: string;
@@ -127,7 +141,7 @@ export function spawnProcess(options: SpawnOptions): Promise<SpawnResult> {
     const stdoutLines: string[] = [];
     const stderrLines: string[] = [];
 
-    const child = spawn(options.command, options.args, {
+    const child = spawn(options.command, normalizeSpawnArgs(options.args), {
       cwd: options.cwd,
       env: { ...process.env, ...options.env },
       stdio: ["pipe", "pipe", "pipe"],
@@ -189,7 +203,7 @@ export function spawnProcessLive(
     logDir?: string;
   },
 ): SpawnedProcess {
-  const child = spawn(options.command, options.args, {
+  const child = spawn(options.command, normalizeSpawnArgs(options.args), {
     cwd: options.cwd,
     env: { ...process.env, ...options.env },
     stdio: ["pipe", "pipe", "pipe"],

@@ -1,6 +1,10 @@
 import { create } from 'zustand';
 import { invoke } from '@tauri-apps/api/core';
-import { deleteWorkspace as tauriDeleteWorkspace } from '@/lib/tauri';
+import {
+  deleteWorkspace as tauriDeleteWorkspace,
+  deleteProject as tauriDeleteProject,
+} from '@/lib/tauri';
+import { useWorkspaceDetailStore } from '@/stores/workspaceDetailStore';
 
 // ---- Types ----
 
@@ -39,8 +43,11 @@ interface WorkspaceState {
   loadWorkspaces: () => Promise<void>;
   selectWorkspace: (id: string) => void;
   deleteWorkspace: (id: string) => Promise<void>;
+  deleteWorkspaces: (ids: string[]) => Promise<void>;
   loadProjects: (workspaceId: string) => Promise<void>;
   selectProject: (id: string) => void;
+  deleteProject: (id: string) => Promise<void>;
+  deleteProjects: (ids: string[]) => Promise<void>;
   createProject: (data: { name: string; description?: string }) => Promise<Project>;
   createWorkspace: (name: string, description?: string) => Promise<Workspace>;
 }
@@ -104,6 +111,29 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     }
   },
 
+  deleteWorkspaces: async (ids: string[]) => {
+    const idSet = new Set(ids);
+    try {
+      for (const id of ids) {
+        await tauriDeleteWorkspace(id);
+      }
+      set((state) => {
+        const remaining = state.workspaces.filter((w) => !idSet.has(w.id));
+        const currentStillExists = remaining.some((w) => w.id === state.currentWorkspace?.id);
+        return {
+          workspaces: remaining,
+          currentWorkspace: currentStillExists ? state.currentWorkspace : (remaining[0] ?? null),
+        };
+      });
+      const { currentWorkspace } = get();
+      if (currentWorkspace) {
+        await get().loadProjects(currentWorkspace.id);
+      }
+    } catch (error) {
+      set({ error: String(error) });
+    }
+  },
+
   loadProjects: async (workspaceId: string) => {
     set({ isLoading: true, error: null });
     try {
@@ -119,6 +149,55 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     set({ currentProject: project });
   },
 
+  deleteProject: async (id: string) => {
+    try {
+      await tauriDeleteProject(id);
+      set((state) => {
+        const remaining = state.projects.filter((p) => p.id !== id);
+        const currentStillExists = remaining.some((p) => p.id === state.currentProject?.id);
+        return {
+          projects: remaining,
+          currentProject: currentStillExists ? state.currentProject : null,
+        };
+      });
+      const { currentWorkspace } = get();
+      if (currentWorkspace) {
+        useWorkspaceDetailStore
+          .getState()
+          .fetchDetail(currentWorkspace.id)
+          .catch(() => {});
+      }
+    } catch (error) {
+      set({ error: String(error) });
+    }
+  },
+
+  deleteProjects: async (ids: string[]) => {
+    const idSet = new Set(ids);
+    try {
+      for (const id of ids) {
+        await tauriDeleteProject(id);
+      }
+      set((state) => {
+        const remaining = state.projects.filter((p) => !idSet.has(p.id));
+        const currentStillExists = remaining.some((p) => p.id === state.currentProject?.id);
+        return {
+          projects: remaining,
+          currentProject: currentStillExists ? state.currentProject : null,
+        };
+      });
+      const { currentWorkspace } = get();
+      if (currentWorkspace) {
+        useWorkspaceDetailStore
+          .getState()
+          .fetchDetail(currentWorkspace.id)
+          .catch(() => {});
+      }
+    } catch (error) {
+      set({ error: String(error) });
+    }
+  },
+
   createProject: async (data) => {
     const { currentWorkspace } = get();
     if (!currentWorkspace) throw new Error('No workspace selected');
@@ -131,6 +210,10 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       set((state) => ({
         projects: [...state.projects, resp.data],
       }));
+      useWorkspaceDetailStore
+        .getState()
+        .fetchDetail(currentWorkspace.id)
+        .catch(() => {});
       return resp.data;
     } catch (error) {
       set({ error: String(error) });

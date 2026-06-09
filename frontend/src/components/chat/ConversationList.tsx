@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Plus, Search, MessageSquare } from 'lucide-react';
+import { useEffect, useState, useCallback } from 'react';
+import { Plus, Search, MessageSquare, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ConversationItem } from './ConversationItem';
 import { useConversationStore } from '@/stores/conversationStore';
@@ -14,10 +14,40 @@ export function ConversationList() {
     createConversation,
     selectConversation,
     deleteConversation,
+    deleteConversations,
     renameConversation,
   } = useConversationStore();
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
+
+  const toggleMultiSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleBatchDelete = async () => {
+    if (selectedIds.size === 0) return;
+    if (!confirm(`确定删除 ${selectedIds.size} 个对话记录吗？此操作不可撤销。`)) {
+      return;
+    }
+    await deleteConversations(Array.from(selectedIds));
+    setSelectedIds(new Set());
+    setIsMultiSelectMode(false);
+  };
+
+  const exitMultiSelect = () => {
+    setSelectedIds(new Set());
+    setIsMultiSelectMode(false);
+  };
 
   useEffect(() => {
     fetchConversations();
@@ -39,15 +69,67 @@ export function ConversationList() {
 
   return (
     <div className="space-y-3">
-      {/* New Chat Button */}
-      <Button
-        variant="glass"
-        className="w-full justify-start gap-2.5 text-sm h-10 px-4 rounded-xl"
-        onClick={handleNewChat}
-      >
-        <Plus className="h-3.5 w-3.5" />
-        <span>新建对话</span>
-      </Button>
+      {/* New Chat Button + Multi-select toggle */}
+      <div className="flex gap-2">
+        <Button
+          variant="glass"
+          className="flex-1 justify-start gap-2.5 text-sm h-10 px-4 rounded-xl"
+          onClick={handleNewChat}
+        >
+          <Plus className="h-3.5 w-3.5" />
+          <span>新建对话</span>
+        </Button>
+        {conversations.length > 1 && (
+          <Button
+            variant="glass"
+            className="h-10 px-3 rounded-xl shrink-0"
+            onClick={() => {
+              if (isMultiSelectMode) {
+                exitMultiSelect();
+              } else {
+                setIsMultiSelectMode(true);
+              }
+            }}
+            title={isMultiSelectMode ? '取消选择' : '批量选择'}
+          >
+            {isMultiSelectMode ? <X className="h-3.5 w-3.5" /> : <Trash2 className="h-3.5 w-3.5" />}
+          </Button>
+        )}
+      </div>
+
+      {/* Batch delete toolbar */}
+      {isMultiSelectMode && selectedIds.size > 0 && (
+        <div
+          className="flex items-center justify-between px-3 py-2 rounded-lg"
+          style={{
+            background: 'rgba(255,61,90,0.06)',
+            border: '1px solid rgba(255,61,90,0.15)',
+          }}
+        >
+          <span
+            style={{
+              fontFamily: 'var(--font-data)',
+              fontSize: 11,
+              color: 'var(--rose)',
+            }}
+          >
+            已选择 {selectedIds.size} 个
+          </span>
+          <button
+            onClick={handleBatchDelete}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors"
+            style={{
+              fontFamily: 'var(--font-data)',
+              color: 'var(--rose)',
+              background: 'rgba(255,61,90,0.1)',
+              border: '1px solid rgba(255,61,90,0.2)',
+            }}
+          >
+            <Trash2 size={11} />
+            删除
+          </button>
+        </div>
+      )}
 
       {/* Search box */}
       {conversations.length > 3 && (
@@ -126,9 +208,11 @@ export function ConversationList() {
               key={conv.id}
               conversation={conv}
               isActive={conv.id === activeConversationId}
-              onSelect={selectConversation}
-              onDelete={handleDelete}
-              onRename={renameConversation}
+              isMultiSelected={isMultiSelectMode && selectedIds.has(conv.id)}
+              onSelect={isMultiSelectMode ? (id) => toggleMultiSelect(id) : selectConversation}
+              onDelete={isMultiSelectMode ? undefined : handleDelete}
+              onRename={isMultiSelectMode ? undefined : renameConversation}
+              onToggleSelect={isMultiSelectMode ? toggleMultiSelect : undefined}
             />
           ))
         )}

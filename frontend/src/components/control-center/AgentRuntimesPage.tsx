@@ -8,11 +8,13 @@ import { jarvisClient } from '@/lib/jarvisClient';
 interface AdapterDiagnostic {
   id: string;
   displayName: string;
+  registered: boolean;
   available: boolean;
   version: string | null;
   reason: string | null;
   transport: string;
   executablePath: string | null;
+  pathSource: 'PATH';
   installHint: string;
 }
 
@@ -39,9 +41,14 @@ export function AgentRuntimesPage() {
       const result = await jarvisClient.get<{ adapters: AdapterDiagnostic[] }>(
         '/api/runtimes/coding/diagnostics'
       );
-      setAdapters(result.adapters);
-    } catch {
-      setError('Failed to fetch adapter diagnostics');
+      setAdapters(result.adapters ?? []);
+    } catch (err) {
+      setAdapters([]);
+      setError(
+        err instanceof Error
+          ? `Failed to fetch adapter diagnostics: ${err.message}`
+          : 'Failed to fetch adapter diagnostics'
+      );
     } finally {
       setIsLoading(false);
     }
@@ -147,11 +154,36 @@ export function AgentRuntimesPage() {
 
       {/* Adapter Table */}
       <SettingsCard title="Adapters" icon={Bot}>
-        {adapters.length === 0 && !isLoading ? (
+        {error ? (
+          <div className="space-y-2">
+            <p
+              style={{
+                fontFamily: 'var(--font-data)',
+                fontSize: 10,
+                color: 'var(--text-tertiary)',
+                lineHeight: 1.6,
+              }}
+            >
+              Diagnostics API is unreachable. Re-check after restarting the daemon or rebuilding the
+              sidecar.
+            </p>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={fetchDiagnostics}
+              disabled={isLoading}
+              className="gap-1"
+              style={{ color: 'var(--cyan)' }}
+            >
+              <RefreshCw className={`h-3 w-3 ${isLoading ? 'animate-spin' : ''}`} />
+              <span style={{ fontFamily: 'var(--font-data)', fontSize: 9 }}>RETRY</span>
+            </Button>
+          </div>
+        ) : adapters.length === 0 && !isLoading ? (
           <p
             style={{ fontFamily: 'var(--font-data)', fontSize: 10, color: 'var(--text-tertiary)' }}
           >
-            No adapters registered.
+            Diagnostics returned no adapters. Expected Claude Code, Codex, and OpenCode.
           </p>
         ) : (
           <div className="space-y-2">
@@ -180,6 +212,11 @@ export function AgentRuntimesPage() {
             {adapters.map((adapter) => {
               const dryResult = dryRunResults.get(adapter.id);
               const isDryRunning = dryRunning.has(adapter.id);
+              const statusLabel = !adapter.registered
+                ? 'Not Registered'
+                : adapter.available
+                  ? 'Ready'
+                  : 'Missing';
 
               return (
                 <div key={adapter.id}>
@@ -219,7 +256,7 @@ export function AgentRuntimesPage() {
                     {/* Status */}
                     <StatusBadge
                       status={adapter.available ? 'healthy' : 'error'}
-                      label={adapter.available ? 'Ready' : 'Missing'}
+                      label={statusLabel}
                     />
 
                     {/* Version */}
@@ -249,7 +286,9 @@ export function AgentRuntimesPage() {
                       }}
                       title={adapter.executablePath ?? ''}
                     >
-                      {adapter.executablePath ?? 'Not found'}
+                      {adapter.executablePath
+                        ? `${adapter.pathSource}: ${adapter.executablePath}`
+                        : `${adapter.pathSource}: Not found`}
                     </span>
 
                     {/* Actions */}
@@ -283,7 +322,7 @@ export function AgentRuntimesPage() {
                   </div>
 
                   {/* Install Hint (shown when adapter is missing) */}
-                  {!adapter.available && adapter.installHint && (
+                  {!adapter.available && (adapter.reason || adapter.installHint) && (
                     <div
                       className="mx-3 mb-2 px-3 py-2 rounded-md"
                       style={{
@@ -299,7 +338,8 @@ export function AgentRuntimesPage() {
                           letterSpacing: 0.5,
                         }}
                       >
-                        Install: {adapter.installHint}
+                        {adapter.reason ? `${adapter.reason} ` : ''}
+                        {adapter.installHint ? `Install: ${adapter.installHint}` : ''}
                       </span>
                     </div>
                   )}
@@ -385,7 +425,7 @@ export function AgentRuntimesPage() {
             }}
           >
             Agent Runtimes are external CLI tools that Jarvis delegates coding tasks to. Each
-            adapter must be installed and accessible on your system PATH.
+            adapter is discovered from your system PATH by default.
           </p>
           <p
             style={{
@@ -397,7 +437,7 @@ export function AgentRuntimesPage() {
             }}
           >
             Use Dry Run to verify that an adapter can start and respond. If an adapter shows
-            "Missing", install it using the command shown in the hint above.
+            "Missing", install it and restart Jarvis so the daemon inherits the updated PATH.
           </p>
         </div>
       </SettingsCard>

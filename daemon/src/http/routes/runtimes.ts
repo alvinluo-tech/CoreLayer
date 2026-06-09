@@ -11,6 +11,12 @@ import { listCodingRuntimes, getCodingRuntime, getExecutablePath, spawnProcess }
 
 const app = new Hono();
 
+const EXPECTED_CODING_ADAPTERS = [
+  { id: "claude-code", displayName: "Claude Code", command: "claude" },
+  { id: "codex", displayName: "Codex", command: "codex" },
+  { id: "opencode", displayName: "OpenCode", command: "opencode" },
+] as const;
+
 const INSTALL_HINTS: Record<string, string> = {
   "claude-code": "npm install -g @anthropic-ai/claude-code",
   codex: "npm install -g @openai/codex",
@@ -23,14 +29,18 @@ const DRY_RUN_PROMPTS: Record<string, string> = {
   opencode: "Reply with exactly: dry-run-ok",
 };
 
+const DRY_RUN_TIMEOUT_MS = 60_000;
+
 interface AdapterDiagnostic {
   id: string;
   displayName: string;
+  registered: boolean;
   available: boolean;
   version: string | null;
   reason: string | null;
   transport: string;
   executablePath: string | null;
+  pathSource: "PATH";
   installHint: string;
 }
 
@@ -38,44 +48,106 @@ interface AdapterDiagnostic {
  * GET /coding/diagnostics — Run discover() on all registered adapters.
  */
 app.get("/coding/diagnostics", async (c) => {
+  const results: AdapterDiagnostic[] = [];
+
   try {
-    const adapters = listCodingRuntimes();
-    const results: AdapterDiagnostic[] = [];
+    const registered = new Map(listCodingRuntimes().map((adapter) => [adapter.id, adapter.name]));
 
-    for (const { id, name } of adapters) {
-      const adapter = getCodingRuntime(id);
-      if (!adapter) continue;
+    for (const expected of EXPECTED_CODING_ADAPTERS) {
+      const adapter = getCodingRuntime(expected.id);
+      const executablePath = getExecutablePath(expected.command);
 
-      const cliCommand = id === "claude-code" ? "claude" : id === "codex" ? "codex" : "opencode";
-      const executablePath = getExecutablePath(cliCommand);
-
-      let availability: { available: boolean; version?: string; reason?: string; transport: string };
-      try {
-        availability = await adapter.discover();
-      } catch (err) {
-        availability = {
+      if (!adapter) {
+        results.push({
+          id: expected.id,
+          displayName: expected.displayName,
+          registered: false,
           available: false,
-          reason: err instanceof Error ? err.message : String(err),
+          version: null,
+          reason: "Adapter is not registered in the Jarvis coding runtime registry.",
           transport: "cli",
-        };
+          executablePath,
+          pathSource: "PATH",
+          installHint: INSTALL_HINTS[expected.id] ?? "",
+        });
+        continue;
       }
 
-      results.push({
-        id,
-        displayName: name,
-        available: availability.available,
-        version: availability.version ?? null,
-        reason: availability.reason ?? null,
-        transport: availability.transport,
-        executablePath,
-        installHint: INSTALL_HINTS[id] ?? "",
-      });
+      try {
+        const availability = await adapter.discover();
+        results.push({
+          id: expected.id,
+          displayName: registered.get(expected.id) ?? expected.displayName,
+          registered: true,
+          available: availability.available,
+          version: availability.version ?? null,
+          reason: availability.reason ?? null,
+          transport: availability.transport,
+          executablePath,
+          pathSource: "PATH",
+          installHint: INSTALL_HINTS[expected.id] ?? "",
+        });
+      } catch (err) {
+        results.push({
+          id: expected.id,
+          displayName: registered.get(expected.id) ?? expected.displayName,
+          registered: true,
+          available: false,
+          version: null,
+          reason: err instanceof Error ? err.message : String(err),
+          transport: "cli",
+          executablePath,
+          pathSource: "PATH",
+          installHint: INSTALL_HINTS[expected.id] ?? "",
+        });
+      }
     }
 
     return c.json({ adapters: results });
   } catch (err) {
     logError("runtimes/diagnostics", err);
-    return apiError(c, extractErrorMessage(err));
+    return c.json({
+      adapters: EXPECTED_CODING_ADAPTERS.map((expected) => ({
+        id: expected.id,
+        displayName: expected.displayName,
+        registered: false,
+        available: false,
+        version: null,
+        reason: extractErrorMessage(err),
+        transport: "cli",
+        executablePath: getExecutablePath(expected.command),
+        pathSource: "PATH",
+        installHint: INSTALL_HINTS[expected.id] ?? "",
+      })),
+    });
+  }
+});
+
+/**
+ * GET /coding/diagnostics/health — Lightweight route/registry sanity check.
+ */
+app.get("/coding/diagnostics/health", async (c) => {
+  try {
+    const registered = listCodingRuntimes();
+    return c.json({
+      ok: true,
+      daemonPid: process.pid,
+      expectedAdapterCount: EXPECTED_CODING_ADAPTERS.length,
+      registeredAdapterCount: registered.length,
+      registeredAdapters: registered.map((adapter) => adapter.id),
+      pathSource: "PATH",
+    });
+  } catch (err) {
+    logError("runtimes/diagnostics-health", err);
+    return c.json({
+      ok: false,
+      daemonPid: process.pid,
+      expectedAdapterCount: EXPECTED_CODING_ADAPTERS.length,
+      registeredAdapterCount: 0,
+      registeredAdapters: [],
+      pathSource: "PATH",
+      error: extractErrorMessage(err),
+    });
   }
 });
 
@@ -100,10 +172,25 @@ app.post("/coding/:id/dry-run", async (c) => {
     const prompt = DRY_RUN_PROMPTS[adapterId] ?? "Reply with exactly: dry-run-ok";
     const startTime = Date.now();
 
+    const args =
+      adapterId === "claude-code"
+        ? ["--print", "--output-format", "text", "--no-session-persistence", prompt]
+        : adapterId === "codex"
+          ? [
+              "exec",
+              "--skip-git-repo-check",
+              "--sandbox",
+              "read-only",
+              "--color",
+              "never",
+              prompt,
+            ]
+          : ["--prompt", prompt];
+
     const result = await spawnProcess({
       command: cliCommand,
-      args: adapterId === "claude-code" ? ["--print", prompt] : ["--prompt", prompt],
-      timeoutMs: 10_000,
+      args,
+      timeoutMs: DRY_RUN_TIMEOUT_MS,
     });
 
     const durationMs = Date.now() - startTime;

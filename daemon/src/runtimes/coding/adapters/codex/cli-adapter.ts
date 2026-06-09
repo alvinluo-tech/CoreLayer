@@ -93,7 +93,7 @@ export class CodexCliAdapter implements CodingAgentAdapter {
     const maskedPrompt = maskObjectSecrets({ taskPrompt: task.taskPrompt }).taskPrompt as string;
     const decision = await broker.requestShellExec(
       "coding-runtime",
-      `codex --prompt "${String(maskedPrompt).slice(0, 100)}..."`,
+      `codex exec "${String(maskedPrompt).slice(0, 100)}..."`,
       {
         reason: `Codex run for repo: ${task.repoPath}`,
       },
@@ -149,7 +149,14 @@ export class CodexCliAdapter implements CodingAgentAdapter {
   }
 
   private spawnCodex(runId: string, task: CodingTask): number | undefined {
-    const args = ["--prompt", task.taskPrompt];
+    const args = [
+      "exec",
+      "--sandbox",
+      "workspace-write",
+      "--color",
+      "never",
+      task.taskPrompt,
+    ];
     const logDir = task.worktreePath
       ? `${task.worktreePath}/.jarvis/logs`
       : undefined;

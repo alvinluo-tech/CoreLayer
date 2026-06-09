@@ -305,7 +305,14 @@ describe("CodexAdapter", () => {
       expect(processSpawner.spawnProcessLive).toHaveBeenCalledWith(
         expect.objectContaining({
           command: "codex",
-          args: ["--prompt", "Fix the bug in main.ts"],
+          args: [
+            "exec",
+            "--sandbox",
+            "workspace-write",
+            "--color",
+            "never",
+            "Fix the bug in main.ts",
+          ],
         }),
       );
     });

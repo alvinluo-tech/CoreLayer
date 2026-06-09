@@ -6,9 +6,11 @@ import type { Conversation } from '@/lib/tauri';
 interface ConversationItemProps {
   conversation: Conversation;
   isActive: boolean;
+  isMultiSelected?: boolean;
   onSelect: (id: string) => void;
-  onDelete: (id: string) => void;
-  onRename: (id: string, title: string) => void;
+  onDelete?: (id: string) => void;
+  onRename?: (id: string, title: string) => void;
+  onToggleSelect?: (id: string) => void;
 }
 
 function formatRelativeTime(dateStr: string): string {
@@ -35,9 +37,11 @@ function formatTokenCount(tokens: number): string {
 export function ConversationItem({
   conversation,
   isActive,
+  isMultiSelected,
   onSelect,
   onDelete,
   onRename,
+  onToggleSelect,
 }: ConversationItemProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(conversation.title);
@@ -46,7 +50,7 @@ export function ConversationItem({
 
   const handleRename = () => {
     if (editTitle.trim() && editTitle !== conversation.title) {
-      onRename(conversation.id, editTitle.trim());
+      onRename?.(conversation.id, editTitle.trim());
     }
     setIsEditing(false);
   };
@@ -79,6 +83,26 @@ export function ConversationItem({
           style={{
             background: 'var(--cyan)',
             boxShadow: '0 0 8px var(--cyan-dim)',
+          }}
+        />
+      )}
+
+      {/* Checkbox (multi-select mode) */}
+      {onToggleSelect && (
+        <input
+          type="checkbox"
+          checked={isMultiSelected ?? false}
+          onChange={(e) => {
+            e.stopPropagation();
+            onToggleSelect(conversation.id);
+          }}
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            width: 14,
+            height: 14,
+            accentColor: 'var(--cyan)',
+            cursor: 'pointer',
+            flexShrink: 0,
           }}
         />
       )}
@@ -170,8 +194,8 @@ export function ConversationItem({
         )}
       </div>
 
-      {/* Action buttons — visible on hover */}
-      {!isEditing && (
+      {/* Action buttons — visible on hover (hidden in multi-select mode) */}
+      {!isEditing && !onToggleSelect && (
         <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
           <button
             onClick={(e) => {
@@ -195,7 +219,7 @@ export function ConversationItem({
           <button
             onClick={(e) => {
               e.stopPropagation();
-              onDelete(conversation.id);
+              onDelete?.(conversation.id);
             }}
             className="p-1 rounded transition-colors"
             style={{

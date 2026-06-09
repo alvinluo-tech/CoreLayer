@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Search, Plus, FolderKanban } from 'lucide-react';
+import { useState, useCallback } from 'react';
+import { Search, Plus, FolderKanban, Trash2, X, CheckSquare } from 'lucide-react';
 import { WorkspaceCard } from './WorkspaceCard';
 import { useWorkspaceStore } from '@/stores/workspaceStore';
 import { useWorkspaceDetailStore } from '@/stores/workspaceDetailStore';
@@ -11,9 +11,11 @@ interface WorkspaceSidebarProps {
 }
 
 export function WorkspaceSidebar({ selectedId, onSelect, onCreate }: WorkspaceSidebarProps) {
-  const { workspaces, deleteWorkspace } = useWorkspaceStore();
+  const { workspaces, deleteWorkspace, deleteWorkspaces } = useWorkspaceStore();
   const { fetchDetail } = useWorkspaceDetailStore();
   const [search, setSearch] = useState('');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
 
   const filtered = workspaces.filter((w) => w.name.toLowerCase().includes(search.toLowerCase()));
 
@@ -27,6 +29,37 @@ export function WorkspaceSidebar({ selectedId, onSelect, onCreate }: WorkspaceSi
     if (!ws) return;
     if (!window.confirm(`Delete workspace "${ws.name}"? This cannot be undone.`)) return;
     await deleteWorkspace(id);
+  };
+
+  const toggleMultiSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleBatchDelete = async () => {
+    if (selectedIds.size === 0) return;
+    if (
+      !window.confirm(
+        `Delete ${selectedIds.size} workspace${selectedIds.size > 1 ? 's' : ''}? This cannot be undone.`
+      )
+    ) {
+      return;
+    }
+    await deleteWorkspaces(Array.from(selectedIds));
+    setSelectedIds(new Set());
+    setIsMultiSelectMode(false);
+  };
+
+  const exitMultiSelect = () => {
+    setSelectedIds(new Set());
+    setIsMultiSelectMode(false);
   };
 
   return (
@@ -57,9 +90,44 @@ export function WorkspaceSidebar({ selectedId, onSelect, onCreate }: WorkspaceSi
         >
           Workspaces
         </span>
-        <button className="workspace-action-btn" onClick={onCreate} title="New Workspace">
-          <Plus size={14} />
-        </button>
+        <div className="flex items-center gap-1">
+          {isMultiSelectMode ? (
+            <>
+              {selectedIds.size > 0 && (
+                <button
+                  className="workspace-action-btn"
+                  onClick={handleBatchDelete}
+                  title={`Delete ${selectedIds.size} selected`}
+                  style={{ color: '#ff3d5a' }}
+                >
+                  <Trash2 size={14} />
+                </button>
+              )}
+              <button
+                className="workspace-action-btn"
+                onClick={exitMultiSelect}
+                title="Cancel selection"
+              >
+                <X size={14} />
+              </button>
+            </>
+          ) : (
+            <>
+              {workspaces.length > 1 && (
+                <button
+                  className="workspace-action-btn"
+                  onClick={() => setIsMultiSelectMode(true)}
+                  title="Select multiple"
+                >
+                  <CheckSquare size={14} />
+                </button>
+              )}
+              <button className="workspace-action-btn" onClick={onCreate} title="New Workspace">
+                <Plus size={14} />
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Search */}
@@ -91,6 +159,40 @@ export function WorkspaceSidebar({ selectedId, onSelect, onCreate }: WorkspaceSi
         </div>
       </div>
 
+      {/* Batch delete toolbar */}
+      {isMultiSelectMode && selectedIds.size > 0 && (
+        <div
+          className="mx-3 mb-2 flex items-center justify-between px-3 py-2 rounded-lg"
+          style={{
+            background: 'rgba(255,61,90,0.06)',
+            border: '1px solid rgba(255,61,90,0.15)',
+          }}
+        >
+          <span
+            style={{
+              fontFamily: 'var(--font-data)',
+              fontSize: 11,
+              color: 'var(--rose)',
+            }}
+          >
+            Selected {selectedIds.size}
+          </span>
+          <button
+            onClick={handleBatchDelete}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors"
+            style={{
+              fontFamily: 'var(--font-data)',
+              color: 'var(--rose)',
+              background: 'rgba(255,61,90,0.1)',
+              border: '1px solid rgba(255,61,90,0.2)',
+            }}
+          >
+            <Trash2 size={11} />
+            Delete
+          </button>
+        </div>
+      )}
+
       {/* List */}
       <div className="flex-1 overflow-y-auto px-2 pb-2 workspace-scroll">
         {filtered.length === 0 ? (
@@ -110,8 +212,10 @@ export function WorkspaceSidebar({ selectedId, onSelect, onCreate }: WorkspaceSi
                 key={ws.id}
                 workspace={ws}
                 isSelected={ws.id === selectedId}
-                onSelect={handleSelect}
-                onDelete={handleDelete}
+                isMultiSelected={isMultiSelectMode && selectedIds.has(ws.id)}
+                onSelect={isMultiSelectMode ? toggleMultiSelect : handleSelect}
+                onDelete={isMultiSelectMode ? undefined : handleDelete}
+                onToggleSelect={isMultiSelectMode ? toggleMultiSelect : undefined}
               />
             ))}
           </div>
