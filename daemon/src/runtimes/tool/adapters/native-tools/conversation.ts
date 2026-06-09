@@ -35,6 +35,7 @@ function containsAnyTerm(value: string, terms: string[]): boolean {
 /**
  * Shared matching logic for conversation cleanup.
  * Returns matching conversations without deleting them.
+ * Uses batch message loading to avoid N+1 queries.
  */
 async function matchConversationsForCleanup(
   query: string,
@@ -48,24 +49,39 @@ async function matchConversationsForCleanup(
   const matches: Array<{ id: string; title: string }> = [];
   const limit = maxResults ?? 200;
 
+  // First pass: collect title matches and IDs needing content search
+  const needsContentSearch: string[] = [];
   for (const conversation of conversations) {
     if (matches.length >= limit) break;
     if (!includeCurrent && currentConversationId && conversation.id === currentConversationId) {
       continue;
     }
+    if (containsAnyTerm(conversation.title, queryTerms)) {
+      matches.push({ id: conversation.id, title: conversation.title });
+    } else {
+      needsContentSearch.push(conversation.id);
+    }
+  }
 
-    const titleMatches = containsAnyTerm(conversation.title, queryTerms);
-    let contentMatches = false;
-
-    if (!titleMatches) {
-      const messages = await repo.getMessages(conversation.id);
-      contentMatches = messages.some((message) =>
-        containsAnyTerm(message.content, queryTerms)
-      );
+  // Batch-load messages for all conversations needing content search
+  if (needsContentSearch.length > 0 && matches.length < limit) {
+    const allMessages = await repo.getMessagesByConversationIds(needsContentSearch);
+    const messagesByConv = new Map<string, string[]>();
+    for (const msg of allMessages) {
+      const arr = messagesByConv.get(msg.conversationId) ?? [];
+      arr.push(msg.content);
+      messagesByConv.set(msg.conversationId, arr);
     }
 
-    if (titleMatches || contentMatches) {
-      matches.push({ id: conversation.id, title: conversation.title });
+    for (const convId of needsContentSearch) {
+      if (matches.length >= limit) break;
+      const contents = messagesByConv.get(convId) ?? [];
+      if (contents.some((content) => containsAnyTerm(content, queryTerms))) {
+        const conv = conversations.find((c) => c.id === convId);
+        if (conv) {
+          matches.push({ id: conv.id, title: conv.title });
+        }
+      }
     }
   }
 

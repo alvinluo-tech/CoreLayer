@@ -24,6 +24,7 @@ import { logger } from '@/lib/logger';
 import { useChat } from '@/hooks/useChat';
 import { useVoice } from '@/hooks/useVoice';
 import { useVoiceFSM } from '@/hooks/useVoiceFSM';
+import { useMirrorMode } from '@/hooks/useMirrorMode';
 import { useConversationStore } from '@/stores/conversationStore';
 import { usePaletteStore } from '@/stores/paletteStore';
 import { useTaskStore } from '@/stores/taskStore';
@@ -43,6 +44,16 @@ export function AppShell() {
 
   const { activeView, setActiveView } = useShellStore();
   const [daemonConnected, setDaemonConnected] = useState(true);
+
+  // Mirror mode
+  const {
+    isMirrorMode,
+    isMirrorModeRef,
+    isProgrammaticFocusRef,
+    activeMonitorRef,
+    enterMirrorMode,
+    exitMirrorMode,
+  } = useMirrorMode();
 
   // Poll daemon health
   useEffect(() => {
@@ -98,169 +109,49 @@ export function AppShell() {
     voiceConvRef.current = voiceConv;
   }, [voiceConv]);
 
-  // Mirror mode state
-  const activeMonitorRef = useRef<any>(null);
-  const startupBoundsRef = useRef<{ size: any; position: any } | null>(null);
-  const [isMirrorMode, setIsMirrorMode] = useState(false);
-  const isMirrorModeRef = useRef(false);
+  // Mirror mode body style
   useEffect(() => {
-    isMirrorModeRef.current = isMirrorMode;
+    if (typeof document !== 'undefined') {
+      if (isMirrorMode) {
+        document.body.style.backgroundColor = 'transparent';
+        document.documentElement.style.backgroundColor = 'transparent';
+        document.body.style.overflow = 'hidden';
+        document.documentElement.style.overflow = 'hidden';
+      } else {
+        document.body.style.backgroundColor = '';
+        document.documentElement.style.backgroundColor = '';
+        document.body.style.overflow = '';
+        document.documentElement.style.overflow = '';
+      }
+    }
   }, [isMirrorMode]);
-  const originalBoundsRef = useRef<{ size: any; position: any } | null>(null);
-  const isProgrammaticFocusRef = useRef(false);
 
-  // Capture startup monitor and bounds
+  // Focus grab for ASR in mirror mode
   useEffect(() => {
-    const captureStartupMonitorAndBounds = async () => {
-      try {
-        const { currentMonitor, getCurrentWindow } = await import('@tauri-apps/api/window');
-        const monitor = await currentMonitor();
-        if (monitor) {
-          activeMonitorRef.current = monitor;
-          logger.debug('[AppShell] Captured startup monitor:', monitor.name);
-        }
-        const appWindow = getCurrentWindow();
-        const size = await appWindow.outerSize().catch(() => null);
-        const position = await appWindow.outerPosition().catch(() => null);
-        if (size && position && size.width > 100 && size.height > 100) {
-          startupBoundsRef.current = { size, position };
-        }
-      } catch (e) {
-        console.warn('Failed to capture startup monitor and bounds:', e);
-      }
-    };
-    captureStartupMonitorAndBounds();
-  }, []);
-
-  // Mirror mode enter/exit
-  const enterMirrorMode = useCallback(async () => {
-    try {
-      const { getCurrentWindow, currentMonitor } = await import('@tauri-apps/api/window');
-      const { PhysicalSize, PhysicalPosition } = await import('@tauri-apps/api/dpi');
-      const appWindow = getCurrentWindow();
-
-      isProgrammaticFocusRef.current = true;
-      setTimeout(() => {
-        isProgrammaticFocusRef.current = false;
-      }, 1000);
-
-      const isMinimized = await appWindow.isMinimized().catch(() => false);
-      if (!isMinimized && !originalBoundsRef.current) {
-        const size = await appWindow.outerSize().catch(() => null);
-        const position = await appWindow.outerPosition().catch(() => null);
-        if (size && position && size.width > 100 && size.height > 100) {
-          originalBoundsRef.current = { size, position };
-        }
-      }
-
-      await appWindow.show().catch(() => {});
-      await appWindow.unminimize().catch(() => {});
-
-      const ASSISTANT_WIDTH = 360;
-      const ASSISTANT_HEIGHT = 440;
-      const MARGIN_RIGHT = 24;
-      const MARGIN_BOTTOM = 24;
-
-      let monitor = await currentMonitor().catch(() => null);
-      if (!monitor) monitor = activeMonitorRef.current;
-      if (!monitor) {
+    if (isMirrorMode && voiceConv.state === 'listening') {
+      const grabFocus = async () => {
         try {
-          const { primaryMonitor } = await import('@tauri-apps/api/window');
-          monitor = await primaryMonitor();
-        } catch {
-          /* fallback */
+          const { getCurrentWindow } = await import('@tauri-apps/api/window');
+          const appWindow = getCurrentWindow();
+          isProgrammaticFocusRef.current = true;
+          await appWindow.setFocus().catch(() => {});
+          setTimeout(() => {
+            isProgrammaticFocusRef.current = false;
+          }, 300);
+        } catch (e) {
+          console.warn('Failed to programmatically focus shrunken window:', e);
         }
-      }
-
-      if (monitor) {
-        const workArea = monitor.workArea || { position: { x: 0, y: 0 }, size: monitor.size };
-        const scaleFactor = monitor.scaleFactor || 1;
-        const workWidthPhysical =
-          workArea.size?.width ?? (workArea as any).width ?? monitor.size.width;
-        const workHeightPhysical =
-          workArea.size?.height ?? (workArea as any).height ?? monitor.size.height;
-        const workXPhysical = workArea.position?.x ?? (workArea as any).x ?? monitor.position.x;
-        const workYPhysical = workArea.position?.y ?? (workArea as any).y ?? monitor.position.y;
-
-        const assistantWidthPhysical = Math.round(ASSISTANT_WIDTH * scaleFactor);
-        const assistantHeightPhysical = Math.round(ASSISTANT_HEIGHT * scaleFactor);
-        const marginRightPhysical = Math.round(MARGIN_RIGHT * scaleFactor);
-        const marginBottomPhysical = Math.round(MARGIN_BOTTOM * scaleFactor);
-
-        const x = Math.max(
-          workXPhysical,
-          workXPhysical + workWidthPhysical - assistantWidthPhysical - marginRightPhysical
-        );
-        const y = Math.max(
-          workYPhysical,
-          workYPhysical + workHeightPhysical - assistantHeightPhysical - marginBottomPhysical
-        );
-
-        await appWindow.setDecorations(false).catch(() => {});
-        await appWindow.setAlwaysOnTop(true).catch(() => {});
-        await appWindow
-          .setSize(new PhysicalSize(assistantWidthPhysical, assistantHeightPhysical))
-          .catch(() => {});
-        await appWindow.setPosition(new PhysicalPosition(x, y)).catch(() => {});
-
-        setTimeout(async () => {
-          await appWindow
-            .setSize(new PhysicalSize(assistantWidthPhysical, assistantHeightPhysical))
-            .catch(() => {});
-          await appWindow.setPosition(new PhysicalPosition(x, y)).catch(() => {});
-        }, 100);
-      }
-
-      setIsMirrorMode(true);
-      logger.debug('[AppShell] Entered mirror mode.');
-    } catch (err) {
-      console.warn('Failed to enter mirror mode:', err);
+      };
+      grabFocus();
     }
-  }, []);
+  }, [isMirrorMode, voiceConv.state]);
 
-  const exitMirrorMode = useCallback(async (shouldMinimize = false) => {
-    try {
-      const { getCurrentWindow } = await import('@tauri-apps/api/window');
-      const appWindow = getCurrentWindow();
-
-      await appWindow.setDecorations(false).catch(() => {});
-      await appWindow.setAlwaysOnTop(false).catch(() => {});
-
-      let targetSize = originalBoundsRef.current?.size;
-      const targetPosition = originalBoundsRef.current?.position;
-
-      if (!targetSize) {
-        if (startupBoundsRef.current?.size) {
-          targetSize = startupBoundsRef.current.size;
-        } else {
-          const { LogicalSize } = await import('@tauri-apps/api/dpi');
-          targetSize = new LogicalSize(1200, 800);
-        }
-      }
-
-      if (targetSize) await appWindow.setSize(targetSize).catch(() => {});
-      if (targetPosition) {
-        await appWindow.setPosition(targetPosition).catch(() => {});
-      } else {
-        await appWindow.center().catch(() => {});
-      }
-
-      originalBoundsRef.current = null;
-
-      if (shouldMinimize) {
-        setIsMainWindowFocused(false);
-        await appWindow.minimize().catch(() => {});
-      } else {
-        await appWindow.unminimize().catch(() => {});
-        await appWindow.show().catch(() => {});
-        await appWindow.setFocus().catch(() => {});
-      }
-
-      setIsMirrorMode(false);
-    } catch (err) {
-      console.warn('Failed to exit mirror mode:', err);
+  // Auto-exit mirror on idle/error
+  useEffect(() => {
+    if ((voiceConv.state === 'idle' || voiceConv.state === 'error') && isMirrorMode) {
+      exitMirrorMode(true);
     }
-  }, []);
+  }, [voiceConv.state, isMirrorMode, exitMirrorMode]);
 
   // Wake word handler
   const handleWake = useCallback(async () => {
@@ -315,7 +206,6 @@ export function AppShell() {
       } else if (view === 'control-center') {
         setActiveView('control-center');
       } else {
-        // Navigate to shell views
         const shellView = view as import('@/stores/shellStore').ShellView;
         setActiveView(shellView);
       }
@@ -330,7 +220,9 @@ export function AppShell() {
   const fetchArticles = useArticleStore((s) => s.fetchArticles);
   const fetchDailySummary = useReviewStore((s) => s.fetchDailySummary);
   const fetchApprovals = useApprovalStore((s) => s.fetchApprovals);
-  const pendingApprovalCount = useApprovalStore((s) => s.pendingCount);
+  const pendingApprovalCount = useApprovalStore(
+    (s) => s.approvals.filter((a) => a.status === 'pending').length
+  );
   const runs = useRunStore((s) => s.runs);
   const fetchRuns = useRunStore((s) => s.fetchRuns);
   const activeRunCount = runs.filter((r) => r.status === 'running').length;
@@ -377,50 +269,6 @@ export function AppShell() {
     }
   }, [messages, voiceConv.clearLastStreamedText]);
 
-  // Mirror mode body style
-  useEffect(() => {
-    if (typeof document !== 'undefined') {
-      if (isMirrorMode) {
-        document.body.style.backgroundColor = 'transparent';
-        document.documentElement.style.backgroundColor = 'transparent';
-        document.body.style.overflow = 'hidden';
-        document.documentElement.style.overflow = 'hidden';
-      } else {
-        document.body.style.backgroundColor = '';
-        document.documentElement.style.backgroundColor = '';
-        document.body.style.overflow = '';
-        document.documentElement.style.overflow = '';
-      }
-    }
-  }, [isMirrorMode]);
-
-  // Focus grab for ASR in mirror mode
-  useEffect(() => {
-    if (isMirrorMode && voiceConv.state === 'listening') {
-      const grabFocus = async () => {
-        try {
-          const { getCurrentWindow } = await import('@tauri-apps/api/window');
-          const appWindow = getCurrentWindow();
-          isProgrammaticFocusRef.current = true;
-          await appWindow.setFocus().catch(() => {});
-          setTimeout(() => {
-            isProgrammaticFocusRef.current = false;
-          }, 300);
-        } catch (e) {
-          console.warn('Failed to programmatically focus shrunken window:', e);
-        }
-      };
-      grabFocus();
-    }
-  }, [isMirrorMode, voiceConv.state]);
-
-  // Auto-exit mirror on idle/error
-  useEffect(() => {
-    if ((voiceConv.state === 'idle' || voiceConv.state === 'error') && isMirrorMode) {
-      exitMirrorMode(true);
-    }
-  }, [voiceConv.state, isMirrorMode, exitMirrorMode]);
-
   // Window focus listener
   useEffect(() => {
     let active = true;
@@ -453,7 +301,7 @@ export function AppShell() {
             try {
               const { currentMonitor } = await import('@tauri-apps/api/window');
               const monitor = await currentMonitor();
-              if (monitor) activeMonitorRef.current = monitor;
+              if (monitor) activeMonitorRef.current = monitor as any;
             } catch {
               /* ignore */
             }
@@ -504,6 +352,21 @@ export function AppShell() {
   const panelTranscript = voiceConv.state !== 'idle' ? voiceConv.finalTranscript : voice.transcript;
   const panelSupported = voiceConv.isSupported || voice.isSupported;
 
+  const handleReconnect = useCallback(async () => {
+    try {
+      await jarvisClient.get('/api/health');
+      setDaemonConnected(true);
+    } catch {
+      setDaemonConnected(false);
+    }
+  }, []);
+
+  const handleOpenSettings = useCallback(() => {
+    exitMirrorMode(false);
+    setInitialControlPage('models');
+    setActiveView('control-center');
+  }, [exitMirrorMode, setActiveView]);
+
   // --- Mirror mode render ---
   if (isMirrorMode) {
     return (
@@ -520,11 +383,7 @@ export function AppShell() {
             voiceConv.state === 'listening' ? voiceConv.finishListening : voiceConv.stopConversation
           }
           onRetry={voiceConv.retryLastAction}
-          onOpenSettings={() => {
-            exitMirrorMode(false);
-            setInitialControlPage('models');
-            setActiveView('control-center');
-          }}
+          onOpenSettings={handleOpenSettings}
           onRestore={() => exitMirrorMode(false)}
           layoutMode="bottom-right"
         />
@@ -602,8 +461,23 @@ export function AppShell() {
     }
   };
 
-  // Workspace view renders its own full layout (sidebar + center + right panel)
-  // without the global inspector pane
+  const voiceOverlay = isMainWindowFocused ? (
+    <JarvisVoiceOverlay
+      state={voiceConv.state}
+      interimTranscript={voiceConv.interimTranscript}
+      finalTranscript={voiceConv.finalTranscript}
+      assistantText={voiceConv.assistantText}
+      thinkingText={voiceConv.thinkingText}
+      isConnected={voiceConv.isConnected}
+      onClose={voiceConv.stopConversation}
+      onStop={voiceConv.state === 'listening' ? voiceConv.finishListening : voiceConv.bargeIn}
+      onRetry={voiceConv.retryLastAction}
+      onOpenSettings={handleOpenSettings}
+      layoutMode="centered"
+    />
+  ) : null;
+
+  // Workspace view renders its own full layout without the global inspector pane
   if (activeView === 'workspace') {
     return (
       <div
@@ -612,18 +486,7 @@ export function AppShell() {
       >
         <HudDecorations />
 
-        {!daemonConnected && (
-          <DaemonDisconnectedBanner
-            onReconnect={async () => {
-              try {
-                await jarvisClient.get('/api/health');
-                setDaemonConnected(true);
-              } catch {
-                setDaemonConnected(false);
-              }
-            }}
-          />
-        )}
+        {!daemonConnected && <DaemonDisconnectedBanner onReconnect={handleReconnect} />}
 
         <TitleBar
           onSettings={() => {
@@ -636,7 +499,7 @@ export function AppShell() {
           <GlobalRail
             activeView={activeView}
             onViewChange={setActiveView}
-            pendingApprovalCount={pendingApprovalCount()}
+            pendingApprovalCount={pendingApprovalCount}
             runningRunCount={activeRunCount}
           />
           <WorkspaceView />
@@ -648,24 +511,7 @@ export function AppShell() {
           onVoiceToggle={handleVoiceToggle}
         />
 
-        {isMainWindowFocused && (
-          <JarvisVoiceOverlay
-            state={voiceConv.state}
-            interimTranscript={voiceConv.interimTranscript}
-            finalTranscript={voiceConv.finalTranscript}
-            assistantText={voiceConv.assistantText}
-            thinkingText={voiceConv.thinkingText}
-            isConnected={voiceConv.isConnected}
-            onClose={voiceConv.stopConversation}
-            onStop={voiceConv.state === 'listening' ? voiceConv.finishListening : voiceConv.bargeIn}
-            onRetry={voiceConv.retryLastAction}
-            onOpenSettings={() => {
-              setInitialControlPage('models');
-              setActiveView('control-center');
-            }}
-            layoutMode="centered"
-          />
-        )}
+        {voiceOverlay}
 
         <ToastContainer />
         <ShortcutsOverlay />
@@ -681,18 +527,7 @@ export function AppShell() {
     >
       <HudDecorations />
 
-      {!daemonConnected && (
-        <DaemonDisconnectedBanner
-          onReconnect={async () => {
-            try {
-              await jarvisClient.get('/api/health');
-              setDaemonConnected(true);
-            } catch {
-              setDaemonConnected(false);
-            }
-          }}
-        />
-      )}
+      {!daemonConnected && <DaemonDisconnectedBanner onReconnect={handleReconnect} />}
 
       <TitleBar
         onSettings={() => {
@@ -706,7 +541,7 @@ export function AppShell() {
           <GlobalRail
             activeView={activeView}
             onViewChange={setActiveView}
-            pendingApprovalCount={pendingApprovalCount()}
+            pendingApprovalCount={pendingApprovalCount}
             runningRunCount={activeRunCount}
           />
         }
@@ -721,24 +556,7 @@ export function AppShell() {
         onVoiceToggle={handleVoiceToggle}
       />
 
-      {isMainWindowFocused && (
-        <JarvisVoiceOverlay
-          state={voiceConv.state}
-          interimTranscript={voiceConv.interimTranscript}
-          finalTranscript={voiceConv.finalTranscript}
-          assistantText={voiceConv.assistantText}
-          thinkingText={voiceConv.thinkingText}
-          isConnected={voiceConv.isConnected}
-          onClose={voiceConv.stopConversation}
-          onStop={voiceConv.state === 'listening' ? voiceConv.finishListening : voiceConv.bargeIn}
-          onRetry={voiceConv.retryLastAction}
-          onOpenSettings={() => {
-            setInitialControlPage('models');
-            setActiveView('control-center');
-          }}
-          layoutMode="centered"
-        />
-      )}
+      {voiceOverlay}
 
       <ToastContainer />
       <ShortcutsOverlay />

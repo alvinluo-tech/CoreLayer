@@ -321,5 +321,16 @@ export function createSupabaseConversationRepo(): ConversationRepository {
 
       return results;
     },
+
+    async getMessagesByConversationIds(conversationIds: string[]): Promise<MessageRow[]> {
+      if (conversationIds.length === 0) return [];
+      const { data, error } = await client
+        .from("messages")
+        .select("*")
+        .in("conversation_id", conversationIds);
+
+      if (error) throw new Error(`Failed to fetch messages: ${error.message}`);
+      return (data ?? []).map(toMessageRow);
+    },
   };
 }

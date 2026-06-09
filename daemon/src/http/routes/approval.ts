@@ -119,11 +119,16 @@ approvalRoutes.post("/batch/approve", async (c) => {
 
     const approvedIds: string[] = [];
     const runIds = new Set<string>();
-    const updatedList = [];
+    const updatedList: Awaited<ReturnType<typeof approvalRequests.approve>>[] = [];
 
-    for (const id of ids) {
-      const existing = await approvalRequests.getById(id);
-      if (existing && existing.status === "pending") {
+    const lookups = await Promise.all(ids.map((id) => approvalRequests.getById(id)));
+    const pendingItems = ids
+      .map((id, i) => ({ id, existing: lookups[i] }))
+      .filter((x) => x.existing && x.existing.status === "pending");
+
+    await Promise.all(
+      pendingItems.map(async ({ id, existing }) => {
+        if (!existing) return;
         toolRuntime.getPermissionGuard().resolvePendingConfirmation(id, true);
         const updated = await approvalRequests.approve(id);
         updatedList.push(updated);
@@ -140,8 +145,8 @@ approvalRoutes.post("/batch/approve", async (c) => {
           result: "approved",
           metadata: { toolId: existing.toolId, toolName: existing.toolName, approvalId: id },
         });
-      }
-    }
+      }),
+    );
 
     // Execute only approved tools in parallel, then re-trigger LLM once per run
     const batchResumePromise = (async () => {
@@ -182,12 +187,17 @@ approvalRoutes.post("/batch/deny", async (c) => {
     const { approvalRequests, toolCallLogs, agentRuns, auditLog } = getRepositories();
     const body = await c.req.json<{ ids: string[] }>();
     const ids = body.ids ?? [];
-    const updatedList = [];
+    const updatedList: Awaited<ReturnType<typeof approvalRequests.deny>>[] = [];
     const runIdsToFail = new Set<string>();
 
-    for (const id of ids) {
-      const existing = await approvalRequests.getById(id);
-      if (existing && existing.status === "pending") {
+    const lookups = await Promise.all(ids.map((id) => approvalRequests.getById(id)));
+    const pendingItems = ids
+      .map((id, i) => ({ id, existing: lookups[i] }))
+      .filter((x) => x.existing && x.existing.status === "pending");
+
+    await Promise.all(
+      pendingItems.map(async ({ id, existing }) => {
+        if (!existing) return;
         toolRuntime.getPermissionGuard().resolvePendingConfirmation(id, false);
         const updated = await approvalRequests.deny(id);
         updatedList.push(updated);
@@ -217,8 +227,8 @@ approvalRoutes.post("/batch/deny", async (c) => {
           risk: existing.risk,
           confirmedByUser: false,
         });
-      }
-    }
+      }),
+    );
 
     for (const runId of runIdsToFail) {
       await agentRuns.updateStatus(runId, "failed", "User denied tool approval");

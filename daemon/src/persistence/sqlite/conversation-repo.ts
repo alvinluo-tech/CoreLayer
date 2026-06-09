@@ -1,4 +1,4 @@
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, desc, sql, inArray } from "drizzle-orm";
 import { db, schema } from "../client.js";
 import { configManager } from "../../config/config-manager.js";
 import type {
@@ -107,15 +107,11 @@ export function createSqliteConversationRepo(): ConversationRepository {
 
     async deleteMany(ids: string[]): Promise<number> {
       if (ids.length === 0) return 0;
-      let total = 0;
-      for (const id of ids) {
-        const result = db
-          .delete(schema.conversations)
-          .where(eq(schema.conversations.id, id))
-          .run();
-        total += result.changes;
-      }
-      return total;
+      const result = db
+        .delete(schema.conversations)
+        .where(inArray(schema.conversations.id, ids))
+        .run();
+      return result.changes;
     },
 
     async addMessage(conversationId: string, data: MessageInput): Promise<MessageRow> {
@@ -286,6 +282,28 @@ export function createSqliteConversationRepo(): ConversationRepository {
         total += result.changes;
       }
       return total;
+    },
+
+    async getMessagesByConversationIds(conversationIds: string[]): Promise<MessageRow[]> {
+      if (conversationIds.length === 0) return [];
+      const rows = db
+        .select()
+        .from(schema.messages)
+        .where(inArray(schema.messages.conversationId, conversationIds))
+        .all();
+      return rows.map((row) => ({
+        id: row.id,
+        conversationId: row.conversationId,
+        role: row.role as MessageRow["role"],
+        content: row.content,
+        toolCalls: row.toolCalls,
+        toolCallId: row.toolCallId,
+        parentMessageId: row.parentMessageId,
+        tokenCount: row.tokenCount,
+        compressed: row.compressed,
+        modelUsed: row.modelUsed,
+        createdAt: row.createdAt,
+      }));
     },
 
     async searchMessages(query: string, limit: number = 20): Promise<SearchResult[]> {

@@ -3,6 +3,7 @@ import { describe, expect, it, vi, beforeAll, beforeEach } from "vitest";
 const conversationsRepo = {
   list: vi.fn(),
   getMessages: vi.fn(),
+  getMessagesByConversationIds: vi.fn(),
   delete: vi.fn(),
   deleteMany: vi.fn(),
 };
@@ -32,11 +33,12 @@ describe("Conversation Connector", () => {
       { id: "content-match", title: "Normal chat" },
       { id: "unmatched", title: "Daily notes" },
     ]);
-    conversationsRepo.getMessages.mockImplementation(async (conversationId: string) => {
-      if (conversationId === "content-match") {
-        return [{ content: "这里有一次心跳检查记录" }];
-      }
-      return [{ content: "ordinary content" }];
+    conversationsRepo.getMessagesByConversationIds.mockImplementation(async (ids: string[]) => {
+      return ids.flatMap((id) => {
+        if (id === "content-match") return [{ conversationId: id, content: "这里有一次心跳检查记录" }];
+        if (id === "unmatched") return [{ conversationId: id, content: "ordinary content" }];
+        return [{ conversationId: id, content: "ordinary content" }];
+      });
     });
     conversationsRepo.deleteMany.mockResolvedValue(2);
 
@@ -55,7 +57,9 @@ describe("Conversation Connector", () => {
       { id: "tick-1", title: "TICK: autonomous processing" },
       { id: "other", title: "Normal chat" },
     ]);
-    conversationsRepo.getMessages.mockResolvedValue([{ content: "ordinary content" }]);
+    conversationsRepo.getMessagesByConversationIds.mockResolvedValue([
+      { conversationId: "other", content: "ordinary content" },
+    ]);
     conversationsRepo.deleteMany.mockResolvedValue(1);
 
     const tool = getRegistry().resolveTool("deleteConversationsByQuery");

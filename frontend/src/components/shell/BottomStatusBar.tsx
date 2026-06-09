@@ -22,7 +22,9 @@ interface DaemonStatus {
 export function BottomStatusBar() {
   const activeConversationId = useConversationStore((s) => s.activeConversationId);
   const runs = useRunStore((s) => s.runs);
-  const pendingCount = useApprovalStore((s) => s.pendingCount);
+  const pendingCount = useApprovalStore(
+    (s) => s.approvals.filter((a) => a.status === 'pending').length
+  );
   const agents = useAgentStore((s) => s.agents);
 
   const [daemon, setDaemon] = useState<DaemonStatus>({ connected: false });
@@ -135,9 +137,7 @@ export function BottomStatusBar() {
         {queuedRunCount > 0 && (
           <span style={{ color: 'var(--text-secondary)' }}>QUEUED {queuedRunCount}</span>
         )}
-        {pendingCount() > 0 && (
-          <span style={{ color: 'var(--amber)' }}>PENDING {pendingCount()}</span>
-        )}
+        {pendingCount > 0 && <span style={{ color: 'var(--amber)' }}>PENDING {pendingCount}</span>}
         {resourcePressure && (
           <span style={{ color: 'var(--amber)' }}>
             CPU {daemon.cpuUsagePercent ?? 0}% · MEM {daemon.memoryPercent ?? 0}%

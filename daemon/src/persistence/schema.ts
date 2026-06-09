@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, index } from "drizzle-orm/sqlite-core";
 
 // ---- Workspaces ----
 
@@ -182,7 +182,9 @@ export const conversations = sqliteTable("conversations", {
   completionTokens: integer("completion_tokens").default(0),
   createdAt: text("created_at").default("CURRENT_TIMESTAMP").notNull(),
   updatedAt: text("updated_at").default("CURRENT_TIMESTAMP").notNull(),
-});
+}, (t) => [
+  index("conversations_updated_at_idx").on(t.updatedAt),
+]);
 
 export const messages = sqliteTable("messages", {
   id: text("id").primaryKey(),
