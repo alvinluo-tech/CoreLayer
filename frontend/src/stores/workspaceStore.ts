@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { invoke } from '@tauri-apps/api/core';
+import { deleteWorkspace as tauriDeleteWorkspace } from '@/lib/tauri';
 
 // ---- Types ----
 
@@ -11,6 +12,7 @@ export interface Workspace {
   settings: unknown;
   createdAt: string;
   updatedAt: string;
+  projects?: { id: string }[];
 }
 
 export interface Project {
@@ -36,6 +38,7 @@ interface WorkspaceState {
 
   loadWorkspaces: () => Promise<void>;
   selectWorkspace: (id: string) => void;
+  deleteWorkspace: (id: string) => Promise<void>;
   loadProjects: (workspaceId: string) => Promise<void>;
   selectProject: (id: string) => void;
   createProject: (data: { name: string; description?: string }) => Promise<Project>;
@@ -78,6 +81,26 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     set({ currentWorkspace: ws, projects: [], currentProject: null });
     if (ws) {
       get().loadProjects(ws.id);
+    }
+  },
+
+  deleteWorkspace: async (id: string) => {
+    try {
+      await tauriDeleteWorkspace(id);
+      set((state) => {
+        const remaining = state.workspaces.filter((w) => w.id !== id);
+        const currentStillExists = remaining.some((w) => w.id === state.currentWorkspace?.id);
+        return {
+          workspaces: remaining,
+          currentWorkspace: currentStillExists ? state.currentWorkspace : (remaining[0] ?? null),
+        };
+      });
+      const { currentWorkspace } = get();
+      if (currentWorkspace) {
+        await get().loadProjects(currentWorkspace.id);
+      }
+    } catch (error) {
+      set({ error: String(error) });
     }
   },
 
