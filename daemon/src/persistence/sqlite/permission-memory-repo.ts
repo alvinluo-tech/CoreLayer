@@ -56,10 +56,31 @@ export function createSqlitePermissionMemoryRepo(
       toolId: string,
       userId = "default",
       projectId?: string,
+      runId?: string,
     ): Promise<PermissionMemoryRow | null> {
       const now = Date.now();
 
-      // Try project-specific first, then global
+      // Priority: session > project > global
+
+      // 1. Try session-scoped (tied to a specific AgentRun)
+      if (runId) {
+        const sessionRow = db
+          .select()
+          .from(schema.permissionMemories)
+          .where(
+            and(
+              eq(schema.permissionMemories.toolId, toolId),
+              eq(schema.permissionMemories.scope, "session"),
+              eq(schema.permissionMemories.userId, userId),
+            ),
+          )
+          .get();
+        if (sessionRow && (!sessionRow.expiresAt || sessionRow.expiresAt > now)) {
+          return mapRow(sessionRow);
+        }
+      }
+
+      // 2. Try project-scoped
       if (projectId) {
         const projectRow = db
           .select()
@@ -77,7 +98,7 @@ export function createSqlitePermissionMemoryRepo(
         }
       }
 
-      // Fall back to global
+      // 3. Fall back to global
       const globalRow = db
         .select()
         .from(schema.permissionMemories)

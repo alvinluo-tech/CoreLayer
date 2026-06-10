@@ -4,6 +4,8 @@ import type { ApprovalRequiredResult } from "@jarvis/runtime-protocol";
 import { getRegistry } from "../adapters/native-tools/registry.js";
 import { getRepositories } from "../../../persistence/factory.js";
 import { checkHardlineBlocklist } from "../../../capabilities/hardline-blocklist.js";
+import { canAutoApprove } from "../../../capabilities/capability-policy.js";
+import type { OperationRisk } from "../../../operations/domain/operation.js";
 
 /**
  * Basic validation of tool args against the tool's inputSchema.
@@ -213,11 +215,15 @@ export class ToolExecutionService {
         toolId,
         "default",
         context.projectId,
+        context.runId,
       );
       if (memory) {
         // Check if the memory has expired
         if (memory.expiresAt !== null && memory.expiresAt < Date.now()) {
           // Memory expired — fall through to confirmation
+        } else if (memory.decision === "auto" && !canAutoApprove(tool.risk as OperationRisk)) {
+          // Capability policy: high/critical risk cannot be auto-approved
+          // Fall through to confirmation
         } else if (memory.decision === "auto") {
           // Log auto-allowed decision for audit trail
           if (context.runId) {

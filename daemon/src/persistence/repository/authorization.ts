@@ -75,7 +75,7 @@ export interface CreatePermissionMemoryInput {
 
 export interface PermissionMemoryRepository {
   create(input: CreatePermissionMemoryInput): Promise<PermissionMemoryRow>;
-  find(toolId: string, userId?: string, projectId?: string): Promise<PermissionMemoryRow | null>;
+  find(toolId: string, userId?: string, projectId?: string, runId?: string): Promise<PermissionMemoryRow | null>;
   getByUserId(userId: string): Promise<PermissionMemoryRow[]>;
   getByProjectId(projectId: string): Promise<PermissionMemoryRow[]>;
   delete(id: string): Promise<boolean>;
