@@ -690,7 +690,7 @@ describe("Scheduler", () => {
         name: "string-input-skill",
         cronExpr: "0 21 * * *",
         skillName: "test-skill",
-        input: "not-an-object",
+        input: "not-an-object" as any,
         enabled: true,
       });
 

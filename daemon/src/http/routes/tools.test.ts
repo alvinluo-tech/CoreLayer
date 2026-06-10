@@ -205,7 +205,6 @@ describe("tools route", () => {
       // NOTE: In the source, /:id route is defined BEFORE /pending-confirmations,
       // so Hono matches "pending-confirmations" as an :id param and returns 404.
       // This tests the actual behavior.
-      const json = (await res.json()) as { error?: string; confirmations?: unknown[] };
 
       // The route works correctly when the path is matched — the 404 is from /:id catching it first
       expect(res.status).toBe(404);

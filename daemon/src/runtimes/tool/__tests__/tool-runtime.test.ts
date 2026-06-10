@@ -22,7 +22,7 @@ vi.mock("hono", () => {
       return this;
     }
 
-    async request(path: string, init?: { method?: string; body?: unknown }) {
+    async request(path: string, init?: { method?: string; body?: any }) {
       const method = init?.method ?? "GET";
       const route = this.routes.find(
         (r) => r.path === path && r.method === method,
@@ -323,7 +323,7 @@ describe("ToolRuntime", () => {
 
       const res = await router.request("/runtime/start-run", {
         method: "POST",
-        body: { runId: "exec-1", input: { toolId: "test" } },
+        body: { runId: "exec-1", input: { toolId: "test" } } as any,
       });
       const body = await res.json();
       expect(body.status).toBe("started");
@@ -335,7 +335,7 @@ describe("ToolRuntime", () => {
 
       const res = await router.request("/runtime/cancel-run", {
         method: "POST",
-        body: { runId: "exec-1" },
+        body: { runId: "exec-1" } as any,
       });
       const body = await res.json();
       expect(body.status).toBe("cancelled");
@@ -354,7 +354,7 @@ describe("ToolRuntime", () => {
           toolId: "todo.create",
           args: { title: "Test" },
           context: { caller: "rest-api" },
-        },
+        } as any,
       });
       expect(res.status).toBe(200);
     });
@@ -375,7 +375,7 @@ describe("ToolRuntime", () => {
 
       const res = await router.request("/runtime/shutdown", {
         method: "POST",
-        body: { status: "shutdown_initiated", timestamp: new Date().toISOString() },
+        body: { status: "shutdown_initiated", timestamp: new Date().toISOString() } as any,
       });
       const body = await res.json();
       expect(body.status).toBe("shutdown_initiated");

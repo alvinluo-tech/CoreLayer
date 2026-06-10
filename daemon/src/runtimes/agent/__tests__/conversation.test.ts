@@ -139,7 +139,6 @@ import {
   injectBudgetWarning,
   ForceAnswerDetector,
   guardEmptyResponse,
-  CACHE_CONTROL,
   applyCacheControl,
   logCacheStats,
   streamMessageInConversation,
@@ -331,12 +330,12 @@ describe("guardEmptyResponse", () => {
 // ---- CACHE_CONTROL & applyCacheControl ----
 describe("applyCacheControl", () => {
   it("applies cache control to system message", () => {
-    const msgs = [{ role: "system", content: "sys" }, { role: "user", content: "hi" }];
-    const result = applyCacheControl(msgs, { t: { description: "tool" } });
+    const msgs = [{ role: "system", content: "sys" }, { role: "user", content: "hi" }] as any;
+    const result = applyCacheControl(msgs, { t: { description: "tool" } } as any);
     expect(result.messages[0]).toHaveProperty("providerOptions");
   });
   it("applies cache control to last tool", () => {
-    const tools = { a: { description: "first" }, b: { description: "last" } };
+    const tools = { a: { description: "first" }, b: { description: "last" } } as any;
     const result = applyCacheControl([], tools);
     expect(result.tools.a).not.toHaveProperty("providerOptions");
     expect(result.tools.b).toHaveProperty("providerOptions");
@@ -345,7 +344,7 @@ describe("applyCacheControl", () => {
     expect(applyCacheControl([], {}).tools).toEqual({});
   });
   it("does not modify non-system messages", () => {
-    const msgs = [{ role: "user", content: "hi" }];
+    const msgs = [{ role: "user", content: "hi" }] as any;
     const result = applyCacheControl(msgs, {});
     expect(result.messages[0]).toEqual({ role: "user", content: "hi" });
   });

@@ -155,7 +155,7 @@ describe("MemoryRuntime", () => {
             const next = await Promise.race([
               iterator.next(),
               new Promise((r) => setTimeout(() => r({ done: true, value: undefined }), 100)),
-            ]);
+            ]) as any;
             if (!next.done) events.push(next.value as { type: string });
           } catch {
             break;

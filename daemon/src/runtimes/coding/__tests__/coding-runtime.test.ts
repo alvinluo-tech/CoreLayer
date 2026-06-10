@@ -22,7 +22,7 @@ vi.mock("hono", () => {
       return this;
     }
 
-    async request(path: string, init?: { method?: string; body?: unknown }) {
+    async request(path: string, init?: { method?: string; body?: any }) {
       const method = init?.method ?? "GET";
       const route = this.routes.find(
         (r) => r.path === path && r.method === method,
@@ -324,7 +324,7 @@ describe("CodingRuntime", () => {
 
       const res = await router.request("/runtime/start-run", {
         method: "POST",
-        body: { runId: "crun-1", input: {} },
+        body: { runId: "crun-1", input: {} } as any,
       });
       const body = await res.json();
       expect(body.status).toBe("started");
@@ -336,7 +336,7 @@ describe("CodingRuntime", () => {
 
       const res = await router.request("/runtime/cancel-run", {
         method: "POST",
-        body: { runId: "crun-1" },
+        body: { runId: "crun-1" } as any,
       });
       const body = await res.json();
       expect(body.status).toBe("cancelled");
@@ -354,7 +354,7 @@ describe("CodingRuntime", () => {
         body: {
           adapterId: "claude-code",
           task: { repoPath: "/repo", taskPrompt: "test" },
-        },
+        } as any,
       });
       expect(res.status).toBe(200);
     });
@@ -373,7 +373,7 @@ describe("CodingRuntime", () => {
 
       const res = await router.request("/runtime/shutdown", {
         method: "POST",
-        body: { status: "shutdown_initiated", timestamp: new Date().toISOString() },
+        body: { status: "shutdown_initiated", timestamp: new Date().toISOString() } as any,
       });
       const body = await res.json();
       expect(body.status).toBe("shutdown_initiated");

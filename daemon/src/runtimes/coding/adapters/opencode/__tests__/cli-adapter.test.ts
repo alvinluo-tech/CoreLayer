@@ -264,7 +264,7 @@ describe("OpenCodeCliAdapter", () => {
 
   describe("streamRunEvents", () => {
     it("throws for unknown runId", async () => {
-      const gen = adapter.streamRunEvents("nonexistent");
+      const gen = adapter.streamRunEvents("nonexistent") as AsyncGenerator;
       await expect(gen.next()).rejects.toThrow("Coding run not found");
     });
   });

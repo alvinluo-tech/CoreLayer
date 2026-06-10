@@ -83,7 +83,7 @@ describe("ModelGateway", () => {
 
     it("uses default profiles when no DB profiles exist", () => {
       const gw = getModelGateway();
-      expect((gw as { config: Record<string, unknown> }).config.profiles).toEqual([
+      expect((gw as unknown as { config: Record<string, unknown> }).config.profiles).toEqual([
         { id: "default-model", provider: "default-provider", modelName: "gpt-4" },
       ]);
     });
@@ -106,7 +106,7 @@ describe("ModelGateway", () => {
       });
 
       const gw = getModelGateway();
-      const config = (gw as { config: Record<string, unknown> }).config;
+      const config = (gw as unknown as { config: Record<string, unknown> }).config;
       const profiles = config.profiles as Array<{ id: string }>;
       expect(profiles).toHaveLength(1);
       expect(profiles[0].id).toBe("db-model-1");
@@ -116,7 +116,7 @@ describe("ModelGateway", () => {
       mockGetRoutingRules.mockReturnValue([{ taskType: "fast", modelId: "quick" }]);
 
       const gw = getModelGateway();
-      const config = (gw as { config: Record<string, unknown> }).config;
+      const config = (gw as unknown as { config: Record<string, unknown> }).config;
       expect(config.routingRules).toEqual([{ taskType: "fast", modelId: "quick" }]);
     });
 
@@ -126,7 +126,7 @@ describe("ModelGateway", () => {
       ]);
 
       const gw = getModelGateway();
-      const config = (gw as { config: Record<string, unknown> }).config;
+      const config = (gw as unknown as { config: Record<string, unknown> }).config;
       expect(config.providers).toHaveProperty("my-provider");
     });
 
@@ -136,7 +136,7 @@ describe("ModelGateway", () => {
       ]);
 
       const gw = getModelGateway();
-      const config = (gw as { config: Record<string, unknown> }).config;
+      const config = (gw as unknown as { config: Record<string, unknown> }).config;
       expect(config.providers).not.toHaveProperty("disabled-provider");
     });
 
@@ -150,7 +150,7 @@ describe("ModelGateway", () => {
       });
 
       const gw = getModelGateway();
-      const config = (gw as { config: Record<string, unknown> }).config;
+      const config = (gw as unknown as { config: Record<string, unknown> }).config;
       expect(config.providers).not.toHaveProperty("remote");
     });
 
@@ -165,7 +165,7 @@ describe("ModelGateway", () => {
       });
 
       const gw = getModelGateway();
-      const config = (gw as { config: Record<string, unknown> }).config;
+      const config = (gw as unknown as { config: Record<string, unknown> }).config;
       expect(config.providers).toHaveProperty("active-remote");
     });
 
@@ -175,13 +175,13 @@ describe("ModelGateway", () => {
       ]);
 
       const gw = getModelGateway();
-      const config = (gw as { config: Record<string, unknown> }).config;
+      const config = (gw as unknown as { config: Record<string, unknown> }).config;
       expect(config.providers).toHaveProperty("ollama");
     });
 
     it("includes legacy ollama provider when not already present", () => {
       const gw = getModelGateway();
-      const config = (gw as { config: Record<string, unknown> }).config;
+      const config = (gw as unknown as { config: Record<string, unknown> }).config;
       expect(config.providers).toHaveProperty("ollama");
     });
 
@@ -209,7 +209,7 @@ describe("ModelGateway", () => {
       });
 
       const gw = getModelGateway();
-      const config = (gw as { config: Record<string, unknown> }).config;
+      const config = (gw as unknown as { config: Record<string, unknown> }).config;
       expect(config.providers).toHaveProperty("special-provider");
     });
   });

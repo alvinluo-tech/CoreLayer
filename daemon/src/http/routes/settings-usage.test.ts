@@ -96,7 +96,7 @@ describe("settings-usage route", () => {
       });
 
       let selectCallCount = 0;
-      const { db } = await import("../../persistence/client.js") as { db: { select: ReturnType<typeof vi.fn> } };
+      const { db } = await import("../../persistence/client.js") as unknown as { db: { select: ReturnType<typeof vi.fn> } };
       db.select.mockImplementation(() => {
         selectCallCount++;
         const chain = {
@@ -133,7 +133,7 @@ describe("settings-usage route", () => {
     });
 
     it("returns 500 on error", async () => {
-      const { db } = await import("../../persistence/client.js") as { db: { select: ReturnType<typeof vi.fn> } };
+      const { db } = await import("../../persistence/client.js") as unknown as { db: { select: ReturnType<typeof vi.fn> } };
       db.select.mockImplementation(() => {
         throw new Error("db error");
       });

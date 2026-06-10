@@ -187,7 +187,7 @@ describe("approval routes", () => {
 
     it("skips non-pending items", async () => {
       mocks.mockGetById.mockResolvedValue({ ...pendingApproval, status: "approved" });
-      const res = await app.fetch(makeRequest("/batch/deny", "POST", { ids: ["a1"] }));
+      await app.fetch(makeRequest("/batch/deny", "POST", { ids: ["a1"] }));
       expect(mocks.mockDeny).not.toHaveBeenCalled();
     });
 

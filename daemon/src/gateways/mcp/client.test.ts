@@ -104,7 +104,7 @@ describe("MCP Client", () => {
         name: "Test Server",
         command: "npx",
         args: ["test-mcp"],
-      };
+      } as any;
 
       await connectMCPServer(config);
 
@@ -126,7 +126,7 @@ describe("MCP Client", () => {
         name: "Test Server",
         command: "npx",
         args: [],
-      });
+      } as any);
 
       expect(consoleSpy).toHaveBeenCalledWith(
         expect.stringContaining("Connected to Test Server"),
@@ -149,7 +149,7 @@ describe("MCP Client", () => {
         name: "Test Server",
         command: "npx",
         args: [],
-      });
+      } as any);
 
       expect(mockFromMCPTools).toHaveBeenCalledWith(
         "server-1",
@@ -167,7 +167,7 @@ describe("MCP Client", () => {
           name: "Test Server",
           command: "npx",
           args: [],
-        }),
+        } as any),
       ).rejects.toThrow("connection refused");
     });
   });

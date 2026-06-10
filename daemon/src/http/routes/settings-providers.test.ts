@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
-const { mockGetProviders, mockGetCredentials, mockSetProvider, mockSetCredential, mockRemoveProvider, mockResetGateway, mockMaskApiKey, mockIsMaskedKey, mockProviderPresets, mockLegacyDefaults } = vi.hoisted(() => ({
+const { mockGetProviders, mockGetCredentials, mockSetProvider, mockSetCredential, mockRemoveProvider, mockResetGateway, mockMaskApiKey, mockIsMaskedKey } = vi.hoisted(() => ({
   mockGetProviders: vi.fn(),
   mockGetCredentials: vi.fn(),
   mockSetProvider: vi.fn(),
@@ -9,8 +9,6 @@ const { mockGetProviders, mockGetCredentials, mockSetProvider, mockSetCredential
   mockResetGateway: vi.fn(),
   mockMaskApiKey: vi.fn(),
   mockIsMaskedKey: vi.fn(),
-  mockProviderPresets: vi.fn(),
-  mockLegacyDefaults: vi.fn(),
 }));
 
 vi.mock("../../config/config-manager.js", () => ({
