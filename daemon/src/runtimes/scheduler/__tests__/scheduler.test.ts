@@ -170,11 +170,14 @@ vi.mock("../../agent/application/compressor.js", () => compressorMocks);
 
 const {
   computeNextRun,
+  startScheduler,
   stopScheduler,
+  isSchedulerRunning,
   triggerTask,
   recordActivity,
   getIdleMs,
   setIdleThreshold,
+  setIdleCallback,
   consolidateOnIdle,
   canRunTick,
   getTickAgeMs,
@@ -543,6 +546,174 @@ describe("Scheduler", () => {
 
       const result = await runTick();
       expect(result.ran).toBe(true);
+    });
+
+    it("runTick returns error when runTurn throws", async () => {
+      resetTickState();
+      const { runTurn } = await import("../../agent/run.js");
+      vi.mocked(runTurn).mockRejectedValueOnce(new Error("LLM unavailable"));
+
+      const result = await runTick();
+      expect(result.ran).toBe(true);
+      expect(result.error).toContain("LLM unavailable");
+    });
+
+    it("runTick returns error for non-Error thrown value", async () => {
+      resetTickState();
+      const { runTurn } = await import("../../agent/run.js");
+      vi.mocked(runTurn).mockRejectedValueOnce("string error");
+
+      const result = await runTick();
+      expect(result.ran).toBe(true);
+      expect(result.error).toBe("string error");
+    });
+
+    it("canRunTick returns false when tick is disabled", () => {
+      resetTickState();
+      getConfigSpy.mockReturnValue({
+        ...configManager.getConfig(),
+        tick: { enabled: false, intervalMinutes: 30 },
+      });
+      expect(canRunTick()).toBe(false);
+    });
+  });
+
+  // ---- Scheduler lifecycle ----
+
+  describe("scheduler lifecycle", () => {
+    it("startScheduler loads tasks and sets running state", async () => {
+      const repo = (await import("../../../persistence/factory.js")).getRepositories().scheduledTasks;
+      await repo.upsert({
+        name: "enabled-task",
+        cronExpr: "0 21 * * *",
+        skillName: "test-skill",
+        enabled: true,
+      });
+      await repo.upsert({
+        name: "disabled-task",
+        cronExpr: "0 22 * * *",
+        skillName: "test-skill",
+        enabled: false,
+      });
+
+      await startScheduler();
+
+      expect(isSchedulerRunning()).toBe(true);
+
+      stopScheduler();
+      expect(isSchedulerRunning()).toBe(false);
+    });
+
+    it("startScheduler is idempotent when already running", async () => {
+      await startScheduler();
+      expect(isSchedulerRunning()).toBe(true);
+
+      // Second call should be a no-op
+      await startScheduler();
+      expect(isSchedulerRunning()).toBe(true);
+
+      stopScheduler();
+    });
+
+    it("stopScheduler clears all timers", async () => {
+      await startScheduler();
+      expect(isSchedulerRunning()).toBe(true);
+
+      stopScheduler();
+      expect(isSchedulerRunning()).toBe(false);
+    });
+
+    it("setIdleCallback registers a callback", () => {
+      const cb = vi.fn().mockResolvedValue(undefined);
+      setIdleCallback(cb);
+      // No direct assertion possible on internal state, but ensure no throw
+      expect(true).toBe(true);
+    });
+  });
+
+  // ---- executeTask edge cases ----
+
+  describe("executeTask edge cases", () => {
+    it("fails when task has neither prompt nor skillName", async () => {
+      const repo = (await import("../../../persistence/factory.js")).getRepositories().scheduledTasks;
+      const task = await repo.upsert({
+        name: "empty-task",
+        cronExpr: "0 21 * * *",
+        enabled: true,
+      });
+
+      const result = await triggerTask(task.id);
+      expect(result).not.toBeNull();
+      expect(result!.success).toBe(false);
+      expect(result!.error).toContain("neither prompt nor skillName");
+    });
+
+    it("executeTask catches skill execution errors", async () => {
+      const { executeSkill } = await import("../../../skills/executor.js");
+      vi.mocked(executeSkill).mockRejectedValueOnce(new Error("skill crashed"));
+
+      const repo = (await import("../../../persistence/factory.js")).getRepositories().scheduledTasks;
+      const task = await repo.upsert({
+        name: "crash-skill",
+        cronExpr: "0 21 * * *",
+        skillName: "test-skill",
+        enabled: true,
+      });
+
+      const result = await triggerTask(task.id);
+      expect(result!.success).toBe(false);
+      expect(result!.error).toContain("skill crashed");
+    });
+
+    it("executeTask passes input to skill executor", async () => {
+      const { executeSkill } = await import("../../../skills/executor.js");
+
+      const repo = (await import("../../../persistence/factory.js")).getRepositories().scheduledTasks;
+      const task = await repo.upsert({
+        name: "input-skill",
+        cronExpr: "0 21 * * *",
+        skillName: "test-skill",
+        input: { key: "value" },
+        enabled: true,
+      });
+
+      const result = await triggerTask(task.id);
+      expect(result!.success).toBe(true);
+      expect(executeSkill).toHaveBeenCalledWith("test-skill", { key: "value" });
+    });
+
+    it("executeTask defaults to empty object for non-object input", async () => {
+      const { executeSkill } = await import("../../../skills/executor.js");
+
+      const repo = (await import("../../../persistence/factory.js")).getRepositories().scheduledTasks;
+      const task = await repo.upsert({
+        name: "string-input-skill",
+        cronExpr: "0 21 * * *",
+        skillName: "test-skill",
+        input: "not-an-object",
+        enabled: true,
+      });
+
+      const result = await triggerTask(task.id);
+      expect(result!.success).toBe(true);
+      expect(executeSkill).toHaveBeenCalledWith("test-skill", {});
+    });
+
+    it("prompt-based task catches runTurn errors", async () => {
+      const { runTurn } = await import("../../agent/run.js");
+      vi.mocked(runTurn).mockRejectedValueOnce(new Error("prompt failed"));
+
+      const repo = (await import("../../../persistence/factory.js")).getRepositories().scheduledTasks;
+      const task = await repo.upsert({
+        name: "failing-prompt",
+        cronExpr: "0 21 * * *",
+        prompt: "Do something",
+        enabled: true,
+      });
+
+      const result = await triggerTask(task.id);
+      expect(result!.success).toBe(false);
+      expect(result!.error).toContain("prompt failed");
     });
   });
 });

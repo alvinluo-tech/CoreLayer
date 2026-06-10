@@ -16,6 +16,8 @@ const mockGetById = vi.fn();
 const mockUpdateArtifacts = vi.fn();
 const mockAgentProfilesGetById = vi.fn();
 const mockTasksGetById = vi.fn();
+const mockTasksUpdate = vi.fn().mockResolvedValue(undefined);
+const mockTasksGetByProjectId = vi.fn().mockResolvedValue([]);
 
 vi.mock("../../persistence/factory.js", () => ({
   getRepositories: vi.fn(() => ({
@@ -31,6 +33,8 @@ vi.mock("../../persistence/factory.js", () => ({
     },
     tasks: {
       getById: (...args: unknown[]) => mockTasksGetById(...args),
+      update: (...args: unknown[]) => mockTasksUpdate(...args),
+      getByProjectId: (...args: unknown[]) => mockTasksGetByProjectId(...args),
     },
     agentRunEvents: {
       create: vi.fn().mockResolvedValue({}),
@@ -44,14 +48,15 @@ vi.mock("../../runtimes/coding/process-spawner.js", () => ({
 
 const mockCreateRun = vi.fn();
 const mockAdapterCancelRun = vi.fn().mockResolvedValue(true);
+const mockGetCodingRuntime = vi.fn().mockReturnValue({
+  id: "claude-code",
+  name: "Claude Code",
+  createRun: (...args: unknown[]) => mockCreateRun(...args),
+  cancelRun: (...args: unknown[]) => mockAdapterCancelRun(...args),
+  getRunStatus: vi.fn().mockResolvedValue({ status: "running", artifacts: [] }),
+});
 vi.mock("../../runtimes/coding/registry.js", () => ({
-  getCodingRuntime: vi.fn(() => ({
-    id: "claude-code",
-    name: "Claude Code",
-    createRun: (...args: unknown[]) => mockCreateRun(...args),
-    cancelRun: (...args: unknown[]) => mockAdapterCancelRun(...args),
-    getRunStatus: vi.fn().mockResolvedValue({ status: "running", artifacts: [] }),
-  })),
+  getCodingRuntime: (...args: unknown[]) => mockGetCodingRuntime(...args),
 }));
 
 const mockCanStartAgentRun = vi.fn().mockReturnValue(true);
@@ -91,6 +96,25 @@ vi.mock("../resource-monitor.js", () => ({
   isResourcePressureHigh: () => mockIsResourcePressureHigh(),
 }));
 
+const mockCanExecute = vi.fn().mockReturnValue(true);
+vi.mock("../workspaces/task-graph-service.js", () => ({
+  TaskGraph: vi.fn().mockImplementation(() => ({
+    canExecute: (...args: unknown[]) => mockCanExecute(...args),
+    completeTask: vi.fn().mockResolvedValue(undefined),
+    getExecutableTasks: vi.fn().mockResolvedValue([]),
+  })),
+}));
+
+const mockEnqueue = vi.fn().mockResolvedValue(undefined);
+vi.mock("../queue-service.js", () => ({
+  enqueue: (...args: unknown[]) => mockEnqueue(...args),
+}));
+
+vi.mock("../../persistence/client.js", () => ({
+  db: { insert: vi.fn().mockReturnValue({ values: vi.fn().mockReturnValue({ catch: vi.fn() }) }) },
+  schema: { artifacts: {} },
+}));
+
 // Import after mocks are set up
 const { dispatchRuns, completeRun, cancelRun, retryRun, getDispatcherStatus } = await import("../run-dispatcher.js");
 
@@ -122,6 +146,7 @@ beforeEach(() => {
   mockUpdateArtifacts.mockResolvedValue(undefined);
   mockAgentProfilesGetById.mockResolvedValue(null);
   mockTasksGetById.mockResolvedValue(null);
+  mockTasksGetByProjectId.mockResolvedValue([]);
   mockCreateRun.mockResolvedValue({ runId: "coding-run-1", status: "running" });
   mockReleaseAgentRun.mockImplementation(() => {});
   mockSetAgentRunQueueDepth.mockImplementation(() => {});
@@ -402,5 +427,233 @@ describe("getDispatcherStatus", () => {
     expect(status.resources).toHaveProperty("memoryPercent");
     expect(status.resources).toHaveProperty("cpuUsagePercent");
     expect(status.resources).toHaveProperty("platform");
+  });
+});
+
+// ---- dispatchRuns — task dependency ----
+
+describe("dispatchRuns — task dependencies", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockCanStartAgentRun.mockReturnValue(true);
+    mockAcquireAgentRun.mockReturnValue(true);
+    mockIsResourcePressureHigh.mockReturnValue(false);
+    mockGetQueued.mockResolvedValue([]);
+    mockGetById.mockResolvedValue(null);
+    mockUpdateStatus.mockResolvedValue(undefined);
+    mockUpdateArtifacts.mockResolvedValue(undefined);
+    mockAgentProfilesGetById.mockResolvedValue(null);
+    mockTasksGetById.mockResolvedValue(null);
+    mockTasksUpdate.mockResolvedValue(undefined);
+    mockCreateRun.mockResolvedValue({ runId: "coding-run-1", status: "running" });
+    mockCanExecute.mockReturnValue(true);
+    mockEnqueue.mockResolvedValue(undefined);
+    mockGetCodingRuntime.mockReturnValue({
+      id: "claude-code",
+      name: "Claude Code",
+      createRun: (...args: unknown[]) => mockCreateRun(...args),
+      cancelRun: (...args: unknown[]) => mockAdapterCancelRun(...args),
+      getRunStatus: vi.fn().mockResolvedValue({ status: "running", artifacts: [] }),
+    });
+  });
+
+  it("skips run when task dependencies are not met", async () => {
+    mockGetQueued.mockResolvedValue([
+      { ...createRun({ id: "run-1" }), taskId: "task-1" },
+    ]);
+    mockCanExecute.mockReturnValue(false);
+
+    const result = await dispatchRuns();
+
+    expect(result.dispatched).toBe(0);
+    expect(result.skipped).toBe(1);
+    expect(mockAcquireAgentRun).not.toHaveBeenCalled();
+  });
+
+  it("dispatches run without taskId (no dependency check)", async () => {
+    mockGetQueued.mockResolvedValue([
+      { ...createRun({ id: "run-1" }), taskId: null },
+    ]);
+
+    const result = await dispatchRuns();
+
+    expect(result.dispatched).toBe(1);
+    expect(mockCanExecute).not.toHaveBeenCalled();
+  });
+
+  it("marks run as failed when dispatchToCodingRuntime throws", async () => {
+    mockGetQueued.mockResolvedValue([
+      createRun({ id: "run-1" }),
+    ]);
+    mockCreateRun.mockRejectedValue(new Error("spawn failed"));
+
+    const result = await dispatchRuns();
+
+    expect(result.dispatched).toBe(1);
+    // Wait for the .catch handler to fire
+    await new Promise((r) => setTimeout(r, 50));
+    expect(mockUpdateStatus).toHaveBeenCalledWith("run-1", "failed", "spawn failed");
+    expect(mockReleaseAgentRun).toHaveBeenCalledWith("run-1");
+  });
+});
+
+// ---- completeRun — task graph integration ----
+
+describe("completeRun — task integration", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockCanStartAgentRun.mockReturnValue(true);
+    mockAcquireAgentRun.mockReturnValue(true);
+    mockIsResourcePressureHigh.mockReturnValue(false);
+    mockGetQueued.mockResolvedValue([]);
+    mockGetById.mockResolvedValue(null);
+    mockUpdateStatus.mockResolvedValue(undefined);
+    mockUpdateArtifacts.mockResolvedValue(undefined);
+    mockAgentProfilesGetById.mockResolvedValue(null);
+    mockTasksGetById.mockResolvedValue(null);
+    mockTasksUpdate.mockResolvedValue(undefined);
+    mockTasksGetByProjectId.mockResolvedValue([]);
+    mockCreateRun.mockResolvedValue({ runId: "coding-run-1", status: "running" });
+    mockCanExecute.mockReturnValue(true);
+    mockEnqueue.mockResolvedValue(undefined);
+  });
+
+  it("updates task status to completed on success", async () => {
+    mockGetById.mockResolvedValue({
+      id: "run-1",
+      taskId: "task-1",
+      agentId: "agent-1",
+      projectId: "proj-1",
+      workspaceId: "ws-1",
+    });
+    mockTasksGetById.mockResolvedValue({
+      id: "task-1",
+      projectId: "proj-1",
+      status: "running",
+    });
+
+    await completeRun("run-1", true);
+
+    expect(mockTasksUpdate).toHaveBeenCalledWith("task-1", expect.objectContaining({
+      status: "completed",
+      completedAt: expect.any(String),
+    }));
+  });
+
+  it("updates task status to failed on failure", async () => {
+    mockGetById.mockResolvedValue({
+      id: "run-1",
+      taskId: "task-1",
+      agentId: "agent-1",
+      projectId: "proj-1",
+    });
+    mockTasksGetById.mockResolvedValue({
+      id: "task-1",
+      projectId: "proj-1",
+      status: "running",
+    });
+
+    await completeRun("run-1", false, "error");
+
+    expect(mockTasksUpdate).toHaveBeenCalledWith("task-1", {
+      status: "failed",
+    });
+  });
+
+  it("does not enqueue tasks when task has no projectId", async () => {
+    mockGetById.mockResolvedValue({
+      id: "run-1",
+      taskId: "task-1",
+      agentId: "agent-1",
+    });
+    mockTasksGetById.mockResolvedValue({
+      id: "task-1",
+      projectId: null,
+      status: "running",
+    });
+
+    await completeRun("run-1", true);
+
+    expect(mockEnqueue).not.toHaveBeenCalled();
+  });
+
+  it("does nothing when run has no taskId", async () => {
+    mockGetById.mockResolvedValue({ id: "run-1", taskId: null });
+
+    await completeRun("run-1", true);
+
+    expect(mockTasksUpdate).not.toHaveBeenCalled();
+    expect(mockReleaseAgentRun).toHaveBeenCalledWith("run-1");
+  });
+});
+
+// ---- cancelRun — with agent profile ----
+
+describe("cancelRun — agent profile", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockCanStartAgentRun.mockReturnValue(true);
+    mockAcquireAgentRun.mockReturnValue(true);
+    mockIsResourcePressureHigh.mockReturnValue(false);
+    mockGetQueued.mockResolvedValue([]);
+    mockGetById.mockResolvedValue(null);
+    mockUpdateStatus.mockResolvedValue(undefined);
+    mockUpdateArtifacts.mockResolvedValue(undefined);
+    mockAgentProfilesGetById.mockResolvedValue(null);
+    mockTasksGetById.mockResolvedValue(null);
+    mockTasksUpdate.mockResolvedValue(undefined);
+    mockTasksGetByProjectId.mockResolvedValue([]);
+    mockCreateRun.mockResolvedValue({ runId: "coding-run-1", status: "running" });
+    mockCanExecute.mockReturnValue(true);
+    mockEnqueue.mockResolvedValue(undefined);
+    mockGetCodingRuntime.mockReturnValue({
+      id: "claude-code",
+      name: "Claude Code",
+      createRun: (...args: unknown[]) => mockCreateRun(...args),
+      cancelRun: (...args: unknown[]) => mockAdapterCancelRun(...args),
+      getRunStatus: vi.fn().mockResolvedValue({ status: "running", artifacts: [] }),
+    });
+  });
+
+  it("cancels run without agentId", async () => {
+    mockGetById.mockResolvedValue({
+      id: "run-1",
+      status: "running",
+      agentId: null,
+    });
+
+    const result = await cancelRun("run-1");
+
+    expect(result).toBe(true);
+    expect(mockUpdateStatus).toHaveBeenCalledWith("run-1", "cancelled");
+    expect(mockGetCodingRuntime).not.toHaveBeenCalled();
+  });
+
+  it("still cancels when adapter lookup throws", async () => {
+    mockGetById.mockResolvedValue(createRun({ id: "run-1", status: "running" }));
+    mockAgentProfilesGetById.mockResolvedValue({
+      id: "agent-1",
+      executorPolicy: { executor: "opencode" },
+    });
+    mockGetCodingRuntime.mockImplementation(() => { throw new Error("adapter error"); });
+
+    const result = await cancelRun("run-1");
+
+    expect(result).toBe(true);
+    expect(mockUpdateStatus).toHaveBeenCalledWith("run-1", "cancelled");
+  });
+
+  it("still cancels when adapter cancelRun throws", async () => {
+    mockGetById.mockResolvedValue(createRun({ id: "run-1", status: "running" }));
+    mockAgentProfilesGetById.mockResolvedValue({
+      id: "agent-1",
+      executorPolicy: { executor: "opencode" },
+    });
+    mockAdapterCancelRun.mockRejectedValue(new Error("kill failed"));
+
+    const result = await cancelRun("run-1");
+
+    expect(result).toBe(true);
+    expect(mockUpdateStatus).toHaveBeenCalledWith("run-1", "cancelled");
   });
 });
