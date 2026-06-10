@@ -3,6 +3,7 @@ import type { ToolResult, JSONSchema } from "@jarvis/types";
 import type { ApprovalRequiredResult } from "@jarvis/runtime-protocol";
 import { getRegistry } from "../adapters/native-tools/registry.js";
 import { getRepositories } from "../../../persistence/factory.js";
+import { checkHardlineBlocklist } from "../../../capabilities/hardline-blocklist.js";
 
 /**
  * Basic validation of tool args against the tool's inputSchema.
@@ -154,6 +155,24 @@ export class ToolExecutionService {
     if (validationError) {
       return {
         result: { success: false, error: `Validation failed: ${validationError}` },
+        confirmed: false,
+        durationMs: Date.now() - startTime,
+      };
+    }
+
+    // Hardline blocklist: unconditionally deny dangerous operations
+    const toolCategory = (tool as { category?: string }).category ?? toolId.split(":")[0];
+    const command = typeof args === "object" && args !== null
+      ? String((args as Record<string, unknown>).command ?? (args as Record<string, unknown>).query ?? JSON.stringify(args))
+      : String(args);
+    const blocklistResult = checkHardlineBlocklist(command, toolCategory);
+    if (blocklistResult.blocked) {
+      // Audit the blocked attempt
+      this.persistAuditEntry(tool, args, "denied", context, {
+        error: `Hardline blocklist: ${blocklistResult.rule.reason}`,
+      });
+      return {
+        result: { success: false, error: `已阻止: ${blocklistResult.rule.reason}` },
         confirmed: false,
         durationMs: Date.now() - startTime,
       };
