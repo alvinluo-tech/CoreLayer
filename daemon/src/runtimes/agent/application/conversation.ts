@@ -4,6 +4,7 @@ import { ContextBuilder, MEMORY_MIN_SCORE } from "./context-builder.js";
 import { compressConversation, createSummaryMessage, extractMemoriesFromTurn } from "./compressor.js";
 import { getAllTools, wrapToolsForAI } from "../../tool/public-api.js";
 import { isTaskComplete } from "../../../workspaces/task-status.js";
+import { isApprovalRequiredMarker, extractApprovalRequestIds } from "../../tool/adapters/ai-tool-wrapper.js";
 
 import { configManager } from "../../../config/config-manager.js";
 import { getModelGateway } from "../../../gateways/model/gateway.js";
@@ -598,6 +599,8 @@ export async function handleMessageInConversation(
   userMessage: MessageRow;
   assistantMessage: MessageRow;
   conversation: ConversationRow;
+  suspended?: boolean;
+  approvalRequestIds?: string[];
 }> {
   const streamResult = await streamMessageInConversation(conversationId, userMessage, undefined, undefined, options);
 
@@ -612,6 +615,20 @@ export async function handleMessageInConversation(
       userMessage: streamResult.userMessage,
       assistantMessage: savedAssistantMsg,
       conversation,
+    };
+  }
+
+  // If the run was suspended due to approval required, do NOT save an assistant message
+  // and return the suspension info so the caller can set waiting_for_approval status.
+  if (streamResult.suspended) {
+    const conversation = (await getRepositories().conversations.getById(conversationId))!;
+    // Return a minimal result — no assistant message saved
+    return {
+      userMessage: streamResult.userMessage,
+      assistantMessage: { id: "", conversationId, role: "assistant", content: "", createdAt: "" } as MessageRow,
+      conversation,
+      suspended: true,
+      approvalRequestIds: streamResult.approvalRequestIds,
     };
   }
 
@@ -668,6 +685,8 @@ export async function streamMessageInConversation(
   needsForceAnswer?: boolean;
   forceAnswerFollowUp?: () => Promise<string>;
   saveAssistantMessage: (reply: string, toolCallsLog: unknown[]) => Promise<MessageRow>;
+  suspended?: boolean;
+  approvalRequestIds?: string[];
 }> {
   recordActivity();
   const repo = getRepositories().conversations;
@@ -818,6 +837,8 @@ export async function streamMessageInConversation(
       const forceDetector = new ForceAnswerDetector();
       const loopBreaker = new LoopBreaker();
       let loopDetected = false;
+      let runSuspended = false;
+      let suspendedApprovalRequestIds: string[] = [];
 
       // Token usage accumulator
       const tokenUsage = { promptTokens: 0, completionTokens: 0 };
@@ -864,6 +885,19 @@ export async function streamMessageInConversation(
 
           const toolCalls = (s.toolCalls ?? []) as Array<Record<string, unknown>>;
           let toolResults = (s.toolResults ?? []) as Array<Record<string, unknown>>;
+
+          // Detect approval-required tool results and suspend the run
+          for (const tr of toolResults) {
+            const output = tr.output ?? tr.result;
+            if (isApprovalRequiredMarker(output)) {
+              const ids = extractApprovalRequestIds(output);
+              console.info(`[Approval] Tool requires approval, suspending run. Request IDs: ${ids.join(", ")}`);
+              suspendedApprovalRequestIds = ids;
+              runSuspended = true;
+              controller.abort();
+              return;
+            }
+          }
 
           // Track iteration budget and inject warning if needed
           if (budget.advance()) {
@@ -926,6 +960,8 @@ export async function streamMessageInConversation(
         result,
         toolCallsLog,
         abortController: controller,
+        suspended: runSuspended,
+        approvalRequestIds: suspendedApprovalRequestIds,
         needsForceAnswer: forceDetector.count >= FORCE_ANSWER_ROUNDS || loopDetected,
         forceAnswerFollowUp: (forceDetector.count >= FORCE_ANSWER_ROUNDS || loopDetected)
           ? async () => {
@@ -980,6 +1016,7 @@ export async function streamChat(
   abortController?: AbortController,
   runtimeContext?: { runId?: string; projectId?: string; mode?: string },
   onMemoryRead?: (memoryIds: string[]) => void,
+  onApprovalSuspension?: (approvalRequestIds: string[]) => void,
 ): Promise<{ stream: ReturnType<typeof streamText>; abortController: AbortController; selectedModel: string }> {
   try {
     const selectedModel = selectModelForConversation(messages[0]?.content?.toString() ?? "", false, 0);
@@ -1045,37 +1082,47 @@ export async function streamChat(
         const e = event as Record<string, unknown>;
         logCacheStats(e.providerMetadata as Record<string, unknown> | undefined, "streamChat");
       },
-      ...(onToolEvent
-        ? {
-            onStepFinish: async (step: unknown) => {
-              const s = step as Record<string, unknown>;
-              const toolCalls = (s.toolCalls ?? []) as Array<Record<string, unknown>>;
-              let toolResults = (s.toolResults ?? []) as Array<Record<string, unknown>>;
+      onStepFinish: async (step: unknown) => {
+        const s = step as Record<string, unknown>;
+        const toolCalls = (s.toolCalls ?? []) as Array<Record<string, unknown>>;
+        let toolResults = (s.toolResults ?? []) as Array<Record<string, unknown>>;
 
-              // Track iteration budget and inject warning if needed
-              if (budget.advance()) {
-                toolResults = injectBudgetWarning(toolResults);
-              }
+        // Track iteration budget and inject warning if needed
+        if (budget.advance()) {
+          toolResults = injectBudgetWarning(toolResults);
+        }
 
-              for (const tc of toolCalls) {
-                await onToolEvent({
-                  type: 'tool-call',
-                  name: tc.toolName as string,
-                  toolCallId: tc.toolCallId as string,
-                  args: tc.input ?? tc.args,
-                });
-              }
-              for (const tr of toolResults) {
-                await onToolEvent({
-                  type: 'tool-result',
-                  name: tr.toolName as string,
-                  toolCallId: tr.toolCallId as string,
-                  result: tr.output ?? tr.result,
-                });
-              }
-            },
+        if (onToolEvent) {
+          for (const tc of toolCalls) {
+            await onToolEvent({
+              type: 'tool-call',
+              name: tc.toolName as string,
+              toolCallId: tc.toolCallId as string,
+              args: tc.input ?? tc.args,
+            });
           }
-        : {}),
+          for (const tr of toolResults) {
+            await onToolEvent({
+              type: 'tool-result',
+              name: tr.toolName as string,
+              toolCallId: tr.toolCallId as string,
+              result: tr.output ?? tr.result,
+            });
+          }
+        }
+
+        // Detect approval-required tool results and suspend the run
+        for (const tr of toolResults) {
+          const output = tr.output ?? tr.result;
+          if (isApprovalRequiredMarker(output)) {
+            const ids = extractApprovalRequestIds(output);
+            console.info(`[Approval] Tool requires approval, suspending run. Request IDs: ${ids.join(", ")}`);
+            onApprovalSuspension?.(ids);
+            controller.abort();
+            return;
+          }
+        }
+      },
     });
 
     return { stream, abortController: controller, selectedModel };

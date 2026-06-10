@@ -108,6 +108,8 @@ export async function runStreamTurn(
   let fullText = "";
   const toolCallsLog: { name: string; input: unknown; output: unknown }[] = [];
   const toolCallIndexByCallId = new Map<string, number>();
+  let approvalSuspended = false;
+  let suspendedApprovalRequestIds: string[] = [];
 
   // Buffer for events from the onToolEvent callback.
   // The callback fires during onStepFinish (inside the SDK's stream iteration),
@@ -228,6 +230,11 @@ export async function runStreamTurn(
         },
         // Memory read callback
         (memoryIds) => emitAndPersist({ type: "memory_read", memoryIds }),
+        // Approval suspension callback
+        (ids) => {
+          approvalSuspended = true;
+          suspendedApprovalRequestIds = ids;
+        },
       );
     } catch (err) {
       clearTimeout(watchdogId);
@@ -287,19 +294,31 @@ export async function runStreamTurn(
       const errorMsg = err instanceof Error ? err.message : String(err);
       logError("runStreamTurn/stream", err);
 
-      // Save partial assistant message if we have any text
-      if (fullText) {
-        await conversations.addMessage(conversationId, {
-          role: "assistant",
-          content: fullText,
-          modelUsed: stream?.selectedModel,
+      // If the run was suspended due to approval required, emit run_suspended
+      // and set waiting_for_approval status. Do NOT save an assistant message.
+      if (approvalSuspended) {
+        yield emitAndPersist({
+          type: "run_suspended",
+          runId: run.id,
+          reason: "approval_required",
+          approvalRequestIds: suspendedApprovalRequestIds,
         });
-      }
+        await agentRuns.updateStatus(run.id, "waiting_for_approval");
+      } else {
+        // Save partial assistant message if we have any text
+        if (fullText) {
+          await conversations.addMessage(conversationId, {
+            role: "assistant",
+            content: fullText,
+            modelUsed: stream?.selectedModel,
+          });
+        }
 
-      const isCancelled = abortController.signal.aborted && !abortedByWatchdog;
-      const finalStatus = isCancelled ? "cancelled" : "failed";
-      yield emitAndPersist({ type: "run_failed", error: errorMsg });
-      await agentRuns.updateStatus(run.id, finalStatus, errorMsg);
+        const isCancelled = abortController.signal.aborted && !abortedByWatchdog;
+        const finalStatus = isCancelled ? "cancelled" : "failed";
+        yield emitAndPersist({ type: "run_failed", error: errorMsg });
+        await agentRuns.updateStatus(run.id, finalStatus, errorMsg);
+      }
     } finally {
       clearTimeout(watchdogId);
     }

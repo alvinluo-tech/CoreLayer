@@ -157,6 +157,28 @@ export async function runTurn(
       },
     );
 
+    // If the run was suspended due to approval required, set waiting_for_approval
+    // status and emit run_suspended instead of run_completed.
+    if (result.suspended) {
+      emitAndPersist({
+        type: "run_suspended",
+        runId: run.id,
+        reason: "approval_required",
+        approvalRequestIds: result.approvalRequestIds ?? [],
+      });
+      await agentRuns.updateStatus(run.id, "waiting_for_approval");
+
+      return {
+        runId: run.id,
+        conversationId,
+        text: "",
+        events,
+        userMessage: result.userMessage,
+        assistantMessage: result.assistantMessage,
+        conversation: result.conversation,
+      };
+    }
+
     const conversation = await conversations.getById(conversationId);
     emitAndPersist({
       type: "run_completed",

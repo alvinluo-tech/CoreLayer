@@ -22,6 +22,27 @@ const MAX_TOOL_RESULT_CHARS = 4000;
 const TRUNCATION_NOTICE = "\n\n[结果已截断——过长，已保留首尾摘要]";
 
 /**
+ * Marker prefix for tool results that require user approval.
+ * The agent loop detects this in onStepFinish and suspends the run.
+ */
+export const APPROVAL_REQUIRED_PREFIX = "__APPROVAL_REQUIRED__:";
+
+export function isApprovalRequiredMarker(value: unknown): boolean {
+  return typeof value === "string" && value.startsWith(APPROVAL_REQUIRED_PREFIX);
+}
+
+export function extractApprovalRequestIds(value: unknown): string[] {
+  if (!isApprovalRequiredMarker(value)) return [];
+  const payload = (value as string).slice(APPROVAL_REQUIRED_PREFIX.length);
+  try {
+    const parsed = JSON.parse(payload) as { ids: string[] };
+    return parsed.ids ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Soft-trim a tool result if it exceeds MAX_TOOL_RESULT_CHARS.
  * Preserves head (70%) + tail (30%) with a truncation notice.
  * JSON.stringify is applied first to handle structured data.
@@ -45,6 +66,9 @@ export function trimToolResult(value: unknown): unknown {
  *
  * When a context with runId is provided, high-risk tools will create
  * approval_requests rows in the DB for the Approval Inbox.
+ *
+ * When approval is required, returns a special marker string instead of throwing.
+ * The agent loop detects this marker in onStepFinish and suspends the run.
  */
 export function wrapToolsForAI(
   tools: Record<string, Tool>,
@@ -72,7 +96,9 @@ export function wrapToolsForAI(
             toolCallId,
           });
           if (isApprovalRequiredResult(executeResult)) {
-            throw new Error(`Approval required: ${executeResult.approvalRequestId}`);
+            // Return a marker instead of throwing — the agent loop detects this
+            // in onStepFinish and suspends the run.
+            return `${APPROVAL_REQUIRED_PREFIX}${JSON.stringify({ ids: [executeResult.approvalRequestId] })}`;
           }
           if (executeResult.result.success) return trimToolResult(executeResult.result.data);
           throw new Error(executeResult.result.error ?? "Tool execution failed");

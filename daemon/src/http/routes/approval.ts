@@ -55,6 +55,10 @@ async function resumeAndSaveToolResult(id: string, triggerLLM: boolean): Promise
         );
 
         if (pendingApprovals.length === 0) {
+          // Resume the run from waiting_for_approval back to running
+          const { agentRuns } = getRepositories();
+          await agentRuns.updateStatus(existing.runId, "running");
+
           await handleMessageInConversation(
             run.conversationId,
             "[System: Tool execution completed. Continue with the conversation.]",
@@ -156,6 +160,9 @@ approvalRoutes.post("/batch/approve", async (c) => {
       for (const runId of runIds) {
         const run = await agentRuns.getById(runId);
         if (run?.conversationId) {
+          // Resume the run from waiting_for_approval back to running
+          await agentRuns.updateStatus(runId, "running");
+
           await handleMessageInConversation(
             run.conversationId,
             "[System: Batch tool execution completed. Continue with the conversation.]",
