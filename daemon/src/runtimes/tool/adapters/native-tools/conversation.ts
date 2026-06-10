@@ -2,6 +2,7 @@ import { tool } from "ai";
 import { z } from "zod";
 import { getRepositories } from "../../../../persistence/factory.js";
 import { registerTool } from "./registry.js";
+import { ConversationCleanupPlanner } from "../../../../operations/planners/conversation-cleanup-planner.js";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -220,6 +221,73 @@ export function registerConversationTools(): void {
         };
       } catch (err) {
         console.error("[ConversationTool] Failed to batch delete conversations:", err);
+        return {
+          success: false,
+          error: err instanceof Error ? err.message : String(err),
+        };
+      }
+    },
+  } as any));
+
+  // ---- requestConversationCleanup (preview + approval, no direct deletion) ----
+  registerTool("requestConversationCleanup", tool({
+    description: "请求清理对话记录。生成操作预览并提交审批，不直接删除。用户批准后才会执行删除。适用于批量清理 TICK、心跳、自主处理等类型的对话记录。",
+    parameters: z.object({
+      query: z.string().min(1).describe("用于匹配对话标题的关键词，例如 TICK、心跳、自主处理"),
+      currentConversationId: z.string().optional().describe("当前对话 ID，默认排除当前对话"),
+      includeCurrent: z.boolean().optional().describe("是否包含当前对话，默认 false"),
+      conversationIds: z.array(z.string()).optional().describe("直接指定要删除的对话 ID 列表（跳过 query 匹配）"),
+    }),
+    execute: async (args: any) => {
+      const query = String(args.query ?? "").trim();
+      const currentConversationId = typeof args.currentConversationId === "string" ? args.currentConversationId : undefined;
+      const includeCurrent = args.includeCurrent === true;
+      const conversationIds = Array.isArray(args.conversationIds) ? args.conversationIds : undefined;
+
+      try {
+        const planner = new ConversationCleanupPlanner();
+        const preview = await planner.plan(
+          {
+            query,
+            excludeConversationId: includeCurrent ? undefined : currentConversationId,
+            mode: conversationIds ? "batch_delete" : "by_query",
+            conversationIds,
+          },
+          { conversationId: currentConversationId },
+        );
+
+        // Create approval request with the rich preview
+        const { approvalRequests } = getRepositories();
+        const expiresInMs = 5 * 60_000;
+        const approvalRequest = await approvalRequests.create({
+          runId: "", // Will be filled by the AI tool wrapper if runId is available
+          toolId: "native:requestConversationCleanup",
+          toolName: "requestConversationCleanup",
+          args: { query, currentConversationId, includeCurrent, conversationIds },
+          risk: "high",
+          projectScope: false,
+          mode: "chat",
+          source: "native",
+          preview: JSON.stringify(preview),
+          expiresAt: Date.now() + expiresInMs,
+          operationKind: preview.kind,
+          operationPayload: JSON.stringify(preview.payload),
+        });
+
+        return {
+          success: true,
+          approvalRequestId: approvalRequest.id,
+          preview: {
+            title: preview.title,
+            summary: preview.summary,
+            targetCount: preview.targetCount,
+            targets: preview.targets,
+            warnings: preview.warnings,
+          },
+          message: `已生成操作预览并提交审批。审批 ID: ${approvalRequest.id}。等待用户批准后执行。`,
+        };
+      } catch (err) {
+        console.error("[ConversationTool] Failed to request conversation cleanup:", err);
         return {
           success: false,
           error: err instanceof Error ? err.message : String(err),

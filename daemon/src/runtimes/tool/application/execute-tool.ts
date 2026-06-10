@@ -93,6 +93,8 @@ function adjustPermissionForMode(
 
 export class ToolExecutionService {
   private permissionGuard: PermissionGuard;
+  /** Track consecutive deleteConversation calls per run to detect batch intent */
+  private deleteCountByRun = new Map<string, number>();
 
   constructor(permissionGuard?: PermissionGuard) {
     this.permissionGuard = permissionGuard ?? new PermissionGuard();
@@ -155,6 +157,28 @@ export class ToolExecutionService {
         confirmed: false,
         durationMs: Date.now() - startTime,
       };
+    }
+
+    // Safety: detect multiple sequential deleteConversation calls and redirect to batch tool
+    if (toolId === "deleteConversation" || toolId === "native:deleteConversation") {
+      const runKey = context.runId ?? "__global__";
+      const count = (this.deleteCountByRun.get(runKey) ?? 0) + 1;
+      this.deleteCountByRun.set(runKey, count);
+      if (count >= 2) {
+        return {
+          result: {
+            success: false,
+            error: "检测到批量删除意图。请使用 requestConversationCleanup 工具进行批量清理，而不是多次调用 deleteConversation。",
+          },
+          confirmed: false,
+          durationMs: Date.now() - startTime,
+        };
+      }
+    } else {
+      // Reset counter for non-delete tools
+      if (context.runId) {
+        this.deleteCountByRun.delete(context.runId);
+      }
     }
 
     const permissionCheck = this.permissionGuard.checkPermission(tool);
