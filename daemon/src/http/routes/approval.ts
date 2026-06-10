@@ -4,6 +4,8 @@ import { apiError, extractErrorMessage, logError } from "../../shared/errors.js"
 import { toolRuntime } from "../../runtimes/tool/public-api.js";
 import { executeApprovedTool } from "../../approvals/resume-service.js";
 import { handleMessageInConversation } from "../../runtimes/agent/public-api.js";
+import { executeOperation } from "../../operations/executors/operation-executor.js";
+import { formatReceiptMessage } from "../../operations/receipts/operation-receipt.js";
 
 const approvalRoutes = new Hono();
 
@@ -23,7 +25,24 @@ async function resumeAndSaveToolResult(id: string, triggerLLM: boolean): Promise
 
   let resumeResult;
   try {
-    resumeResult = await executeApprovedTool(id);
+    // Use operation-based execution if operationKind is set (new path)
+    // Otherwise fall back to legacy tool execution
+    if (existing.operationKind) {
+      const receipt = await executeOperation(
+        existing.operationKind,
+        existing.operationPayload ? JSON.parse(existing.operationPayload as string) : {},
+        { runId: existing.runId, conversationId: undefined },
+      );
+      resumeResult = {
+        approvalRequestId: id,
+        toolResult: { success: receipt.success, data: receipt, error: receipt.error },
+        toolId: existing.toolId,
+        toolName: existing.toolName,
+        runId: existing.runId,
+      };
+    } else {
+      resumeResult = await executeApprovedTool(id);
+    }
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
     await approvalRequests.markFailed(id, errorMsg);
@@ -42,11 +61,20 @@ async function resumeAndSaveToolResult(id: string, triggerLLM: boolean): Promise
     const { agentRuns } = getRepositories();
     const run = await agentRuns.getById(existing.runId);
     if (run?.conversationId) {
-      await conversations.addMessage(run.conversationId, {
-        role: "tool",
-        content: JSON.stringify(resumeResult.toolResult),
-        toolCallId: existing.toolCallId ?? undefined,
-      });
+      // For operation-based execution, append a receipt message
+      if (existing.operationKind && resumeResult.toolResult.data) {
+        const receipt = resumeResult.toolResult.data as import("../../operations/domain/operation.js").OperationReceipt;
+        await conversations.addMessage(run.conversationId, {
+          role: "system",
+          content: formatReceiptMessage(receipt),
+        });
+      } else {
+        await conversations.addMessage(run.conversationId, {
+          role: "tool",
+          content: JSON.stringify(resumeResult.toolResult),
+          toolCallId: existing.toolCallId ?? undefined,
+        });
+      }
 
       if (triggerLLM) {
         const allApprovals = await approvalRequests.getByRunId(existing.runId);
