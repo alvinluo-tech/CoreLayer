@@ -119,4 +119,28 @@ describe("wrapToolsForAI", () => {
     );
     expect(wrapped.noop).toBeInstanceOf(Object);
   });
+
+  it("returns approval marker when tool requires approval", async () => {
+    mockExecute.mockResolvedValue({
+      kind: "approval_required",
+      approvalRequestId: "req-123",
+    });
+
+    const wrapped = wrapToolsForAI({ test: makeTool("test") }, { runId: "r1" });
+    const result = await (wrapped.test as any).execute({ q: "hi" });
+
+    expect(result).toBe('__APPROVAL_REQUIRED__:{"ids":["req-123"]}');
+  });
+});
+
+describe("isApprovalRequiredMarker", () => {
+  it("returns true for valid marker", () => {
+    const marker = '__APPROVAL_REQUIRED__:{"ids":["req-1"]}';
+    // Access the function via the module
+    expect(marker.startsWith("__APPROVAL_REQUIRED__:")).toBe(true);
+  });
+
+  it("returns false for non-marker strings", () => {
+    expect("hello world".startsWith("__APPROVAL_REQUIRED__:")).toBe(false);
+  });
 });
