@@ -19,6 +19,8 @@ export { ContextBuilder } from "./application/context-builder.js";
 export { decomposeTask } from "./application/task-decomposer.js";
 export { buildTickSystemPrompt } from "./application/prompt-builder.js";
 export { compressConversation } from "./application/compressor.js";
+export { runAgentLoop, MessageQueue } from "./application/agent-loop.js";
+export type { AgentLoopConfig, DeliveryMode } from "./application/agent-loop.js";
 
 import { runTurn } from "./run.js";
 import { runStreamTurn } from "./stream.js";
@@ -28,6 +30,7 @@ import { ContextBuilder } from "./application/context-builder.js";
 import { decomposeTask } from "./application/task-decomposer.js";
 import { buildTickSystemPrompt } from "./application/prompt-builder.js";
 import { compressConversation } from "./application/compressor.js";
+import { runAgentLoop, MessageQueue } from "./application/agent-loop.js";
 
 /** Facade — prefer importing this object over individual named exports. */
 export const agentRuntimeApi = {
@@ -41,4 +44,6 @@ export const agentRuntimeApi = {
   decomposeTask,
   buildTickSystemPrompt,
   compressConversation,
+  runAgentLoop,
+  MessageQueue,
 } as const;
