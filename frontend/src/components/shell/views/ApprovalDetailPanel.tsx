@@ -149,7 +149,7 @@ export function BatchApprovalDetail({
             transition: 'all 0.15s',
           }}
         >
-          Approve All ({item.approvals.length})
+          批准并执行 ({item.approvals.length})
         </button>
         <button
           onClick={() => denyBatch(item.approvals.map((a) => a.id))}
@@ -166,7 +166,7 @@ export function BatchApprovalDetail({
             transition: 'all 0.15s',
           }}
         >
-          Deny All
+          全部拒绝
         </button>
       </div>
     </div>
@@ -281,9 +281,97 @@ export function ApprovalDetail({ approval }: { approval: ApprovalRequest }) {
         </pre>
       </div>
 
+      {approval.preview &&
+        (() => {
+          try {
+            const preview = JSON.parse(approval.preview);
+            if (preview.targets || preview.warnings) {
+              return (
+                <div className="space-y-2">
+                  <SectionHeader>操作预览</SectionHeader>
+                  {preview.summary && (
+                    <div
+                      style={{
+                        fontFamily: 'var(--font-data)',
+                        fontSize: 11,
+                        color: 'var(--text-secondary)',
+                      }}
+                    >
+                      {preview.summary}
+                    </div>
+                  )}
+                  {preview.targetCount > 0 && (
+                    <div
+                      style={{
+                        fontFamily: 'var(--font-data)',
+                        fontSize: 11,
+                        color: 'var(--text-tertiary)',
+                      }}
+                    >
+                      影响 {preview.targetCount} 个目标
+                    </div>
+                  )}
+                  {preview.targets?.length > 0 && (
+                    <div className="space-y-1">
+                      {preview.targets
+                        .slice(0, 10)
+                        .map((t: { id: string; label: string; type: string }) => (
+                          <div
+                            key={t.id}
+                            className="flex items-center gap-2"
+                            style={{
+                              fontFamily: 'var(--font-data)',
+                              fontSize: 10,
+                              color: 'var(--text-tertiary)',
+                            }}
+                          >
+                            <span style={{ color: 'var(--text-secondary)' }}>{t.label}</span>
+                            <span>({t.type})</span>
+                          </div>
+                        ))}
+                      {preview.targets.length > 10 && (
+                        <div
+                          style={{
+                            fontFamily: 'var(--font-data)',
+                            fontSize: 10,
+                            color: 'var(--text-tertiary)',
+                          }}
+                        >
+                          ... 还有 {preview.targets.length - 10} 个
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {preview.warnings?.length > 0 && (
+                    <div className="space-y-1">
+                      {preview.warnings.map((w: string, i: number) => (
+                        <div
+                          key={i}
+                          className="flex items-center gap-1"
+                          style={{
+                            fontFamily: 'var(--font-data)',
+                            fontSize: 10,
+                            color: 'var(--amber)',
+                          }}
+                        >
+                          <AlertTriangle size={10} />
+                          {w}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            }
+          } catch {
+            // Not JSON — show as plain text preview below
+          }
+          return null;
+        })()}
+
       {isPending && (
         <div className="space-y-2">
-          <SectionHeader>Actions</SectionHeader>
+          <SectionHeader>操作</SectionHeader>
           <div className="flex items-center gap-2">
             <button
               onClick={() => approve(approval.id)}
@@ -299,7 +387,7 @@ export function ApprovalDetail({ approval }: { approval: ApprovalRequest }) {
                 transition: 'all 0.15s',
               }}
             >
-              Approve
+              批准并执行
             </button>
             <button
               onClick={() => deny(approval.id)}
@@ -315,7 +403,7 @@ export function ApprovalDetail({ approval }: { approval: ApprovalRequest }) {
                 transition: 'all 0.15s',
               }}
             >
-              Deny
+              拒绝
             </button>
           </div>
           <div className="flex items-center gap-2 mt-1">
@@ -333,7 +421,7 @@ export function ApprovalDetail({ approval }: { approval: ApprovalRequest }) {
                 transition: 'all 0.15s',
               }}
             >
-              Remember: Auto-approve
+              本次允许
             </button>
             <button
               onClick={() => remember(approval.id, 'deny')}
@@ -349,7 +437,7 @@ export function ApprovalDetail({ approval }: { approval: ApprovalRequest }) {
                 transition: 'all 0.15s',
               }}
             >
-              Remember: Always deny
+              本项目允许
             </button>
           </div>
         </div>

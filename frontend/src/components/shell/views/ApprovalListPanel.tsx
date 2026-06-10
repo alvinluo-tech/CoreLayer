@@ -223,7 +223,7 @@ export function ApprovalCard({
               transition: 'all 0.15s',
             }}
           >
-            Approve
+            批准
           </button>
           <button
             onClick={(e) => {
@@ -242,7 +242,7 @@ export function ApprovalCard({
               transition: 'all 0.15s',
             }}
           >
-            Deny
+            拒绝
           </button>
         </div>
       )}
