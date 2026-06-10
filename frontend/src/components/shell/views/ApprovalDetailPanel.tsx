@@ -219,7 +219,7 @@ export function ApprovalDetail({ approval }: { approval: ApprovalRequest }) {
                   ? 'var(--amber)'
                   : approval.status === 'executing'
                     ? 'var(--cyan)'
-                    : approval.status === 'approved'
+                    : approval.status === 'succeeded' || approval.status === 'approved'
                       ? 'var(--emerald)'
                       : approval.status === 'denied' || approval.status === 'failed'
                         ? 'var(--red)'

@@ -8,6 +8,7 @@ export const approvalStatusSchema = z.enum([
   'denied',
   'expired',
   'executing',
+  'succeeded',
   'failed',
 ]);
 export const approvalRiskSchema = z.enum(['low', 'medium', 'high', 'critical']);

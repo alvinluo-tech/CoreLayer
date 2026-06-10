@@ -149,6 +149,20 @@ export function createSqliteApprovalRepo(database?: DrizzleDb): ApprovalRequestR
       return mapRow(row);
     },
 
+    async markSucceeded(id: string): Promise<ApprovalRequestRow> {
+      const now = Date.now();
+      db.update(schema.approvalRequests)
+        .set({ status: "succeeded", decidedAt: now })
+        .where(eq(schema.approvalRequests.id, id))
+        .run();
+      const row = db
+        .select()
+        .from(schema.approvalRequests)
+        .where(eq(schema.approvalRequests.id, id))
+        .get()!;
+      return mapRow(row);
+    },
+
     async markFailed(id: string, error: string): Promise<ApprovalRequestRow> {
       const now = Date.now();
       db.update(schema.approvalRequests)

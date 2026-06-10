@@ -6,6 +6,7 @@ import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
 import { migrateAgentRunsStatusConstraint } from "./sqlite/agent-runs-migration.js";
+import { migrateApprovalRequestsStatusConstraint } from "./sqlite/approval-status-migration.js";
 
 type BetterSqlite3Constructor = new (
   filename: string,
@@ -293,6 +294,13 @@ try {
   migrateAgentRunsStatusConstraint(sqlite);
 } catch (err) {
   console.error("[Jarvis] Failed to migrate agent_runs status constraint:", err);
+}
+
+// Migration: add executing/succeeded/failed to approval_requests CHECK constraint
+try {
+  migrateApprovalRequestsStatusConstraint(sqlite);
+} catch (err) {
+  console.error("[Jarvis] Failed to migrate approval_requests status constraint:", err);
 }
 
 // Migration: add missing columns to conversations for existing databases

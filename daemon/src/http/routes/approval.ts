@@ -11,7 +11,7 @@ const approvalRoutes = new Hono();
  * Reusable helper to execute an approved tool, save the result to database messages,
  * log the audit entry, and optionally re-trigger the LLM to resume conversation.
  *
- * Status transitions: approved -> executing -> (approved on success | failed on error)
+ * Status transitions: approved -> executing -> (succeeded on success | failed on error)
  */
 async function resumeAndSaveToolResult(id: string, triggerLLM: boolean): Promise<void> {
   const { approvalRequests, toolCallLogs, conversations } = getRepositories();
@@ -31,9 +31,10 @@ async function resumeAndSaveToolResult(id: string, triggerLLM: boolean): Promise
     return;
   }
 
-  // Tool execution succeeded — status stays "approved" (the approve() call already set it)
-  // If the tool itself returned failure, mark as failed
-  if (!resumeResult.toolResult.success) {
+  // Tool execution succeeded — mark as succeeded (not just "approved")
+  if (resumeResult.toolResult.success) {
+    await approvalRequests.markSucceeded(id);
+  } else {
     await approvalRequests.markFailed(id, String(resumeResult.toolResult.error ?? "Tool execution failed"));
   }
 

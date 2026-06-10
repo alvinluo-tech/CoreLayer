@@ -13,6 +13,7 @@ export function FilterTabs() {
 
   const pending = approvals.filter((a) => a.status === 'pending').length;
   const executing = approvals.filter((a) => a.status === 'executing').length;
+  const succeeded = approvals.filter((a) => a.status === 'succeeded').length;
   const approved = approvals.filter((a) => a.status === 'approved').length;
   const denied = approvals.filter((a) => a.status === 'denied').length;
   const failed = approvals.filter((a) => a.status === 'failed').length;
@@ -22,6 +23,7 @@ export function FilterTabs() {
     { value: 'all', label: 'All', count: approvals.length },
     { value: 'pending', label: 'Pending', count: pending },
     { value: 'executing', label: 'Executing', count: executing },
+    { value: 'succeeded', label: 'Succeeded', count: succeeded },
     { value: 'approved', label: 'Approved', count: approved },
     { value: 'denied', label: 'Denied', count: denied },
     { value: 'failed', label: 'Failed', count: failed },
@@ -153,6 +155,8 @@ export function ApprovalCard({
           <Clock size={12} style={{ color: 'var(--amber)' }} />
         ) : approval.status === 'executing' ? (
           <Loader2 size={12} className="animate-spin" style={{ color: 'var(--cyan)' }} />
+        ) : approval.status === 'succeeded' ? (
+          <CheckCircle2 size={12} style={{ color: 'var(--emerald)' }} />
         ) : approval.status === 'approved' ? (
           <CheckCircle2 size={12} style={{ color: 'var(--emerald)' }} />
         ) : approval.status === 'denied' ? (
