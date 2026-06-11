@@ -1,12 +1,13 @@
 import { Hono } from "hono";
 import { getRepositories } from "../../persistence/factory.js";
 import { apiError, extractErrorMessage, logError } from "../../shared/errors.js";
+import { withErrorHandling } from "../middleware/error-handler.js";
 
 const app = new Hono();
 
-// GET / - Get reading list
-app.get("/", async (c) => {
-  try {
+app.get(
+  "/",
+  withErrorHandling("articles/list", async (c) => {
     const status = c.req.query("status");
     const category = c.req.query("category");
     const limit = c.req.query("limit");
@@ -18,15 +19,12 @@ app.get("/", async (c) => {
     });
 
     return c.json({ articles, count: articles.length });
-  } catch (err) {
-    logError("articles/list", err);
-    return apiError(c, extractErrorMessage(err));
-  }
-});
+  }),
+);
 
-// POST / - Add article
-app.post("/", async (c) => {
-  try {
+app.post(
+  "/",
+  withErrorHandling("articles/create", async (c) => {
     const body = await c.req.json<{
       title: string;
       url?: string;
@@ -46,13 +44,10 @@ app.post("/", async (c) => {
     });
 
     return c.json({ article }, 201);
-  } catch (err) {
-    logError("articles/create", err);
-    return apiError(c, extractErrorMessage(err));
-  }
-});
+  }),
+);
 
-// PATCH /:id - Update reading status
+// PATCH has custom 404 classification — keep manual try/catch
 app.patch("/:id", async (c) => {
   const id = c.req.param("id");
   try {

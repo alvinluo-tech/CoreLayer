@@ -1,11 +1,12 @@
 import { Hono } from "hono";
 import { getRepositories } from "../../persistence/factory.js";
-import { apiError, extractErrorMessage, logError } from "../../shared/errors.js";
+import { apiError } from "../../shared/errors.js";
 import {
   isAgentModelPolicy,
   isAgentExecutorPolicy,
 } from "../../shared/agent-profile-types.js";
 import type { CreateAgentProfileInput, UpdateAgentProfileData } from "../../persistence/repository.js";
+import { withErrorHandling } from "../middleware/error-handler.js";
 
 const agentProfileRoutes = new Hono();
 
@@ -110,42 +111,30 @@ function validateUpdateInput(body: unknown): { ok: true; data: UpdateAgentProfil
   return { ok: true, data };
 }
 
-/**
- * GET /api/agent-profiles - List all agent profiles
- */
-agentProfileRoutes.get("/", async (c) => {
-  try {
+agentProfileRoutes.get(
+  "/",
+  withErrorHandling("agent-profiles/list", async (c) => {
     const { agentProfiles } = getRepositories();
     const profiles = await agentProfiles.getAll();
     return c.json({ data: profiles });
-  } catch (err) {
-    logError("agent-profiles/list", err);
-    return apiError(c, extractErrorMessage(err), 500);
-  }
-});
+  }),
+);
 
-/**
- * GET /api/agent-profiles/default - Get default agent profile
- */
-agentProfileRoutes.get("/default", async (c) => {
-  try {
+agentProfileRoutes.get(
+  "/default",
+  withErrorHandling("agent-profiles/default", async (c) => {
     const { agentProfiles } = getRepositories();
     const profile = await agentProfiles.getDefault();
     if (!profile) {
       return apiError(c, "No default agent profile found", 404);
     }
     return c.json({ data: profile });
-  } catch (err) {
-    logError("agent-profiles/default", err);
-    return apiError(c, extractErrorMessage(err), 500);
-  }
-});
+  }),
+);
 
-/**
- * POST /api/agent-profiles - Create a new agent profile
- */
-agentProfileRoutes.post("/", async (c) => {
-  try {
+agentProfileRoutes.post(
+  "/",
+  withErrorHandling("agent-profiles/create", async (c) => {
     const body = await c.req.json();
     const validation = validateCreateInput(body);
     if (!validation.ok) {
@@ -154,36 +143,26 @@ agentProfileRoutes.post("/", async (c) => {
     const { agentProfiles } = getRepositories();
     const profile = await agentProfiles.create(validation.input);
     return c.json({ data: profile }, 201);
-  } catch (err) {
-    logError("agent-profiles/create", err);
-    return apiError(c, extractErrorMessage(err), 500);
-  }
-});
+  }),
+);
 
-/**
- * GET /api/agent-profiles/:id - Get a specific agent profile
- */
-agentProfileRoutes.get("/:id", async (c) => {
-  try {
+agentProfileRoutes.get(
+  "/:id",
+  withErrorHandling("agent-profiles/get", async (c) => {
     const { agentProfiles } = getRepositories();
-    const id = c.req.param("id");
+    const id = c.req.param("id")!;
     const profile = await agentProfiles.getById(id);
     if (!profile) {
       return apiError(c, "Agent profile not found", 404);
     }
     return c.json({ data: profile });
-  } catch (err) {
-    logError("agent-profiles/get", err);
-    return apiError(c, extractErrorMessage(err), 500);
-  }
-});
+  }),
+);
 
-/**
- * PATCH /api/agent-profiles/:id - Update an agent profile
- */
-agentProfileRoutes.patch("/:id", async (c) => {
-  try {
-    const id = c.req.param("id");
+agentProfileRoutes.patch(
+  "/:id",
+  withErrorHandling("agent-profiles/update", async (c) => {
+    const id = c.req.param("id")!;
     const body = await c.req.json();
     const validation = validateUpdateInput(body);
     if (!validation.ok) {
@@ -196,18 +175,13 @@ agentProfileRoutes.patch("/:id", async (c) => {
     }
     const profile = await agentProfiles.update(id, validation.data);
     return c.json({ data: profile });
-  } catch (err) {
-    logError("agent-profiles/update", err);
-    return apiError(c, extractErrorMessage(err), 500);
-  }
-});
+  }),
+);
 
-/**
- * DELETE /api/agent-profiles/:id - Delete an agent profile
- */
-agentProfileRoutes.delete("/:id", async (c) => {
-  try {
-    const id = c.req.param("id");
+agentProfileRoutes.delete(
+  "/:id",
+  withErrorHandling("agent-profiles/delete", async (c) => {
+    const id = c.req.param("id")!;
     const { agentProfiles } = getRepositories();
     const existing = await agentProfiles.getById(id);
     if (!existing) {
@@ -218,24 +192,18 @@ agentProfileRoutes.delete("/:id", async (c) => {
     }
     await agentProfiles.delete(id);
     return c.json({ data: { deleted: true } });
-  } catch (err) {
-    logError("agent-profiles/delete", err);
-    return apiError(c, extractErrorMessage(err), 500);
-  }
-});
+  }),
+);
 
-/**
- * POST /api/agent-profiles/:id/set-default - Set a profile as the default
- */
-agentProfileRoutes.post("/:id/set-default", async (c) => {
-  try {
-    const id = c.req.param("id");
+agentProfileRoutes.post(
+  "/:id/set-default",
+  withErrorHandling("agent-profiles/set-default", async (c) => {
+    const id = c.req.param("id")!;
     const { agentProfiles } = getRepositories();
     const existing = await agentProfiles.getById(id);
     if (!existing) {
       return apiError(c, "Agent profile not found", 404);
     }
-    // Clear default on all profiles, then set the target
     const all = await agentProfiles.getAll();
     for (const p of all) {
       if (p.isDefault) {
@@ -244,10 +212,7 @@ agentProfileRoutes.post("/:id/set-default", async (c) => {
     }
     const profile = await agentProfiles.update(id, { isDefault: true });
     return c.json({ data: profile });
-  } catch (err) {
-    logError("agent-profiles/set-default", err);
-    return apiError(c, extractErrorMessage(err), 500);
-  }
-});
+  }),
+);
 
 export default agentProfileRoutes;

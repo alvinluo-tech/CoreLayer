@@ -1,21 +1,21 @@
 import { Hono } from "hono";
 import { configManager, type JarvisConfig } from "../../config/config-manager.js";
-import { apiError, logError } from "../../shared/errors.js";
+import { apiError } from "../../shared/errors.js";
+import { withErrorHandling } from "../middleware/error-handler.js";
 
 const app = new Hono();
 
-app.get("/tick", (c) => {
-  try {
+app.get(
+  "/tick",
+  withErrorHandling("settings/tick/get", (c) => {
     const tick = configManager.getTickConfig();
     return c.json(tick);
-  } catch (err) {
-    logError("settings/tick/get", err);
-    return apiError(c, "Failed to get TICK config", 500);
-  }
-});
+  }),
+);
 
-app.put("/tick", async (c) => {
-  try {
+app.put(
+  "/tick",
+  withErrorHandling("settings/tick/update", async (c) => {
     const body = await c.req.json<Record<string, unknown>>();
     const patch: Partial<JarvisConfig["tick"]> = {};
 
@@ -32,10 +32,7 @@ app.put("/tick", async (c) => {
     configManager.updateTickConfig(patch);
 
     return c.json({ success: true, config: configManager.getTickConfig() });
-  } catch (err) {
-    logError("settings/tick/update", err);
-    return apiError(c, "Failed to update TICK config", 500);
-  }
-});
+  }),
+);
 
 export default app;

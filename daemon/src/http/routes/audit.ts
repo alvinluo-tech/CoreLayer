@@ -1,12 +1,12 @@
 import { Hono } from "hono";
 import { getRepositories } from "../../persistence/factory.js";
-import { apiError, extractErrorMessage, logError } from "../../shared/errors.js";
+import { withErrorHandling } from "../middleware/error-handler.js";
 
 const app = new Hono();
 
-// GET / - Query audit log with optional filters
-app.get("/", async (c) => {
-  try {
+app.get(
+  "/",
+  withErrorHandling("audit/query", async (c) => {
     const actor = c.req.query("actor");
     const action = c.req.query("action");
     const riskLevel = c.req.query("riskLevel");
@@ -30,10 +30,7 @@ app.get("/", async (c) => {
     ]);
 
     return c.json({ entries, total, count: entries.length });
-  } catch (err) {
-    logError("audit/query", err);
-    return apiError(c, extractErrorMessage(err));
-  }
-});
+  }),
+);
 
 export default app;

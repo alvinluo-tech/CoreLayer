@@ -3,23 +3,21 @@ import { getRepositories } from "../../persistence/factory.js";
 import { apiError, extractErrorMessage, logError } from "../../shared/errors.js";
 import { triggerTask, computeNextRun } from "../../runtimes/scheduler/public-api.js";
 import { parseNlTimeToCron } from "../../shared/time/parse-nl-time.js";
+import { withErrorHandling } from "../middleware/error-handler.js";
 
 const app = new Hono();
 
-// GET / - List all scheduled tasks
-app.get("/", async (c) => {
-  try {
+app.get(
+  "/",
+  withErrorHandling("scheduled-tasks/list", async (c) => {
     const tasks = await getRepositories().scheduledTasks.getAll();
     return c.json({ tasks, count: tasks.length });
-  } catch (err) {
-    logError("scheduled-tasks/list", err);
-    return apiError(c, extractErrorMessage(err));
-  }
-});
+  }),
+);
 
-// POST / - Create scheduled task
-app.post("/", async (c) => {
-  try {
+app.post(
+  "/",
+  withErrorHandling("scheduled-tasks/create", async (c) => {
     const body = await c.req.json<{
       name: string;
       cronExpr: string;
@@ -39,7 +37,6 @@ app.post("/", async (c) => {
       return apiError(c, "Either prompt or skillName must be provided", 400);
     }
 
-    // Try NL time parsing if cronExpr doesn't look like a standard cron expression
     let cronExpr = body.cronExpr.trim();
     if (!/^[0-9*/]/.test(cronExpr)) {
       const parsed = parseNlTimeToCron(cronExpr);
@@ -48,7 +45,6 @@ app.post("/", async (c) => {
       }
     }
 
-    // Validate cron expression by computing next run
     let nextRun: string;
     try {
       nextRun = computeNextRun(cronExpr);
@@ -65,17 +61,12 @@ app.post("/", async (c) => {
       enabled: body.enabled ?? true,
     });
 
-    // Update nextRun in DB
     await getRepositories().scheduledTasks.updateLastRun(task.id, task.lastRun ?? "", nextRun);
 
     return c.json({ task }, 201);
-  } catch (err) {
-    logError("scheduled-tasks/create", err);
-    return apiError(c, extractErrorMessage(err));
-  }
-});
+  }),
+);
 
-// PUT /:id - Update scheduled task
 app.put("/:id", async (c) => {
   const id = c.req.param("id");
   try {
@@ -88,7 +79,6 @@ app.put("/:id", async (c) => {
       enabled?: boolean;
     }>();
 
-    // Validate cron if provided, with NL time parsing
     let cronExpr = body.cronExpr;
     if (cronExpr) {
       if (!/^[0-9*/]/.test(cronExpr)) {
@@ -115,34 +105,28 @@ app.put("/:id", async (c) => {
   }
 });
 
-// DELETE /:id - Delete scheduled task
-app.delete("/:id", async (c) => {
-  const id = c.req.param("id");
-  try {
+app.delete(
+  "/:id",
+  withErrorHandling("scheduled-tasks/delete", async (c) => {
+    const id = c.req.param("id")!;
     const deleted = await getRepositories().scheduledTasks.delete(id);
     if (!deleted) {
       return apiError(c, "Scheduled task not found", 404);
     }
     return c.json({ success: true });
-  } catch (err) {
-    logError("scheduled-tasks/delete", err);
-    return apiError(c, extractErrorMessage(err));
-  }
-});
+  }),
+);
 
-// POST /:id/trigger - Manual trigger
-app.post("/:id/trigger", async (c) => {
-  const id = c.req.param("id");
-  try {
+app.post(
+  "/:id/trigger",
+  withErrorHandling("scheduled-tasks/trigger", async (c) => {
+    const id = c.req.param("id")!;
     const result = await triggerTask(id);
     if (!result) {
       return apiError(c, "Scheduled task not found", 404);
     }
     return c.json({ result });
-  } catch (err) {
-    logError("scheduled-tasks/trigger", err);
-    return apiError(c, extractErrorMessage(err));
-  }
-});
+  }),
+);
 
 export default app;

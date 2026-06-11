@@ -1,12 +1,12 @@
 import { Hono } from "hono";
 import { getRepositories } from "../../persistence/factory.js";
-import { apiError, extractErrorMessage, logError } from "../../shared/errors.js";
+import { withErrorHandling } from "../middleware/error-handler.js";
 
 const app = new Hono();
 
-// GET / - Query event log with optional filters
-app.get("/", async (c) => {
-  try {
+app.get(
+  "/",
+  withErrorHandling("events/query", async (c) => {
     const type = c.req.query("type");
     const projectId = c.req.query("projectId");
     const agentRunId = c.req.query("agentRunId");
@@ -32,10 +32,7 @@ app.get("/", async (c) => {
     ]);
 
     return c.json({ events, total, count: events.length });
-  } catch (err) {
-    logError("events/query", err);
-    return apiError(c, extractErrorMessage(err));
-  }
-});
+  }),
+);
 
 export default app;

@@ -4,21 +4,19 @@ import { isApprovalRequiredResult } from "@jarvis/runtime-protocol";
 import { getRegistry, toolRuntime } from "../../runtimes/tool/public-api.js";
 import { getRepositories } from "../../persistence/factory.js";
 import { apiError, extractErrorMessage, logError, ErrorCodes } from "../../shared/errors.js";
+import { withErrorHandling } from "../middleware/error-handler.js";
 
 const app = new Hono();
 
-// Get recent tool call audit logs
-app.get("/logs", async (c) => {
-  try {
+app.get(
+  "/logs",
+  withErrorHandling("tools/logs", async (c) => {
     const limit = parseInt(c.req.query("limit") ?? "20", 10);
     const repos = getRepositories();
     const logs = await repos.toolCallLogs.getRecent(limit);
     return c.json({ logs });
-  } catch (err) {
-    logError("tools/logs", err);
-    return apiError(c, extractErrorMessage(err), 500, ErrorCodes.DB_ERROR);
-  }
-});
+  }),
+);
 
 // List all registered tools
 app.get("/", (c) => {
@@ -79,9 +77,9 @@ app.get("/:id", (c) => {
   });
 });
 
-// Filter tools
-app.post("/filter", async (c) => {
-  try {
+app.post(
+  "/filter",
+  withErrorHandling("tools/filter", async (c) => {
     const registry = getRegistry();
     const filter = await c.req.json<{
       appId?: string;
@@ -101,11 +99,8 @@ app.post("/filter", async (c) => {
     }));
 
     return c.json({ tools, count: tools.length });
-  } catch (err) {
-    logError("tools/filter", err);
-    return apiError(c, extractErrorMessage(err), 500, ErrorCodes.VALIDATION);
-  }
-});
+  }),
+);
 
 // Execute a tool (with permission guard)
 app.post("/:id/execute", async (c) => {

@@ -41,7 +41,7 @@ vi.mock("../../../shared/errors.js", () => ({
   logError: vi.fn(),
 }));
 
-vi.mock("./settings-helpers.js", () => ({
+vi.mock("../settings-helpers.js", () => ({
   maskApiKey: (key: string | undefined) => key ? "*".repeat(Math.max(0, key.length - 4)) + key.slice(-4) : "",
   isMaskedKey: (key: string) => /^\*{4,}/.test(key),
 }));

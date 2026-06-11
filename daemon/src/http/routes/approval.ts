@@ -167,9 +167,6 @@ async function resumeAndSaveToolResult(id: string, triggerLLM: boolean): Promise
 
 // ---- Static routes MUST be registered before parameterized /:id/* routes ----
 
-/**
- * GET /api/approvals - List pending approval requests
- */
 approvalRoutes.get("/", async (c) => {
   try {
     const { approvalRequests } = getRepositories();
@@ -296,9 +293,6 @@ approvalRoutes.post("/batch/deny", async (c) => {
   }
 });
 
-/**
- * POST /api/approvals/expire-stale - Expire stale pending approval requests
- */
 approvalRoutes.post("/expire-stale", async (c) => {
   try {
     const { approvalRequests } = getRepositories();
@@ -318,9 +312,6 @@ approvalRoutes.post("/expire-stale", async (c) => {
 
 // ---- Parameterized routes (MUST come after static /batch/* routes) ----
 
-/**
- * GET /api/approvals/:id - Get a specific approval request
- */
 approvalRoutes.get("/:id", async (c) => {
   try {
     const { approvalRequests } = getRepositories();
