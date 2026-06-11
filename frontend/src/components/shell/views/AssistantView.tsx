@@ -28,6 +28,7 @@ interface VoicePanelState {
 interface AssistantViewProps {
   messages: Message[];
   onSend: (text: string) => void;
+  onStop?: () => void;
   isLoading: boolean;
   hasActiveConversation: boolean;
   error: string | null;
@@ -48,6 +49,7 @@ interface AssistantViewProps {
 export function AssistantView({
   messages,
   onSend,
+  onStop,
   isLoading,
   hasActiveConversation,
   error,
@@ -117,6 +119,7 @@ export function AssistantView({
         <ChatPanel
           messages={messages}
           onSend={onSend}
+          onStop={onStop}
           isLoading={isLoading}
           hasActiveConversation={hasActiveConversation}
           error={error}

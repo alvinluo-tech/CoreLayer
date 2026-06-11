@@ -18,6 +18,7 @@ import { configManager } from "../../config/config-manager.js";
 import { logError } from "../../shared/errors.js";
 import { resolveConversationScope } from "./run-context.js";
 import { createEventEmitter, handleApprovalSuspension } from "./application/run-events.js";
+import { registerActiveRun, unregisterActiveRun } from "./run.js";
 import type { ModelMessage } from "ai";
 
 export type RunStreamTurnOptions = {
@@ -105,6 +106,9 @@ export async function runStreamTurn(
     selectedModel: request.modelOverride ?? undefined,
   });
 
+  // Register abort controller so POST /runs/:id/cancel can abort streaming runs
+  registerActiveRun(run.id, abortController);
+
   // Internal state
   let fullText = "";
   const toolCallsLog: { name: string; input: unknown; output: unknown }[] = [];
@@ -174,6 +178,7 @@ export async function runStreamTurn(
         await agentRuns.updateStatus(run.id, "failed", errorMsg);
       } finally {
         clearTimeout(watchdogId);
+        unregisterActiveRun(run.id);
       }
       return;
     }
@@ -302,12 +307,14 @@ export async function runStreamTurn(
       }
     } finally {
       clearTimeout(watchdogId);
+      unregisterActiveRun(run.id);
     }
   };
 
   // Handle client disconnect
   abortController.signal.addEventListener("abort", () => {
     clearTimeout(watchdogId);
+    unregisterActiveRun(run.id);
   });
 
   return {

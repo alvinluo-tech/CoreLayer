@@ -36,6 +36,14 @@ export function cancelActiveRun(runId: string): boolean {
   return true;
 }
 
+export function registerActiveRun(runId: string, controller: AbortController): void {
+  activeRunControllers.set(runId, controller);
+}
+
+export function unregisterActiveRun(runId: string): void {
+  activeRunControllers.delete(runId);
+}
+
 const taskGraph = new TaskGraph();
 
 function appendRunHistory(

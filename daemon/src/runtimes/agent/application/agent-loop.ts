@@ -23,7 +23,7 @@ import { logCacheStats } from "./cache-control.js";
 
 // ---- Message Queue ----
 
-export type DeliveryMode = "steer" | "followUp";
+export type DeliveryMode = "steer" | "followUp" | "interrupt";
 
 interface MessageEntry {
   content: string;
@@ -46,6 +46,7 @@ interface MessageEntry {
 export class MessageQueue {
   private steerQueue: MessageEntry[] = [];
   private followUpQueue: MessageEntry[] = [];
+  private interruptQueue: MessageEntry[] = [];
   private onEnqueueCallback?: (mode: DeliveryMode) => void;
 
   /** Register a callback for new message events */
@@ -62,6 +63,8 @@ export class MessageQueue {
       const entry: MessageEntry = { content, mode, resolve };
       if (mode === "steer") {
         this.steerQueue.push(entry);
+      } else if (mode === "interrupt") {
+        this.interruptQueue.push(entry);
       } else {
         this.followUpQueue.push(entry);
       }
@@ -71,7 +74,7 @@ export class MessageQueue {
 
   /** Check if any messages are pending */
   get pending(): boolean {
-    return this.steerQueue.length > 0 || this.followUpQueue.length > 0;
+    return this.steerQueue.length > 0 || this.followUpQueue.length > 0 || this.interruptQueue.length > 0;
   }
 
   /** Check specifically for steer messages */
@@ -79,9 +82,21 @@ export class MessageQueue {
     return this.steerQueue.length > 0;
   }
 
+  /** Check specifically for interrupt messages */
+  get hasInterrupt(): boolean {
+    return this.interruptQueue.length > 0;
+  }
+
   /** Drain all entries of a given mode, resolving their promises */
   drain(mode: DeliveryMode): MessageEntry[] {
-    const queue = mode === "steer" ? this.steerQueue : this.followUpQueue;
+    let queue: MessageEntry[];
+    if (mode === "steer") {
+      queue = this.steerQueue;
+    } else if (mode === "interrupt") {
+      queue = this.interruptQueue;
+    } else {
+      queue = this.followUpQueue;
+    }
     const entries = [...queue];
     queue.length = 0;
     return entries;
@@ -166,6 +181,14 @@ export async function* runAgentLoop(
   let abortedDuringLoop = false;
 
   for (let round = 0; round < maxRounds; round++) {
+    // Check for interrupt messages — immediately break the loop
+    const interruptEntries = queue.drain("interrupt");
+    if (interruptEntries.length > 0) {
+      for (const entry of interruptEntries) entry.resolve();
+      abortedDuringLoop = true;
+      break;
+    }
+
     if (abortSignal?.aborted) {
       abortedDuringLoop = true;
       break;

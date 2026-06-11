@@ -11,7 +11,7 @@
  * move to separate processes.
  */
 
-export { runTurn, cancelActiveRun } from "./run.js";
+export { runTurn, cancelActiveRun, registerActiveRun, unregisterActiveRun } from "./run.js";
 export { runStreamTurn } from "./stream.js";
 export { handleMessageInConversation } from "./application/conversation.js";
 export { isGoalCommand, handleGoalCommand, GoalJudge } from "./application/goal-handler.js";
@@ -23,7 +23,7 @@ export { runAgentLoop, MessageQueue } from "./application/agent-loop.js";
 export type { AgentLoopConfig, DeliveryMode } from "./application/agent-loop.js";
 export type { AgentRunEvent } from "./domain/agent-run.js";
 
-import { runTurn, cancelActiveRun } from "./run.js";
+import { runTurn, cancelActiveRun, registerActiveRun, unregisterActiveRun } from "./run.js";
 import { runStreamTurn } from "./stream.js";
 import { handleMessageInConversation } from "./application/conversation.js";
 import { isGoalCommand, handleGoalCommand, GoalJudge } from "./application/goal-handler.js";
@@ -37,6 +37,8 @@ import { runAgentLoop, MessageQueue } from "./application/agent-loop.js";
 export const agentRuntimeApi = {
   runTurn,
   cancelActiveRun,
+  registerActiveRun,
+  unregisterActiveRun,
   runStreamTurn,
   handleMessageInConversation,
   isGoalCommand,

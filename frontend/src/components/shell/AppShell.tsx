@@ -40,6 +40,7 @@ export function AppShell() {
   const {
     messages,
     sendMessage,
+    stopStreaming,
     isLoading,
     activeConversationId,
     error,
@@ -453,6 +454,7 @@ export function AppShell() {
           <AssistantView
             messages={messages}
             onSend={sendMessage}
+            onStop={stopStreaming}
             isLoading={isLoading}
             hasActiveConversation={!!activeConversationId}
             error={error}

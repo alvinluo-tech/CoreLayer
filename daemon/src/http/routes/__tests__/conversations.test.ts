@@ -25,6 +25,8 @@ vi.mock("../../../runtimes/agent/stream.js", () => ({
 vi.mock("../../../runtimes/agent/run.js", () => ({
   runTurn: (...args: unknown[]) => mocks.mockRunTurn(...args),
   cancelActiveRun: vi.fn().mockReturnValue(false),
+  registerActiveRun: vi.fn(),
+  unregisterActiveRun: vi.fn(),
 }));
 
 vi.mock("../../../persistence/factory.js", () => ({

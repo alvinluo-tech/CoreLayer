@@ -151,6 +151,8 @@ vi.mock("../../../skills/executor.js", () => ({
 // Mock runtime run-executor
 vi.mock("../../agent/run.js", () => ({
   cancelActiveRun: vi.fn().mockReturnValue(false),
+  registerActiveRun: vi.fn(),
+  unregisterActiveRun: vi.fn(),
   runTurn: vi.fn().mockResolvedValue({
     runId: "run-1",
     conversationId: "conv-1",

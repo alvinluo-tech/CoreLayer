@@ -56,6 +56,11 @@ export function useChat() {
   const [pendingApprovals, setPendingApprovals] = useState<PendingApproval[]>([]);
   const [approvalRunId, setApprovalRunId] = useState<string | null>(null);
   const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const abortCleanupRef = useRef<{
+    conversationId: string;
+    userTempId: string;
+    assistantTempId: string;
+  } | null>(null);
 
   const messages: Message[] = rawMessages.map(convertMessage);
 
@@ -102,6 +107,12 @@ export function useChat() {
         toolCalls: null,
         toolCallId: null,
         createdAt: new Date().toISOString(),
+      };
+
+      abortCleanupRef.current = {
+        conversationId: conversationId!,
+        userTempId,
+        assistantTempId,
       };
 
       const isTargetConversationActive = () =>
@@ -244,6 +255,14 @@ export function useChat() {
               } catch (e) {
                 console.warn('[useChat] Failed to parse done event:', e);
               }
+            } else if (event === 'error') {
+              // Backend-initiated run failure (cancel, error, etc.)
+              try {
+                const payload = JSON.parse(data) as { error: string };
+                useConversationStore.setState({ error: payload.error });
+              } catch {
+                useConversationStore.setState({ error: data });
+              }
             }
 
             if (messageListUpdated) {
@@ -294,6 +313,7 @@ export function useChat() {
         setIsSending(false);
         setStreamConversationId(null);
         abortControllerRef.current = null;
+        abortCleanupRef.current = null;
         setStreamingContent('');
       }
     },
@@ -362,8 +382,20 @@ export function useChat() {
   }, []);
 
   const stopStreaming = useCallback(() => {
+    // Clean up optimistic messages before aborting
+    const cleanup = abortCleanupRef.current;
+    if (cleanup) {
+      const state = useConversationStore.getState();
+      if (state.activeConversationId === cleanup.conversationId) {
+        const msgs = state.messages.filter(
+          (m) => m.id !== cleanup.userTempId && m.id !== cleanup.assistantTempId
+        );
+        setMessages(msgs);
+      }
+      abortCleanupRef.current = null;
+    }
     abortControllerRef.current?.abort();
-  }, []);
+  }, [setMessages]);
 
   const startNewChat = useCallback(async () => {
     return createConversation();

@@ -12,6 +12,7 @@ import { useConversationStore } from '@/stores/conversationStore';
 interface ChatPanelProps {
   messages: Message[];
   onSend: (text: string) => void;
+  onStop?: () => void;
   isLoading: boolean;
   voiceSpeak?: (text: string) => void;
   hasActiveConversation: boolean;
@@ -28,6 +29,7 @@ interface ChatPanelProps {
 export function ChatPanel({
   messages,
   onSend,
+  onStop,
   isLoading,
   hasActiveConversation,
   error,
@@ -338,7 +340,7 @@ export function ChatPanel({
 
       {/* Input area — glass border top */}
       <div className="p-4" style={{ borderTop: '1px solid var(--glass-border)' }}>
-        <ChatInput onSend={onSend} disabled={isLoading} />
+        <ChatInput onSend={onSend} disabled={isLoading} onStop={onStop} />
       </div>
     </div>
   );
