@@ -195,7 +195,7 @@ export class ClaudeCodeCliAdapter implements CodingAgentAdapter {
       this.collectChangedFiles(info, task);
 
       // Persist artifacts to disk and DB
-      persistArtifacts(runId, info.artifacts);
+      persistArtifacts(runId, info.artifacts, task.conversationId);
       try {
         const { agentRuns } = getRepositories();
         agentRuns.updateArtifacts(runId, info.artifacts).catch(() => {});
@@ -214,7 +214,7 @@ export class ClaudeCodeCliAdapter implements CodingAgentAdapter {
       info.completedAt = new Date().toISOString();
       info.artifacts.push({ type: "error", content: info.error });
 
-      persistArtifacts(runId, info.artifacts);
+      persistArtifacts(runId, info.artifacts, task.conversationId);
       try {
         const { agentRuns } = getRepositories();
         agentRuns.updateArtifacts(runId, info.artifacts);

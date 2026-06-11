@@ -3,11 +3,15 @@
  *
  * Artifacts are stored under JARVIS_APP_DATA_DIR/artifacts/{runId}/
  * as individual JSON files plus a manifest.
+ *
+ * When a conversationId is provided, artifacts are also written to
+ * the session directory: JARVIS_APP_DATA_DIR/sessions/{conversationId}/artifacts/
  */
 
-import { mkdirSync, writeFileSync } from "fs";
+import { mkdirSync, writeFileSync, readFileSync, existsSync } from "fs";
 import path from "path";
 import { resolveAppPaths } from "../../config/app-paths.js";
+import { ensureSessionDir, recordArtifactInSession } from "../../services/session-manager.js";
 import type { CodingArtifact } from "./types.js";
 
 /** In-memory artifact registry keyed by runId */
@@ -24,24 +28,26 @@ function getRunArtifactDir(runId: string): string {
 
 /**
  * Persist artifacts for a coding run to disk and cache in memory.
+ * Optionally also writes to the session directory when conversationId is provided.
  */
 export function persistArtifacts(
   runId: string,
   artifacts: CodingArtifact[],
+  conversationId?: string,
 ): void {
   if (artifacts.length === 0) return;
 
   // Cache in memory
   artifactRegistry.set(runId, artifacts);
 
-  // Write to disk
+  // Write to run-specific directory
   try {
     const dir = getRunArtifactDir(runId);
     mkdirSync(dir, { recursive: true });
 
-    // Write manifest
     const manifest = {
       runId,
+      conversationId: conversationId ?? null,
       artifactCount: artifacts.length,
       persistedAt: new Date().toISOString(),
       artifacts: artifacts.map((a, i) => ({
@@ -57,7 +63,6 @@ export function persistArtifacts(
       "utf-8",
     );
 
-    // Write individual artifact files
     for (let i = 0; i < artifacts.length; i++) {
       const artifact = artifacts[i];
       writeFileSync(
@@ -69,11 +74,67 @@ export function persistArtifacts(
   } catch {
     // File persistence is best-effort — in-memory cache still works
   }
+
+  // Also write to session directory when conversationId is provided
+  if (conversationId) {
+    try {
+      const sessionArtifactsDir = path.join(ensureSessionDir(conversationId), "artifacts");
+      mkdirSync(sessionArtifactsDir, { recursive: true });
+
+      // Write a symlink-style reference file pointing to the run artifacts
+      const ref = {
+        runId,
+        type: "run-artifacts",
+        artifactCount: artifacts.length,
+        persistedAt: new Date().toISOString(),
+      };
+      writeFileSync(
+        path.join(sessionArtifactsDir, `${runId}.json`),
+        JSON.stringify(ref, null, 2),
+        "utf-8",
+      );
+
+      recordArtifactInSession(conversationId);
+    } catch {
+      // Best-effort session copy
+    }
+  }
 }
 
 /**
- * Retrieve artifacts for a run (from memory cache, or null if not found).
+ * Retrieve artifacts for a run. Returns from in-memory cache if available,
+ * otherwise attempts to load from disk and populate the cache.
  */
 export function getArtifacts(runId: string): CodingArtifact[] | null {
-  return artifactRegistry.get(runId) ?? null;
+  const cached = artifactRegistry.get(runId);
+  if (cached) return cached;
+
+  // Try loading from disk
+  const dir = getRunArtifactDir(runId);
+  if (!existsSync(dir)) return null;
+
+  try {
+    const manifestPath = path.join(dir, "manifest.json");
+    if (!existsSync(manifestPath)) return null;
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf-8")) as {
+      artifactCount: number;
+    };
+
+    const artifacts: CodingArtifact[] = [];
+    for (let i = 0; i < manifest.artifactCount; i++) {
+      const artifactPath = path.join(dir, `artifact-${i}.json`);
+      if (existsSync(artifactPath)) {
+        artifacts.push(JSON.parse(readFileSync(artifactPath, "utf-8")) as CodingArtifact);
+      }
+    }
+
+    if (artifacts.length > 0) {
+      artifactRegistry.set(runId, artifacts);
+      return artifacts;
+    }
+  } catch {
+    // Corrupted or unreadable — fall through to null
+  }
+
+  return null;
 }
