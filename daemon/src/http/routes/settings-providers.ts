@@ -5,153 +5,134 @@ import { resetGateway } from "../../gateways/model/gateway.js";
 import { PROVIDER_PRESETS } from "@jarvis/model-gateway";
 import { apiError, logError } from "../../shared/errors.js";
 import { maskApiKey, isMaskedKey } from "./settings-helpers.js";
+import { withErrorHandling } from "../middleware/error-handler.js";
 
 const app = new Hono();
 
 // ---- Provider Presets ----
 
-app.get("/providers/presets", (c) => {
+app.get("/providers/presets", withErrorHandling("settings/providers/presets", (c) => {
   return c.json({ presets: PROVIDER_PRESETS });
-});
+}));
 
 // ---- Providers CRUD ----
 
-app.get("/providers", (c) => {
-  try {
-    const stored = configManager.getProviders();
+app.get("/providers", withErrorHandling("settings/providers/list", (c) => {
+  const stored = configManager.getProviders();
 
-    if (stored.length === 0) {
-      // Synthesize legacy view from credentials
-      const creds = configManager.getCredentials();
-      const providers: Record<string, { apiKey: string; baseURL: string; enabled: boolean }> = {};
+  if (stored.length === 0) {
+    // Synthesize legacy view from credentials
+    const creds = configManager.getCredentials();
+    const providers: Record<string, { apiKey: string; baseURL: string; enabled: boolean }> = {};
 
-      for (const [name, def] of Object.entries(LEGACY_DEFAULTS)) {
-        if (name === "ollama") continue; // Skip alias
-        providers[name] = {
-          apiKey: maskApiKey(creds[name]),
-          baseURL: def.baseURL,
-          enabled: true,
-        };
-      }
-
-      return c.json({ providers, isLegacy: true });
-    }
-
-    const providers = stored.map((p) => ({
-      ...p,
-      apiKey: maskApiKey(configManager.getCredentials()[p.id]),
-    }));
-
-    return c.json({ providers, isLegacy: false });
-  } catch (err) {
-    logError("settings/providers/list", err);
-    return apiError(c, "Failed to list providers", 500);
-  }
-});
-
-app.post("/providers", async (c) => {
-  try {
-    const body = await c.req.json<{
-      id: string;
-      name: string;
-      type?: string;
-      baseURL: string;
-      apiKey?: string;
-      enabled?: boolean;
-    }>();
-
-    if (!body.id || !body.name || !body.baseURL) {
-      return apiError(c, "id, name, and baseURL are required", 400);
-    }
-
-    const provider: Omit<StoredProvider, "id"> = {
-      name: body.name,
-      type: (body.type as StoredProvider["type"]) ?? "openai_compatible",
-      baseURL: body.baseURL,
-      enabled: body.enabled ?? true,
-    };
-
-    configManager.setProvider(body.id, provider);
-
-    if (body.apiKey) {
-      configManager.setCredential(body.id, body.apiKey);
-    }
-
-    resetGateway();
-
-    return c.json({ success: true, message: `Provider "${body.name}" added.` });
-  } catch (err) {
-    logError("settings/providers/create", err);
-    return apiError(c, `Failed to add provider: ${err instanceof Error ? err.message : String(err)}`, 500);
-  }
-});
-
-app.put("/providers/:id", async (c) => {
-  try {
-    const id = c.req.param("id");
-    const body = await c.req.json<{
-      name?: string;
-      baseURL?: string;
-      apiKey?: string;
-      enabled?: boolean;
-    }>();
-
-    const existing = configManager.getProviders().find((p) => p.id === id);
-    if (existing) {
-      const updated: Omit<StoredProvider, "id"> = {
-        name: body.name ?? existing.name,
-        type: existing.type,
-        baseURL: body.baseURL ?? existing.baseURL,
-        enabled: body.enabled ?? existing.enabled,
+    for (const [name, def] of Object.entries(LEGACY_DEFAULTS)) {
+      if (name === "ollama") continue; // Skip alias
+      providers[name] = {
+        apiKey: maskApiKey(creds[name]),
+        baseURL: def.baseURL,
+        enabled: true,
       };
-      configManager.setProvider(id, updated);
-
-      // Update credential separately
-      if (body.apiKey !== undefined && !isMaskedKey(body.apiKey)) {
-        configManager.setCredential(id, body.apiKey);
-      }
-    } else {
-      // Legacy provider — create as new stored provider using preset defaults
-      const preset = PROVIDER_PRESETS.find((p) => p.id === id);
-      if (preset) {
-        const provider: Omit<StoredProvider, "id"> = {
-          name: preset.name,
-          type: preset.type as StoredProvider["type"],
-          baseURL: body.baseURL ?? preset.defaultBaseURL,
-          enabled: body.enabled ?? true,
-        };
-        configManager.setProvider(id, provider);
-      }
-
-      if (body.apiKey !== undefined && !isMaskedKey(body.apiKey)) {
-        configManager.setCredential(id, body.apiKey);
-      }
     }
 
-    resetGateway();
-    return c.json({ success: true, message: `Provider "${id}" updated.` });
-  } catch (err) {
-    logError("settings/providers/update", err);
-    return apiError(c, `Failed to update provider: ${err instanceof Error ? err.message : String(err)}`, 500);
+    return c.json({ providers, isLegacy: true });
   }
-});
 
-app.delete("/providers/:id", async (c) => {
-  try {
-    const id = c.req.param("id");
-    configManager.removeProvider(id);
-    resetGateway();
-    return c.json({ success: true });
-  } catch (err) {
-    logError("settings/providers/delete", err);
-    return apiError(c, "Failed to delete provider", 500);
+  const providers = stored.map((p) => ({
+    ...p,
+    apiKey: maskApiKey(configManager.getCredentials()[p.id]),
+  }));
+
+  return c.json({ providers, isLegacy: false });
+}));
+
+app.post("/providers", withErrorHandling("settings/providers/create", async (c) => {
+  const body = await c.req.json<{
+    id: string;
+    name: string;
+    type?: string;
+    baseURL: string;
+    apiKey?: string;
+    enabled?: boolean;
+  }>();
+
+  if (!body.id || !body.name || !body.baseURL) {
+    return apiError(c, "id, name, and baseURL are required", 400);
   }
-});
+
+  const provider: Omit<StoredProvider, "id"> = {
+    name: body.name,
+    type: (body.type as StoredProvider["type"]) ?? "openai_compatible",
+    baseURL: body.baseURL,
+    enabled: body.enabled ?? true,
+  };
+
+  configManager.setProvider(body.id, provider);
+
+  if (body.apiKey) {
+    configManager.setCredential(body.id, body.apiKey);
+  }
+
+  resetGateway();
+
+  return c.json({ success: true, message: `Provider "${body.name}" added.` });
+}));
+
+app.put("/providers/:id", withErrorHandling("settings/providers/update", async (c) => {
+  const id = c.req.param("id")!;
+  const body = await c.req.json<{
+    name?: string;
+    baseURL?: string;
+    apiKey?: string;
+    enabled?: boolean;
+  }>();
+
+  const existing = configManager.getProviders().find((p) => p.id === id);
+  if (existing) {
+    const updated: Omit<StoredProvider, "id"> = {
+      name: body.name ?? existing.name,
+      type: existing.type,
+      baseURL: body.baseURL ?? existing.baseURL,
+      enabled: body.enabled ?? existing.enabled,
+    };
+    configManager.setProvider(id, updated);
+
+    // Update credential separately
+    if (body.apiKey !== undefined && !isMaskedKey(body.apiKey)) {
+      configManager.setCredential(id, body.apiKey);
+    }
+  } else {
+    // Legacy provider — create as new stored provider using preset defaults
+    const preset = PROVIDER_PRESETS.find((p) => p.id === id);
+    if (preset) {
+      const provider: Omit<StoredProvider, "id"> = {
+        name: preset.name,
+        type: preset.type as StoredProvider["type"],
+        baseURL: body.baseURL ?? preset.defaultBaseURL,
+        enabled: body.enabled ?? true,
+      };
+      configManager.setProvider(id, provider);
+    }
+
+    if (body.apiKey !== undefined && !isMaskedKey(body.apiKey)) {
+      configManager.setCredential(id, body.apiKey);
+    }
+  }
+
+  resetGateway();
+  return c.json({ success: true, message: `Provider "${id}" updated.` });
+}));
+
+app.delete("/providers/:id", withErrorHandling("settings/providers/delete", async (c) => {
+  const id = c.req.param("id")!;
+  configManager.removeProvider(id);
+  resetGateway();
+  return c.json({ success: true });
+}));
 
 // ---- Model Discovery ----
 
 app.post("/providers/:id/discover", async (c) => {
-  const id = c.req.param("id");
+  const id = c.req.param("id")!;
   const stored = configManager.getProviders().find((p) => p.id === id);
 
   let baseURL: string;
@@ -192,7 +173,7 @@ app.post("/providers/:id/discover", async (c) => {
 // ---- Provider Connectivity Test ----
 
 app.post("/providers/:id/test", async (c) => {
-  const id = c.req.param("id");
+  const id = c.req.param("id")!;
   const stored = configManager.getProviders().find((p) => p.id === id);
 
   if (!stored) {
@@ -258,7 +239,7 @@ app.post("/providers/:id/test", async (c) => {
 
 // ---- Legacy Provider Credentials (backward compat) ----
 
-app.get("/providers/legacy", (c) => {
+app.get("/providers/legacy", withErrorHandling("settings/providers/legacy", (c) => {
   const creds = configManager.getCredentials();
   const providers: Record<string, { apiKey: string; baseURL: string }> = {};
 
@@ -271,6 +252,6 @@ app.get("/providers/legacy", (c) => {
   }
 
   return c.json({ providers });
-});
+}));
 
 export default app;

@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { getRepositories } from "../../persistence/factory.js";
-import { apiError, extractErrorMessage, logError, ErrorCodes } from "../../shared/errors.js";
+import { apiError, ErrorCodes } from "../../shared/errors.js";
+import { withErrorHandling } from "../middleware/error-handler.js";
 import { TaskGraph } from "../../workspaces/task-graph-service.js";
 import { decomposeTask } from "../../runtimes/agent/public-api.js";
 import { enqueue } from "../../workflow/queue-service.js";
@@ -9,8 +10,9 @@ const app = new Hono();
 const taskGraph = new TaskGraph();
 
 // GET / - Query tasks
-app.get("/", async (c) => {
-  try {
+app.get(
+  "/",
+  withErrorHandling("tasks/list", async (c) => {
     const status = c.req.query("status");
     const priority = c.req.query("priority");
     const projectId = c.req.query("projectId");
@@ -20,15 +22,13 @@ app.get("/", async (c) => {
       projectId: projectId ?? undefined,
     });
     return c.json({ tasks, count: tasks.length });
-  } catch (err) {
-    logError("tasks/list", err);
-    return apiError(c, extractErrorMessage(err));
-  }
-});
+  }),
+);
 
 // POST / - Create task
-app.post("/", async (c) => {
-  try {
+app.post(
+  "/",
+  withErrorHandling("tasks/create", async (c) => {
     const body = await c.req.json<{
       title: string;
       priority?: number;
@@ -62,147 +62,140 @@ app.post("/", async (c) => {
     });
 
     return c.json({ task }, 201);
-  } catch (err) {
-    logError("tasks/create", err);
-    return apiError(c, extractErrorMessage(err));
-  }
-});
+  }),
+);
 
 // GET /:id - Get task by ID
-app.get("/:id", async (c) => {
-  const id = c.req.param("id");
-  try {
+app.get(
+  "/:id",
+  withErrorHandling("tasks/get", async (c) => {
+    const id = c.req.param("id")!;
     const task = await getRepositories().tasks.getById(id);
     if (!task) return apiError(c, "Task not found", 404);
     return c.json({ task });
-  } catch (err) {
-    logError("tasks/get", err);
-    return apiError(c, extractErrorMessage(err));
-  }
-});
+  }),
+);
 
 // PATCH /:id - Update task
-app.patch("/:id", async (c) => {
-  const id = c.req.param("id");
-  try {
-    const body = await c.req.json<{
-      title?: string;
-      priority?: number;
-      status?: string;
-      dueDate?: string;
-      tags?: string[];
-      objective?: string;
-      assignedAgentId?: string;
-      parentTaskId?: string;
-      dependencies?: string[];
-      blockedBy?: string[];
-      acceptanceCriteria?: string[];
-      artifacts?: unknown[];
-      runHistory?: unknown[];
-      manualInterventionRequired?: boolean;
-      rollbackPlan?: string;
-    }>();
-    const task = await getRepositories().tasks.update(id, body);
-    return c.json({ task });
-  } catch (err) {
-    logError("tasks/update", err);
-    const msg = extractErrorMessage(err);
-    return apiError(c, msg.toLowerCase().includes("not found") ? "Task not found" : msg,
-      msg.toLowerCase().includes("not found") ? 404 : 500);
-  }
-});
+app.patch(
+  "/:id",
+  withErrorHandling("tasks/update", async (c) => {
+    const id = c.req.param("id")!;
+    try {
+      const body = await c.req.json<{
+        title?: string;
+        priority?: number;
+        status?: string;
+        dueDate?: string;
+        tags?: string[];
+        objective?: string;
+        assignedAgentId?: string;
+        parentTaskId?: string;
+        dependencies?: string[];
+        blockedBy?: string[];
+        acceptanceCriteria?: string[];
+        artifacts?: unknown[];
+        runHistory?: unknown[];
+        manualInterventionRequired?: boolean;
+        rollbackPlan?: string;
+      }>();
+      const task = await getRepositories().tasks.update(id, body);
+      return c.json({ task });
+    } catch (err) {
+      const msg =
+        err instanceof Error ? err.message : String(err);
+      return apiError(
+        c,
+        msg.toLowerCase().includes("not found") ? "Task not found" : msg,
+        msg.toLowerCase().includes("not found") ? 404 : 500,
+      );
+    }
+  }),
+);
 
 // DELETE /:id - Soft delete task
-app.delete("/:id", async (c) => {
-  const id = c.req.param("id");
-  try {
+app.delete(
+  "/:id",
+  withErrorHandling("tasks/delete", async (c) => {
+    const id = c.req.param("id")!;
     await getRepositories().tasks.delete(id);
     return c.json({ success: true });
-  } catch (err) {
-    logError("tasks/delete", err);
-    return apiError(c, extractErrorMessage(err));
-  }
-});
+  }),
+);
 
 // GET /project/:projectId - Get tasks by project
-app.get("/project/:projectId", async (c) => {
-  const projectId = c.req.param("projectId");
-  try {
+app.get(
+  "/project/:projectId",
+  withErrorHandling("tasks/byProject", async (c) => {
+    const projectId = c.req.param("projectId")!;
     const tasks = await getRepositories().tasks.getByProjectId(projectId);
     return c.json({ tasks, count: tasks.length });
-  } catch (err) {
-    logError("tasks/byProject", err);
-    return apiError(c, extractErrorMessage(err));
-  }
-});
+  }),
+);
 
 // POST /:id/dependencies - Set dependencies for a task
-app.post("/:id/dependencies", async (c) => {
-  const id = c.req.param("id");
-  try {
-    const body = await c.req.json<{ dependencies: string[] }>();
-    await taskGraph.setDependencies(id, body.dependencies);
-    const task = await getRepositories().tasks.getById(id);
-    return c.json({ task });
-  } catch (err) {
-    logError("tasks/setDependencies", err);
-    const msg = extractErrorMessage(err);
-    return apiError(c, msg, msg.includes("depend on itself") ? 400 : 500);
-  }
-});
+app.post(
+  "/:id/dependencies",
+  withErrorHandling("tasks/setDependencies", async (c) => {
+    const id = c.req.param("id")!;
+    try {
+      const body = await c.req.json<{ dependencies: string[] }>();
+      await taskGraph.setDependencies(id, body.dependencies);
+      const task = await getRepositories().tasks.getById(id);
+      return c.json({ task });
+    } catch (err) {
+      const msg =
+        err instanceof Error ? err.message : String(err);
+      return apiError(c, msg, msg.includes("depend on itself") ? 400 : 500);
+    }
+  }),
+);
 
 // GET /:id/can-execute - Check if a task can execute
-app.get("/:id/can-execute", async (c) => {
-  const id = c.req.param("id");
-  try {
+app.get(
+  "/:id/can-execute",
+  withErrorHandling("tasks/canExecute", async (c) => {
+    const id = c.req.param("id")!;
     const canExecute = await taskGraph.canExecute(id);
     return c.json({ canExecute });
-  } catch (err) {
-    logError("tasks/canExecute", err);
-    return apiError(c, extractErrorMessage(err));
-  }
-});
+  }),
+);
 
 // POST /:id/complete - Mark task as completed and unblock dependents
-app.post("/:id/complete", async (c) => {
-  const id = c.req.param("id");
-  try {
+app.post(
+  "/:id/complete",
+  withErrorHandling("tasks/complete", async (c) => {
+    const id = c.req.param("id")!;
     await taskGraph.completeTask(id);
     const task = await getRepositories().tasks.getById(id);
     return c.json({ task });
-  } catch (err) {
-    logError("tasks/complete", err);
-    return apiError(c, extractErrorMessage(err));
-  }
-});
+  }),
+);
 
 // GET /project/:projectId/executable - Get executable tasks for a project
-app.get("/project/:projectId/executable", async (c) => {
-  const projectId = c.req.param("projectId");
-  try {
+app.get(
+  "/project/:projectId/executable",
+  withErrorHandling("tasks/executable", async (c) => {
+    const projectId = c.req.param("projectId")!;
     const tasks = await taskGraph.getExecutableTasks(projectId);
     return c.json({ tasks, count: tasks.length });
-  } catch (err) {
-    logError("tasks/executable", err);
-    return apiError(c, extractErrorMessage(err));
-  }
-});
+  }),
+);
 
 // GET /project/:projectId/cycles - Detect circular dependencies
-app.get("/project/:projectId/cycles", async (c) => {
-  const projectId = c.req.param("projectId");
-  try {
+app.get(
+  "/project/:projectId/cycles",
+  withErrorHandling("tasks/detectCycles", async (c) => {
+    const projectId = c.req.param("projectId")!;
     const cycles = await taskGraph.detectCycles(projectId);
     return c.json({ cycles, hasCycles: cycles.length > 0 });
-  } catch (err) {
-    logError("tasks/detectCycles", err);
-    return apiError(c, extractErrorMessage(err));
-  }
-});
+  }),
+);
 
 // POST /decompose - Decompose a task using AI
-app.post("/decompose", async (c) => {
-  try {
+app.post(
+  "/decompose",
+  withErrorHandling("tasks/decompose", async (c) => {
     const body = await c.req.json<{
       objective: string;
       projectId: string;
@@ -215,16 +208,14 @@ app.post("/decompose", async (c) => {
 
     const result = await decomposeTask(body.objective, body.projectId, body.agentId);
     return c.json(result, 201);
-  } catch (err) {
-    logError("tasks/decompose", err);
-    return apiError(c, extractErrorMessage(err));
-  }
-});
+  }),
+);
 
 // POST /:id/start - Start executing a task (enqueue for execution)
-app.post("/:id/start", async (c) => {
-  const id = c.req.param("id");
-  try {
+app.post(
+  "/:id/start",
+  withErrorHandling("tasks/start", async (c) => {
+    const id = c.req.param("id")!;
     const repos = getRepositories();
     const task = await repos.tasks.getById(id);
     if (!task) {
@@ -240,16 +231,14 @@ app.post("/:id/start", async (c) => {
     });
 
     return c.json({ success: true, runId: entry.runId, entry });
-  } catch (err) {
-    logError("tasks/start", err);
-    return apiError(c, extractErrorMessage(err));
-  }
-});
+  }),
+);
 
 // POST /:id/cancel - Cancel a running task's active run
-app.post("/:id/cancel", async (c) => {
-  const id = c.req.param("id");
-  try {
+app.post(
+  "/:id/cancel",
+  withErrorHandling("tasks/cancel", async (c) => {
+    const id = c.req.param("id")!;
     const repos = getRepositories();
     const task = await repos.tasks.getById(id);
     if (!task) {
@@ -258,7 +247,9 @@ app.post("/:id/cancel", async (c) => {
 
     // Find the most recent run for this task and cancel it
     const runs = await repos.agentRuns.getRecent(100);
-    const taskRun = runs.find((r) => r.taskId === id && (r.status === "running" || r.status === "queued"));
+    const taskRun = runs.find(
+      (r) => r.taskId === id && (r.status === "running" || r.status === "queued"),
+    );
 
     if (!taskRun) {
       return apiError(c, "No active run found for this task", 400, ErrorCodes.VALIDATION);
@@ -268,10 +259,7 @@ app.post("/:id/cancel", async (c) => {
     const cancelled = await cancelRun(taskRun.id);
 
     return c.json({ success: cancelled, runId: taskRun.id });
-  } catch (err) {
-    logError("tasks/cancel", err);
-    return apiError(c, extractErrorMessage(err));
-  }
-});
+  }),
+);
 
 export default app;

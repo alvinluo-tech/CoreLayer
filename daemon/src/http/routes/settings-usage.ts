@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { sql } from "drizzle-orm";
 import { db, schema } from "../../persistence/client.js";
 import { getModelGateway } from "../../gateways/model/gateway.js";
-import { apiError, logError } from "../../shared/errors.js";
+import { withErrorHandling } from "../middleware/error-handler.js";
 
 const app = new Hono();
 
@@ -35,8 +35,9 @@ function estimateCost(
   return Math.round((inputCost + outputCost) * 100) / 100;
 }
 
-app.get("/usage", (c) => {
-  try {
+app.get(
+  "/usage",
+  withErrorHandling("settings/usage/get", async (c) => {
     const gateway = getModelGateway();
     const rows = db
       .select({
@@ -89,10 +90,7 @@ app.get("/usage", (c) => {
     };
 
     return c.json(summary);
-  } catch (err) {
-    logError("settings/usage/get", err);
-    return apiError(c, "Failed to get usage stats", 500);
-  }
-});
+  }),
+);
 
 export default app;

@@ -3,85 +3,89 @@ import { streamSSE } from "hono/streaming";
 import { transcribeWithGroq, isAsrAvailable, synthesizeSpeech, isTtsAvailable, type TTSModel, StreamingTTS, voiceRegistry } from "../../runtimes/voice/public-api.js";
 import { getProviderConfig } from "../../gateways/ai-provider/provider.js";
 import { configManager } from "../../config/config-manager.js";
-import { extractErrorMessage, logError } from "../../shared/errors.js";
+import { logError } from "../../shared/errors.js";
 import { runStreamTurn } from "../../runtimes/agent/public-api.js";
+import { pipeRunStreamToSSE } from "./stream-helpers.js";
+import { withErrorHandling } from "../middleware/error-handler.js";
 
 const voiceRoutes = new Hono();
+
+function requireAsr(c: { json: (data: unknown, status?: number) => Response }): Response | null {
+  if (!isAsrAvailable()) {
+    return c.json({ error: "ASR not configured. Set GROQ_API_KEY." }, 503);
+  }
+  return null;
+}
+
+function requireTts(c: { json: (data: unknown, status?: number) => Response }): Response | null {
+  if (!isTtsAvailable()) {
+    return c.json({ error: "TTS not configured. Set MIMO_API_KEY." }, 503);
+  }
+  return null;
+}
 
 /**
  * POST /api/voice/transcribe
  * Accepts audio file upload, returns transcription text.
  */
-voiceRoutes.post("/transcribe", async (c) => {
-  if (!isAsrAvailable()) {
-    return c.json({ error: "ASR not configured. Set GROQ_API_KEY." }, 503);
+voiceRoutes.post("/transcribe", withErrorHandling("voice/transcribe", async (c) => {
+  const guard = requireAsr(c);
+  if (guard) return guard;
+
+  const formData = await c.req.formData();
+  const audioFile = formData.get("audio");
+
+  if (!audioFile || !(audioFile instanceof File)) {
+    return c.json({ error: "Missing audio file" }, 400);
   }
 
-  try {
-    const formData = await c.req.formData();
-    const audioFile = formData.get("audio");
+  const arrayBuffer = await audioFile.arrayBuffer();
+  const audioBuffer = Buffer.from(arrayBuffer);
+  const filename = audioFile.name || "audio.webm";
 
-    if (!audioFile || !(audioFile instanceof File)) {
-      return c.json({ error: "Missing audio file" }, 400);
-    }
+  const language = formData.get("language") as string | null;
+  const result = await transcribeWithGroq(audioBuffer, filename, language ?? undefined);
 
-    const arrayBuffer = await audioFile.arrayBuffer();
-    const audioBuffer = Buffer.from(arrayBuffer);
-    const filename = audioFile.name || "audio.webm";
-
-    const language = formData.get("language") as string | null;
-    const result = await transcribeWithGroq(audioBuffer, filename, language ?? undefined);
-
-    return c.json(result);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return c.json({ error: message }, 500);
-  }
-});
+  return c.json(result);
+}));
 
 /**
  * POST /api/voice/synthesize
  * Accepts text, returns audio binary (MP3).
  * Body: { text, model?, voice?, speed? }
  */
-voiceRoutes.post("/synthesize", async (c) => {
-  if (!isTtsAvailable()) {
-    return c.json({ error: "TTS not configured. Set MIMO_API_KEY." }, 503);
+voiceRoutes.post("/synthesize", withErrorHandling("voice/synthesize", async (c) => {
+  const guard = requireTts(c);
+  if (guard) return guard;
+
+  const body = await c.req.json<{
+    text: string;
+    model?: TTSModel;
+    voice?: string;
+    speed?: number;
+  }>();
+
+  if (!body.text?.trim()) {
+    return c.json({ error: "Text is required" }, 400);
   }
 
-  try {
-    const body = await c.req.json<{
-      text: string;
-      model?: TTSModel;
-      voice?: string;
-      speed?: number;
-    }>();
+  // Truncate very long text to avoid API limits
+  const text = body.text.length > 2000 ? body.text.slice(0, 2000) + "..." : body.text;
 
-    if (!body.text?.trim()) {
-      return c.json({ error: "Text is required" }, 400);
-    }
+  const audioBuffer = await synthesizeSpeech({
+    text,
+    model: body.model,
+    voice: body.voice,
+    speed: body.speed,
+  });
 
-    // Truncate very long text to avoid API limits
-    const text = body.text.length > 2000 ? body.text.slice(0, 2000) + "..." : body.text;
-
-    const audioBuffer = await synthesizeSpeech({
-      text,
-      model: body.model,
-      voice: body.voice,
-      speed: body.speed,
-    });
-
-    return new Response(new Uint8Array(audioBuffer), {
-      headers: {
-        "Content-Type": "audio/wav",
-        "Content-Length": audioBuffer.length.toString(),
-      },
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return c.json({ error: message }, 500);
-  }
-});
+  return new Response(new Uint8Array(audioBuffer), {
+    headers: {
+      "Content-Type": "audio/wav",
+      "Content-Length": audioBuffer.length.toString(),
+    },
+  });
+}));
 
 /**
  * POST /api/voice/synthesize-batch
@@ -89,45 +93,39 @@ voiceRoutes.post("/synthesize", async (c) => {
  * Body: { sentences: string[], model?, voice?, speed? }
  * Response: { chunks: ArrayBuffer[] } (each chunk is a WAV buffer)
  */
-voiceRoutes.post("/synthesize-batch", async (c) => {
-  if (!isTtsAvailable()) {
-    return c.json({ error: "TTS not configured. Set MIMO_API_KEY." }, 503);
+voiceRoutes.post("/synthesize-batch", withErrorHandling("voice/synthesize-batch", async (c) => {
+  const guard = requireTts(c);
+  if (guard) return guard;
+
+  const body = await c.req.json<{
+    sentences: string[];
+    model?: TTSModel;
+    voice?: string;
+    speed?: number;
+  }>();
+
+  if (!body.sentences?.length) {
+    return c.json({ error: "sentences array is required" }, 400);
   }
 
-  try {
-    const body = await c.req.json<{
-      sentences: string[];
-      model?: TTSModel;
-      voice?: string;
-      speed?: number;
-    }>();
+  // Process sentences in parallel (limited concurrency to avoid rate limits)
+  const results = await Promise.all(
+    body.sentences.map(async (text) => {
+      const trimmed = text.length > 2000 ? text.slice(0, 2000) + "..." : text;
+      const audioBuffer = await synthesizeSpeech({
+        text: trimmed,
+        model: body.model,
+        voice: body.voice,
+        speed: body.speed,
+      });
+      return audioBuffer;
+    })
+  );
 
-    if (!body.sentences?.length) {
-      return c.json({ error: "sentences array is required" }, 400);
-    }
-
-    // Process sentences in parallel (limited concurrency to avoid rate limits)
-    const results = await Promise.all(
-      body.sentences.map(async (text) => {
-        const trimmed = text.length > 2000 ? text.slice(0, 2000) + "..." : text;
-        const audioBuffer = await synthesizeSpeech({
-          text: trimmed,
-          model: body.model,
-          voice: body.voice,
-          speed: body.speed,
-        });
-        return audioBuffer;
-      })
-    );
-
-    // Return as JSON with base64-encoded audio chunks
-    const chunks = results.map((buf) => Buffer.from(buf).toString("base64"));
-    return c.json({ chunks });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return c.json({ error: message }, 500);
-  }
-});
+  // Return as JSON with base64-encoded audio chunks
+  const chunks = results.map((buf) => Buffer.from(buf).toString("base64"));
+  return c.json({ chunks });
+}));
 
 /**
  * GET /api/voice/status
@@ -191,45 +189,10 @@ voiceRoutes.post("/converse-stream", async (c) => {
   }
 
   return streamSSE(c, async (sseStream) => {
-    try {
-      for await (const event of result.stream) {
-        if (event.type === "delta") {
-          await sseStream.writeSSE({
-            event: "delta",
-            data: JSON.stringify({ text: event.text }),
-          });
-        } else if (event.type === "tool_call") {
-          if (event.toolCall.result !== undefined) {
-            await sseStream.writeSSE({
-              event: "tool_result",
-              data: JSON.stringify({ name: event.toolCall.name, toolCallId: event.toolCall.id ?? "", output: event.toolCall.result }),
-            });
-          } else {
-            await sseStream.writeSSE({
-              event: "tool_calls",
-              data: JSON.stringify({ name: event.toolCall.name, toolCallId: event.toolCall.id ?? "", input: event.toolCall.args }),
-            });
-          }
-        } else if (event.type === "run_completed") {
-          await sseStream.writeSSE({
-            event: "done",
-            data: JSON.stringify({ fullText: event.result.text, conversationId: event.result.conversationId, runId: result.runId }),
-          });
-        } else if (event.type === "run_failed") {
-          await sseStream.writeSSE({
-            event: "error",
-            data: JSON.stringify({ error: event.error }),
-          });
-        }
-      }
-    } catch (error) {
-      logError("voice/converse-stream", error);
-      const message = extractErrorMessage(error);
-      await sseStream.writeSSE({
-        event: "error",
-        data: JSON.stringify({ error: message }),
-      });
-    }
+    await pipeRunStreamToSSE(result.stream, sseStream, {
+      runId: result.runId,
+      conversationId: body.conversationId,
+    });
   });
 });
 
@@ -302,41 +265,15 @@ voiceRoutes.post("/converse-voice-stream", async (c) => {
       }
     });
 
-    try {
-      for await (const event of result.stream) {
-        if (event.type === "delta") {
-          // Feed text to streaming TTS for sentence detection
-          streamingTTS.feed(event.text);
-          await sseStream.writeSSE({
-            event: "delta",
-            data: JSON.stringify({ text: event.text }),
-          });
-        } else if (event.type === "run_completed") {
-          const ttsChunks = await streamingTTS.flush();
-          await sseStream.writeSSE({
-            event: "done",
-            data: JSON.stringify({
-              fullText: event.result.text,
-              conversationId: event.result.conversationId,
-              runId: result.runId,
-              ttsChunks: ttsChunks.length,
-            }),
-          });
-        } else if (event.type === "run_failed") {
-          await sseStream.writeSSE({
-            event: "error",
-            data: JSON.stringify({ error: event.error }),
-          });
-        }
-      }
-    } catch (error) {
-      logError("voice/converse-voice-stream", error);
-      const message = extractErrorMessage(error);
-      await sseStream.writeSSE({
-        event: "error",
-        data: JSON.stringify({ error: message }),
-      });
-    }
+    await pipeRunStreamToSSE(result.stream, sseStream, {
+      runId: result.runId,
+      conversationId: body.conversationId,
+      onDelta: (text) => streamingTTS.feed(text),
+      onDoneData: async () => {
+        const ttsChunks = await streamingTTS.flush();
+        return { ttsChunks: ttsChunks.length };
+      },
+    });
   });
 });
 
@@ -344,47 +281,42 @@ voiceRoutes.post("/converse-voice-stream", async (c) => {
  * POST /api/voice/realtime-session
  * Fetches an ephemeral token from OpenAI Realtime API for direct WebRTC / WebSocket connections.
  */
-voiceRoutes.post("/realtime-session", async (c) => {
+voiceRoutes.post("/realtime-session", withErrorHandling("voice/realtime-session", async (c) => {
+  let apiKey = "";
   try {
-    let apiKey = "";
-    try {
-      const config = getProviderConfig("openai");
-      apiKey = config.apiKey;
-    } catch {
-      apiKey = "";
-    }
-
-    if (!apiKey) {
-      return c.json({ error: "OpenAI API Key 未配置，请在模型配置中添加 OpenAI 提供商" }, 400);
-    }
-
-    // Call OpenAI Realtime Client Secrets endpoint (GA standard)
-    const response = await fetch("https://api.openai.com/v1/realtime/client_secrets", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-realtime-preview",
-        modalities: ["audio", "text"],
-        voice: "alloy",
-      }),
-    });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      const status = response.status >= 400 && response.status < 600 ? response.status as 400 | 401 | 403 | 404 | 500 | 503 : 500;
-      return c.json({ error: `Failed to create OpenAI Realtime session: ${errText}` }, status);
-    }
-
-    const data = await response.json();
-    return c.json(data);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return c.json({ error: message }, 500);
+    const config = getProviderConfig("openai");
+    apiKey = config.apiKey;
+  } catch {
+    apiKey = "";
   }
-});
+
+  if (!apiKey) {
+    return c.json({ error: "OpenAI API Key 未配置，请在模型配置中添加 OpenAI 提供商" }, 400);
+  }
+
+  // Call OpenAI Realtime Client Secrets endpoint (GA standard)
+  const response = await fetch("https://api.openai.com/v1/realtime/client_secrets", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "gpt-4o-realtime-preview",
+      modalities: ["audio", "text"],
+      voice: "alloy",
+    }),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    const status = response.status >= 400 && response.status < 600 ? response.status as 400 | 401 | 403 | 404 | 500 | 503 : 500;
+    return c.json({ error: `Failed to create OpenAI Realtime session: ${errText}` }, status);
+  }
+
+  const data = await response.json();
+  return c.json(data);
+}));
 
 /**
  * GET /api/voice/providers
@@ -443,7 +375,7 @@ voiceRoutes.get("/config", (c) => {
  * Save voice configuration. Body: { asrProvider?, asrModel?, ttsProvider?, ttsModel?, ttsVoice?, ttsSpeed? }
  * For API key updates, use PUT /api/voice/credentials.
  */
-voiceRoutes.put("/config", async (c) => {
+voiceRoutes.put("/config", withErrorHandling("voice/updateConfig", async (c) => {
   const body = await c.req.json<{
     asrProvider?: string;
     asrModel?: string;
@@ -459,14 +391,14 @@ voiceRoutes.put("/config", async (c) => {
 
   configManager.updateVoiceConfig(body);
   return c.json({ success: true, config: configManager.getVoiceConfig() });
-});
+}));
 
 /**
  * PUT /api/voice/credentials
  * Update API key for a voice provider. Body: { providerId, apiKey }
  * Keys are stored in credentials.json (temporary path — migrate to SecretStore when ready).
  */
-voiceRoutes.put("/credentials", async (c) => {
+voiceRoutes.put("/credentials", withErrorHandling("voice/updateCredentials", async (c) => {
   const body = await c.req.json<{ providerId: string; apiKey: string }>().catch(() => null);
 
   if (!body?.providerId || !body.apiKey) {
@@ -485,7 +417,7 @@ voiceRoutes.put("/credentials", async (c) => {
   // Store in credentials.json using the provider's credentialKey
   configManager.setCredential(definition.credentialKey, body.apiKey);
   return c.json({ success: true });
-});
+}));
 
 /**
  * POST /api/voice/test-tts
@@ -537,44 +469,39 @@ voiceRoutes.post("/test-tts", async (c) => {
  * Test ASR transcription with a small audio sample. Accepts audio file upload.
  * Body: multipart form with "audio" file and optional "providerId".
  */
-voiceRoutes.post("/test-asr", async (c) => {
-  try {
-    const formData = await c.req.formData();
-    const audioFile = formData.get("audio");
-    const providerId = formData.get("providerId") as string | null;
+voiceRoutes.post("/test-asr", withErrorHandling("voice/test-asr", async (c) => {
+  const formData = await c.req.formData();
+  const audioFile = formData.get("audio");
+  const providerId = formData.get("providerId") as string | null;
 
-    if (!audioFile || !(audioFile instanceof File)) {
-      return c.json({ error: "Missing audio file" }, 400);
-    }
-
-    const arrayBuffer = await audioFile.arrayBuffer();
-    const audioBuffer = Buffer.from(arrayBuffer);
-    const filename = audioFile.name || "audio.webm";
-
-    // Resolve provider
-    const provider = providerId
-      ? voiceRegistry.getASR(providerId)
-      : voiceRegistry.getDefaultASR();
-
-    if (!provider) {
-      return c.json({ error: "No ASR provider available" }, 503);
-    }
-
-    if (!provider.isAvailable()) {
-      return c.json({ error: `ASR provider "${provider.name}" is not available (API key missing)` }, 503);
-    }
-
-    const result = await provider.transcribe({
-      audio: audioBuffer,
-      filename,
-      language: formData.get("language") as string | undefined,
-    });
-
-    return c.json(result);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return c.json({ error: `ASR test failed: ${message}` }, 500);
+  if (!audioFile || !(audioFile instanceof File)) {
+    return c.json({ error: "Missing audio file" }, 400);
   }
-});
+
+  const arrayBuffer = await audioFile.arrayBuffer();
+  const audioBuffer = Buffer.from(arrayBuffer);
+  const filename = audioFile.name || "audio.webm";
+
+  // Resolve provider
+  const provider = providerId
+    ? voiceRegistry.getASR(providerId)
+    : voiceRegistry.getDefaultASR();
+
+  if (!provider) {
+    return c.json({ error: "No ASR provider available" }, 503);
+  }
+
+  if (!provider.isAvailable()) {
+    return c.json({ error: `ASR provider "${provider.name}" is not available (API key missing)` }, 503);
+  }
+
+  const result = await provider.transcribe({
+    audio: audioBuffer,
+    filename,
+    language: formData.get("language") as string | undefined,
+  });
+
+  return c.json(result);
+}));
 
 export default voiceRoutes;

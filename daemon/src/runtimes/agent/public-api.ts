@@ -21,6 +21,7 @@ export { buildTickSystemPrompt } from "./application/prompt-builder.js";
 export { compressConversation } from "./application/compressor.js";
 export { runAgentLoop, MessageQueue } from "./application/agent-loop.js";
 export type { AgentLoopConfig, DeliveryMode } from "./application/agent-loop.js";
+export type { AgentRunEvent } from "./domain/agent-run.js";
 
 import { runTurn, cancelActiveRun } from "./run.js";
 import { runStreamTurn } from "./stream.js";

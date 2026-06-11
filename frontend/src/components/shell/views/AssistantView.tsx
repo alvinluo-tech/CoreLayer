@@ -5,7 +5,7 @@ import { ReadingList } from '@/components/modules/reading/ReadingList';
 import { DailySummary } from '@/components/modules/review/DailySummary';
 import { VoicePanel } from '@/components/voice/VoicePanel';
 import { Separator } from '@/components/ui/separator';
-import type { Message } from '@/hooks/useChat';
+import type { Message, PendingApproval } from '@/hooks/useChat';
 import type { VoiceState as WakeWordVoiceState } from '@/hooks/useVoice';
 import type { VoiceState as FSMVoiceState } from '@/hooks/useVoiceFSM';
 
@@ -36,6 +36,9 @@ interface AssistantViewProps {
   voiceAssistantText?: string;
   isVoiceStreaming: boolean;
   voice: VoicePanelState;
+  pendingApprovals?: PendingApproval[];
+  onApprove?: (id: string) => void;
+  onDeny?: (id: string) => void;
 }
 
 /**
@@ -53,6 +56,9 @@ export function AssistantView({
   voiceAssistantText,
   isVoiceStreaming,
   voice,
+  pendingApprovals,
+  onApprove,
+  onDeny,
 }: AssistantViewProps) {
   return (
     <>
@@ -118,6 +124,9 @@ export function AssistantView({
           voiceUserText={voiceUserText}
           voiceAssistantText={voiceAssistantText}
           isVoiceStreaming={isVoiceStreaming}
+          pendingApprovals={pendingApprovals}
+          onApprove={onApprove}
+          onDeny={onDeny}
         />
       </main>
     </>

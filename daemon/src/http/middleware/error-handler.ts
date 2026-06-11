@@ -1,8 +1,6 @@
 import type { Context } from "hono";
 import { apiError, extractErrorMessage, logError } from "../../shared/errors.js";
 
-type HonoHandler = (c: Context) => Promise<Response> | Response;
-
 /**
  * Wrap a route handler with automatic error handling.
  *
@@ -13,16 +11,16 @@ type HonoHandler = (c: Context) => Promise<Response> | Response;
  * @param context - Label for log messages (e.g. "articles/create")
  * @param handler - The actual route handler
  */
-export function withErrorHandling(
+export function withErrorHandling<C extends Context>(
   context: string,
-  handler: HonoHandler,
-): HonoHandler {
-  return async (c) => {
+  handler: (c: C) => Promise<Response> | Response,
+): (c: C) => Promise<Response> {
+  return async (c: C) => {
     try {
       return await handler(c);
     } catch (err) {
       logError(context, err);
-      return apiError(c, extractErrorMessage(err));
+      return apiError(c, extractErrorMessage(err), 500);
     }
   };
 }

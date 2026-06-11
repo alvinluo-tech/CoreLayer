@@ -7,6 +7,7 @@
 
 import { Hono } from "hono";
 import { apiError, extractErrorMessage, logError } from "../../shared/errors.js";
+import { withErrorHandling } from "../middleware/error-handler.js";
 import { listCodingRuntimes, getCodingRuntime, getExecutablePath, spawnProcess } from "../../runtimes/coding/public-api.js";
 
 const app = new Hono();
@@ -126,7 +127,7 @@ app.get("/coding/diagnostics", async (c) => {
 /**
  * GET /coding/diagnostics/health — Lightweight route/registry sanity check.
  */
-app.get("/coding/diagnostics/health", async (c) => {
+app.get("/coding/diagnostics/health", withErrorHandling("runtimes/diagnostics-health", async (c) => {
   try {
     const registered = listCodingRuntimes();
     return c.json({
@@ -138,7 +139,6 @@ app.get("/coding/diagnostics/health", async (c) => {
       pathSource: "PATH",
     });
   } catch (err) {
-    logError("runtimes/diagnostics-health", err);
     return c.json({
       ok: false,
       daemonPid: process.pid,
@@ -149,63 +149,59 @@ app.get("/coding/diagnostics/health", async (c) => {
       error: extractErrorMessage(err),
     });
   }
-});
+}));
 
 /**
  * POST /coding/:id/dry-run — Spawn a minimal test task with the given adapter.
  */
-app.post("/coding/:id/dry-run", async (c) => {
-  const adapterId = c.req.param("id");
-  try {
-    const adapter = getCodingRuntime(adapterId);
-    if (!adapter) {
-      return apiError(c, `Unknown adapter: ${adapterId}`, 404);
-    }
+app.post("/coding/:id/dry-run", withErrorHandling("runtimes/dry-run", async (c) => {
+  const adapterId = c.req.param("id")!;
 
-    // Verify CLI is available before attempting dry-run
-    const cliCommand = adapterId === "claude-code" ? "claude" : adapterId === "codex" ? "codex" : "opencode";
-    const executablePath = getExecutablePath(cliCommand);
-    if (!executablePath) {
-      return apiError(c, `${cliCommand} not found on PATH. Install it first.`, 400);
-    }
-
-    const prompt = DRY_RUN_PROMPTS[adapterId] ?? "Reply with exactly: dry-run-ok";
-    const startTime = Date.now();
-
-    const args =
-      adapterId === "claude-code"
-        ? ["--print", "--output-format", "text", "--no-session-persistence", prompt]
-        : adapterId === "codex"
-          ? [
-              "exec",
-              "--skip-git-repo-check",
-              "--sandbox",
-              "read-only",
-              "--color",
-              "never",
-              prompt,
-            ]
-          : ["--prompt", prompt];
-
-    const result = await spawnProcess({
-      command: cliCommand,
-      args,
-      timeoutMs: DRY_RUN_TIMEOUT_MS,
-    });
-
-    const durationMs = Date.now() - startTime;
-
-    return c.json({
-      success: result.exitCode === 0,
-      durationMs,
-      stdout: result.stdout.slice(0, 2000),
-      stderr: result.stderr.slice(0, 2000),
-      exitCode: result.exitCode,
-    });
-  } catch (err) {
-    logError("runtimes/dry-run", err);
-    return apiError(c, extractErrorMessage(err));
+  const adapter = getCodingRuntime(adapterId);
+  if (!adapter) {
+    return apiError(c, `Unknown adapter: ${adapterId}`, 404);
   }
-});
+
+  // Verify CLI is available before attempting dry-run
+  const cliCommand = adapterId === "claude-code" ? "claude" : adapterId === "codex" ? "codex" : "opencode";
+  const executablePath = getExecutablePath(cliCommand);
+  if (!executablePath) {
+    return apiError(c, `${cliCommand} not found on PATH. Install it first.`, 400);
+  }
+
+  const prompt = DRY_RUN_PROMPTS[adapterId] ?? "Reply with exactly: dry-run-ok";
+  const startTime = Date.now();
+
+  const args =
+    adapterId === "claude-code"
+      ? ["--print", "--output-format", "text", "--no-session-persistence", prompt]
+      : adapterId === "codex"
+        ? [
+            "exec",
+            "--skip-git-repo-check",
+            "--sandbox",
+            "read-only",
+            "--color",
+            "never",
+            prompt,
+          ]
+        : ["--prompt", prompt];
+
+  const result = await spawnProcess({
+    command: cliCommand,
+    args,
+    timeoutMs: DRY_RUN_TIMEOUT_MS,
+  });
+
+  const durationMs = Date.now() - startTime;
+
+  return c.json({
+    success: result.exitCode === 0,
+    durationMs,
+    stdout: result.stdout.slice(0, 2000),
+    stderr: result.stderr.slice(0, 2000),
+    exitCode: result.exitCode,
+  });
+}));
 
 export default app;

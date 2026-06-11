@@ -37,7 +37,16 @@ import { DaemonDisconnectedBanner } from '@/components/common/DaemonDisconnected
 import { jarvisClient } from '@/lib/jarvisClient';
 
 export function AppShell() {
-  const { messages, sendMessage, isLoading, activeConversationId, error } = useChat();
+  const {
+    messages,
+    sendMessage,
+    isLoading,
+    activeConversationId,
+    error,
+    pendingApprovals,
+    approveInline,
+    denyInline,
+  } = useChat();
   const [isMainWindowFocused, setIsMainWindowFocused] = useState(true);
   const [initialControlPage, setInitialControlPage] = useState<ControlPage>('overview');
   const paletteToggle = usePaletteStore((s) => s.toggle);
@@ -456,6 +465,9 @@ export function AppShell() {
             }
             isVoiceStreaming={voiceConv.state === 'streaming'}
             voice={voicePanelState}
+            pendingApprovals={pendingApprovals}
+            onApprove={approveInline}
+            onDeny={denyInline}
           />
         );
     }

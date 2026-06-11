@@ -61,6 +61,9 @@ vi.mock("../../../config/config-manager.js", () => ({
 }));
 
 vi.mock("../../../shared/errors.js", () => ({
+  apiError: vi.fn((_c: unknown, message: string, status = 500) =>
+    new Response(JSON.stringify({ error: message }), { status }),
+  ),
   extractErrorMessage: vi.fn((e: unknown) => (e instanceof Error ? e.message : String(e))),
   logError: vi.fn(),
 }));

@@ -1,9 +1,17 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useConversationStore } from '@/stores/conversationStore';
 import type { ConversationMessage } from '@/lib/tauri';
 import * as tauri from '@/lib/tauri';
 import { jarvisClient } from '@/lib/jarvisClient';
 import { useDataPanelStore } from '@/stores/dataPanelStore';
+
+export interface PendingApproval {
+  id: string;
+  toolName: string;
+  args: unknown;
+  risk: 'low' | 'medium' | 'high' | 'critical';
+  preview: string | null;
+}
 
 export interface Message {
   id: string;
@@ -13,6 +21,7 @@ export interface Message {
   toolCalls?: { name: string; input: unknown; output: unknown }[];
   isStreaming?: boolean;
   modelUsed?: string | null;
+  pendingApprovals?: PendingApproval[];
 }
 
 function convertMessage(msg: ConversationMessage): Message {
@@ -44,6 +53,9 @@ export function useChat() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamConversationId, setStreamConversationId] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const [pendingApprovals, setPendingApprovals] = useState<PendingApproval[]>([]);
+  const [approvalRunId, setApprovalRunId] = useState<string | null>(null);
+  const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const messages: Message[] = rawMessages.map(convertMessage);
 
@@ -175,23 +187,60 @@ export function useChat() {
               } catch (e) {
                 console.warn('[useChat] Failed to parse tool_result event:', e);
               }
+            } else if (event === 'approval_required') {
+              try {
+                const payload = JSON.parse(data) as {
+                  runId: string;
+                  conversationId: string;
+                  approvals: PendingApproval[];
+                };
+                if (isTargetConversationActive()) {
+                  setPendingApprovals(payload.approvals);
+                  setApprovalRunId(payload.runId);
+                }
+              } catch (e) {
+                console.warn('[useChat] Failed to parse approval_required event:', e);
+              }
             } else if (event === 'done') {
               try {
                 const payload = JSON.parse(data) as {
-                  userMessage: ConversationMessage;
-                  assistantMessage: ConversationMessage;
+                  userMessage?: ConversationMessage;
+                  assistantMessage?: ConversationMessage;
+                  suspended?: boolean;
+                  approvalRequestIds?: string[];
                 };
-                const updatedFromDb = currentMessages.map((m) => {
-                  if (m.id === userTempId) return payload.userMessage;
-                  if (m.id === assistantTempId) return payload.assistantMessage;
-                  return m;
-                });
-                setMessagesIfActive(updatedFromDb);
-                tauri
-                  .listConversations()
-                  .then(setConversations)
-                  .catch(() => {});
-                messageListUpdated = false;
+
+                if (payload.suspended) {
+                  // Stream ended due to approval — finalize the partial assistant message
+                  const updatedAssistant: ConversationMessage = {
+                    ...optimisticAssistantMsg,
+                    content: fullText || '',
+                    toolCalls:
+                      toolCallsMap.size > 0
+                        ? JSON.stringify(Array.from(toolCallsMap.values()))
+                        : null,
+                  };
+                  setMessagesIfActive(
+                    currentMessages.map((m) => (m.id === assistantTempId ? updatedAssistant : m))
+                  );
+                  // Start polling for new messages after approval
+                  startApprovalPolling(conversationId!);
+                  return;
+                }
+
+                if (payload.userMessage && payload.assistantMessage) {
+                  const updatedFromDb = currentMessages.map((m) => {
+                    if (m.id === userTempId) return payload.userMessage!;
+                    if (m.id === assistantTempId) return payload.assistantMessage!;
+                    return m;
+                  });
+                  setMessagesIfActive(updatedFromDb);
+                  tauri
+                    .listConversations()
+                    .then(setConversations)
+                    .catch(() => {});
+                  messageListUpdated = false;
+                }
               } catch (e) {
                 console.warn('[useChat] Failed to parse done event:', e);
               }
@@ -258,6 +307,60 @@ export function useChat() {
     ]
   );
 
+  const stopApprovalPolling = useCallback(() => {
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
+    }
+  }, []);
+
+  const startApprovalPolling = useCallback(
+    (convId: string) => {
+      let attempts = 0;
+      const maxAttempts = 60; // 2 minutes at 2s intervals
+
+      pollingIntervalRef.current = setInterval(async () => {
+        attempts++;
+        if (attempts > maxAttempts) {
+          stopApprovalPolling();
+          return;
+        }
+        try {
+          const { messages: freshMessages } = await tauri.getConversation(convId);
+          const state = useConversationStore.getState();
+          if (state.activeConversationId !== convId) {
+            stopApprovalPolling();
+            return;
+          }
+          const hasNewAssistantMsg = freshMessages.some(
+            (fm) => fm.role === 'assistant' && !state.messages.some((cm) => cm.id === fm.id)
+          );
+          if (hasNewAssistantMsg) {
+            setMessages(freshMessages);
+            setPendingApprovals([]);
+            setApprovalRunId(null);
+            stopApprovalPolling();
+            tauri
+              .listConversations()
+              .then(setConversations)
+              .catch(() => {});
+          }
+        } catch {
+          // Poll failure is non-critical, will retry
+        }
+      }, 2_000);
+    },
+    [stopApprovalPolling, setMessages, setConversations]
+  );
+
+  useEffect(() => {
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
+    };
+  }, []);
+
   const stopStreaming = useCallback(() => {
     abortControllerRef.current?.abort();
   }, []);
@@ -276,5 +379,15 @@ export function useChat() {
     streamingContent,
     activeConversationId,
     error,
+    pendingApprovals,
+    approvalRunId,
+    approveInline: async (approvalId: string) => {
+      await jarvisClient.post(`/api/approvals/${approvalId}/approve`);
+    },
+    denyInline: async (approvalId: string) => {
+      await jarvisClient.post(`/api/approvals/${approvalId}/deny`);
+      setPendingApprovals([]);
+      setApprovalRunId(null);
+    },
   };
 }

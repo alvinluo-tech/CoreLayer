@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { MessageSquarePlus, ArrowDown, Loader2 } from 'lucide-react';
 import { ChatErrorCard } from '@/components/chat/ChatErrorCard';
+import { InlineApprovalCard } from '@/components/chat/InlineApprovalCard';
 import { Streamdown } from 'streamdown';
 import { MessageBubble } from './MessageBubble';
 import { ChatInput } from './ChatInput';
 import { Button } from '@/components/ui/button';
-import type { Message } from '@/hooks/useChat';
+import type { Message, PendingApproval } from '@/hooks/useChat';
 import { useConversationStore } from '@/stores/conversationStore';
 
 interface ChatPanelProps {
@@ -19,6 +20,9 @@ interface ChatPanelProps {
   voiceUserText?: string;
   voiceAssistantText?: string;
   isVoiceStreaming?: boolean;
+  pendingApprovals?: PendingApproval[];
+  onApprove?: (id: string) => void;
+  onDeny?: (id: string) => void;
 }
 
 export function ChatPanel({
@@ -31,6 +35,9 @@ export function ChatPanel({
   voiceUserText,
   voiceAssistantText,
   isVoiceStreaming,
+  pendingApprovals,
+  onApprove,
+  onDeny,
 }: ChatPanelProps) {
   const createConversation = useConversationStore((s) => s.createConversation);
   const conversations = useConversationStore((s) => s.conversations);
@@ -173,6 +180,15 @@ export function ChatPanel({
             <MessageBubble key={msg.id} message={msg} />
           ))}
 
+          {/* Inline approval card */}
+          {pendingApprovals && pendingApprovals.length > 0 && onApprove && onDeny && (
+            <InlineApprovalCard
+              approvals={pendingApprovals}
+              onApprove={onApprove}
+              onDeny={onDeny}
+            />
+          )}
+
           {/* Voice: user message */}
           {voiceUserText && (
             <div className="flex justify-end my-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
@@ -224,7 +240,7 @@ export function ChatPanel({
               <div
                 className="rounded-xl px-4 py-3.5 space-y-2.5 max-w-[80%] relative overflow-hidden"
                 style={{
-                  border: '1px solid rgba(167,139,250,0.12)',
+                  border: `1px solid ${pendingApprovals?.length ? 'rgba(255,184,0,0.12)' : 'rgba(167,139,250,0.12)'}`,
                   background: 'var(--glass-bg)',
                   backdropFilter: 'blur(12px)',
                 }}
@@ -233,13 +249,13 @@ export function ChatPanel({
                 <div
                   className="absolute top-0 left-0 w-full h-px"
                   style={{
-                    background: 'linear-gradient(90deg, transparent, var(--violet), transparent)',
+                    background: `linear-gradient(90deg, transparent, ${pendingApprovals?.length ? 'var(--amber)' : 'var(--violet)'}, transparent)`,
                   }}
                 />
                 <div className="flex items-center gap-2">
                   <Loader2
                     className="h-3.5 w-3.5 animate-spin"
-                    style={{ color: 'var(--violet)' }}
+                    style={{ color: pendingApprovals?.length ? 'var(--amber)' : 'var(--violet)' }}
                   />
                   <span
                     style={{
@@ -247,10 +263,10 @@ export function ChatPanel({
                       fontSize: 10,
                       fontWeight: 600,
                       letterSpacing: 2,
-                      color: 'var(--violet)',
+                      color: pendingApprovals?.length ? 'var(--amber)' : 'var(--violet)',
                     }}
                   >
-                    JARVIS PROCESSING...
+                    {pendingApprovals?.length ? 'AWAITING APPROVAL...' : 'JARVIS PROCESSING...'}
                   </span>
                 </div>
                 {/* Wave bars */}
@@ -261,7 +277,7 @@ export function ChatPanel({
                       className="w-0.5 rounded-full"
                       style={{
                         height: h,
-                        background: 'var(--violet)',
+                        background: pendingApprovals?.length ? 'var(--amber)' : 'var(--violet)',
                         animation: `waveBar 1s ease-in-out infinite`,
                         animationDelay: `${i * 0.1}s`,
                       }}

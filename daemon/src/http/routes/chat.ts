@@ -4,6 +4,8 @@ import { ContextBuilder, runTurn, runStreamTurn } from "../../runtimes/agent/pub
 import { getRepositories } from "../../persistence/factory.js";
 import { configManager } from "../../config/config-manager.js";
 import { apiError, extractErrorMessage, classifyError, logError } from "../../shared/errors.js";
+import { withErrorHandling } from "../middleware/error-handler.js";
+import { pipeRunStreamToWriter, writeStreamError } from "./stream-helpers.js";
 
 const chatRoutes = new Hono();
 
@@ -74,9 +76,7 @@ chatRoutes.post("/stream", async (c) => {
 
     const abortController = new AbortController();
 
-    // Propagate client disconnect
     c.req.raw.signal.addEventListener("abort", () => {
-      logError("[Stream] client disconnected, aborting upstream", new Error("client disconnect"));
       abortController.abort();
     });
 
@@ -95,27 +95,12 @@ chatRoutes.post("/stream", async (c) => {
 
     return stream(c, async (streamWriter) => {
       try {
-        for await (const event of result.stream) {
-          if (event.type === "delta") {
-            await streamWriter.write(`event: delta\ndata: ${JSON.stringify({ text: event.text })}\n\n`);
-          } else if (event.type === "tool_call") {
-            await streamWriter.write(
-              `event: tool_calls\ndata: ${JSON.stringify({ name: event.toolCall.name, toolCallId: event.toolCall.id ?? "", input: event.toolCall.args })}\n\n`,
-            );
-          } else if (event.type === "run_completed") {
-            await streamWriter.write(
-              `event: done\ndata: ${JSON.stringify({ fullText: event.result.text, conversationId: event.result.conversationId, runId: result.runId })}\n\n`,
-            );
-          } else if (event.type === "run_failed") {
-            await streamWriter.write(
-              `event: error\ndata: ${JSON.stringify({ error: event.error })}\n\n`,
-            );
-          }
-        }
+        await pipeRunStreamToWriter(result.stream, streamWriter, {
+          runId: result.runId,
+          conversationId: body.conversationId,
+        });
       } catch (streamErr) {
-        logError("chat/stream[mid-stream]", streamErr);
-        const message = extractErrorMessage(streamErr);
-        await streamWriter.write(`event: error\ndata: ${JSON.stringify({ error: message })}\n\n`).catch(() => {});
+        await writeStreamError(streamWriter, streamErr, "chat/stream[mid-stream]");
       }
     });
   } catch (err) {
@@ -130,38 +115,31 @@ chatRoutes.post("/stream", async (c) => {
  * Accepts { conversationId: string, message?: string }
  * Returns per-component token usage, memory items, tool catalog info.
  */
-chatRoutes.post("/debug/context", async (c) => {
-  try {
-    const body = await c.req.json<{ conversationId?: string; message?: string }>();
-    const conversationId = body.conversationId;
-    const message = body.message ?? "";
+chatRoutes.post("/debug/context", withErrorHandling("chat/debug/context", async (c) => {
+  const body = await c.req.json<{ conversationId?: string; message?: string }>();
+  const conversationId = body.conversationId;
+  const message = body.message ?? "";
 
-    const repo = getRepositories();
-    const memories = await repo.memories.getAll();
-    const scoredMemories = memories.map((m) => ({ ...m, score: 0 }));
+  const repo = getRepositories();
+  const memories = await repo.memories.getAll();
+  const scoredMemories = memories.map((m) => ({ ...m, score: 0 }));
 
-    // If conversationId provided, fetch history
-    let history: Awaited<ReturnType<typeof repo.conversations.getMessages>> = [];
-    if (conversationId) {
-      history = await repo.conversations.getMessages(conversationId);
-    }
-
-    const builder = new ContextBuilder({
-      mode: "text",
-      conversationId,
-      modelName: configManager.getActiveModel(),
-      userMessage: message,
-    });
-
-    const context = await builder.build(scoredMemories, history);
-    const debugInfo = context.debug();
-
-    return c.json(debugInfo);
-  } catch (err) {
-    logError("chat/debug/context", err);
-    const { status, code } = classifyError(err);
-    return apiError(c, extractErrorMessage(err), status, code);
+  let history: Awaited<ReturnType<typeof repo.conversations.getMessages>> = [];
+  if (conversationId) {
+    history = await repo.conversations.getMessages(conversationId);
   }
-});
+
+  const builder = new ContextBuilder({
+    mode: "text",
+    conversationId,
+    modelName: configManager.getActiveModel(),
+    userMessage: message,
+  });
+
+  const context = await builder.build(scoredMemories, history);
+  const debugInfo = context.debug();
+
+  return c.json(debugInfo);
+}));
 
 export default chatRoutes;

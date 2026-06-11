@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { getRepositories } from "../../persistence/factory.js";
-import { apiError, extractErrorMessage, logError } from "../../shared/errors.js";
+import { apiError, extractErrorMessage } from "../../shared/errors.js";
 import { withErrorHandling } from "../middleware/error-handler.js";
 
 const app = new Hono();
@@ -47,23 +47,24 @@ app.post(
   }),
 );
 
-// PATCH has custom 404 classification — keep manual try/catch
-app.patch("/:id", async (c) => {
-  const id = c.req.param("id");
-  try {
-    const body = await c.req.json<{
-      status?: string;
-      rating?: number;
-      notes?: string;
-    }>();
-    const article = await getRepositories().articles.update(id, body);
-    return c.json({ article });
-  } catch (err) {
-    logError("articles/update", err);
-    const msg = extractErrorMessage(err);
-    return apiError(c, msg.toLowerCase().includes("not found") ? "Article not found" : msg,
-      msg.toLowerCase().includes("not found") ? 404 : 500);
-  }
-});
+app.patch(
+  "/:id",
+  withErrorHandling("articles/update", async (c) => {
+    const id = c.req.param("id")!;
+    try {
+      const body = await c.req.json<{
+        status?: string;
+        rating?: number;
+        notes?: string;
+      }>();
+      const article = await getRepositories().articles.update(id, body);
+      return c.json({ article });
+    } catch (err) {
+      const msg = extractErrorMessage(err);
+      return apiError(c, msg.toLowerCase().includes("not found") ? "Article not found" : msg,
+        msg.toLowerCase().includes("not found") ? 404 : 500);
+    }
+  }),
+);
 
 export default app;
