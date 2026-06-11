@@ -6,8 +6,55 @@ import { executeApprovedTool } from "../../approvals/resume-service.js";
 import { handleMessageInConversation } from "../../runtimes/agent/public-api.js";
 import { executeOperation } from "../../operations/executors/operation-executor.js";
 import { formatReceiptMessage } from "../../operations/receipts/operation-receipt.js";
+import type { AuditLogRepository, ApprovalRequestRepository, ToolCallLogRepository } from "../../persistence/repository.js";
 
 const approvalRoutes = new Hono();
+
+// ---- Shared helpers ----
+
+async function logApprovalDecision(
+  auditLog: AuditLogRepository,
+  existing: { toolName: string; risk: string; toolId: string },
+  decision: "approve" | "deny",
+  id: string,
+): Promise<void> {
+  await auditLog.create({
+    actor: "user",
+    action: "approval.decision",
+    resource: `tool:${existing.toolName}`,
+    riskLevel: existing.risk,
+    permissionDecision: decision,
+    confirmedByUser: decision === "approve",
+    result: decision === "approve" ? "approved" : "denied",
+    metadata: { toolId: existing.toolId, toolName: existing.toolName, approvalId: id },
+  });
+}
+
+async function findPendingApproval(
+  approvalRequests: ApprovalRequestRepository,
+  id: string,
+): Promise<{ data: import("../../persistence/repository.js").ApprovalRequestRow } | { notFound: true } | { notPending: string }> {
+  const existing = await approvalRequests.getById(id);
+  if (!existing) return { notFound: true };
+  if (existing.status !== "pending") return { notPending: `Approval request is already ${existing.status}` };
+  return { data: existing };
+}
+
+async function logDeniedToolCall(
+  toolCallLogs: ToolCallLogRepository,
+  existing: { toolId: string; toolName: string; source: string | null; args: unknown; risk: string },
+): Promise<void> {
+  await toolCallLogs.create({
+    toolId: existing.toolId,
+    toolName: existing.toolName,
+    source: (existing.source as "mcp" | "native" | "skill" | "rest") ?? "rest",
+    args: existing.args,
+    resultSuccess: false,
+    resultError: "User denied approval",
+    risk: existing.risk,
+    confirmedByUser: false,
+  });
+}
 
 /**
  * Reusable helper to execute an approved tool, save the result to database messages,
@@ -168,16 +215,7 @@ approvalRoutes.post("/batch/approve", async (c) => {
         approvedIds.push(id);
         if (existing.runId) runIds.add(existing.runId);
 
-        await auditLog.create({
-          actor: "user",
-          action: "approval.decision",
-          resource: `tool:${existing.toolName}`,
-          riskLevel: existing.risk,
-          permissionDecision: "approve",
-          confirmedByUser: true,
-          result: "approved",
-          metadata: { toolId: existing.toolId, toolName: existing.toolName, approvalId: id },
-        });
+        await logApprovalDecision(auditLog, existing, "approve", id);
       }),
     );
 
@@ -242,27 +280,8 @@ approvalRoutes.post("/batch/deny", async (c) => {
           runIdsToFail.add(existing.runId);
         }
 
-        await auditLog.create({
-          actor: "user",
-          action: "approval.decision",
-          resource: `tool:${existing.toolName}`,
-          riskLevel: existing.risk,
-          permissionDecision: "deny",
-          confirmedByUser: false,
-          result: "denied",
-          metadata: { toolId: existing.toolId, toolName: existing.toolName, approvalId: id },
-        });
-
-        await toolCallLogs.create({
-          toolId: existing.toolId,
-          toolName: existing.toolName,
-          source: (existing.source as "mcp" | "native" | "skill" | "rest") ?? "rest",
-          args: existing.args,
-          resultSuccess: false,
-          resultError: "User denied approval",
-          risk: existing.risk,
-          confirmedByUser: false,
-        });
+        await logApprovalDecision(auditLog, existing, "deny", id);
+        await logDeniedToolCall(toolCallLogs, existing);
       }),
     );
 
@@ -327,28 +346,16 @@ approvalRoutes.post("/:id/approve", async (c) => {
   try {
     const { approvalRequests } = getRepositories();
     const id = c.req.param("id");
-    const existing = await approvalRequests.getById(id);
-    if (!existing) {
-      return apiError(c, "Approval request not found", 404);
-    }
-    if (existing.status !== "pending") {
-      return apiError(c, `Approval request is already ${existing.status}`, 400);
-    }
+    const lookup = await findPendingApproval(approvalRequests, id);
+    if ("notFound" in lookup) return apiError(c, "Approval request not found", 404);
+    if ("notPending" in lookup) return apiError(c, lookup.notPending, 400);
+    const existing = lookup.data;
 
     toolRuntime.getPermissionGuard().resolvePendingConfirmation(id, true);
     const updated = await approvalRequests.approve(id);
 
     const { auditLog } = getRepositories();
-    await auditLog.create({
-      actor: "user",
-      action: "approval.decision",
-      resource: `tool:${existing.toolName}`,
-      riskLevel: existing.risk,
-      permissionDecision: "approve",
-      confirmedByUser: true,
-      result: "approved",
-      metadata: { toolId: existing.toolId, toolName: existing.toolName, approvalId: id },
-    });
+    await logApprovalDecision(auditLog, existing, "approve", id);
 
     const resumePromise = resumeAndSaveToolResult(id, true);
     resumePromise.catch((err) => logError("approvals/approve/resume-fatal", err));
@@ -367,13 +374,10 @@ approvalRoutes.post("/:id/deny", async (c) => {
   try {
     const { approvalRequests, toolCallLogs, agentRuns } = getRepositories();
     const id = c.req.param("id");
-    const existing = await approvalRequests.getById(id);
-    if (!existing) {
-      return apiError(c, "Approval request not found", 404);
-    }
-    if (existing.status !== "pending") {
-      return apiError(c, `Approval request is already ${existing.status}`, 400);
-    }
+    const lookup = await findPendingApproval(approvalRequests, id);
+    if ("notFound" in lookup) return apiError(c, "Approval request not found", 404);
+    if ("notPending" in lookup) return apiError(c, lookup.notPending, 400);
+    const existing = lookup.data;
 
     toolRuntime.getPermissionGuard().resolvePendingConfirmation(id, false);
     const updated = await approvalRequests.deny(id);
@@ -383,27 +387,8 @@ approvalRoutes.post("/:id/deny", async (c) => {
     }
 
     const { auditLog } = getRepositories();
-    await auditLog.create({
-      actor: "user",
-      action: "approval.decision",
-      resource: `tool:${existing.toolName}`,
-      riskLevel: existing.risk,
-      permissionDecision: "deny",
-      confirmedByUser: false,
-      result: "denied",
-      metadata: { toolId: existing.toolId, toolName: existing.toolName, approvalId: id },
-    });
-
-    await toolCallLogs.create({
-      toolId: existing.toolId,
-      toolName: existing.toolName,
-      source: (existing.source as "mcp" | "native" | "skill" | "rest") ?? "rest",
-      args: existing.args,
-      resultSuccess: false,
-      resultError: "User denied approval",
-      risk: existing.risk,
-      confirmedByUser: false,
-    });
+    await logApprovalDecision(auditLog, existing, "deny", id);
+    await logDeniedToolCall(toolCallLogs, existing);
 
     return c.json({ data: updated });
   } catch (err) {
@@ -417,7 +402,7 @@ approvalRoutes.post("/:id/deny", async (c) => {
  */
 approvalRoutes.post("/:id/remember", async (c) => {
   try {
-    const { approvalRequests, permissionMemories, agentRuns } = getRepositories();
+    const { approvalRequests, permissionMemories, agentRuns, toolCallLogs } = getRepositories();
     const id = c.req.param("id");
     const body = await c.req.json<{
       decision: "auto" | "confirm" | "deny";
@@ -445,13 +430,17 @@ approvalRoutes.post("/:id/remember", async (c) => {
     if (existing.status === "pending") {
       const approved = body.decision !== "deny";
       toolRuntime.getPermissionGuard().resolvePendingConfirmation(id, approved);
+
+      const { auditLog } = getRepositories();
       if (approved) {
         await approvalRequests.approve(id);
-        // Execute the tool and re-trigger LLM
+        await logApprovalDecision(auditLog, existing, "approve", id);
         const resumePromise = resumeAndSaveToolResult(id, true);
         resumePromise.catch((err) => logError("approvals/remember/resume-fatal", err));
       } else {
         await approvalRequests.deny(id);
+        await logApprovalDecision(auditLog, existing, "deny", id);
+        await logDeniedToolCall(toolCallLogs, existing);
         if (existing.runId) {
           await agentRuns.updateStatus(existing.runId, "failed", "User denied tool approval");
         }

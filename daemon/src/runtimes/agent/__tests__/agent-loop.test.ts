@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { IterationBudget, injectBudgetWarning, guardEmptyResponse, ForceAnswerDetector } from "../application/conversation.js";
+import { IterationBudget, injectBudgetWarning } from "../application/iteration-budget.js";
+import { guardEmptyResponse } from "../application/response-guard.js";
+import { ForceAnswerDetector } from "../application/force-answer.js";
 import { trimToolResult } from "../../tool/public-api.js";
 import { MessageQueue, runAgentLoop } from "../application/agent-loop.js";
 import type { AgentLoopConfig } from "../application/agent-loop.js";

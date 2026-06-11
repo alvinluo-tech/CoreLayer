@@ -133,19 +133,16 @@ vi.mock("../../scheduler/public-api.js", () => ({
 import {
   isAiConfigured,
   generateTitleFromMessage,
-  LoopBreaker,
-  injectLoopBreakerWarning,
-  IterationBudget,
-  injectBudgetWarning,
-  ForceAnswerDetector,
-  guardEmptyResponse,
-  applyCacheControl,
-  logCacheStats,
   streamMessageInConversation,
   handleMessageInConversation,
   streamChat,
   handleMessage,
 } from "../application/conversation.js";
+import { IterationBudget, injectBudgetWarning } from "../application/iteration-budget.js";
+import { LoopBreaker, injectLoopBreakerWarning } from "../application/loop-breaker.js";
+import { ForceAnswerDetector } from "../application/force-answer.js";
+import { guardEmptyResponse } from "../application/response-guard.js";
+import { applyCacheControl, logCacheStats } from "../application/cache-control.js";
 import { configManager } from "../../../config/config-manager.js";
 import { getRepositories } from "../../../persistence/factory.js";
 import { generateText, streamText } from "ai";

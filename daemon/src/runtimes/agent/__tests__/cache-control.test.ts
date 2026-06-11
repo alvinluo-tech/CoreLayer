@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { ContextBuilder } from "../application/context-builder.js";
-import { applyCacheControl, logCacheStats, CACHE_CONTROL } from "../application/conversation.js";
+import { applyCacheControl, logCacheStats, CACHE_CONTROL } from "../application/cache-control.js";
 import type { ModelMessage, Tool } from "ai";
 
 // Mock the tools registry

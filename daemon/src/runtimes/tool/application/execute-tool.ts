@@ -1,5 +1,5 @@
 import { PermissionGuard } from "@jarvis/permission-guard";
-import type { ToolResult, JSONSchema } from "@jarvis/types";
+import type { ToolResult, JSONSchema, JarvisTool } from "@jarvis/types";
 import type { ApprovalRequiredResult } from "@jarvis/runtime-protocol";
 import { getRegistry } from "../adapters/native-tools/registry.js";
 import { getRepositories } from "../../../persistence/factory.js";
@@ -97,10 +97,116 @@ function adjustPermissionForMode(
 export class ToolExecutionService {
   private permissionGuard: PermissionGuard;
   /** Track consecutive deleteConversation calls per run to detect batch intent */
-  private deleteCountByRun = new Map<string, number>();
+  private deleteCountByRun = new Map<string, { count: number; timestamp: number }>();
 
   constructor(permissionGuard?: PermissionGuard) {
     this.permissionGuard = permissionGuard ?? new PermissionGuard();
+  }
+
+  /** Evict stale entries from deleteCountByRun (entries older than 10 minutes) */
+  private cleanupStaleDeleteCounts(): void {
+    const now = Date.now();
+    const TEN_MINUTES = 600_000;
+    for (const [key, entry] of this.deleteCountByRun) {
+      if (now - entry.timestamp > TEN_MINUTES) {
+        this.deleteCountByRun.delete(key);
+      }
+    }
+  }
+
+  /** Check for batch deletion intent. Returns an error result if detected, null otherwise. */
+  private checkBatchDeletion(
+    toolId: string,
+    context: ToolExecutionContext,
+  ): ToolExecutionResult | null {
+    if (toolId !== "deleteConversation" && toolId !== "native:deleteConversation") {
+      if (context.runId) {
+        this.deleteCountByRun.delete(context.runId);
+      }
+      return null;
+    }
+    const runKey = context.runId ?? "__global__";
+    const entry = this.deleteCountByRun.get(runKey);
+    const count = (entry?.count ?? 0) + 1;
+    this.deleteCountByRun.set(runKey, { count, timestamp: Date.now() });
+    if (count >= 2) {
+      return {
+        result: {
+          success: false,
+          error: "检测到批量删除意图。请使用 requestConversationCleanup 工具进行批量清理，而不是多次调用 deleteConversation。",
+        },
+        confirmed: false,
+        durationMs: 0,
+      };
+    }
+    return null;
+  }
+
+  /**
+   * Check saved permission memory for auto-approve/deny.
+   * Returns the execution result if memory applies, null if confirmation is needed.
+   */
+  private async checkPermissionMemory(
+    tool: JarvisTool,
+    args: unknown,
+    context: ToolExecutionContext,
+  ): Promise<ToolExecutionResult | null> {
+    const permissionCheck = this.permissionGuard.checkPermission(tool);
+    const effectiveRequiresConfirmation = adjustPermissionForMode(
+      permissionCheck.requiresConfirmation,
+      context.mode,
+      (tool as { action?: string }).action,
+    );
+    if (!effectiveRequiresConfirmation || !context.runId) return null;
+
+    const { permissionMemories } = getRepositories();
+    const memory = await permissionMemories.find(
+      tool.id,
+      "default",
+      context.projectId,
+      context.runId,
+    );
+    if (!memory) return null;
+
+    if (memory.expiresAt !== null && memory.expiresAt < Date.now()) {
+      return null; // expired — fall through to confirmation
+    }
+    if (memory.decision === "auto" && !canAutoApprove(tool.risk as OperationRisk)) {
+      return null; // high/critical risk cannot be auto-approved
+    }
+    if (memory.decision === "auto") {
+      if (context.runId) {
+        const { approvalRequests } = getRepositories();
+        await approvalRequests.create({
+          runId: context.runId,
+          toolId: tool.id,
+          toolName: tool.name,
+          args,
+          risk: tool.risk,
+          projectScope: !!context.projectId,
+          mode: context.mode,
+          source: context.source,
+          preview: `[auto-allowed] ${tool.description}`,
+          toolCallId: context.toolCallId,
+        }).then((r) => approvalRequests.approve(r.id)).catch(() => { /* best-effort */ });
+      }
+      const result = await tool.execute(args);
+      this.persistAuditEntry(tool, args, result.success ? "success" : "failure", context, { confirmedByUser: true, error: result.error });
+      return {
+        result,
+        confirmed: true,
+        durationMs: 0,
+      };
+    }
+    if (memory.decision === "deny") {
+      this.persistAuditEntry(tool, args, "denied", context);
+      return {
+        result: { success: false, error: `Tool denied by saved permission: ${tool.id}` },
+        confirmed: false,
+        durationMs: 0,
+      };
+    }
+    return null;
   }
 
   /** Write a tool execution result to the persistent audit log */
@@ -181,83 +287,21 @@ export class ToolExecutionService {
     }
 
     // Safety: detect multiple sequential deleteConversation calls and redirect to batch tool
-    if (toolId === "deleteConversation" || toolId === "native:deleteConversation") {
-      const runKey = context.runId ?? "__global__";
-      const count = (this.deleteCountByRun.get(runKey) ?? 0) + 1;
-      this.deleteCountByRun.set(runKey, count);
-      if (count >= 2) {
-        return {
-          result: {
-            success: false,
-            error: "检测到批量删除意图。请使用 requestConversationCleanup 工具进行批量清理，而不是多次调用 deleteConversation。",
-          },
-          confirmed: false,
-          durationMs: Date.now() - startTime,
-        };
-      }
-    } else {
-      // Reset counter for non-delete tools
-      if (context.runId) {
-        this.deleteCountByRun.delete(context.runId);
-      }
-    }
+    this.cleanupStaleDeleteCounts();
+    const batchBlock = this.checkBatchDeletion(toolId, context);
+    if (batchBlock) return { ...batchBlock, durationMs: Date.now() - startTime };
 
+    // Check saved permission memory for auto-approve/deny
+    const memoryResult = await this.checkPermissionMemory(tool, args, context);
+    if (memoryResult) return { ...memoryResult, durationMs: Date.now() - startTime };
+
+    // Compute effective requiresConfirmation for downstream use
     const permissionCheck = this.permissionGuard.checkPermission(tool);
     const effectiveRequiresConfirmation = adjustPermissionForMode(
       permissionCheck.requiresConfirmation,
       context.mode,
       (tool as { action?: string }).action,
     );
-
-    if (effectiveRequiresConfirmation && context.runId) {
-      const { permissionMemories } = getRepositories();
-      const memory = await permissionMemories.find(
-        toolId,
-        "default",
-        context.projectId,
-        context.runId,
-      );
-      if (memory) {
-        // Check if the memory has expired
-        if (memory.expiresAt !== null && memory.expiresAt < Date.now()) {
-          // Memory expired — fall through to confirmation
-        } else if (memory.decision === "auto" && !canAutoApprove(tool.risk as OperationRisk)) {
-          // Capability policy: high/critical risk cannot be auto-approved
-          // Fall through to confirmation
-        } else if (memory.decision === "auto") {
-          // Log auto-allowed decision for audit trail
-          if (context.runId) {
-            const { approvalRequests } = getRepositories();
-            await approvalRequests.create({
-              runId: context.runId,
-              toolId: tool.id,
-              toolName: tool.name,
-              args,
-              risk: tool.risk,
-              projectScope: !!context.projectId,
-              mode: context.mode,
-              source: context.source,
-              preview: `[auto-allowed] ${tool.description}`,
-              toolCallId: context.toolCallId,
-            }).then((r) => approvalRequests.approve(r.id)).catch(() => { /* best-effort */ });
-          }
-          const result = await tool.execute(args);
-          this.persistAuditEntry(tool, args, result.success ? "success" : "failure", context, { confirmedByUser: true, error: result.error });
-          return {
-            result,
-            confirmed: true,
-            durationMs: Date.now() - startTime,
-          };
-        } else if (memory.decision === "deny") {
-          this.persistAuditEntry(tool, args, "denied", context);
-          return {
-            result: { success: false, error: `Tool denied by saved permission: ${toolId}` },
-            confirmed: false,
-            durationMs: Date.now() - startTime,
-          };
-        }
-      }
-    }
 
     if (context.caller === "ai") {
       // Non-blocking approval: return ApprovalRequiredResult immediately

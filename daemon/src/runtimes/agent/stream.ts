@@ -17,6 +17,7 @@ import { withStreamTimeout } from "../../shared/stream/stream-timeout.js";
 import { configManager } from "../../config/config-manager.js";
 import { logError } from "../../shared/errors.js";
 import { resolveConversationScope } from "./run-context.js";
+import { createEventEmitter, handleApprovalSuspension } from "./application/run-events.js";
 import type { ModelMessage } from "ai";
 
 export type RunStreamTurnOptions = {
@@ -116,21 +117,7 @@ export async function runStreamTurn(
   // so we can't yield from it. Instead we buffer and yield on the next iteration.
   const eventBuffer: AgentRunEvent[] = [];
 
-  let eventSequence = 0;
-
-  const emitAndPersist = (event: AgentRunEvent) => {
-    options?.onEvent?.(event);
-    if (event.type !== "delta") {
-      const seq = eventSequence++;
-      agentRunEvents.create({
-        runId: run.id,
-        sequence: seq,
-        type: event.type,
-        payload: event,
-      }).catch((err) => logError("agentRunEvents/create", err));
-    }
-    return event;
-  };
+  const emitAndPersist = createEventEmitter(run.id, agentRunEvents, options?.onEvent);
 
   // Build the async iterable that yields AgentRunEvents
   const eventStream = async function* (): AsyncGenerator<AgentRunEvent> {
@@ -297,13 +284,7 @@ export async function runStreamTurn(
       // If the run was suspended due to approval required, emit run_suspended
       // and set waiting_for_approval status. Do NOT save an assistant message.
       if (approvalSuspended) {
-        yield emitAndPersist({
-          type: "run_suspended",
-          runId: run.id,
-          reason: "approval_required",
-          approvalRequestIds: suspendedApprovalRequestIds,
-        });
-        await agentRuns.updateStatus(run.id, "waiting_for_approval");
+        await handleApprovalSuspension(run.id, suspendedApprovalRequestIds, emitAndPersist, agentRuns);
       } else {
         // Save partial assistant message if we have any text
         if (fullText) {

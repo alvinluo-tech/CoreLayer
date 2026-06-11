@@ -15,6 +15,7 @@ import { handleMessageInConversation } from "./application/conversation.js";
 import { logError } from "../../shared/errors.js";
 import { TaskGraph } from "../../workspaces/task-graph-service.js";
 import { resolveConversationScope } from "./run-context.js";
+import { createEventEmitter, handleApprovalSuspension } from "./application/run-events.js";
 
 export type RunTurnOptions = {
   onEvent?: (event: AgentRunEvent) => void;
@@ -63,21 +64,9 @@ export async function runTurn(
     agentId: request.agentId,
   });
 
-  let eventSequence = 0;
-  let currentRunId = "";
-
-  const emitAndPersist = (event: AgentRunEvent) => {
+  let emitAndPersist = (event: AgentRunEvent) => {
     events.push(event);
     options?.onEvent?.(event);
-    if (event.type !== "delta" && currentRunId) {
-      const seq = eventSequence++;
-      agentRunEvents.create({
-        runId: currentRunId,
-        sequence: seq,
-        type: event.type,
-        payload: event,
-      }).catch((err) => logError("agentRunEvents/create", err));
-    }
     return event;
   };
 
@@ -125,7 +114,12 @@ export async function runTurn(
     selectedModel: request.modelOverride ?? undefined,
   });
 
-  currentRunId = run.id;
+  const baseEmit = createEventEmitter(run.id, agentRunEvents, options?.onEvent);
+  emitAndPersist = (event: AgentRunEvent) => {
+    events.push(event);
+    baseEmit(event);
+    return event;
+  };
 
   if (request.taskId) {
     const task = await tasks.getById(request.taskId);
@@ -160,13 +154,7 @@ export async function runTurn(
     // If the run was suspended due to approval required, set waiting_for_approval
     // status and emit run_suspended instead of run_completed.
     if (result.suspended) {
-      emitAndPersist({
-        type: "run_suspended",
-        runId: run.id,
-        reason: "approval_required",
-        approvalRequestIds: result.approvalRequestIds ?? [],
-      });
-      await agentRuns.updateStatus(run.id, "waiting_for_approval");
+      await handleApprovalSuspension(run.id, result.approvalRequestIds ?? [], emitAndPersist, agentRuns);
 
       return {
         runId: run.id,
