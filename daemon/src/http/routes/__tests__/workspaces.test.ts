@@ -63,6 +63,10 @@ vi.mock("../../../shared/errors.js", () => ({
   logError: vi.fn(),
 }));
 
+vi.mock("../../../persistence/audit-log.js", () => ({
+  logAuditEntry: vi.fn().mockResolvedValue(undefined),
+}));
+
 import app from "../workspaces.js";
 
 function makeRequest(path: string, method = "GET", body?: unknown) {
@@ -207,6 +211,7 @@ describe("workspaces route", () => {
 
   describe("DELETE /:id", () => {
     it("deletes workspace", async () => {
+      mockGetById.mockResolvedValue({ id: "ws-1", name: "Test Workspace" });
       mockDelete.mockResolvedValue(true);
 
       const res = await app.fetch(makeRequest("/ws-1", "DELETE"));

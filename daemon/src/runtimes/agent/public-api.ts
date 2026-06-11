@@ -11,7 +11,7 @@
  * move to separate processes.
  */
 
-export { runTurn } from "./run.js";
+export { runTurn, cancelActiveRun } from "./run.js";
 export { runStreamTurn } from "./stream.js";
 export { handleMessageInConversation } from "./application/conversation.js";
 export { isGoalCommand, handleGoalCommand, GoalJudge } from "./application/goal-handler.js";
@@ -22,7 +22,7 @@ export { compressConversation } from "./application/compressor.js";
 export { runAgentLoop, MessageQueue } from "./application/agent-loop.js";
 export type { AgentLoopConfig, DeliveryMode } from "./application/agent-loop.js";
 
-import { runTurn } from "./run.js";
+import { runTurn, cancelActiveRun } from "./run.js";
 import { runStreamTurn } from "./stream.js";
 import { handleMessageInConversation } from "./application/conversation.js";
 import { isGoalCommand, handleGoalCommand, GoalJudge } from "./application/goal-handler.js";
@@ -35,6 +35,7 @@ import { runAgentLoop, MessageQueue } from "./application/agent-loop.js";
 /** Facade — prefer importing this object over individual named exports. */
 export const agentRuntimeApi = {
   runTurn,
+  cancelActiveRun,
   runStreamTurn,
   handleMessageInConversation,
   isGoalCommand,

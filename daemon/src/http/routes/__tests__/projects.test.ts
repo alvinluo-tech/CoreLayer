@@ -28,6 +28,10 @@ vi.mock("../../../shared/errors.js", () => ({
   logError: vi.fn(),
 }));
 
+vi.mock("../../../persistence/audit-log.js", () => ({
+  logAuditEntry: vi.fn().mockResolvedValue(undefined),
+}));
+
 import app from "../projects.js";
 
 function makeRequest(path: string, method = "GET", body?: unknown) {
@@ -134,6 +138,7 @@ describe("projects route", () => {
 
   describe("DELETE /:id", () => {
     it("deletes project", async () => {
+      mockGetById.mockResolvedValue({ id: "p1", name: "Test Project" });
       mockDelete.mockResolvedValue(true);
 
       const res = await app.fetch(makeRequest("/p1", "DELETE"));
@@ -144,8 +149,7 @@ describe("projects route", () => {
     });
 
     it("returns 404 when not found", async () => {
-      mockDelete.mockResolvedValue(false);
-
+      mockGetById.mockResolvedValue(null);
       const res = await app.fetch(makeRequest("/nonexistent", "DELETE"));
       expect(res.status).toBe(404);
     });

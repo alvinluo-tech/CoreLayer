@@ -24,6 +24,7 @@ vi.mock("../../../runtimes/agent/stream.js", () => ({
 
 vi.mock("../../../runtimes/agent/run.js", () => ({
   runTurn: (...args: unknown[]) => mocks.mockRunTurn(...args),
+  cancelActiveRun: vi.fn().mockReturnValue(false),
 }));
 
 vi.mock("../../../persistence/factory.js", () => ({
@@ -63,6 +64,10 @@ vi.mock("../../../shared/errors.js", () => ({
   }),
   extractErrorMessage: vi.fn((err: unknown) => (err instanceof Error ? err.message : String(err))),
   logError: vi.fn(),
+}));
+
+vi.mock("../../../persistence/audit-log.js", () => ({
+  logAuditEntry: vi.fn().mockResolvedValue(undefined),
 }));
 
 import app from "../conversations.js";
@@ -194,7 +199,7 @@ describe("conversations API", () => {
     });
 
     it("returns 404 if not found", async () => {
-      mocks.mockDelete.mockResolvedValue(false);
+      mocks.mockGetById.mockResolvedValue(null);
       const res = await app.fetch(makeRequest("/missing", "DELETE"));
       expect(res.status).toBe(404);
     });

@@ -19,7 +19,22 @@ import { createEventEmitter, handleApprovalSuspension } from "./application/run-
 
 export type RunTurnOptions = {
   onEvent?: (event: AgentRunEvent) => void;
+  abortController?: AbortController;
 };
+
+/**
+ * Module-level registry of active run AbortControllers.
+ * Allows external cancel (e.g. HTTP POST /runs/:id/cancel) to abort
+ * an in-flight runTurn without needing a reference to the runtime instance.
+ */
+const activeRunControllers = new Map<string, AbortController>();
+
+export function cancelActiveRun(runId: string): boolean {
+  const controller = activeRunControllers.get(runId);
+  if (!controller) return false;
+  controller.abort();
+  return true;
+}
 
 const taskGraph = new TaskGraph();
 
@@ -133,6 +148,11 @@ export async function runTurn(
 
   emitAndPersist({ type: "run_started", runId: run.id, mode: request.mode });
 
+  // Register abort controller for external cancellation
+  if (options?.abortController) {
+    activeRunControllers.set(run.id, options.abortController);
+  }
+
   try {
     const result = await handleMessageInConversation(
       conversationId,
@@ -141,6 +161,7 @@ export async function runTurn(
         modelOverride: request.modelOverride,
         providerOverride: request.providerOverride,
         systemPromptOverride: request.systemPromptOverride,
+        abortController: options?.abortController,
         runtimeContext: {
           runId: run.id,
           projectId: context.projectId,
@@ -210,18 +231,20 @@ export async function runTurn(
     };
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
+    const isCancelled = options?.abortController?.signal.aborted === true;
+    const finalStatus = isCancelled ? "cancelled" : "failed";
     logError("runTurn", err);
     emitAndPersist({ type: "run_failed", error: errorMsg });
-    await agentRuns.updateStatus(run.id, "failed", errorMsg);
+    await agentRuns.updateStatus(run.id, finalStatus, errorMsg);
 
     if (request.taskId) {
       const task = await tasks.getById(request.taskId);
       if (task) {
         const runHistory = Array.isArray(task.runHistory) ? task.runHistory : [];
         await tasks.update(request.taskId, {
-          status: "failed",
+          status: finalStatus,
           runHistory: updateLastRunHistoryEntry(runHistory, {
-            status: "failed",
+            status: finalStatus,
             error: errorMsg,
             completedAt: new Date().toISOString(),
           }),
@@ -230,5 +253,7 @@ export async function runTurn(
     }
 
     throw err;
+  } finally {
+    activeRunControllers.delete(run.id);
   }
 }

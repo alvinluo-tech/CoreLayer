@@ -30,6 +30,10 @@ vi.mock("../../../shared/errors.js", () => ({
   logError: vi.fn(),
 }));
 
+vi.mock("../../../persistence/audit-log.js", () => ({
+  logAuditEntry: vi.fn().mockResolvedValue(undefined),
+}));
+
 import app from "../memories.js";
 
 function makeRequest(path: string, method = "GET", body?: unknown) {
@@ -145,6 +149,7 @@ describe("memories route", () => {
 
   describe("DELETE /:id", () => {
     it("deletes memory", async () => {
+      mockGetAll.mockResolvedValue([{ id: "m1", key: "name", value: "val", type: "fact", scopeType: "user", scopeId: "u1" }]);
       mockDelete.mockResolvedValue(true);
 
       const res = await app.fetch(makeRequest("/m1", "DELETE"));
@@ -155,8 +160,7 @@ describe("memories route", () => {
     });
 
     it("returns 404 when not found", async () => {
-      mockDelete.mockResolvedValue(false);
-
+      mockGetAll.mockResolvedValue([]);
       const res = await app.fetch(makeRequest("/nonexistent", "DELETE"));
       expect(res.status).toBe(404);
     });

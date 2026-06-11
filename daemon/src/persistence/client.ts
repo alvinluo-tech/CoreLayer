@@ -659,6 +659,10 @@ try { sqlite.exec(`ALTER TABLE approval_requests ADD COLUMN expires_at INTEGER`)
 try { sqlite.exec(`ALTER TABLE approval_requests ADD COLUMN operation_kind TEXT`); } catch { /* already exists */ }
 try { sqlite.exec(`ALTER TABLE approval_requests ADD COLUMN operation_payload TEXT`); } catch { /* already exists */ }
 
+// Migration: Permission memory session scope — add run_id column
+try { sqlite.exec(`ALTER TABLE permission_memories ADD COLUMN run_id TEXT`); } catch { /* already exists */ }
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_permission_memories_session ON permission_memories(tool_id, user_id, run_id, scope)`); } catch { /* already exists */ }
+
 // Migration: Phase 7 - Agent Run Event Store
 sqlite.exec(`
   CREATE TABLE IF NOT EXISTS agent_run_events (

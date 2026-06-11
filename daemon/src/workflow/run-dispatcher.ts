@@ -12,6 +12,7 @@ import { getCodingRuntime } from "../runtimes/coding/registry.js";
 import type { CodingTask } from "../runtimes/coding/types.js";
 import { isAgentExecutorPolicy } from "../shared/agent-profile-types.js";
 import { TaskGraph } from "../workspaces/task-graph-service.js";
+import { cancelActiveRun } from "../runtimes/agent/run.js";
 import { enqueue } from "./queue-service.js";
 
 const taskGraph = new TaskGraph();
@@ -230,6 +231,9 @@ export async function cancelRun(runId: string): Promise<boolean> {
   if (run.status === "succeeded" || run.status === "failed" || run.status === "cancelled") {
     return false; // Already terminal
   }
+
+  // Abort any in-flight runTurn for this run
+  cancelActiveRun(runId);
 
   // Try to kill the external process via the adapter
   if (run.agentId) {

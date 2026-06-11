@@ -55,6 +55,7 @@ export interface PermissionMemoryRow {
   id: string;
   userId: string;
   projectId: string | null;
+  runId: string | null;
   toolId: string;
   risk: string;
   decision: "auto" | "confirm" | "deny";
@@ -66,6 +67,7 @@ export interface PermissionMemoryRow {
 export interface CreatePermissionMemoryInput {
   userId?: string;
   projectId?: string | null;
+  runId?: string | null;
   toolId: string;
   risk: string;
   decision: "auto" | "confirm" | "deny";
@@ -77,6 +79,7 @@ export interface PermissionMemoryRepository {
   create(input: CreatePermissionMemoryInput): Promise<PermissionMemoryRow>;
   find(toolId: string, userId?: string, projectId?: string, runId?: string): Promise<PermissionMemoryRow | null>;
   getByUserId(userId: string): Promise<PermissionMemoryRow[]>;
+  cleanupExpired(): Promise<number>;
   getByProjectId(projectId: string): Promise<PermissionMemoryRow[]>;
   delete(id: string): Promise<boolean>;
 }

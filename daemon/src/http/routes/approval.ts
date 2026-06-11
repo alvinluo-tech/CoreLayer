@@ -397,8 +397,9 @@ approvalRoutes.post("/:id/remember", async (c) => {
     const id = c.req.param("id");
     const body = await c.req.json<{
       decision: "auto" | "confirm" | "deny";
-      scope?: "global" | "project";
+      scope?: "global" | "project" | "session";
       projectId?: string;
+      runId?: string;
     }>();
 
     if (!body.decision || !["auto", "confirm", "deny"].includes(body.decision)) {
@@ -416,6 +417,7 @@ approvalRoutes.post("/:id/remember", async (c) => {
       decision: body.decision,
       scope: body.scope ?? "global",
       projectId: body.projectId ?? null,
+      runId: body.runId ?? existing.runId ?? null,
     });
 
     if (existing.status === "pending") {

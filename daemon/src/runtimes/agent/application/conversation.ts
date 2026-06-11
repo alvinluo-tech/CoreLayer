@@ -37,6 +37,8 @@ export interface ConversationOptions {
   modelOverride?: string;
   providerOverride?: string;
   systemPromptOverride?: string;
+  /** External AbortController for run cancellation */
+  abortController?: AbortController;
   /** Runtime context for tool approval and audit */
   runtimeContext?: {
     runId?: string;
@@ -64,7 +66,7 @@ export async function handleMessageInConversation(
   suspended?: boolean;
   approvalRequestIds?: string[];
 }> {
-  const streamResult = await streamMessageInConversation(conversationId, userMessage, undefined, undefined, options);
+  const streamResult = await streamMessageInConversation(conversationId, userMessage, undefined, options?.abortController, options);
 
   // Non-AI local fallback: save and return directly
   if (!streamResult.isAi) {

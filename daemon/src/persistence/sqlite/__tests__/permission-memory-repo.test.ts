@@ -37,6 +37,7 @@ function createTestDb() {
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
       project_id TEXT,
+      run_id TEXT,
       tool_id TEXT NOT NULL,
       risk TEXT NOT NULL,
       decision TEXT NOT NULL CHECK(decision IN ('auto', 'confirm', 'deny')),
@@ -229,6 +230,118 @@ describe("PermissionMemory Repository", () => {
     it("should return false for non-existent id", async () => {
       const deleted = await repo.delete("nonexistent");
       expect(deleted).toBe(false);
+    });
+  });
+
+  describe("session scope with runId", () => {
+    it("should create session-scoped memory with runId", async () => {
+      const mem = await repo.create({
+        toolId: "shell:exec",
+        risk: "high",
+        decision: "auto",
+        scope: "session",
+        runId: "run-123",
+      });
+
+      expect(mem.scope).toBe("session");
+      expect(mem.runId).toBe("run-123");
+      expect(mem.expiresAt).toBeDefined();
+      expect(mem.expiresAt!).toBeGreaterThan(Date.now());
+    });
+
+    it("should find session memory only for matching runId", async () => {
+      await repo.create({
+        toolId: "shell:exec",
+        risk: "high",
+        decision: "auto",
+        scope: "session",
+        runId: "run-1",
+      });
+
+      // Found for matching runId
+      const found = await repo.find("shell:exec", "default", undefined, "run-1");
+      expect(found).not.toBeNull();
+      expect(found!.decision).toBe("auto");
+
+      // Not found for different runId
+      const notFound = await repo.find("shell:exec", "default", undefined, "run-2");
+      expect(notFound).toBeNull();
+    });
+
+    it("should prefer session over project scope", async () => {
+      await repo.create({
+        toolId: "shell:exec",
+        risk: "high",
+        decision: "confirm",
+        scope: "project",
+        projectId: "proj-1",
+      });
+      await repo.create({
+        toolId: "shell:exec",
+        risk: "high",
+        decision: "auto",
+        scope: "session",
+        runId: "run-1",
+      });
+
+      const found = await repo.find("shell:exec", "default", "proj-1", "run-1");
+      expect(found!.decision).toBe("auto");
+      expect(found!.scope).toBe("session");
+    });
+
+    it("should default session-scoped memory TTL to 30 minutes", async () => {
+      const mem = await repo.create({
+        toolId: "shell:exec",
+        risk: "medium",
+        decision: "auto",
+        scope: "session",
+        runId: "run-1",
+      });
+
+      const thirtyMinMs = 30 * 60 * 1000;
+      const expectedExpiry = mem.createdAt + thirtyMinMs;
+      expect(mem.expiresAt).toBeCloseTo(expectedExpiry, -3); // within 1s tolerance
+    });
+  });
+
+  describe("cleanupExpired", () => {
+    it("should delete expired permission memories", async () => {
+      const pastTime = Date.now() - 10000;
+      await repo.create({
+        toolId: "expired:tool",
+        risk: "low",
+        decision: "auto",
+        expiresAt: pastTime,
+      });
+      await repo.create({
+        toolId: "active:tool",
+        risk: "low",
+        decision: "auto",
+        expiresAt: Date.now() + 60_000,
+      });
+
+      const cleaned = await repo.cleanupExpired();
+      expect(cleaned).toBe(1);
+
+      const found = await repo.find("expired:tool");
+      expect(found).toBeNull();
+      const stillThere = await repo.find("active:tool");
+      expect(stillThere).not.toBeNull();
+    });
+
+    it("should not delete memories with null expiresAt", async () => {
+      await repo.create({
+        toolId: "permanent:tool",
+        risk: "low",
+        decision: "auto",
+        expiresAt: null,
+      });
+
+      const cleaned = await repo.cleanupExpired();
+      expect(cleaned).toBe(0);
+
+      const found = await repo.find("permanent:tool");
+      expect(found).not.toBeNull();
     });
   });
 });

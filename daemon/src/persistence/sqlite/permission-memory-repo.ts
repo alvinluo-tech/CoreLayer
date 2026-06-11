@@ -1,4 +1,4 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import { db as defaultDb, schema } from "../client.js";
 import type {
@@ -14,6 +14,7 @@ function mapRow(row: typeof schema.permissionMemories.$inferSelect): PermissionM
     id: row.id,
     userId: row.userId,
     projectId: row.projectId,
+    runId: row.runId,
     toolId: row.toolId,
     risk: row.risk,
     decision: row.decision as PermissionMemoryRow["decision"],
@@ -23,6 +24,9 @@ function mapRow(row: typeof schema.permissionMemories.$inferSelect): PermissionM
   };
 }
 
+/** Default TTL for session-scoped permission memories: 30 minutes */
+const SESSION_TTL_MS = 30 * 60 * 1000;
+
 export function createSqlitePermissionMemoryRepo(
   database?: DrizzleDb,
 ): PermissionMemoryRepository {
@@ -31,17 +35,22 @@ export function createSqlitePermissionMemoryRepo(
     async create(input: CreatePermissionMemoryInput): Promise<PermissionMemoryRow> {
       const id = crypto.randomUUID();
       const now = Date.now();
+
+      // Session-scoped memories get a default TTL if none specified
+      const expiresAt = input.expiresAt ?? (input.scope === "session" ? now + SESSION_TTL_MS : null);
+
       db.insert(schema.permissionMemories)
         .values({
           id,
           userId: input.userId ?? "default",
           projectId: input.projectId ?? null,
+          runId: input.runId ?? null,
           toolId: input.toolId,
           risk: input.risk,
           decision: input.decision,
           scope: input.scope ?? "global",
           createdAt: now,
-          expiresAt: input.expiresAt ?? null,
+          expiresAt,
         })
         .run();
       const row = db
@@ -72,6 +81,7 @@ export function createSqlitePermissionMemoryRepo(
               eq(schema.permissionMemories.toolId, toolId),
               eq(schema.permissionMemories.scope, "session"),
               eq(schema.permissionMemories.userId, userId),
+              eq(schema.permissionMemories.runId, runId),
             ),
           )
           .get();
@@ -141,6 +151,15 @@ export function createSqlitePermissionMemoryRepo(
         .where(eq(schema.permissionMemories.id, id))
         .run();
       return result.changes > 0;
+    },
+
+    async cleanupExpired(): Promise<number> {
+      const now = Date.now();
+      const result = db
+        .delete(schema.permissionMemories)
+        .where(sql`expires_at IS NOT NULL AND expires_at < ${now}`)
+        .run();
+      return result.changes;
     },
   };
 }

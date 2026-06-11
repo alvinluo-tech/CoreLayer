@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { getRepositories } from "../../persistence/factory.js";
 import { apiError } from "../../shared/errors.js";
 import { withErrorHandling } from "../middleware/error-handler.js";
+import { logAuditEntry } from "../../persistence/audit-log.js";
 
 const memoryRoutes = new Hono();
 
@@ -62,6 +63,16 @@ memoryRoutes.patch(
       scopeType: existing.scopeType,
       scopeId: existing.scopeId,
     });
+
+    await logAuditEntry({
+      actor: "user",
+      action: "memory.update",
+      resource: `memory:${id}`,
+      decision: "approved",
+      result: "updated",
+      metadata: { id, key: existing.key, scopeType: existing.scopeType },
+    });
+
     return c.json({ data: updated });
   }),
 );
@@ -71,10 +82,19 @@ memoryRoutes.delete(
   withErrorHandling("memories/delete", async (c) => {
     const { memories } = getRepositories();
     const id = c.req.param("id")!;
-    const deleted = await memories.delete(id);
-    if (!deleted) {
+    const existing = await memories.getAll().then((all) => all.find((m) => m.id === id));
+    if (!existing) {
       return apiError(c, "Memory not found", 404);
     }
+    await memories.delete(id);
+    await logAuditEntry({
+      actor: "user",
+      action: "memory.delete",
+      resource: `memory:${id}`,
+      decision: "approved",
+      result: "deleted",
+      metadata: { id, key: existing.key, scopeType: existing.scopeType },
+    });
     return c.json({ success: true });
   }),
 );

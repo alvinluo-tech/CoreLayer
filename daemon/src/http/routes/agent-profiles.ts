@@ -7,6 +7,7 @@ import {
 } from "../../shared/agent-profile-types.js";
 import type { CreateAgentProfileInput, UpdateAgentProfileData } from "../../persistence/repository.js";
 import { withErrorHandling } from "../middleware/error-handler.js";
+import { logAuditEntry } from "../../persistence/audit-log.js";
 
 const agentProfileRoutes = new Hono();
 
@@ -142,6 +143,14 @@ agentProfileRoutes.post(
     }
     const { agentProfiles } = getRepositories();
     const profile = await agentProfiles.create(validation.input);
+    await logAuditEntry({
+      actor: "user",
+      action: "agent-profile.create",
+      resource: `agent-profile:${profile.id}`,
+      decision: "approved",
+      result: "created",
+      metadata: { id: profile.id, name: profile.name },
+    });
     return c.json({ data: profile }, 201);
   }),
 );
@@ -174,6 +183,14 @@ agentProfileRoutes.patch(
       return apiError(c, "Agent profile not found", 404);
     }
     const profile = await agentProfiles.update(id, validation.data);
+    await logAuditEntry({
+      actor: "user",
+      action: "agent-profile.update",
+      resource: `agent-profile:${id}`,
+      decision: "approved",
+      result: "updated",
+      metadata: { id, changes: Object.keys(body) },
+    });
     return c.json({ data: profile });
   }),
 );
@@ -191,6 +208,14 @@ agentProfileRoutes.delete(
       return apiError(c, "Cannot delete the default agent profile", 400);
     }
     await agentProfiles.delete(id);
+    await logAuditEntry({
+      actor: "user",
+      action: "agent-profile.delete",
+      resource: `agent-profile:${id}`,
+      decision: "approved",
+      result: "deleted",
+      metadata: { id, name: existing.name },
+    });
     return c.json({ data: { deleted: true } });
   }),
 );
@@ -211,6 +236,14 @@ agentProfileRoutes.post(
       }
     }
     const profile = await agentProfiles.update(id, { isDefault: true });
+    await logAuditEntry({
+      actor: "user",
+      action: "agent-profile.set-default",
+      resource: `agent-profile:${id}`,
+      decision: "approved",
+      result: "updated",
+      metadata: { id, name: existing.name },
+    });
     return c.json({ data: profile });
   }),
 );

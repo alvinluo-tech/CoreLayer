@@ -371,6 +371,7 @@ export const permissionMemories = sqliteTable("permission_memories", {
   id: text("id").primaryKey(),
   userId: text("user_id").notNull(),
   projectId: text("project_id").references(() => projects.id),
+  runId: text("run_id"), // ties session-scoped memories to a specific run
   toolId: text("tool_id").notNull(),
   risk: text("risk").notNull(),
   decision: text("decision", { enum: ["auto", "confirm", "deny"] }).notNull(),

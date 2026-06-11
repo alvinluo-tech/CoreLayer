@@ -115,6 +115,10 @@ vi.mock("../../persistence/client.js", () => ({
   schema: { artifacts: {} },
 }));
 
+vi.mock("../../runtimes/agent/run.js", () => ({
+  cancelActiveRun: vi.fn().mockReturnValue(false),
+}));
+
 // Import after mocks are set up
 const { dispatchRuns, completeRun, cancelRun, retryRun, getDispatcherStatus } = await import("../run-dispatcher.js");
 

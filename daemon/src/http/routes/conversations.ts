@@ -3,6 +3,7 @@ import { streamSSE } from "hono/streaming";
 import { getRepositories } from "../../persistence/factory.js";
 import { runStreamTurn, runTurn, isGoalCommand, handleGoalCommand } from "../../runtimes/agent/public-api.js";
 import { apiError, extractErrorMessage, logError } from "../../shared/errors.js";
+import { logAuditEntry } from "../../persistence/audit-log.js";
 
 const app = new Hono();
 
@@ -54,6 +55,14 @@ app.post("/batch-delete", async (c) => {
       return c.json({ deleted: 0 });
     }
     const deleted = await getRepositories().conversations.deleteMany(ids);
+    await logAuditEntry({
+      actor: "user",
+      action: "conversation.batch-delete",
+      resource: `conversations:${ids.length}`,
+      decision: "approved",
+      result: "deleted",
+      metadata: { count: deleted, ids },
+    });
     return c.json({ deleted });
   } catch (err) {
     logError("conversations/batch-delete", err);
@@ -65,10 +74,19 @@ app.post("/batch-delete", async (c) => {
 app.delete("/:id", async (c) => {
   try {
     const id = c.req.param("id");
-    const deleted = await getRepositories().conversations.delete(id);
-    if (!deleted) {
+    const existing = await getRepositories().conversations.getById(id);
+    if (!existing) {
       return apiError(c, "Conversation not found", 404);
     }
+    await getRepositories().conversations.delete(id);
+    await logAuditEntry({
+      actor: "user",
+      action: "conversation.delete",
+      resource: `conversation:${id}`,
+      decision: "approved",
+      result: "deleted",
+      metadata: { id, title: existing.title },
+    });
     return c.json({ success: true });
   } catch (err) {
     logError("conversations/delete", err);

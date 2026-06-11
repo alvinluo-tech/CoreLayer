@@ -5,6 +5,7 @@ import { getWorkspaceDetail } from "../../services/workspace-detail.js";
 import { orchestrateFromGoal } from "../../services/workspace-orchestrator.js";
 import { db, schema } from "../../persistence/client.js";
 import { eq, and } from "drizzle-orm";
+import { logAuditEntry } from "../../persistence/audit-log.js";
 
 const workspaceRoutes = new Hono();
 
@@ -81,6 +82,15 @@ workspaceRoutes.post("/", async (c) => {
       description: body.description,
     });
 
+    await logAuditEntry({
+      actor: "user",
+      action: "workspace.create",
+      resource: `workspace:${ws.id}`,
+      decision: "approved",
+      result: "created",
+      metadata: { id: ws.id, name: ws.name },
+    });
+
     return c.json({ data: ws }, 201);
   } catch (err) {
     logError("workspaces/create", err);
@@ -117,6 +127,16 @@ workspaceRoutes.patch("/:id", async (c) => {
       ...body,
       status: body.status as "draft" | "planning" | "running" | "blocked" | "succeeded" | "failed" | "cancelled" | undefined,
     });
+
+    await logAuditEntry({
+      actor: "user",
+      action: "workspace.update",
+      resource: `workspace:${id}`,
+      decision: "approved",
+      result: "updated",
+      metadata: { id, changes: Object.keys(body) },
+    });
+
     return c.json({ data: updated });
   } catch (err) {
     logError("workspaces/update", err);
@@ -130,8 +150,18 @@ workspaceRoutes.patch("/:id", async (c) => {
 workspaceRoutes.delete("/:id", async (c) => {
   try {
     const { workspaces } = getRepositories();
-    const deleted = await workspaces.delete(c.req.param("id"));
-    if (!deleted) return apiError(c, "Workspace not found", 404);
+    const id = c.req.param("id");
+    const existing = await workspaces.getById(id);
+    if (!existing) return apiError(c, "Workspace not found", 404);
+    await workspaces.delete(id);
+    await logAuditEntry({
+      actor: "user",
+      action: "workspace.delete",
+      resource: `workspace:${id}`,
+      decision: "approved",
+      result: "deleted",
+      metadata: { id, name: existing.name },
+    });
     return c.json({ success: true });
   } catch (err) {
     logError("workspaces/delete", err);

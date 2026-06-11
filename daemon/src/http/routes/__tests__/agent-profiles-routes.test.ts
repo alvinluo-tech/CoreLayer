@@ -28,6 +28,10 @@ vi.mock("../../../shared/errors.js", () => ({
   logError: vi.fn(),
 }));
 
+vi.mock("../../../persistence/audit-log.js", () => ({
+  logAuditEntry: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("../../../shared/agent-profile-types.js", () => ({
   isAgentModelPolicy: (v: unknown) => {
     if (v == null || typeof v !== "object") return false;

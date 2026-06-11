@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { getRepositories } from "../../persistence/factory.js";
 import { apiError, extractErrorMessage, logError } from "../../shared/errors.js";
+import { logAuditEntry } from "../../persistence/audit-log.js";
 
 const projectRoutes = new Hono();
 
@@ -56,6 +57,16 @@ projectRoutes.post("/", async (c) => {
       name: body.name,
       description: body.description,
     });
+
+    await logAuditEntry({
+      actor: "user",
+      action: "project.create",
+      resource: `project:${project.id}`,
+      decision: "approved",
+      result: "created",
+      metadata: { id: project.id, name: project.name, workspaceId: body.workspaceId },
+    });
+
     return c.json({ data: project }, 201);
   } catch (err) {
     logError("projects/create", err);
@@ -78,6 +89,16 @@ projectRoutes.patch("/:id", async (c) => {
       status?: "active" | "archived" | "completed";
     }>();
     const updated = await projects.update(id, body);
+
+    await logAuditEntry({
+      actor: "user",
+      action: "project.update",
+      resource: `project:${id}`,
+      decision: "approved",
+      result: "updated",
+      metadata: { id, changes: Object.keys(body) },
+    });
+
     return c.json({ data: updated });
   } catch (err) {
     logError("projects/update", err);
@@ -91,8 +112,18 @@ projectRoutes.patch("/:id", async (c) => {
 projectRoutes.delete("/:id", async (c) => {
   try {
     const { projects } = getRepositories();
-    const deleted = await projects.delete(c.req.param("id"));
-    if (!deleted) return apiError(c, "Project not found", 404);
+    const id = c.req.param("id");
+    const existing = await projects.getById(id);
+    if (!existing) return apiError(c, "Project not found", 404);
+    await projects.delete(id);
+    await logAuditEntry({
+      actor: "user",
+      action: "project.delete",
+      resource: `project:${id}`,
+      decision: "approved",
+      result: "deleted",
+      metadata: { id, name: existing.name },
+    });
     return c.json({ success: true });
   } catch (err) {
     logError("projects/delete", err);
