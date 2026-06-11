@@ -13,12 +13,12 @@
 
 export { toolRuntime } from "./application/execute-tool.js";
 export { getRegistry, registerJarvisTool, registerTool, getTool, getAllJarvisTools, getAllTools } from "./adapters/native-tools/registry.js";
-export { wrapToolsForAI, trimToolResult } from "./adapters/ai-tool-wrapper.js";
+export { wrapToolsForAI, trimToolResult, isApprovalRequiredMarker, extractApprovalRequestIds } from "./adapters/ai-tool-wrapper.js";
 export { registerTaskFlowAdapter } from "./adapters/native-tools/taskflow.js";
 
 import { toolRuntime } from "./application/execute-tool.js";
 import { getRegistry, registerJarvisTool, registerTool, getTool, getAllJarvisTools, getAllTools } from "./adapters/native-tools/registry.js";
-import { wrapToolsForAI, trimToolResult } from "./adapters/ai-tool-wrapper.js";
+import { wrapToolsForAI, trimToolResult, isApprovalRequiredMarker, extractApprovalRequestIds } from "./adapters/ai-tool-wrapper.js";
 import { registerTaskFlowAdapter } from "./adapters/native-tools/taskflow.js";
 
 /** Facade — prefer importing this object over individual named exports. */
@@ -33,5 +33,7 @@ export const toolRuntimeApi = {
   getAllTools,
   wrapToolsForAI,
   trimToolResult,
+  isApprovalRequiredMarker,
+  extractApprovalRequestIds,
   registerTaskFlowAdapter,
 } as const;

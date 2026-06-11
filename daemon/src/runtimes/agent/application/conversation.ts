@@ -2,8 +2,7 @@ import { generateText, streamText, stepCountIs } from "ai";
 import type { ModelMessage } from "ai";
 import { ContextBuilder } from "./context-builder.js";
 import { compressConversation, createSummaryMessage, extractMemoriesFromTurn } from "./compressor.js";
-import { getAllTools, wrapToolsForAI } from "../../tool/public-api.js";
-import { isApprovalRequiredMarker, extractApprovalRequestIds } from "../../tool/adapters/ai-tool-wrapper.js";
+import { getAllTools, wrapToolsForAI, isApprovalRequiredMarker, extractApprovalRequestIds } from "../../tool/public-api.js";
 
 import { configManager } from "../../../config/config-manager.js";
 import { getModelGateway } from "../../../gateways/model/gateway.js";
