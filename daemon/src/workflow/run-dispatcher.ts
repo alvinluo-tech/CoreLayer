@@ -100,7 +100,7 @@ async function dispatchToCodingRuntime(
   agentId: string | null,
   taskId: string | null,
 ): Promise<void> {
-  const { agentRuns, agentProfiles, tasks } = getRepositories();
+  const { agentRuns, agentProfiles, tasks, projects } = getRepositories();
 
   // Resolve adapter ID from agent profile's executor policy
   let adapterId = "claude-code"; // default
@@ -122,9 +122,19 @@ async function dispatchToCodingRuntime(
     throw new Error(`Unknown coding adapter: ${adapterId}`);
   }
 
+  // Resolve project root path
+  const runRecord = await agentRuns.getById(runId);
+  let projectRootPath: string | undefined;
+  if (runRecord?.projectId) {
+    const project = await projects.getById(runRecord.projectId);
+    if (project?.rootPath) {
+      projectRootPath = project.rootPath;
+    }
+  }
+
   // Build CodingTask from task + run info
   let taskPrompt = `Execute agent run ${runId}`;
-  const repoPath = workDir ?? process.cwd();
+  const repoPath = workDir ?? projectRootPath ?? process.cwd();
 
   if (taskId) {
     const task = await tasks.getById(taskId);

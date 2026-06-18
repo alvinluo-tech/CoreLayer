@@ -19,6 +19,9 @@ import { db, schema } from "../persistence/client.js";
 import { proposeTeam } from "./agent-broker.js";
 import { enqueue } from "../workflow/queue-service.js";
 import { logError } from "../shared/errors.js";
+import { resolveAppPaths } from "../config/app-paths.js";
+import * as fs from "node:fs";
+import * as path from "node:path";
 
 export interface OrchestratorResult {
   workspace: {
@@ -100,14 +103,37 @@ export async function orchestrateFromGoal(goal: string): Promise<OrchestratorRes
     // Continue without spec — non-blocking
   }
 
-  // 3. Create project with spec
+  // Create physical workspace directory for agent runs
+  const { appDataDir } = resolveAppPaths();
+  const projectRootPath = path.join(appDataDir, "workspaces", workspace.id);
   const projectName = goal.length > 40 ? goal.slice(0, 37) + "..." : goal;
+
+  try {
+    const { execSync } = await import("node:child_process");
+    fs.mkdirSync(projectRootPath, { recursive: true });
+    // Initialize git repository
+    execSync("git init", { cwd: projectRootPath, stdio: "ignore" });
+    // Create initial README.md
+    fs.writeFileSync(
+      path.join(projectRootPath, "README.md"),
+      `# ${projectName}\n\nGenerated from goal: ${goal}\n`
+    );
+    // Configure local git and add commit
+    execSync("git config user.name \"Jarvis Agent\"", { cwd: projectRootPath, stdio: "ignore" });
+    execSync("git config user.email \"agent@jarvis.local\"", { cwd: projectRootPath, stdio: "ignore" });
+    execSync("git add . && git commit -m \"initial commit\"", { cwd: projectRootPath, stdio: "ignore" });
+  } catch (err) {
+    logError("orchestrator/workspace-dir-init", err);
+  }
+
+  // 3. Create project with spec and rootPath
   const project = await projects.create({
     workspaceId: workspace.id,
     name: projectName,
     description: goal,
     spec: spec ?? undefined,
     techStack: techStack ?? undefined,
+    rootPath: projectRootPath,
   });
 
   // Set active project on workspace
