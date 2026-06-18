@@ -8,9 +8,12 @@ import {
   Play,
   Trash2,
   Bot,
+  Loader2,
+  CheckCircle2,
+  AlertCircle,
 } from 'lucide-react';
 import { MetaLabel, MetaValue, MetaGrid, StatusPill } from '@/components/ui/agent-os';
-import type { AgentProfile } from '@/stores/agentStore';
+import { useAgentStore, type AgentProfile } from '@/stores/agentStore';
 
 interface AgentInspectorPanelProps {
   agent: AgentProfile;
@@ -54,6 +57,11 @@ function StatCell({
 }
 
 export function AgentInspectorPanel({ agent, onTest, onDelete }: AgentInspectorPanelProps) {
+  const testingStatus = useAgentStore((state) => state.testingStatus[agent.id] || 'idle');
+  const testLogs = useAgentStore((state) => state.testLogs[agent.id] || '');
+  const testError = useAgentStore((state) => state.testError[agent.id] || '');
+  const testSuggestion = useAgentStore((state) => state.testSuggestion[agent.id] || '');
+
   const modelPolicy = agent.modelPolicy as Record<string, unknown> | null;
   const preferredModels = modelPolicy?.preferredModels as string[] | undefined;
   const temperature = modelPolicy?.temperature as number | undefined;
@@ -165,31 +173,181 @@ export function AgentInspectorPanel({ agent, onTest, onDelete }: AgentInspectorP
           </div>
         </div>
 
-        {/* Test Result */}
+        {/* Test Result / Diagnostics Checklist */}
         <div className="glass-card p-3" style={{ borderRadius: 8 }}>
-          <div className="flex items-center gap-2 mb-2">
-            <FlaskConical size={10} style={{ color: 'var(--text-tertiary)' }} />
-            <span
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <FlaskConical size={10} style={{ color: 'var(--text-tertiary)' }} />
+              <span
+                style={{
+                  fontFamily: 'var(--font-data)',
+                  fontSize: 10,
+                  color: 'var(--text-tertiary)',
+                }}
+              >
+                Agent Diagnostics
+              </span>
+            </div>
+            <StatusPill
+              label={
+                testingStatus === 'testing'
+                  ? 'RUNNING'
+                  : testingStatus === 'passed'
+                    ? 'PASSED'
+                    : testingStatus === 'failed'
+                      ? 'FAILED'
+                      : 'NOT TESTED'
+              }
+              color={
+                testingStatus === 'testing'
+                  ? 'var(--cyan)'
+                  : testingStatus === 'passed'
+                    ? 'var(--emerald)'
+                    : testingStatus === 'failed'
+                      ? 'var(--rose)'
+                      : 'var(--text-tertiary)'
+              }
+              pulse={testingStatus === 'testing'}
+            />
+          </div>
+
+          {testingStatus === 'idle' && (
+            <div
+              className="flex items-center justify-center py-3"
               style={{
                 fontFamily: 'var(--font-data)',
                 fontSize: 10,
                 color: 'var(--text-tertiary)',
+                fontStyle: 'italic',
               }}
             >
-              Last Test
-            </span>
-          </div>
-          <div
-            className="flex items-center justify-center py-3"
-            style={{
-              fontFamily: 'var(--font-data)',
-              fontSize: 10,
-              color: 'var(--text-tertiary)',
-              fontStyle: 'italic',
-            }}
-          >
-            Not tested yet
-          </div>
+              No verification runs performed yet. Click 'Test Agent' below.
+            </div>
+          )}
+
+          {testingStatus === 'testing' && (
+            <div
+              style={{
+                fontFamily: 'var(--font-data)',
+                fontSize: 10,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '6px',
+                color: 'var(--text-secondary)',
+                marginTop: 8,
+              }}
+            >
+              <div className="flex items-center gap-1.5">
+                <Loader2 size={10} className="animate-spin" style={{ color: 'var(--cyan)' }} />{' '}
+                Resolving workspace path
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Loader2 size={10} className="animate-spin" style={{ color: 'var(--cyan)' }} />{' '}
+                Checking shell permissions
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Loader2 size={10} className="animate-spin" style={{ color: 'var(--cyan)' }} />{' '}
+                Spawning verification dry-run
+              </div>
+            </div>
+          )}
+
+          {testingStatus === 'passed' && (
+            <div className="space-y-2 mt-2">
+              <div
+                style={{
+                  fontFamily: 'var(--font-data)',
+                  fontSize: 10,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '6px',
+                  color: 'var(--text-secondary)',
+                }}
+              >
+                <div className="flex items-center gap-1.5">
+                  <CheckCircle2 size={10} style={{ color: 'var(--emerald)' }} /> Path & Workspace
+                  ready
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <CheckCircle2 size={10} style={{ color: 'var(--emerald)' }} /> Shell capability
+                  allowlisted
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <CheckCircle2 size={10} style={{ color: 'var(--emerald)' }} /> Execution test
+                  completed
+                </div>
+              </div>
+              {testLogs && (
+                <pre
+                  className="agents-scroll"
+                  style={{
+                    background: 'rgba(0,0,0,0.45)',
+                    padding: '6px',
+                    borderRadius: '4px',
+                    fontFamily: 'var(--font-code)',
+                    fontSize: '9px',
+                    color: 'var(--text-secondary)',
+                    maxHeight: '120px',
+                    overflowY: 'auto',
+                    whiteSpace: 'pre-wrap',
+                    border: '1px solid var(--glass-border)',
+                    wordBreak: 'break-all',
+                    marginTop: 8,
+                  }}
+                >
+                  {testLogs}
+                </pre>
+              )}
+            </div>
+          )}
+
+          {testingStatus === 'failed' && (
+            <div className="space-y-2 mt-2">
+              <div
+                className="flex items-start gap-1.5"
+                style={{ fontFamily: 'var(--font-data)', fontSize: 10, color: 'var(--rose)' }}
+              >
+                <AlertCircle size={10} className="mt-0.5 flex-shrink-0" />
+                <span>{testError || 'Verification failed.'}</span>
+              </div>
+              {testSuggestion && (
+                <div
+                  style={{
+                    background: 'rgba(255,75,75,0.05)',
+                    border: '1px dashed rgba(255,75,75,0.2)',
+                    padding: '6px',
+                    borderRadius: '4px',
+                    fontFamily: 'var(--font-data)',
+                    fontSize: '9.5px',
+                    color: '#fecdd3',
+                  }}
+                >
+                  <strong>Suggestion:</strong> {testSuggestion}
+                </div>
+              )}
+              {testLogs && (
+                <pre
+                  className="agents-scroll"
+                  style={{
+                    background: 'rgba(0,0,0,0.45)',
+                    padding: '6px',
+                    borderRadius: '4px',
+                    fontFamily: 'var(--font-code)',
+                    fontSize: '9px',
+                    color: 'var(--text-secondary)',
+                    maxHeight: '120px',
+                    overflowY: 'auto',
+                    whiteSpace: 'pre-wrap',
+                    border: '1px solid rgba(255,75,75,0.1)',
+                    wordBreak: 'break-all',
+                    marginTop: 8,
+                  }}
+                >
+                  {testLogs}
+                </pre>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Model Config Summary */}
@@ -255,21 +413,35 @@ export function AgentInspectorPanel({ agent, onTest, onDelete }: AgentInspectorP
           <div className="flex flex-col gap-2">
             <button
               onClick={onTest}
-              className="flex items-center gap-2 w-full text-left"
+              disabled={testingStatus === 'testing'}
+              className="flex items-center gap-2 w-full text-left disabled:opacity-50 disabled:cursor-not-allowed"
               style={{
                 fontFamily: 'var(--font-data)',
                 fontSize: 11,
-                color: 'var(--emerald)',
-                background: 'rgba(0,230,138,0.06)',
-                border: '1px solid rgba(0,230,138,0.12)',
+                color: testingStatus === 'testing' ? 'var(--cyan)' : 'var(--emerald)',
+                background:
+                  testingStatus === 'testing' ? 'rgba(0,212,255,0.06)' : 'rgba(0,230,138,0.06)',
+                border:
+                  testingStatus === 'testing'
+                    ? '1px solid rgba(0,212,255,0.12)'
+                    : '1px solid rgba(0,230,138,0.12)',
                 borderRadius: 6,
                 padding: '6px 10px',
                 cursor: 'pointer',
                 transition: 'all 0.15s',
               }}
             >
-              <FlaskConical size={12} />
-              Test Agent
+              {testingStatus === 'testing' ? (
+                <>
+                  <Loader2 size={12} className="animate-spin" />
+                  Testing Agent...
+                </>
+              ) : (
+                <>
+                  <FlaskConical size={12} />
+                  Test Agent
+                </>
+              )}
             </button>
             <button
               onClick={onDelete}

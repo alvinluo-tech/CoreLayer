@@ -20,6 +20,7 @@ export function AgentsView() {
     createAgent,
     updateAgent,
     deleteAgent,
+    testAgent,
   } = useAgentStore();
   const [viewMode, setViewMode] = useState<ViewMode>('list');
 
@@ -128,14 +129,14 @@ export function AgentsView() {
         <AgentDetailPanel
           agent={selectedAgent}
           onEdit={() => setViewMode('edit')}
-          onTest={() => {}}
+          onTest={() => testAgent(selectedAgent.id)}
           onUpdate={handleUpdate}
         />
       ) : selectedAgent && viewMode === 'edit' ? (
         <AgentDetailPanel
           agent={selectedAgent}
           onEdit={() => setViewMode('edit')}
-          onTest={() => {}}
+          onTest={() => testAgent(selectedAgent.id)}
           onUpdate={handleUpdate}
         />
       ) : (
@@ -156,7 +157,11 @@ export function AgentsView() {
       )}
 
       {selectedAgent && (
-        <AgentInspectorPanel agent={selectedAgent} onTest={() => {}} onDelete={handleDelete} />
+        <AgentInspectorPanel
+          agent={selectedAgent}
+          onTest={() => testAgent(selectedAgent.id)}
+          onDelete={handleDelete}
+        />
       )}
 
       {(viewMode === 'create' || (viewMode === 'edit' && selectedAgent)) && (

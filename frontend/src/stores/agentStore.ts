@@ -36,12 +36,18 @@ interface AgentState {
   isLoading: boolean;
   error: string | null;
 
+  testingStatus: Record<string, 'idle' | 'testing' | 'passed' | 'failed'>;
+  testLogs: Record<string, string>;
+  testError: Record<string, string>;
+  testSuggestion: Record<string, string>;
+
   fetchAgents: () => Promise<void>;
   selectAgent: (id: string | null) => void;
   createAgent: (input: CreateAgentInput) => Promise<AgentProfile>;
   updateAgent: (id: string, data: UpdateAgentInput) => Promise<AgentProfile>;
   deleteAgent: (id: string) => Promise<void>;
   setDefaultAgent: (id: string) => Promise<AgentProfile>;
+  testAgent: (id: string) => Promise<void>;
 }
 
 export const useAgentStore = create<AgentState>((set, get) => ({
@@ -49,6 +55,10 @@ export const useAgentStore = create<AgentState>((set, get) => ({
   selectedId: null,
   isLoading: false,
   error: null,
+  testingStatus: {},
+  testLogs: {},
+  testError: {},
+  testSuggestion: {},
 
   fetchAgents: async () => {
     set({ isLoading: true, error: null });
@@ -102,5 +112,48 @@ export const useAgentStore = create<AgentState>((set, get) => ({
       ),
     }));
     return get().agents.find((a) => a.id === id)!;
+  },
+
+  testAgent: async (id) => {
+    set((state) => ({
+      testingStatus: { ...state.testingStatus, [id]: 'testing' },
+      testLogs: { ...state.testLogs, [id]: '' },
+      testError: { ...state.testError, [id]: '' },
+      testSuggestion: { ...state.testSuggestion, [id]: '' },
+    }));
+
+    try {
+      const res = await jarvisClient.post<{
+        data: {
+          success: boolean;
+          durationMs: number;
+          logs: string;
+          error?: string;
+          suggestion?: string;
+        };
+      }>(`/api/agent-profiles/${id}/test`);
+
+      const { success, logs, error, suggestion } = res.data;
+      set((state) => ({
+        testingStatus: {
+          ...state.testingStatus,
+          [id]: success ? 'passed' : 'failed',
+        },
+        testLogs: { ...state.testLogs, [id]: logs || '' },
+        testError: { ...state.testError, [id]: error || '' },
+        testSuggestion: { ...state.testSuggestion, [id]: suggestion || '' },
+      }));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Test failed due to an unknown error';
+      set((state) => ({
+        testingStatus: { ...state.testingStatus, [id]: 'failed' },
+        testError: { ...state.testError, [id]: message },
+        testLogs: { ...state.testLogs, [id]: `[ERROR] ${message}` },
+        testSuggestion: {
+          ...state.testSuggestion,
+          [id]: 'Verify that the Jarvis daemon is running and reachable.',
+        },
+      }));
+    }
   },
 }));
