@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "concurrently \"pnpm --filter daemon dev\" \"pnpm --filter frontend tauri dev\"",
     "dev:web": "pnpm --filter frontend dev",
+    "dev:frontend": "pnpm --filter frontend tauri dev",
     "dev:daemon": "pnpm --filter daemon dev",
     "build:daemon": "pnpm --filter daemon build",
     "build:daemon:sidecar": "node scripts/build-daemon-sidecar.mjs",
