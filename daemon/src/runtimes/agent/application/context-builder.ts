@@ -482,6 +482,11 @@ export class ContextBuilder {
       };
     }
 
+    // Pinned memories always inject (never decay, user-explicit)
+    const pinned = memories
+      .filter((m) => m.tier === "pinned")
+      .slice(0, 5);
+
     // Tier-specific selection: preferences always inject, others score-thresholded
     const preferences = memories
       .filter((m) => m.tier === "preference")
@@ -496,7 +501,7 @@ export class ContextBuilder {
       .filter((m) => m.tier === "fact" && m.score >= minScore)
       .slice(0, MAX_FACT_MEMORIES);
 
-    const topMemories = [...preferences, ...contexts, ...facts].slice(0, MAX_MEMORIES);
+    const topMemories = [...pinned, ...preferences, ...contexts, ...facts].slice(0, MAX_MEMORIES + pinned.length);
 
     this.selectedMemoryItems = topMemories.map((m) => ({
       key: m.key,
@@ -505,7 +510,7 @@ export class ContextBuilder {
     }));
 
     let memoryText = topMemories
-      .map((m) => `${m.key}: ${m.value}`)
+      .map((m) => m.tier === "pinned" ? `[固定] ${m.key}: ${m.value}` : `${m.key}: ${m.value}`)
       .join("\n");
 
     // Truncate if over budget

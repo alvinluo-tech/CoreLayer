@@ -63,6 +63,8 @@ export interface ToolExecutionContext {
   source?: string;
   /** Tool call ID for idempotent dedup */
   toolCallId?: string;
+  /** Tool policy mode: standard, guide_only, disable_all */
+  toolPolicyMode?: string;
 }
 
 export interface ToolExecutionResult {
@@ -291,9 +293,61 @@ export class ToolExecutionService {
     const batchBlock = this.checkBatchDeletion(toolId, context);
     if (batchBlock) return { ...batchBlock, durationMs: Date.now() - startTime };
 
+    // Tool policy: check guide_only / disable_all modes
+    if (context.toolPolicyMode && context.toolPolicyMode !== "standard") {
+      const { checkToolPolicy } = await import("../../../capabilities/tool-policy.js");
+      const { parseToolPolicyMode } = await import("../../../capabilities/tool-policy.js");
+      const policyMode = parseToolPolicyMode(context.toolPolicyMode);
+      const policyResult = checkToolPolicy(tool, policyMode);
+      if (!policyResult.allowed) {
+        this.persistAuditEntry(tool, args, "denied", context, { error: policyResult.guidance });
+        return {
+          result: { success: false, error: policyResult.guidance ?? "Tool disabled by policy" },
+          confirmed: false,
+          durationMs: Date.now() - startTime,
+        };
+      }
+      // Guide mode: add guidance to the result but allow execution
+      if (policyResult.guidance && context.caller === "ai") {
+        // Log the guidance for audit purposes
+        this.persistAuditEntry(tool, args, "success", context, { confirmedByUser: false, error: `[guide_only] ${policyResult.guidance}` });
+      }
+    }
+
     // Check saved permission memory for auto-approve/deny
     const memoryResult = await this.checkPermissionMemory(tool, args, context);
     if (memoryResult) return { ...memoryResult, durationMs: Date.now() - startTime };
+
+    // Smart approval: LLM evaluates risk when mode is "smart"
+    if (context.mode === "smart" && context.caller === "ai") {
+      const { evaluateToolRisk } = await import("../../../capabilities/smart-approval.js");
+      const smartResult = await evaluateToolRisk({
+        toolName: tool.name,
+        toolDescription: tool.description,
+        toolRisk: tool.risk,
+        args,
+      });
+
+      if (smartResult.decision === "auto") {
+        // Smart auto-approve: execute immediately
+        const result = await tool.execute(args);
+        this.persistAuditEntry(tool, args, result.success ? "success" : "failure", context, { confirmedByUser: false, error: result.error });
+        return {
+          result,
+          confirmed: false,
+          durationMs: Date.now() - startTime,
+        };
+      }
+      if (smartResult.decision === "deny") {
+        this.persistAuditEntry(tool, args, "denied", context);
+        return {
+          result: { success: false, error: `Smart approval denied: ${smartResult.reason}` },
+          confirmed: false,
+          durationMs: Date.now() - startTime,
+        };
+      }
+      // "confirm" falls through to the standard approval flow below
+    }
 
     // Compute effective requiresConfirmation for downstream use
     const permissionCheck = this.permissionGuard.checkPermission(tool);

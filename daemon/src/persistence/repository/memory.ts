@@ -4,7 +4,7 @@ export interface MemoryRow {
   scopeType: "user" | "workspace" | "project" | "agent" | "task" | "conversation";
   scopeId: string | null;
   type: "fact" | "preference" | "context" | "summary";
-  tier: "preference" | "context" | "fact";
+  tier: "preference" | "context" | "fact" | "pinned";
   key: string;
   value: string;
   source: string | null;
@@ -28,7 +28,7 @@ export interface UpsertMemoryInput {
   scopeType?: MemoryRow["scopeType"];
   scopeId?: string | null;
   type: "fact" | "preference" | "context" | "summary";
-  tier?: "preference" | "context" | "fact";
+  tier?: "preference" | "context" | "fact" | "pinned";
   key: string;
   value: string;
   source?: string;
@@ -56,4 +56,7 @@ export interface MemoryRepository {
   cleanExpired(): Promise<number>;
   pruneUnusedMemories(maxAgeDays?: number): Promise<number>;
   clear(): Promise<number>;
+  getPinned(userId?: string): Promise<MemoryRow[]>;
+  pin(id: string): Promise<MemoryRow>;
+  unpin(id: string): Promise<MemoryRow>;
 }

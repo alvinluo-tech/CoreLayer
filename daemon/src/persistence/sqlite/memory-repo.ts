@@ -595,5 +595,46 @@ export function createSqliteMemoryRepo(database?: DrizzleDb): MemoryRepository {
       const result = db.delete(schema.memories).run();
       return result.changes;
     },
+
+    async getPinned(userId = "default"): Promise<MemoryRow[]> {
+      const rows = db
+        .select()
+        .from(schema.memories)
+        .where(and(eq(schema.memories.userId, userId), eq(schema.memories.tier, "pinned")))
+        .all();
+      return rows.map(normalize);
+    },
+
+    async pin(id: string): Promise<MemoryRow> {
+      const now = new Date().toISOString();
+      const result = db
+        .update(schema.memories)
+        .set({ tier: "pinned", updatedAt: now })
+        .where(eq(schema.memories.id, id))
+        .run();
+      if (result.changes === 0) {
+        throw new Error(`Memory not found: ${id}`);
+      }
+      const row = db.select().from(schema.memories).where(eq(schema.memories.id, id)).get()!;
+      return normalize(row);
+    },
+
+    async unpin(id: string): Promise<MemoryRow> {
+      const now = new Date().toISOString();
+      const row = db.select().from(schema.memories).where(eq(schema.memories.id, id)).get();
+      if (!row) throw new Error(`Memory not found: ${id}`);
+      // Restore to auto-classified tier based on content
+      const restoredTier = classifyTier(row.type as MemoryRow["type"], row.key, row.value);
+      const result = db
+        .update(schema.memories)
+        .set({ tier: restoredTier, updatedAt: now })
+        .where(eq(schema.memories.id, id))
+        .run();
+      if (result.changes === 0) {
+        throw new Error(`Memory not found: ${id}`);
+      }
+      const updated = db.select().from(schema.memories).where(eq(schema.memories.id, id)).get()!;
+      return normalize(updated);
+    },
   };
 }

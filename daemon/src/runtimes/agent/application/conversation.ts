@@ -119,6 +119,18 @@ export async function handleMessageInConversation(
     streamResult.toolCallsLog ?? [],
   );
 
+  // Rolling summary: check and generate if threshold reached (non-blocking)
+  const { shouldGenerateSummary, generateRollingSummary } = await import("./rolling-summary.js");
+  shouldGenerateSummary(conversationId)
+    .then((should) => {
+      if (should) {
+        generateRollingSummary(conversationId).catch((err: Error) => {
+          console.error("[RollingSummary] Failed to generate:", err);
+        });
+      }
+    })
+    .catch(() => { /* ignore check errors */ });
+
   const conversation = (await getRepositories().conversations.getById(conversationId))!;
 
   return {

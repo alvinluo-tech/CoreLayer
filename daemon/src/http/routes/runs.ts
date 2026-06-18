@@ -3,6 +3,7 @@ import { getRepositories } from "../../persistence/factory.js";
 import { apiError } from "../../shared/errors.js";
 import { cancelRun, retryRun } from "../../workflow/run-dispatcher.js";
 import { withErrorHandling } from "../middleware/error-handler.js";
+import { getActiveQueue } from "../../runtimes/agent/public-api.js";
 
 const runsRoutes = new Hono();
 
@@ -74,6 +75,34 @@ runsRoutes.post(
       return apiError(c, "Run not found or not in failed state", 400);
     }
     return c.json({ data: { retried: true } });
+  }),
+);
+
+/**
+ * Enqueue a steer, followUp, or interrupt message into a running agent loop.
+ *
+ * - steer: Injected between tool-call rounds (before next LLM call)
+ * - followUp: Queued until the current loop completes, then processed as a new turn
+ * - interrupt: Immediately breaks the loop
+ */
+runsRoutes.post(
+  "/:id/message",
+  withErrorHandling("runs/message", async (c) => {
+    const id = c.req.param("id")!;
+    const body = await c.req.json<{ message: string; mode?: "steer" | "followUp" | "interrupt" }>();
+
+    if (!body.message?.trim()) {
+      return apiError(c, "消息不能为空", 400);
+    }
+
+    const mode = body.mode ?? "steer";
+    const queue = getActiveQueue(id);
+    if (!queue) {
+      return apiError(c, "Run not found or not actively running", 404);
+    }
+
+    await queue.enqueue(body.message, mode);
+    return c.json({ data: { enqueued: true, mode } });
   }),
 );
 

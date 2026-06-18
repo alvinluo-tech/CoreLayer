@@ -103,6 +103,27 @@ export class MessageQueue {
   }
 }
 
+// ---- Global Queue Registry ----
+
+/**
+ * Module-level registry of active MessageQueues keyed by run ID.
+ * Allows external callers (HTTP routes, other modules) to enqueue
+ * steer/followUp/interrupt messages into a running agent loop.
+ */
+const activeQueues = new Map<string, MessageQueue>();
+
+export function registerActiveQueue(runId: string, queue: MessageQueue): void {
+  activeQueues.set(runId, queue);
+}
+
+export function unregisterActiveQueue(runId: string): void {
+  activeQueues.delete(runId);
+}
+
+export function getActiveQueue(runId: string): MessageQueue | undefined {
+  return activeQueues.get(runId);
+}
+
 // ---- Agent Loop ----
 
 export interface AgentLoopConfig {

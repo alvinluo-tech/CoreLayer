@@ -262,7 +262,7 @@ export const memories = sqliteTable("memories", {
   scopeType: text("scope_type", { enum: ["user", "workspace", "project", "agent", "task", "conversation"] }).notNull().default("user"),
   scopeId: text("scope_id"),
   type: text("type", { enum: ["fact", "preference", "context", "summary"] }).notNull(),
-  tier: text("tier", { enum: ["preference", "context", "fact"] }).notNull().default("context"),
+  tier: text("tier", { enum: ["preference", "context", "fact", "pinned"] }).notNull().default("context"),
   key: text("key").notNull(),
   value: text("value").notNull(),
   source: text("source"),
@@ -423,3 +423,59 @@ export const auditLog = sqliteTable("audit_log", {
   metadata: text("metadata"), // JSON stored as text
   createdAt: text("created_at").default("CURRENT_TIMESTAMP").notNull(),
 });
+
+// ---- Channel Accounts ----
+
+export const channelAccounts = sqliteTable("channel_accounts", {
+  id: text("id").primaryKey(),
+  channelType: text("channel_type").notNull(),
+  displayName: text("display_name").notNull(),
+  config: text("config").notNull().default("{}"),
+  enabled: integer("enabled", { mode: "boolean" }).default(true).notNull(),
+  createdAt: text("created_at").default("CURRENT_TIMESTAMP").notNull(),
+  updatedAt: text("updated_at").default("CURRENT_TIMESTAMP").notNull(),
+});
+
+// ---- Channel Conversations ----
+
+export const channelConversations = sqliteTable(
+  "channel_conversations",
+  {
+    id: text("id").primaryKey(),
+    channelAccountId: text("channel_account_id")
+      .notNull()
+      .references(() => channelAccounts.id, { onDelete: "cascade" }),
+    platformConversationId: text("platform_conversation_id").notNull(),
+    jarvisConversationId: text("jarvis_conversation_id").notNull(),
+    workspaceId: text("workspace_id"),
+    platformUserMetadata: text("platform_user_metadata").notNull().default("{}"),
+    createdAt: text("created_at").default("CURRENT_TIMESTAMP").notNull(),
+    updatedAt: text("updated_at").default("CURRENT_TIMESTAMP").notNull(),
+  },
+  (t) => [
+    index("idx_channel_conv_account").on(t.channelAccountId),
+    index("idx_channel_conv_platform").on(t.channelAccountId, t.platformConversationId),
+    index("idx_channel_conv_jarvis").on(t.jarvisConversationId),
+  ],
+);
+
+// ---- Channel Messages ----
+
+export const channelMessages = sqliteTable(
+  "channel_messages",
+  {
+    id: text("id").primaryKey(),
+    channelConversationId: text("channel_conversation_id")
+      .notNull()
+      .references(() => channelConversations.id, { onDelete: "cascade" }),
+    direction: text("direction", { enum: ["inbound", "outbound"] }).notNull(),
+    content: text("content").notNull(),
+    platformMessageId: text("platform_message_id"),
+    metadata: text("metadata").notNull().default("{}"),
+    createdAt: text("created_at").default("CURRENT_TIMESTAMP").notNull(),
+  },
+  (t) => [
+    index("idx_channel_msg_conv").on(t.channelConversationId),
+    index("idx_channel_msg_created").on(t.createdAt),
+  ],
+);

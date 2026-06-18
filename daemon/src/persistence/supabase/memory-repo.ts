@@ -58,5 +58,14 @@ export function createSupabaseMemoryRepo(): MemoryRepository {
     async clear(): Promise<number> {
       throw new Error("Supabase MemoryRepository not implemented — use SQLite mode");
     },
+    async getPinned(_userId?: string): Promise<MemoryRow[]> {
+      throw new Error("Supabase MemoryRepository not implemented — use SQLite mode");
+    },
+    async pin(_id: string): Promise<MemoryRow> {
+      throw new Error("Supabase MemoryRepository not implemented — use SQLite mode");
+    },
+    async unpin(_id: string): Promise<MemoryRow> {
+      throw new Error("Supabase MemoryRepository not implemented — use SQLite mode");
+    },
   };
 }
