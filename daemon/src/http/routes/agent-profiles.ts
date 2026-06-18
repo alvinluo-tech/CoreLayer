@@ -8,6 +8,10 @@ import {
 import type { CreateAgentProfileInput, UpdateAgentProfileData } from "../../persistence/repository.js";
 import { withErrorHandling } from "../middleware/error-handler.js";
 import { logAuditEntry } from "../../persistence/audit-log.js";
+import * as os from "node:os";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { spawnProcess, isCommandAvailable } from "../../runtimes/coding/public-api.js";
 
 const agentProfileRoutes = new Hono();
 
@@ -246,6 +250,203 @@ agentProfileRoutes.post(
     });
     return c.json({ data: profile });
   }),
+);
+
+agentProfileRoutes.post(
+  "/:id/test",
+  withErrorHandling("agent-profiles/test", async (c) => {
+    const id = c.req.param("id")!;
+    const { agentProfiles } = getRepositories();
+    const profile = await agentProfiles.getById(id);
+    if (!profile) {
+      return apiError(c, "Agent profile not found", 404);
+    }
+
+    const executorPolicy = profile.executorPolicy as Record<string, any> | null;
+    const executor = executorPolicy?.executor || "self";
+
+    const startTime = Date.now();
+
+    // Case 1: CLI coding executors
+    if (executor === "claude-code" || executor === "codex" || executor === "opencode") {
+      const cliCommand = executor === "claude-code" ? "claude" : executor === "codex" ? "codex" : "opencode";
+      const installHint =
+        executor === "claude-code"
+          ? "npm install -g @anthropic-ai/claude-code"
+          : executor === "codex"
+          ? "npm install -g @openai/codex"
+          : "https://github.com/opencode-ai/opencode";
+
+      if (!isCommandAvailable(cliCommand)) {
+        return c.json({
+          data: {
+            success: false,
+            durationMs: Date.now() - startTime,
+            error: `Command '${cliCommand}' not found on PATH.`,
+            suggestion: `Run '${installHint}' to install ${cliCommand} globally.`,
+            logs: `[error] '${cliCommand}' is not recognized as an internal or external command.`,
+          },
+        });
+      }
+
+      // Setup temporary directory
+      const tempBase = path.join(os.homedir(), ".jarvis", "test-runs");
+      const tempDir = path.join(tempBase, `test-${id}`);
+      try {
+        fs.mkdirSync(tempDir, { recursive: true });
+      } catch (err) {
+        return c.json({
+          data: {
+            success: false,
+            durationMs: Date.now() - startTime,
+            error: "Failed to create temporary workspace directory",
+            suggestion: "Ensure Jarvis has write permissions to home directory folder ~/.jarvis",
+            logs: `[error] ${err instanceof Error ? err.message : String(err)}`,
+          },
+        });
+      }
+
+      try {
+        // 1. Initialize git repository in tempDir
+        const gitInit = await spawnProcess({
+          command: "git",
+          args: ["init"],
+          cwd: tempDir,
+          timeoutMs: 5000,
+        });
+        if (gitInit.exitCode !== 0) {
+          throw new Error(`Git initialization failed: ${gitInit.stderr}`);
+        }
+
+        // 2. Prepare diagnostic command args
+        const args =
+          executor === "claude-code"
+            ? ["--print", "--output-format", "text", "--no-session-persistence", "write 'OK' to success.txt"]
+            : executor === "codex"
+            ? ["exec", "--skip-git-repo-check", "--sandbox", "read-only", "write 'OK' to success.txt"]
+            : ["--prompt", "write 'OK' to success.txt"];
+
+        // 3. Execute coding adapter dry-run task
+        const runResult = await spawnProcess({
+          command: cliCommand,
+          args,
+          cwd: tempDir,
+          timeoutMs: 30000,
+        });
+
+        const durationMs = Date.now() - startTime;
+        const successFilePath = path.join(tempDir, "success.txt");
+        const hasSuccessFile = fs.existsSync(successFilePath);
+        let successFileContent = "";
+        if (hasSuccessFile) {
+          successFileContent = fs.readFileSync(successFilePath, "utf8").trim();
+        }
+
+        const passed = runResult.exitCode === 0 && hasSuccessFile && successFileContent.includes("OK");
+
+        // Cleanup temp folder
+        try {
+          fs.rmSync(tempDir, { recursive: true, force: true });
+        } catch (cleanupErr) {
+          // Ignore cleanup errors to prevent failing the route
+        }
+
+        await logAuditEntry({
+          actor: "user",
+          action: "agent-profile.test",
+          resource: `agent-profile:${id}`,
+          decision: "approved",
+          result: passed ? "passed" : "failed",
+          metadata: { id, executor, durationMs, exitCode: runResult.exitCode },
+        });
+
+        if (passed) {
+          return c.json({
+            data: {
+              success: true,
+              durationMs,
+              logs: `[stdout] ${runResult.stdout}\n[file-verification] success.txt exists and verified.`,
+              stdout: runResult.stdout,
+              stderr: runResult.stderr,
+              exitCode: runResult.exitCode,
+            },
+          });
+        } else {
+          return c.json({
+            data: {
+              success: false,
+              durationMs,
+              error: `Dry-run execution failed with exit code ${runResult.exitCode}.`,
+              suggestion: `Verify that ${cliCommand} is properly configured and authenticated.`,
+              logs: `[stdout] ${runResult.stdout}\n[stderr] ${runResult.stderr}`,
+              stdout: runResult.stdout,
+              stderr: runResult.stderr,
+              exitCode: runResult.exitCode,
+            },
+          });
+        }
+      } catch (err) {
+        // Cleanup temp folder in case of errors
+        try {
+          fs.rmSync(tempDir, { recursive: true, force: true });
+        } catch {
+          // Ignore
+        }
+
+        const durationMs = Date.now() - startTime;
+        return c.json({
+          data: {
+            success: false,
+            durationMs,
+            error: err instanceof Error ? err.message : "Diagnostics execution error",
+            suggestion: "Check your path environment variables and CLI execution permissions.",
+            logs: `[exception] ${err instanceof Error ? err.stack : String(err)}`,
+          },
+        });
+      }
+    }
+
+    // Case 2: LLM API based executor (self)
+    const hasApiKey =
+      process.env.GEMINI_API_KEY || process.env.ANTHROPIC_API_KEY || process.env.OPENAI_API_KEY;
+
+    const durationMs = Date.now() - startTime;
+
+    await logAuditEntry({
+      actor: "user",
+      action: "agent-profile.test",
+      resource: `agent-profile:${id}`,
+      decision: "approved",
+      result: hasApiKey ? "passed" : "failed",
+      metadata: { id, executor, durationMs },
+    });
+
+    if (hasApiKey) {
+      const activeKeys = [
+        process.env.GEMINI_API_KEY ? "GEMINI_API_KEY" : "",
+        process.env.ANTHROPIC_API_KEY ? "ANTHROPIC_API_KEY" : "",
+        process.env.OPENAI_API_KEY ? "OPENAI_API_KEY" : "",
+      ].filter(Boolean);
+
+      return c.json({
+        data: {
+          success: true,
+          durationMs,
+          logs: `[api-check] Verified API key environment variables. Active: ${activeKeys.join(", ")}`,
+        },
+      });
+    } else {
+      return c.json({
+        data: {
+          success: false,
+          durationMs,
+          error: "No active API key credentials found in system environment.",
+          suggestion: "Set GEMINI_API_KEY, ANTHROPIC_API_KEY, or OPENAI_API_KEY in your system environment variables.",
+          logs: "[api-check] GEMINI_API_KEY, ANTHROPIC_API_KEY, and OPENAI_API_KEY are all undefined.",
+        },
+      });
+    }
+  })
 );
 
 export default agentProfileRoutes;

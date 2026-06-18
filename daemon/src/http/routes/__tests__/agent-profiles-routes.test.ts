@@ -56,6 +56,25 @@ vi.mock("../../../shared/agent-profile-types.js", () => ({
   },
 }));
 
+const mocks = vi.hoisted(() => ({
+  mockSpawnProcess: vi.fn(),
+  mockIsCommandAvailable: vi.fn(),
+}));
+
+vi.mock("../../../runtimes/coding/public-api.js", () => ({
+  spawnProcess: (...args: unknown[]) => mocks.mockSpawnProcess(...args),
+  isCommandAvailable: (...args: unknown[]) => mocks.mockIsCommandAvailable(...args),
+}));
+
+const mockFs = vi.hoisted(() => ({
+  mkdirSync: vi.fn(),
+  existsSync: vi.fn(),
+  readFileSync: vi.fn(),
+  rmSync: vi.fn(),
+}));
+
+vi.mock("node:fs", () => mockFs);
+
 import app from "../agent-profiles.js";
 
 function makeRequest(path: string, method = "GET", body?: unknown) {
@@ -81,6 +100,10 @@ const mockProfile = {
 describe("agent-profiles routes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockFs.mkdirSync.mockReset();
+    mockFs.rmSync.mockReset();
+    mockFs.existsSync.mockReset();
+    mockFs.readFileSync.mockReset();
   });
 
   // ---- GET / ----
@@ -349,6 +372,145 @@ describe("agent-profiles routes", () => {
       mockGetById.mockRejectedValue(new Error("db error"));
       const res = await app.fetch(makeRequest("/profile-1/set-default", "POST"));
       expect(res.status).toBe(500);
+    });
+  });
+
+  // ---- POST /:id/test ----
+  describe("POST /:id/test", () => {
+    it("returns 404 if agent profile not found", async () => {
+      mockGetById.mockResolvedValue(null);
+      const res = await app.fetch(makeRequest("/nonexistent/test", "POST"));
+      expect(res.status).toBe(404);
+      const json = await res.json();
+      expect(json.error).toBe("Agent profile not found");
+    });
+
+    it("runs self diagnostics successfully when API key is present", async () => {
+      const originalGeminiKey = process.env.GEMINI_API_KEY;
+      process.env.GEMINI_API_KEY = "test-key";
+      try {
+        mockGetById.mockResolvedValue({
+          ...mockProfile,
+          executorPolicy: { executor: "self" },
+        });
+
+        const res = await app.fetch(makeRequest("/profile-1/test", "POST"));
+        expect(res.status).toBe(200);
+        const json = await res.json();
+        expect(json.data.success).toBe(true);
+        expect(json.data.logs).toContain("Active: GEMINI_API_KEY");
+      } finally {
+        process.env.GEMINI_API_KEY = originalGeminiKey;
+      }
+    });
+
+    it("fails self diagnostics when no API key is present", async () => {
+      const originalGeminiKey = process.env.GEMINI_API_KEY;
+      const originalAnthropicKey = process.env.ANTHROPIC_API_KEY;
+      const originalOpenAIKey = process.env.OPENAI_API_KEY;
+      delete process.env.GEMINI_API_KEY;
+      delete process.env.ANTHROPIC_API_KEY;
+      delete process.env.OPENAI_API_KEY;
+      try {
+        mockGetById.mockResolvedValue({
+          ...mockProfile,
+          executorPolicy: { executor: "self" },
+        });
+
+        const res = await app.fetch(makeRequest("/profile-1/test", "POST"));
+        expect(res.status).toBe(200);
+        const json = await res.json();
+        expect(json.data.success).toBe(false);
+        expect(json.data.error).toContain("No active API key credentials found");
+      } finally {
+        process.env.GEMINI_API_KEY = originalGeminiKey;
+        process.env.ANTHROPIC_API_KEY = originalAnthropicKey;
+        process.env.OPENAI_API_KEY = originalOpenAIKey;
+      }
+    });
+
+    it("returns error suggestion if CLI command is not available", async () => {
+      mockGetById.mockResolvedValue({
+        ...mockProfile,
+        executorPolicy: { executor: "claude-code" },
+      });
+      mocks.mockIsCommandAvailable.mockReturnValue(false);
+
+      const res = await app.fetch(makeRequest("/profile-1/test", "POST"));
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.data.success).toBe(false);
+      expect(json.data.error).toContain("Command 'claude' not found on PATH");
+    });
+
+    it("returns error if git init fails", async () => {
+      mockGetById.mockResolvedValue({
+        ...mockProfile,
+        executorPolicy: { executor: "claude-code" },
+      });
+      mocks.mockIsCommandAvailable.mockReturnValue(true);
+      // Mock spawnProcess first call (git init) to return non-zero exit code
+      mocks.mockSpawnProcess.mockResolvedValueOnce({
+        exitCode: 1,
+        stdout: "",
+        stderr: "fatal: not a git repository",
+        durationMs: 10,
+      });
+
+      const res = await app.fetch(makeRequest("/profile-1/test", "POST"));
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.data.success).toBe(false);
+      expect(json.data.error).toContain("Git initialization failed");
+    });
+
+    it("runs CLI dry run successfully when command succeeds and success.txt is verified", async () => {
+      mockGetById.mockResolvedValue({
+        ...mockProfile,
+        executorPolicy: { executor: "claude-code" },
+      });
+      mocks.mockIsCommandAvailable.mockReturnValue(true);
+      
+      // spawnProcess returns exitCode: 0 for git init and CLI run
+      mocks.mockSpawnProcess
+        .mockResolvedValueOnce({ exitCode: 0, stdout: "Initialized git", stderr: "", durationMs: 10 })
+        .mockResolvedValueOnce({ exitCode: 0, stdout: "Command success", stderr: "", durationMs: 20 });
+
+      mockFs.existsSync.mockReturnValue(true);
+      mockFs.readFileSync.mockReturnValue("OK");
+
+      const res = await app.fetch(makeRequest("/profile-1/test", "POST"));
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.data.success).toBe(true);
+      expect(json.data.logs).toContain("success.txt exists and verified");
+      expect(json.data.stdout).toBe("Command success");
+      expect(json.data.stderr).toBe("");
+      expect(json.data.exitCode).toBe(0);
+    });
+
+    it("fails CLI dry run when exitCode is 0 but success.txt is missing", async () => {
+      mockGetById.mockResolvedValue({
+        ...mockProfile,
+        executorPolicy: { executor: "claude-code" },
+      });
+      mocks.mockIsCommandAvailable.mockReturnValue(true);
+      
+      // spawnProcess returns exitCode: 0 for git init and CLI run
+      mocks.mockSpawnProcess
+        .mockResolvedValueOnce({ exitCode: 0, stdout: "Initialized git", stderr: "", durationMs: 10 })
+        .mockResolvedValueOnce({ exitCode: 0, stdout: "Command finished", stderr: "", durationMs: 20 });
+
+      mockFs.existsSync.mockReturnValue(false); // success.txt missing
+
+      const res = await app.fetch(makeRequest("/profile-1/test", "POST"));
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.data.success).toBe(false);
+      expect(json.data.error).toContain("Dry-run execution failed");
+      expect(json.data.stdout).toBe("Command finished");
+      expect(json.data.stderr).toBe("");
+      expect(json.data.exitCode).toBe(0);
     });
   });
 });
