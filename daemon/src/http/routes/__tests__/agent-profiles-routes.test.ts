@@ -464,7 +464,7 @@ describe("agent-profiles routes", () => {
       expect(json.data.error).toContain("Git initialization failed");
     });
 
-    it("runs CLI dry run successfully when command succeeds and success.txt is verified", async () => {
+    it("runs CLI dry run successfully when command succeeds and token is verified", async () => {
       mockGetById.mockResolvedValue({
         ...mockProfile,
         executorPolicy: { executor: "claude-code" },
@@ -474,22 +474,19 @@ describe("agent-profiles routes", () => {
       // spawnProcess returns exitCode: 0 for git init and CLI run
       mocks.mockSpawnProcess
         .mockResolvedValueOnce({ exitCode: 0, stdout: "Initialized git", stderr: "", durationMs: 10 })
-        .mockResolvedValueOnce({ exitCode: 0, stdout: "Command success", stderr: "", durationMs: 20 });
-
-      mockFs.existsSync.mockReturnValue(true);
-      mockFs.readFileSync.mockReturnValue("OK");
+        .mockResolvedValueOnce({ exitCode: 0, stdout: "AGENT_DIAGNOSTICS_OK", stderr: "", durationMs: 20 });
 
       const res = await app.fetch(makeRequest("/profile-1/test", "POST"));
       expect(res.status).toBe(200);
       const json = await res.json();
       expect(json.data.success).toBe(true);
-      expect(json.data.logs).toContain("success.txt exists and verified");
-      expect(json.data.stdout).toBe("Command success");
+      expect(json.data.logs).toContain("token match successful");
+      expect(json.data.stdout).toBe("AGENT_DIAGNOSTICS_OK");
       expect(json.data.stderr).toBe("");
       expect(json.data.exitCode).toBe(0);
     });
 
-    it("fails CLI dry run when exitCode is 0 but success.txt is missing", async () => {
+    it("fails CLI dry run when exitCode is 0 but token is missing", async () => {
       mockGetById.mockResolvedValue({
         ...mockProfile,
         executorPolicy: { executor: "claude-code" },
@@ -499,16 +496,14 @@ describe("agent-profiles routes", () => {
       // spawnProcess returns exitCode: 0 for git init and CLI run
       mocks.mockSpawnProcess
         .mockResolvedValueOnce({ exitCode: 0, stdout: "Initialized git", stderr: "", durationMs: 10 })
-        .mockResolvedValueOnce({ exitCode: 0, stdout: "Command finished", stderr: "", durationMs: 20 });
-
-      mockFs.existsSync.mockReturnValue(false); // success.txt missing
+        .mockResolvedValueOnce({ exitCode: 0, stdout: "Command finished with warnings", stderr: "", durationMs: 20 });
 
       const res = await app.fetch(makeRequest("/profile-1/test", "POST"));
       expect(res.status).toBe(200);
       const json = await res.json();
       expect(json.data.success).toBe(false);
       expect(json.data.error).toContain("Dry-run execution failed");
-      expect(json.data.stdout).toBe("Command finished");
+      expect(json.data.stdout).toBe("Command finished with warnings");
       expect(json.data.stderr).toBe("");
       expect(json.data.exitCode).toBe(0);
     });

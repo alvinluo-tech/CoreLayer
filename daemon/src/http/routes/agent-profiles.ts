@@ -318,13 +318,13 @@ agentProfileRoutes.post(
           throw new Error(`Git initialization failed: ${gitInit.stderr}`);
         }
 
-        // 2. Prepare diagnostic command args
+        // 2. Prepare diagnostic command args - we use a print check to avoid triggering interactive write approval warnings
         const args =
           executor === "claude-code"
-            ? ["--print", "--output-format", "text", "--no-session-persistence", "write 'OK' to success.txt"]
+            ? ["--print", "--output-format", "text", "--no-session-persistence", "Reply with exactly: AGENT_DIAGNOSTICS_OK"]
             : executor === "codex"
-            ? ["exec", "--skip-git-repo-check", "--sandbox", "read-only", "write 'OK' to success.txt"]
-            : ["--prompt", "write 'OK' to success.txt"];
+            ? ["exec", "--skip-git-repo-check", "--sandbox", "read-only", "Reply with exactly: AGENT_DIAGNOSTICS_OK"]
+            : ["--prompt", "Reply with exactly: AGENT_DIAGNOSTICS_OK"];
 
         // 3. Execute coding adapter dry-run task
         const runResult = await spawnProcess({
@@ -335,14 +335,8 @@ agentProfileRoutes.post(
         });
 
         const durationMs = Date.now() - startTime;
-        const successFilePath = path.join(tempDir, "success.txt");
-        const hasSuccessFile = fs.existsSync(successFilePath);
-        let successFileContent = "";
-        if (hasSuccessFile) {
-          successFileContent = fs.readFileSync(successFilePath, "utf8").trim();
-        }
-
-        const passed = runResult.exitCode === 0 && hasSuccessFile && successFileContent.includes("OK");
+        const stdoutUpper = runResult.stdout.toUpperCase();
+        const passed = runResult.exitCode === 0 && stdoutUpper.includes("AGENT_DIAGNOSTICS_OK");
 
         // Cleanup temp folder
         try {
@@ -365,7 +359,7 @@ agentProfileRoutes.post(
             data: {
               success: true,
               durationMs,
-              logs: `[stdout] ${runResult.stdout}\n[file-verification] success.txt exists and verified.`,
+              logs: `[stdout] ${runResult.stdout}\n[verification] CLI verification token match successful.`,
               stdout: runResult.stdout,
               stderr: runResult.stderr,
               exitCode: runResult.exitCode,
@@ -376,8 +370,8 @@ agentProfileRoutes.post(
             data: {
               success: false,
               durationMs,
-              error: `Dry-run execution failed with exit code ${runResult.exitCode}.`,
-              suggestion: `Verify that ${cliCommand} is properly configured and authenticated.`,
+              error: `Dry-run execution failed with exit code ${runResult.exitCode} or token mismatch.`,
+              suggestion: `Verify that ${cliCommand} is properly configured, authenticated, and can communicate with the model.`,
               logs: `[stdout] ${runResult.stdout}\n[stderr] ${runResult.stderr}`,
               stdout: runResult.stdout,
               stderr: runResult.stderr,
