@@ -506,18 +506,18 @@ Verification:
 
 Goal: make scoped permissions usable without hiding risk.
 
-- [ ] Show required permission package before execution begins.
-- [ ] Show approved permission package in the workspace timeline.
-- [ ] Support approving a bounded execution plan once.
-- [ ] Ask again only when execution exceeds the approved plan.
-- [ ] Show high-risk external writes separately.
-- [ ] Add permission grant revocation flow.
-- [ ] Show final diff/artifacts before irreversible actions.
-- [ ] Distinguish system auto-allow, user-memory allow, and explicit user approval.
+- [x] Show required permission package before execution begins.
+- [x] Show approved permission package in the workspace timeline.
+- [x] Support approving a bounded execution plan once.
+- [x] Ask again only when execution exceeds the approved plan.
+- [x] Show high-risk external writes separately.
+- [x] Add permission grant revocation flow.
+- [x] Show final diff/artifacts before irreversible actions.
+- [x] Distinguish system auto-allow, user-memory allow, and explicit user approval.
 
 Verification:
 
-- [ ] Permission UI/store tests if present.
-- [ ] Approval route/service tests.
+- [x] Permission UI/store tests if present.
+- [x] Approval route/service tests.
 - [ ] Manual UI smoke test for approve, revoke, and exceed-plan flows.
 
