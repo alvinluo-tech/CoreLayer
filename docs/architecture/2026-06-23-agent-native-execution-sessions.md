@@ -372,15 +372,15 @@ Verification:
 
 Goal: prevent unverified success claims.
 
-- [ ] Add delivery-ready state.
-- [ ] Require verification summary before final success.
-- [ ] Show changed files, artifacts, tests, and residual risks.
-- [ ] Require explicit confirmation for merge/push/publish/external write.
-- [ ] Prevent success claim when verification failed.
+- [x] Add delivery-ready state.
+- [x] Require verification summary before final success.
+- [x] Show changed files, artifacts, tests, and residual risks.
+- [x] Require explicit confirmation for merge/push/publish/external write.
+- [x] Prevent success claim when verification failed.
 
 Verification:
 
-- [ ] Delivery state service tests.
+- [x] Delivery state service tests.
 - [ ] UI smoke test for final delivery panel.
 
 ### Session 18 - Docker Sandbox Backend
@@ -467,40 +467,40 @@ Verification:
 
 Goal: make agents measurable capability units rather than prompt labels.
 
-- [ ] Define `AgentSpec` schema or type.
-- [ ] Define `TeamSpec` schema or type.
-- [ ] Version agent specs.
-- [ ] Store agent capability metadata.
-- [ ] Store executor preference and model policy in a structured form.
-- [ ] Track success rate by task type.
-- [ ] Track retry rate.
-- [ ] Track verification failure rate.
-- [ ] Track user acceptance rate.
-- [ ] Use capability and performance data in agent selection.
+- [x] Define `AgentSpec` schema or type.
+- [x] Define `TeamSpec` schema or type.
+- [x] Version agent specs.
+- [x] Store agent capability metadata.
+- [x] Store executor preference and model policy in a structured form.
+- [x] Track success rate by task type.
+- [x] Track retry rate.
+- [x] Track verification failure rate.
+- [x] Track user acceptance rate.
+- [x] Use capability and performance data in agent selection.
 
 Verification:
 
 - [ ] Agent profile repository tests.
 - [ ] Agent broker tests.
-- [ ] Schema/type validation tests.
+- [x] Schema/type validation tests.
 
 ### Session 24 - Quality Gate Expansion
 
 Goal: expand verification beyond the first coding checks.
 
-- [ ] Add task-type-specific quality gate registry.
-- [ ] Add coding gates for lint, typecheck, tests, build, path policy, and security scan when configured.
-- [ ] Add reviewer-agent gate after mechanical checks.
-- [ ] Add image/media gate placeholders.
-- [ ] Add research/writing gate placeholders.
-- [ ] Ensure delivery includes artifact list, verification results, limitations, pending approvals, and unresolved risks.
-- [ ] Ensure failed verification prevents success status.
+- [x] Add task-type-specific quality gate registry.
+- [x] Add coding gates for lint, typecheck, tests, build, path policy, and security scan when configured.
+- [x] Add reviewer-agent gate after mechanical checks.
+- [x] Add image/media gate placeholders.
+- [x] Add research/writing gate placeholders.
+- [x] Ensure delivery includes artifact list, verification results, limitations, pending approvals, and unresolved risks.
+- [x] Ensure failed verification prevents success status.
 
 Verification:
 
-- [ ] Quality gate registry tests.
+- [x] Quality gate registry tests.
 - [ ] Coding gate tests.
-- [ ] Delivery gate tests.
+- [x] Delivery gate tests.
 
 ### Session 25 - Permission UX, Revocation, And Approved Plan Display
 
