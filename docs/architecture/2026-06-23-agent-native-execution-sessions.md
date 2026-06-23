@@ -294,17 +294,17 @@ Verification:
 
 Goal: reduce permission spam while keeping hard boundaries.
 
-- [ ] Add permission grant model.
-- [ ] Add run/task/workspace/project scopes.
-- [ ] Add expiry and max-use constraints.
-- [ ] Add decision source.
-- [ ] Keep high and critical risk fail-closed.
-- [ ] Add broker tests for risk and scope.
+- [x] Add permission grant model.
+- [x] Add run/task/workspace/project scopes.
+- [x] Add expiry and max-use constraints.
+- [x] Add decision source.
+- [x] Keep high and critical risk fail-closed.
+- [x] Add broker tests for risk and scope.
 
 Verification:
 
-- [ ] Permission broker tests.
-- [ ] Approval memory tests.
+- [x] Permission broker tests.
+- [x] Approval memory tests.
 
 ### Session 13 - Executor Permission Block Handling
 
