@@ -19,6 +19,7 @@ import { createSqliteAgentRunEventRepo } from "./agent-run-event-repo.js";
 import { createSqliteEventLogRepo } from "./event-log-repo.js";
 import { createSqliteAuditLogRepo } from "./audit-log-repo.js";
 import { createSqliteExecutorRunRepo } from "./executor-run-repo.js";
+import { createSqliteEnvironmentSessionRepo, createSqliteEnvironmentEventRepo } from "./environment-repo.js";
 
 export function createSqliteRepositories(): Repositories {
   return {
@@ -42,5 +43,7 @@ export function createSqliteRepositories(): Repositories {
     eventLog: createSqliteEventLogRepo(),
     auditLog: createSqliteAuditLogRepo(),
     executorRuns: createSqliteExecutorRunRepo(),
+    environmentSessions: createSqliteEnvironmentSessionRepo(),
+    environmentEvents: createSqliteEnvironmentEventRepo(),
   };
 }

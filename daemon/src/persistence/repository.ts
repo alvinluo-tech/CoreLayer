@@ -122,6 +122,17 @@ export type {
   ExecutorRunRepository,
 } from "./repository/executor-run.js";
 
+export type {
+  EnvironmentSessionRow,
+  CreateEnvironmentSessionInput,
+  UpdateEnvironmentSessionInput,
+  EnvironmentState,
+  EnvironmentSessionRepository,
+  EnvironmentEventRow,
+  CreateEnvironmentEventInput,
+  EnvironmentEventRepository,
+} from "./repository/environment.js";
+
 // ---- Aggregate ----
 
 import type { TaskRepository } from "./repository/task.js";
@@ -138,6 +149,7 @@ import type { ProjectRepository } from "./repository/project.js";
 import type { ApprovalRequestRepository, PermissionMemoryRepository } from "./repository/authorization.js";
 import type { EventLogRepository, AuditLogRepository } from "./repository/observability.js";
 import type { ExecutorRunRepository } from "./repository/executor-run.js";
+import type { EnvironmentSessionRepository, EnvironmentEventRepository } from "./repository/environment.js";
 
 export interface Repositories {
   tasks: TaskRepository;
@@ -160,4 +172,6 @@ export interface Repositories {
   eventLog: EventLogRepository;
   auditLog: AuditLogRepository;
   executorRuns: ExecutorRunRepository;
+  environmentSessions: EnvironmentSessionRepository;
+  environmentEvents: EnvironmentEventRepository;
 }

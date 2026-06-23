@@ -216,16 +216,16 @@ Verification:
 
 Goal: make environment sessions durable and auditable.
 
-- [ ] Add `environment_sessions` schema/table.
-- [ ] Add `environment_events` schema/table.
-- [ ] Add repositories.
-- [ ] Add repository tests.
-- [ ] Link sessions to workspace/project/run/agent.
+- [x] Add `environment_sessions` schema/table.
+- [x] Add `environment_events` schema/table.
+- [x] Add repositories.
+- [x] Add repository tests.
+- [x] Link sessions to workspace/project/run/agent.
 
 Verification:
 
-- [ ] Repository tests pass.
-- [ ] Migration tests pass if applicable.
+- [x] Repository tests pass.
+- [x] Migration tests pass if applicable.
 
 ### Session 8 - Git Worktree Environment Backend
 

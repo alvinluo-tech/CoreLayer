@@ -779,5 +779,38 @@ sqlite.exec(`
   CREATE INDEX IF NOT EXISTS idx_executor_runs_adapter ON executor_runs(adapter_id);
 `);
 
+// Migration: Environment Sessions and Events (Agent-Native Execution - Session 7)
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS environment_sessions (
+    id TEXT PRIMARY KEY,
+    workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    project_id TEXT REFERENCES projects(id),
+    run_id TEXT,
+    agent_id TEXT REFERENCES agent_profiles(id),
+    environment_kind TEXT NOT NULL,
+    state TEXT NOT NULL DEFAULT 'created' CHECK(state IN ('created', 'preparing', 'ready', 'active', 'paused', 'completed', 'failed', 'disposed')),
+    working_directory TEXT,
+    access_policy TEXT DEFAULT '{}',
+    metadata TEXT DEFAULT '{}',
+    created_at TEXT NOT NULL DEFAULT 'CURRENT_TIMESTAMP',
+    updated_at TEXT NOT NULL DEFAULT 'CURRENT_TIMESTAMP'
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_env_sessions_workspace ON environment_sessions(workspace_id);
+  CREATE INDEX IF NOT EXISTS idx_env_sessions_run ON environment_sessions(run_id);
+  CREATE INDEX IF NOT EXISTS idx_env_sessions_state ON environment_sessions(state);
+
+  CREATE TABLE IF NOT EXISTS environment_events (
+    id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL REFERENCES environment_sessions(id) ON DELETE CASCADE,
+    sequence INTEGER NOT NULL,
+    type TEXT NOT NULL,
+    payload TEXT,
+    created_at TEXT NOT NULL DEFAULT 'CURRENT_TIMESTAMP'
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_env_events_session ON environment_events(session_id, sequence);
+`);
+
 export { db };
 export { schema };

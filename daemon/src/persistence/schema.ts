@@ -294,6 +294,42 @@ export const scheduledTasks = sqliteTable("scheduled_tasks", {
   updatedAt: text("updated_at").default("CURRENT_TIMESTAMP").notNull(),
 });
 
+// ---- Environment Sessions ----
+
+export const environmentSessions = sqliteTable("environment_sessions", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  projectId: text("project_id").references(() => projects.id),
+  runId: text("run_id"),
+  agentId: text("agent_id").references(() => agentProfiles.id),
+  environmentKind: text("environment_kind").notNull(), // git-worktree, browser-session, canvas, message-draft, etc.
+  state: text("state", {
+    enum: ["created", "preparing", "ready", "active", "paused", "completed", "failed", "disposed"],
+  })
+    .default("created")
+    .notNull(),
+  workingDirectory: text("working_directory"),
+  accessPolicy: text("access_policy").default("{}"), // JSON stored as text
+  metadata: text("metadata").default("{}"), // JSON stored as text
+  createdAt: text("created_at").default("CURRENT_TIMESTAMP").notNull(),
+  updatedAt: text("updated_at").default("CURRENT_TIMESTAMP").notNull(),
+});
+
+// ---- Environment Events ----
+
+export const environmentEvents = sqliteTable("environment_events", {
+  id: text("id").primaryKey(),
+  sessionId: text("session_id")
+    .notNull()
+    .references(() => environmentSessions.id, { onDelete: "cascade" }),
+  sequence: integer("sequence").notNull(),
+  type: text("type").notNull(),
+  payload: text("payload"), // JSON stored as text
+  createdAt: text("created_at").default("CURRENT_TIMESTAMP").notNull(),
+});
+
 // ---- Executor Runs ----
 
 export const executorRuns = sqliteTable("executor_runs", {
