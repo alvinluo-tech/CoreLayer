@@ -310,16 +310,16 @@ Verification:
 
 Goal: convert executor permission blocks into visible Jarvis states.
 
-- [ ] Detect known permission-blocked output for one executor.
-- [ ] Convert known block to Jarvis approval request.
-- [ ] Mark unknown interactive block as `blocked_by_executor_permission`.
-- [ ] Add timeout so executor cannot hang forever.
-- [ ] Record run event and audit entry.
+- [x] Detect known permission-blocked output for one executor.
+- [x] Convert known block to Jarvis approval request.
+- [x] Mark unknown interactive block as `blocked_by_executor_permission`.
+- [x] Add timeout so executor cannot hang forever.
+- [x] Record run event and audit entry.
 
 Verification:
 
-- [ ] Simulated stdout/stderr tests.
-- [ ] Approval service or route tests if touched.
+- [x] Simulated stdout/stderr tests.
+- [x] Approval service or route tests if touched.
 
 ### Session 14 - Event Sourcing For Runs
 
@@ -340,12 +340,12 @@ Verification:
 
 Goal: make failed runs retryable from known state.
 
-- [ ] Add failure classification.
-- [ ] Add attempt number.
-- [ ] Add parent attempt id.
-- [ ] Snapshot task/agent/executor/environment policy per attempt.
-- [ ] Implement safe retry scheduling for reversible failures.
-- [ ] Add retry decision tests.
+- [x] Add failure classification.
+- [x] Add attempt number.
+- [x] Add parent attempt id.
+- [x] Snapshot task/agent/executor/environment policy per attempt.
+- [x] Implement safe retry scheduling for reversible failures.
+- [x] Add retry decision tests.
 
 Verification:
 
