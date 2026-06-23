@@ -84,7 +84,7 @@ Use this map to verify that the implementation sessions cover the architecture r
 - [x] Phase 0 is covered by Session 0.
 - [x] Phase 1 is covered by Sessions 1, 2, and 3.
 - [x] Phase 2 is covered by Sessions 4 and 5.
-- [ ] Phase 3 is covered by Sessions 6, 7, 8, 18, and 21.
+- [x] Phase 3 is covered by Sessions 6, 7, 8, 18, and 21.
 - [ ] Phase 4 is covered by Sessions 7 and 8.
 - [ ] Phase 5 is covered by Sessions 12 and 25.
 - [ ] Phase 6 is covered by Sessions 9, 10, 13, and 19.
@@ -191,26 +191,26 @@ Verification:
 
 Goal: introduce a backend-agnostic execution environment contract before implementing coding-specific worktrees.
 
-- [ ] Add `packages/execution-environment`.
-- [ ] Define `ExecutionEnvironment`.
-- [ ] Define `EnvironmentSessionRequest`.
-- [ ] Define `EnvironmentSession`.
-- [ ] Define `EnvironmentState`.
-- [ ] Define `AccessPolicy`.
-- [ ] Define command/file/artifact result types.
-- [ ] Define generic action request/result types that do not require shell execution.
-- [ ] Add request validation helpers.
-- [ ] Add non-coding environment examples in tests or docs:
-  - [ ] `BrowserSessionEnvironment`
-  - [ ] `ImageWorkspaceEnvironment`
-  - [ ] `MessageDraftEnvironment`
-- [ ] Add validation tests.
+- [x] Add `packages/execution-environment`.
+- [x] Define `ExecutionEnvironment`.
+- [x] Define `EnvironmentSessionRequest`.
+- [x] Define `EnvironmentSession`.
+- [x] Define `EnvironmentState`.
+- [x] Define `AccessPolicy`.
+- [x] Define command/file/artifact result types.
+- [x] Define generic action request/result types that do not require shell execution.
+- [x] Add request validation helpers.
+- [x] Add non-coding environment examples in tests or docs:
+  - [x] `BrowserSessionEnvironment`
+  - [x] `ImageWorkspaceEnvironment`
+  - [x] `MessageDraftEnvironment`
+- [x] Add validation tests.
 
 Verification:
 
-- [ ] Execution environment package tests pass.
-- [ ] Workspace typecheck passes.
-- [ ] Core interfaces do not mention Claude Code, Codex, OpenCode, git, worktree, diff, lint, typecheck, or test commands.
+- [x] Execution environment package tests pass.
+- [x] Workspace typecheck passes.
+- [x] Core interfaces do not mention Claude Code, Codex, OpenCode, git, worktree, diff, lint, typecheck, or test commands.
 
 ### Session 7 - Environment Persistence
 
