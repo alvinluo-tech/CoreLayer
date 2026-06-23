@@ -176,16 +176,16 @@ Verification:
 
 Goal: record real installed-version behavior for Jarvis adapter design.
 
-- [ ] Verify `--output-format stream-json` event shape.
-- [ ] Verify `--permission-mode` blocked behavior.
-- [ ] Verify `--settings` session-local behavior.
-- [ ] Verify `--mcp-config` and `--strict-mcp-config`.
-- [ ] Record observed commands and outputs in a dated research note.
+- [x] Verify `--output-format stream-json` event shape.
+- [x] Verify `--permission-mode` blocked behavior.
+- [x] Verify `--settings` session-local behavior.
+- [x] Verify `--mcp-config` and `--strict-mcp-config`.
+- [x] Record observed commands and outputs in a dated research note.
 
 Verification:
 
-- [ ] Research note includes exact Claude Code version.
-- [ ] Research note separates confirmed behavior from assumptions.
+- [x] Research note includes exact Claude Code version.
+- [x] Research note separates confirmed behavior from assumptions.
 
 ### Session 6 - Execution Environment Interface
 
