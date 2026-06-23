@@ -43,7 +43,7 @@ Use this map to verify that the implementation sessions cover the architecture r
 
 - [ ] Product thesis, target mental model, non-goals, guardrails, and success criteria are design constraints for every session.
 - [x] Phase 0 is covered by Session 0.
-- [ ] Phase 1 is covered by Sessions 1, 2, and 3.
+- [x] Phase 1 is covered by Sessions 1, 2, and 3.
 - [ ] Phase 2 is covered by Sessions 4 and 5.
 - [ ] Phase 3 is covered by Sessions 6, 7, 8, 18, and 21.
 - [ ] Phase 4 is covered by Sessions 7 and 8.
@@ -75,16 +75,16 @@ Verification:
 
 Goal: add the shared vocabulary for managed executors.
 
-- [ ] Add `ExecutorAdapter` interface.
-- [ ] Add normalized executor statuses.
-- [ ] Add normalized executor events.
-- [ ] Add executor capability profile types.
-- [ ] Export types from the proper package boundary.
+- [x] Add `ExecutorAdapter` interface.
+- [x] Add normalized executor statuses.
+- [x] Add normalized executor events.
+- [x] Add executor capability profile types.
+- [x] Export types from the proper package boundary.
 
 Verification:
 
-- [ ] Typecheck affected packages.
-- [ ] Run focused tests for modified package.
+- [x] Typecheck affected packages.
+- [x] Run focused tests for modified package.
 
 ### Session 2 - Executor Run Persistence
 
