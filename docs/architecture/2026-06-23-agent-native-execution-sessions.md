@@ -85,15 +85,15 @@ Use this map to verify that the implementation sessions cover the architecture r
 - [x] Phase 1 is covered by Sessions 1, 2, and 3.
 - [x] Phase 2 is covered by Sessions 4 and 5.
 - [x] Phase 3 is covered by Sessions 6, 7, 8, 18, and 21.
-- [ ] Phase 4 is covered by Sessions 7 and 8.
-- [ ] Phase 5 is covered by Sessions 12 and 25.
-- [ ] Phase 6 is covered by Sessions 9, 10, 13, and 19.
-- [ ] Phase 7 is covered by Sessions 14 and 22.
-- [ ] Phase 8 is covered by Session 15.
-- [ ] Phase 9 is covered by Sessions 11, 17, and 24.
-- [ ] Phase 10 is covered by Sessions 20 and 23.
-- [ ] Phase 11 is covered by Sessions 16, 17, and 25.
-- [ ] Phase 12 is the high-level migration order; it is implemented through Sessions 0-25.
+- [x] Phase 4 is covered by Sessions 7 and 8.
+- [x] Phase 5 is covered by Sessions 12 and 25.
+- [x] Phase 6 is covered by Sessions 9, 10, 13, and 19.
+- [x] Phase 7 is covered by Sessions 14 and 22.
+- [x] Phase 8 is covered by Session 15.
+- [x] Phase 9 is covered by Sessions 11, 17, and 24.
+- [x] Phase 10 is covered by Sessions 20 and 23.
+- [x] Phase 11 is covered by Sessions 16, 17, and 25.
+- [x] Phase 12 is the high-level migration order; it is implemented through Sessions 0-25.
 
 ### Session 0 - Inventory Only
 
@@ -325,15 +325,15 @@ Verification:
 
 Goal: make workflow execution traceable and replayable.
 
-- [ ] Add missing run/task event types.
-- [ ] Emit an append-only event for every lifecycle transition.
-- [ ] Add event sequence ordering per run.
-- [ ] Add query by workspace/project/task/run.
-- [ ] Add tests for ordering and replay data.
+- [x] Add missing run/task event types.
+- [x] Emit an append-only event for every lifecycle transition.
+- [x] Add event sequence ordering per run.
+- [x] Add query by workspace/project/task/run.
+- [x] Add tests for ordering and replay data.
 
 Verification:
 
-- [ ] Event repository tests.
+- [x] Event repository tests.
 - [ ] Workspace detail/timeline tests.
 
 ### Session 15 - Retry Policy Core
@@ -349,7 +349,7 @@ Goal: make failed runs retryable from known state.
 
 Verification:
 
-- [ ] Retry policy unit tests.
+- [x] Retry policy unit tests.
 - [ ] Queue service tests if touched.
 
 ### Session 16 - Workspace Timeline UI
@@ -427,7 +427,7 @@ Goal: make team mode a structured task graph, not free-form chat.
 Verification:
 
 - [x] Agent broker tests.
-- [ ] Task graph service tests.
+- [x] Task graph service tests.
 
 ### Session 21 - Cloud Executor Readiness
 
@@ -454,13 +454,13 @@ Goal: make user goals and plans durable, not just transient orchestration output
 - [x] Add persistent `TaskGraph` or task dependency graph model if missing.
 - [x] Store planner output as a versioned plan artifact.
 - [x] Link goals, plans, tasks, agent runs, and artifacts.
-- [ ] Add repository methods and tests.
+- [x] Add repository methods and tests.
 - [x] Add migration coverage where needed.
 
 Verification:
 
-- [ ] Repository tests pass.
-- [ ] Task graph service tests pass.
+- [x] Repository tests pass.
+- [x] Task graph service tests pass.
 - [x] Workspace detail can load goal, plan, tasks, and runs together.
 
 ### Session 23 - AgentSpec, TeamSpec, And Capability Registry
@@ -480,8 +480,8 @@ Goal: make agents measurable capability units rather than prompt labels.
 
 Verification:
 
-- [ ] Agent profile repository tests.
-- [ ] Agent broker tests.
+- [x] Agent profile repository tests.
+- [x] Agent broker tests.
 - [x] Schema/type validation tests.
 
 ### Session 24 - Quality Gate Expansion
@@ -499,7 +499,7 @@ Goal: expand verification beyond the first coding checks.
 Verification:
 
 - [x] Quality gate registry tests.
-- [ ] Coding gate tests.
+- [x] Coding gate tests.
 - [x] Delivery gate tests.
 
 ### Session 25 - Permission UX, Revocation, And Approved Plan Display
