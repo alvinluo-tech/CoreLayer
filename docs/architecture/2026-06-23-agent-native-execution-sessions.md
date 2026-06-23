@@ -403,10 +403,10 @@ Verification:
 
 Goal: make executor MCP access explicit and scoped.
 
-- [ ] Generate executor-specific MCP config from approved servers.
-- [ ] Support strict MCP config for Claude Code if verified.
-- [ ] Deny unapproved MCP servers by default.
-- [ ] Log MCP exposure and visible calls.
+- [x] Generate executor-specific MCP config from approved servers.
+- [x] Support strict MCP config for Claude Code if verified.
+- [x] Deny unapproved MCP servers by default.
+- [x] Log MCP exposure and visible calls.
 - [ ] Add config generation tests.
 
 Verification:
@@ -433,17 +433,17 @@ Verification:
 
 Goal: prepare the contracts for remote/cloud agents without selecting a provider.
 
-- [ ] Define cloud executor adapter contract.
-- [ ] Ensure environment/session/artifact/event contracts do not require local paths as source of truth.
-- [ ] Add remote artifact references.
-- [ ] Add remote log streaming abstraction.
-- [ ] Add remote cancellation semantics.
-- [ ] Keep this contract-only unless a provider is selected.
+- [x] Define cloud executor adapter contract.
+- [x] Ensure environment/session/artifact/event contracts do not require local paths as source of truth.
+- [x] Add remote artifact references.
+- [x] Add remote log streaming abstraction.
+- [x] Add remote cancellation semantics.
+- [x] Keep this contract-only unless a provider is selected.
 
 Verification:
 
-- [ ] Type tests or contract tests.
-- [ ] No provider-specific behavior unless explicitly scoped.
+- [x] Type tests or contract tests.
+- [x] No provider-specific behavior unless explicitly scoped.
 
 ### Session 22 - Goal, Plan, And TaskGraph Persistence
 
