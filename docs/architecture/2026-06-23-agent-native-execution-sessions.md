@@ -83,7 +83,7 @@ Use this map to verify that the implementation sessions cover the architecture r
 - [ ] Product thesis, target mental model, non-goals, guardrails, and success criteria are design constraints for every session.
 - [x] Phase 0 is covered by Session 0.
 - [x] Phase 1 is covered by Sessions 1, 2, and 3.
-- [ ] Phase 2 is covered by Sessions 4 and 5.
+- [x] Phase 2 is covered by Sessions 4 and 5.
 - [ ] Phase 3 is covered by Sessions 6, 7, 8, 18, and 21.
 - [ ] Phase 4 is covered by Sessions 7 and 8.
 - [ ] Phase 5 is covered by Sessions 12 and 25.
@@ -159,18 +159,18 @@ Verification:
 
 Goal: prove Claude Code behavior with tests before relying on it.
 
-- [ ] Add conformance tests that skip safely when Claude Code is missing.
-- [ ] Test discovery.
-- [ ] Test unavailable or unauthenticated behavior.
-- [ ] Test simple non-interactive run when credentials are available.
-- [ ] Test timeout.
-- [ ] Test cancellation.
-- [ ] Document optional local conformance command.
+- [x] Add conformance tests that skip safely when Claude Code is missing.
+- [x] Test discovery.
+- [x] Test unavailable or unauthenticated behavior.
+- [x] Test simple non-interactive run when credentials are available.
+- [x] Test timeout.
+- [x] Test cancellation.
+- [x] Document optional local conformance command.
 
 Verification:
 
-- [ ] Tests pass without Claude Code installed.
-- [ ] Optional local conformance run documented.
+- [x] Tests pass without Claude Code installed.
+- [x] Optional local conformance run documented.
 
 ### Session 5 - Claude Code Behavior Research
 
