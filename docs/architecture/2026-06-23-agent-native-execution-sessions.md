@@ -1,0 +1,474 @@
+# Agent-Native Execution Sessions
+
+This is the execution queue for coding agents.
+
+Use this file when assigning implementation work. The architecture phases live in `2026-06-23-agent-native-execution-plan.md`; this file turns that roadmap into bounded coding sessions.
+
+## How To Use
+
+- [ ] Run one session per coding-agent session.
+- [ ] Do not ask one agent session to complete the full architecture plan.
+- [ ] Keep each session's diff small enough to review.
+- [ ] Each session must update checkboxes in this file.
+- [ ] Each session must report changed files, tests run, skipped tests, and residual risks.
+- [ ] If a session grows too large, stop and split it before continuing.
+
+## Branch And Commit Strategy
+
+- [ ] Start from the latest `main`.
+- [ ] Use one long-lived feature branch for this roadmap: `feat/agent-native-execution-runtime`.
+- [ ] Complete one session at a time.
+- [ ] Create at least one commit per completed session.
+- [ ] Use commit messages in this shape: `feat: session N <short outcome>` or `test: session N <short outcome>`.
+- [ ] If a session is too large, split it into multiple commits, but keep all commits scoped to that session.
+- [ ] Do not mix unrelated cleanup or opportunistic refactors into a session commit.
+- [ ] Do not commit `docs/` unless explicitly requested; this workspace currently ignores `docs/` by default.
+- [ ] Before each session commit, run the smallest relevant test set plus typecheck.
+- [ ] Before merging the feature branch back to `main`, run full `pnpm.cmd test`, `pnpm.cmd typecheck`, `pnpm.cmd lint`, and `git diff --check`.
+- [ ] Keep the feature branch mergeable by rebasing or merging from `main` only at session boundaries.
+
+Recommended setup:
+
+```bash
+git checkout main
+git pull
+git checkout -b feat/agent-native-execution-runtime
+```
+
+## Execution Queue
+
+## Phase Coverage Map
+
+Use this map to verify that the implementation sessions cover the architecture roadmap.
+
+- [ ] Product thesis, target mental model, non-goals, guardrails, and success criteria are design constraints for every session.
+- [x] Phase 0 is covered by Session 0.
+- [ ] Phase 1 is covered by Sessions 1, 2, and 3.
+- [ ] Phase 2 is covered by Sessions 4 and 5.
+- [ ] Phase 3 is covered by Sessions 6, 7, 8, 18, and 21.
+- [ ] Phase 4 is covered by Sessions 7 and 8.
+- [ ] Phase 5 is covered by Sessions 12 and 25.
+- [ ] Phase 6 is covered by Sessions 9, 10, 13, and 19.
+- [ ] Phase 7 is covered by Sessions 14 and 22.
+- [ ] Phase 8 is covered by Session 15.
+- [ ] Phase 9 is covered by Sessions 11, 17, and 24.
+- [ ] Phase 10 is covered by Sessions 20 and 23.
+- [ ] Phase 11 is covered by Sessions 16, 17, and 25.
+- [ ] Phase 12 is the high-level migration order; it is implemented through Sessions 0-25.
+
+### Session 0 - Inventory Only
+
+Goal: map the current codebase to the target architecture without changing behavior.
+
+- [x] Map current workspace, task, run, agent, approval, and coding runtime modules.
+- [x] List every direct executor launch path.
+- [x] List every direct shell/file/network/MCP policy bypass path.
+- [x] Identify which current APIs should become legacy low-level APIs.
+- [x] Write findings to a dated inventory note under `docs/architecture/`.
+
+Verification:
+
+- [x] No production behavior changes.
+- [x] Manual review of code references.
+
+### Session 1 - Executor Lifecycle Types
+
+Goal: add the shared vocabulary for managed executors.
+
+- [ ] Add `ExecutorAdapter` interface.
+- [ ] Add normalized executor statuses.
+- [ ] Add normalized executor events.
+- [ ] Add executor capability profile types.
+- [ ] Export types from the proper package boundary.
+
+Verification:
+
+- [ ] Typecheck affected packages.
+- [ ] Run focused tests for modified package.
+
+### Session 2 - Executor Run Persistence
+
+Goal: persist executor lifecycle separately from agent logic.
+
+- [ ] Add `executor_runs` schema/table.
+- [ ] Add repository methods for create/update/get/list.
+- [ ] Add SQLite migration.
+- [ ] Add repository tests.
+- [ ] Keep existing executor behavior unchanged.
+
+Verification:
+
+- [ ] Repository tests pass.
+- [ ] Migration tests pass if migration coverage exists.
+
+### Session 3 - Adapter Wrapper Skeleton
+
+Goal: wrap existing coding executors behind the unified lifecycle contract.
+
+- [ ] Wrap Claude Code adapter behind `ExecutorAdapter`.
+- [ ] Wrap Codex adapter behind `ExecutorAdapter`.
+- [ ] Wrap OpenCode adapter behind `ExecutorAdapter`.
+- [ ] Add discovery tests.
+- [ ] Avoid changing executor CLI flags unless required for compatibility.
+
+Verification:
+
+- [ ] Focused coding runtime adapter tests.
+- [ ] Typecheck daemon package.
+
+### Session 4 - Claude Code Conformance Harness
+
+Goal: prove Claude Code behavior with tests before relying on it.
+
+- [ ] Add conformance tests that skip safely when Claude Code is missing.
+- [ ] Test discovery.
+- [ ] Test unavailable or unauthenticated behavior.
+- [ ] Test simple non-interactive run when credentials are available.
+- [ ] Test timeout.
+- [ ] Test cancellation.
+- [ ] Document optional local conformance command.
+
+Verification:
+
+- [ ] Tests pass without Claude Code installed.
+- [ ] Optional local conformance run documented.
+
+### Session 5 - Claude Code Behavior Research
+
+Goal: record real installed-version behavior for Jarvis adapter design.
+
+- [ ] Verify `--output-format stream-json` event shape.
+- [ ] Verify `--permission-mode` blocked behavior.
+- [ ] Verify `--settings` session-local behavior.
+- [ ] Verify `--mcp-config` and `--strict-mcp-config`.
+- [ ] Record observed commands and outputs in a dated research note.
+
+Verification:
+
+- [ ] Research note includes exact Claude Code version.
+- [ ] Research note separates confirmed behavior from assumptions.
+
+### Session 6 - Sandbox Runtime Interface
+
+Goal: introduce a backend-agnostic execution boundary.
+
+- [ ] Add `packages/sandbox-runtime`.
+- [ ] Define `SandboxRuntime`.
+- [ ] Define `SandboxSessionRequest`.
+- [ ] Define command/file/artifact result types.
+- [ ] Add request validation helpers.
+- [ ] Add validation tests.
+
+Verification:
+
+- [ ] Sandbox package tests pass.
+- [ ] Workspace typecheck passes.
+
+### Session 7 - Sandbox Persistence
+
+Goal: make sandbox sessions durable and auditable.
+
+- [ ] Add `sandbox_sessions` schema/table.
+- [ ] Add `sandbox_events` schema/table.
+- [ ] Add repositories.
+- [ ] Add repository tests.
+- [ ] Link sessions to workspace/project/run/agent.
+
+Verification:
+
+- [ ] Repository tests pass.
+- [ ] Migration tests pass if applicable.
+
+### Session 8 - Git Worktree Sandbox Backend
+
+Goal: make isolated worktrees the default local coding boundary.
+
+- [ ] Implement `GitWorktreeSandboxRuntime`.
+- [ ] Create per-run worktree.
+- [ ] Persist run workspace state.
+- [ ] Enforce worktree path under approved project root.
+- [ ] Collect changed files.
+- [ ] Add cleanup and abandoned-worktree recovery.
+
+Verification:
+
+- [ ] Path validation tests.
+- [ ] Temporary git repo integration test.
+
+### Session 9 - Coding Runtime Sandbox Integration
+
+Goal: start one executor through a sandbox session.
+
+- [ ] Create sandbox session before executor start.
+- [ ] Pass sandbox-derived cwd/worktree to executor adapter.
+- [ ] Persist executor run and sandbox session ids.
+- [ ] Emit sandbox-created and executor-started events.
+- [ ] Preserve fallback path where needed.
+
+Verification:
+
+- [ ] Focused coding runtime tests.
+- [ ] Adapter tests for the migrated executor.
+
+### Session 10 - Sandbox-Mediated Process Execution
+
+Goal: stop one executor from owning raw process lifecycle directly.
+
+- [ ] Route one executor's process start through sandbox runtime.
+- [ ] Keep low-level process spawn as internal implementation detail.
+- [ ] Propagate timeout through sandbox runtime.
+- [ ] Propagate cancellation through sandbox runtime.
+- [ ] Collect logs through sandbox runtime.
+
+Verification:
+
+- [ ] Cancellation test.
+- [ ] Timeout test.
+- [ ] Log collection test.
+
+### Session 11 - Artifact And Verification Core
+
+Goal: make completion depend on artifacts and checks, not self-report.
+
+- [ ] Add artifact collection phase.
+- [ ] Add verification result model if missing.
+- [ ] Add changed-files artifact.
+- [ ] Add final-summary artifact.
+- [ ] Add path-policy verification.
+- [ ] Add test-command verification hook.
+
+Verification:
+
+- [ ] Verification unit tests.
+- [ ] Changed-files integration test.
+
+### Session 12 - Plan-Scoped Permission Grants
+
+Goal: reduce permission spam while keeping hard boundaries.
+
+- [ ] Add permission grant model.
+- [ ] Add run/task/workspace/project scopes.
+- [ ] Add expiry and max-use constraints.
+- [ ] Add decision source.
+- [ ] Keep high and critical risk fail-closed.
+- [ ] Add broker tests for risk and scope.
+
+Verification:
+
+- [ ] Permission broker tests.
+- [ ] Approval memory tests.
+
+### Session 13 - Executor Permission Block Handling
+
+Goal: convert executor permission blocks into visible Jarvis states.
+
+- [ ] Detect known permission-blocked output for one executor.
+- [ ] Convert known block to Jarvis approval request.
+- [ ] Mark unknown interactive block as `blocked_by_executor_permission`.
+- [ ] Add timeout so executor cannot hang forever.
+- [ ] Record run event and audit entry.
+
+Verification:
+
+- [ ] Simulated stdout/stderr tests.
+- [ ] Approval service or route tests if touched.
+
+### Session 14 - Event Sourcing For Runs
+
+Goal: make workflow execution traceable and replayable.
+
+- [ ] Add missing run/task event types.
+- [ ] Emit an append-only event for every lifecycle transition.
+- [ ] Add event sequence ordering per run.
+- [ ] Add query by workspace/project/task/run.
+- [ ] Add tests for ordering and replay data.
+
+Verification:
+
+- [ ] Event repository tests.
+- [ ] Workspace detail/timeline tests.
+
+### Session 15 - Retry Policy Core
+
+Goal: make failed runs retryable from known state.
+
+- [ ] Add failure classification.
+- [ ] Add attempt number.
+- [ ] Add parent attempt id.
+- [ ] Snapshot task/agent/executor/sandbox policy per attempt.
+- [ ] Implement safe retry scheduling for reversible failures.
+- [ ] Add retry decision tests.
+
+Verification:
+
+- [ ] Retry policy unit tests.
+- [ ] Queue service tests if touched.
+
+### Session 16 - Workspace Timeline UI
+
+Goal: make execution status understandable to users.
+
+- [ ] Show planning/executing/verifying/delivering phases.
+- [ ] Show active agent and executor.
+- [ ] Show sandbox and executor lifecycle events.
+- [ ] Show artifacts and verification status.
+- [ ] Show retry attempts and blocked state.
+- [ ] Keep detailed logs collapsible.
+
+Verification:
+
+- [ ] Timeline model tests if present.
+- [ ] Manual UI smoke test.
+
+### Session 17 - Final Delivery Gate
+
+Goal: prevent unverified success claims.
+
+- [ ] Add delivery-ready state.
+- [ ] Require verification summary before final success.
+- [ ] Show changed files, artifacts, tests, and residual risks.
+- [ ] Require explicit confirmation for merge/push/publish/external write.
+- [ ] Prevent success claim when verification failed.
+
+Verification:
+
+- [ ] Delivery state service tests.
+- [ ] UI smoke test for final delivery panel.
+
+### Session 18 - Docker Sandbox Backend
+
+Goal: add optional stronger isolation after worktree backend is stable.
+
+- [ ] Implement Docker backend behind explicit config.
+- [ ] Mount workspace according to policy.
+- [ ] Use isolated HOME/config/tmp.
+- [ ] Add network mode support.
+- [ ] Add container cleanup.
+- [ ] Add Docker-gated integration tests.
+
+Verification:
+
+- [ ] Unit tests pass without Docker.
+- [ ] Optional Docker integration tests pass when Docker is available.
+
+### Session 19 - MCP Gateway Policy
+
+Goal: make executor MCP access explicit and scoped.
+
+- [ ] Generate executor-specific MCP config from approved servers.
+- [ ] Support strict MCP config for Claude Code if verified.
+- [ ] Deny unapproved MCP servers by default.
+- [ ] Log MCP exposure and visible calls.
+- [ ] Add config generation tests.
+
+Verification:
+
+- [ ] MCP config generation tests.
+- [ ] MCP route tests if touched.
+
+### Session 20 - Team Mode Orchestration
+
+Goal: make team mode a structured task graph, not free-form chat.
+
+- [ ] Define team role mapping.
+- [ ] Assign planner/builder/reviewer/tester roles.
+- [ ] Route tasks to compatible agents/executors.
+- [ ] Add reviewer handoff after builder output.
+- [ ] Track per-agent performance data.
+
+Verification:
+
+- [ ] Agent broker tests.
+- [ ] Task graph service tests.
+
+### Session 21 - Cloud Executor Readiness
+
+Goal: prepare the contracts for remote/cloud agents without selecting a provider.
+
+- [ ] Define cloud executor adapter contract.
+- [ ] Ensure sandbox/session/artifact/event contracts do not require local paths as source of truth.
+- [ ] Add remote artifact references.
+- [ ] Add remote log streaming abstraction.
+- [ ] Add remote cancellation semantics.
+- [ ] Keep this contract-only unless a provider is selected.
+
+Verification:
+
+- [ ] Type tests or contract tests.
+- [ ] No provider-specific behavior unless explicitly scoped.
+
+### Session 22 - Goal, Plan, And TaskGraph Persistence
+
+Goal: make user goals and plans durable, not just transient orchestration output.
+
+- [ ] Add or validate persistent `Goal` model coverage.
+- [ ] Add persistent `Plan` model if missing.
+- [ ] Add persistent `TaskGraph` or task dependency graph model if missing.
+- [ ] Store planner output as a versioned plan artifact.
+- [ ] Link goals, plans, tasks, agent runs, and artifacts.
+- [ ] Add repository methods and tests.
+- [ ] Add migration coverage where needed.
+
+Verification:
+
+- [ ] Repository tests pass.
+- [ ] Task graph service tests pass.
+- [ ] Workspace detail can load goal, plan, tasks, and runs together.
+
+### Session 23 - AgentSpec, TeamSpec, And Capability Registry
+
+Goal: make agents measurable capability units rather than prompt labels.
+
+- [ ] Define `AgentSpec` schema or type.
+- [ ] Define `TeamSpec` schema or type.
+- [ ] Version agent specs.
+- [ ] Store agent capability metadata.
+- [ ] Store executor preference and model policy in a structured form.
+- [ ] Track success rate by task type.
+- [ ] Track retry rate.
+- [ ] Track verification failure rate.
+- [ ] Track user acceptance rate.
+- [ ] Use capability and performance data in agent selection.
+
+Verification:
+
+- [ ] Agent profile repository tests.
+- [ ] Agent broker tests.
+- [ ] Schema/type validation tests.
+
+### Session 24 - Quality Gate Expansion
+
+Goal: expand verification beyond the first coding checks.
+
+- [ ] Add task-type-specific quality gate registry.
+- [ ] Add coding gates for lint, typecheck, tests, build, path policy, and security scan when configured.
+- [ ] Add reviewer-agent gate after mechanical checks.
+- [ ] Add image/media gate placeholders.
+- [ ] Add research/writing gate placeholders.
+- [ ] Ensure delivery includes artifact list, verification results, limitations, pending approvals, and unresolved risks.
+- [ ] Ensure failed verification prevents success status.
+
+Verification:
+
+- [ ] Quality gate registry tests.
+- [ ] Coding gate tests.
+- [ ] Delivery gate tests.
+
+### Session 25 - Permission UX, Revocation, And Approved Plan Display
+
+Goal: make scoped permissions usable without hiding risk.
+
+- [ ] Show required permission package before execution begins.
+- [ ] Show approved permission package in the workspace timeline.
+- [ ] Support approving a bounded execution plan once.
+- [ ] Ask again only when execution exceeds the approved plan.
+- [ ] Show high-risk external writes separately.
+- [ ] Add permission grant revocation flow.
+- [ ] Show final diff/artifacts before irreversible actions.
+- [ ] Distinguish system auto-allow, user-memory allow, and explicit user approval.
+
+Verification:
+
+- [ ] Permission UI/store tests if present.
+- [ ] Approval route/service tests.
+- [ ] Manual UI smoke test for approve, revoke, and exceed-plan flows.
