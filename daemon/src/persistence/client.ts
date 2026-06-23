@@ -741,5 +741,43 @@ sqlite.exec(`
   CREATE INDEX IF NOT EXISTS idx_artifacts_project ON artifacts(project_id);
 `);
 
+// Migration: Executor Runs (Agent-Native Execution - Session 2)
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS executor_runs (
+    id TEXT PRIMARY KEY,
+    agent_run_id TEXT REFERENCES agent_runs(id),
+    workspace_id TEXT REFERENCES workspaces(id),
+    project_id TEXT REFERENCES projects(id),
+    task_id TEXT,
+    agent_id TEXT REFERENCES agent_profiles(id),
+    adapter_id TEXT NOT NULL,
+    domain TEXT NOT NULL DEFAULT 'coding',
+    status TEXT NOT NULL DEFAULT 'created' CHECK(status IN (
+      'created', 'queued', 'preparing_environment', 'waiting_for_permission',
+      'starting_executor', 'running', 'waiting_for_executor_input',
+      'collecting_artifacts', 'verifying', 'needs_retry',
+      'succeeded', 'failed', 'cancelled', 'timed_out', 'cleanup_failed'
+    )),
+    task_prompt TEXT NOT NULL,
+    environment_kind TEXT NOT NULL DEFAULT 'local',
+    environment_config TEXT DEFAULT '{}',
+    working_directory TEXT,
+    pid INTEGER,
+    exit_code INTEGER,
+    error TEXT,
+    failure_category TEXT,
+    timeout_ms INTEGER,
+    artifacts TEXT DEFAULT '{}',
+    started_at TEXT NOT NULL DEFAULT 'CURRENT_TIMESTAMP',
+    completed_at TEXT,
+    duration_ms INTEGER
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_executor_runs_agent_run ON executor_runs(agent_run_id);
+  CREATE INDEX IF NOT EXISTS idx_executor_runs_workspace ON executor_runs(workspace_id);
+  CREATE INDEX IF NOT EXISTS idx_executor_runs_status ON executor_runs(status);
+  CREATE INDEX IF NOT EXISTS idx_executor_runs_adapter ON executor_runs(adapter_id);
+`);
+
 export { db };
 export { schema };

@@ -294,6 +294,53 @@ export const scheduledTasks = sqliteTable("scheduled_tasks", {
   updatedAt: text("updated_at").default("CURRENT_TIMESTAMP").notNull(),
 });
 
+// ---- Executor Runs ----
+
+export const executorRuns = sqliteTable("executor_runs", {
+  id: text("id").primaryKey(),
+  agentRunId: text("agent_run_id").references(() => agentRuns.id),
+  workspaceId: text("workspace_id").references(() => workspaces.id),
+  projectId: text("project_id").references(() => projects.id),
+  taskId: text("task_id"),
+  agentId: text("agent_id").references(() => agentProfiles.id),
+  adapterId: text("adapter_id").notNull(),
+  domain: text("domain").notNull().default("coding"), // coding, research, image-generation, messaging, etc.
+  status: text("status", {
+    enum: [
+      "created",
+      "queued",
+      "preparing_environment",
+      "waiting_for_permission",
+      "starting_executor",
+      "running",
+      "waiting_for_executor_input",
+      "collecting_artifacts",
+      "verifying",
+      "needs_retry",
+      "succeeded",
+      "failed",
+      "cancelled",
+      "timed_out",
+      "cleanup_failed",
+    ],
+  })
+    .default("created")
+    .notNull(),
+  taskPrompt: text("task_prompt").notNull(),
+  environmentKind: text("environment_kind").notNull().default("local"), // git-worktree, browser-session, canvas, etc.
+  environmentConfig: text("environment_config").default("{}"), // JSON: domain-specific environment config
+  workingDirectory: text("working_directory"), // primary working directory
+  pid: integer("pid"),
+  exitCode: integer("exit_code"),
+  error: text("error"),
+  failureCategory: text("failure_category"),
+  timeoutMs: integer("timeout_ms"),
+  artifacts: text("artifacts").default("{}"), // JSON stored as text
+  startedAt: text("started_at").default("CURRENT_TIMESTAMP").notNull(),
+  completedAt: text("completed_at"),
+  durationMs: integer("duration_ms"),
+});
+
 // ---- Agent Runs ----
 
 export const agentRuns = sqliteTable("agent_runs", {

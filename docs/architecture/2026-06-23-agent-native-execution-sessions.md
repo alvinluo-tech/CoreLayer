@@ -1,4 +1,4 @@
-# Agent-Native Execution Sessions
+﻿# Agent-Native Execution Sessions
 
 This is the execution queue for coding agents.
 
@@ -12,6 +12,45 @@ Use this file when assigning implementation work. The architecture phases live i
 - [ ] Each session must update checkboxes in this file.
 - [ ] Each session must report changed files, tests run, skipped tests, and residual risks.
 - [ ] If a session grows too large, stop and split it before continuing.
+
+## Product Scope Rule
+
+The first implementation target is coding executor management, but the core architecture is a general Agent Execution OS.
+
+- [ ] Build the first working path around Claude Code, Codex, and OpenCode.
+- [ ] Keep core runtime abstractions domain-agnostic.
+- [ ] Do not put coding-specific names into core packages unless they are adapter/domain implementations.
+- [ ] Use `ExecutionEnvironment` as the general concept; use `GitWorktreeEnvironment` only in the coding domain.
+- [ ] Use `OutcomeContract` and `VerificationPlan` as general concepts; use `CodingChangeContract` only in the coding domain.
+- [ ] Treat coding as the first proof point, not the final product boundary.
+- [ ] Future domains should fit the same runtime model: research, image generation, writing, desktop control, messaging, data analysis, and cloud agents.
+
+## AI Implementation Guardrails
+
+These rules are mandatory for every coding-agent session. They exist to prevent short-term coding executor work from corrupting the long-term general Agent Execution OS architecture.
+
+- [ ] Core packages must use generic nouns: `executor`, `environment`, `artifact`, `verification`, `outcome`, `delivery`, `capability`, `permission`, `event`.
+- [ ] Coding-only nouns such as `git`, `worktree`, `diff`, `typecheck`, `lint`, `testCommand`, `ClaudeCode`, `Codex`, and `OpenCode` must stay in coding-domain packages, coding adapters, or coding-specific tests.
+- [ ] If a core type needs a coding-specific field, replace it with a generic extension point such as `metadata`, `capabilities`, `environmentKind`, `artifactKind`, or a domain-specific contract.
+- [ ] Every new core interface must include at least one non-coding example in comments, docs, or tests.
+- [ ] Every new executor abstraction must be able to describe a non-coding executor, such as `ImageGenerationExecutor`, `ResearchAgentExecutor`, or `MessagingExecutor`.
+- [ ] Every new environment abstraction must be able to describe a non-coding environment, such as `BrowserSessionEnvironment`, `ImageWorkspaceEnvironment`, or `MessageDraftEnvironment`.
+- [ ] Every new verification abstraction must be able to describe non-code checks, such as citation checks, image safety checks, tone checks, or sensitive-data checks.
+- [ ] Do not place Claude Code/Codex/OpenCode assumptions in shared schemas unless they are behind an executor-specific profile or adapter config.
+- [ ] Do not make git worktrees mandatory in the core runtime; they are the default coding environment implementation only.
+- [ ] Do not make shell access mandatory in the core runtime; many future domains should not need shell execution.
+- [ ] Do not make file diffs the only artifact model; future domains may produce images, reports, drafts, browser traces, data files, or external-action receipts.
+- [ ] If a session introduces a core abstraction, its handoff note must state why the abstraction remains domain-agnostic.
+
+Core abstraction checklist before committing a session:
+
+- [ ] Could this type/API support a research task?
+- [ ] Could this type/API support an image generation task?
+- [ ] Could this type/API support a messaging draft task?
+- [ ] Could this type/API support a desktop/browser control task?
+- [ ] Are all coding-specific details isolated in coding-domain code?
+- [ ] Are executor-specific details isolated in adapter/profile code?
+- [ ] Can the feature still be explained as part of a general Agent Execution OS?
 
 ## Branch And Commit Strategy
 
@@ -90,16 +129,16 @@ Verification:
 
 Goal: persist executor lifecycle separately from agent logic.
 
-- [ ] Add `executor_runs` schema/table.
-- [ ] Add repository methods for create/update/get/list.
-- [ ] Add SQLite migration.
-- [ ] Add repository tests.
-- [ ] Keep existing executor behavior unchanged.
+- [x] Add `executor_runs` schema/table.
+- [x] Add repository methods for create/update/get/list.
+- [x] Add SQLite migration.
+- [x] Add repository tests.
+- [x] Keep existing executor behavior unchanged.
 
 Verification:
 
-- [ ] Repository tests pass.
-- [ ] Migration tests pass if migration coverage exists.
+- [x] Repository tests pass.
+- [x] Migration tests pass if migration coverage exists.
 
 ### Session 3 - Adapter Wrapper Skeleton
 
@@ -148,28 +187,28 @@ Verification:
 - [ ] Research note includes exact Claude Code version.
 - [ ] Research note separates confirmed behavior from assumptions.
 
-### Session 6 - Sandbox Runtime Interface
+### Session 6 - Execution Environment Interface
 
-Goal: introduce a backend-agnostic execution boundary.
+Goal: introduce a backend-agnostic execution environment contract before implementing coding-specific worktrees.
 
-- [ ] Add `packages/sandbox-runtime`.
-- [ ] Define `SandboxRuntime`.
-- [ ] Define `SandboxSessionRequest`.
+- [ ] Add `packages/execution-environment`.
+- [ ] Define `ExecutionEnvironment`.
+- [ ] Define `EnvironmentSessionRequest`.
 - [ ] Define command/file/artifact result types.
 - [ ] Add request validation helpers.
 - [ ] Add validation tests.
 
 Verification:
 
-- [ ] Sandbox package tests pass.
+- [ ] Execution environment package tests pass.
 - [ ] Workspace typecheck passes.
 
-### Session 7 - Sandbox Persistence
+### Session 7 - Environment Persistence
 
-Goal: make sandbox sessions durable and auditable.
+Goal: make environment sessions durable and auditable.
 
-- [ ] Add `sandbox_sessions` schema/table.
-- [ ] Add `sandbox_events` schema/table.
+- [ ] Add `environment_sessions` schema/table.
+- [ ] Add `environment_events` schema/table.
 - [ ] Add repositories.
 - [ ] Add repository tests.
 - [ ] Link sessions to workspace/project/run/agent.
@@ -179,11 +218,11 @@ Verification:
 - [ ] Repository tests pass.
 - [ ] Migration tests pass if applicable.
 
-### Session 8 - Git Worktree Sandbox Backend
+### Session 8 - Git Worktree Environment Backend
 
-Goal: make isolated worktrees the default local coding boundary.
+Goal: make isolated git worktrees the default coding-domain environment implementation.
 
-- [ ] Implement `GitWorktreeSandboxRuntime`.
+- [ ] Implement `GitWorktreeEnvironment`.
 - [ ] Create per-run worktree.
 - [ ] Persist run workspace state.
 - [ ] Enforce worktree path under approved project root.
@@ -195,14 +234,14 @@ Verification:
 - [ ] Path validation tests.
 - [ ] Temporary git repo integration test.
 
-### Session 9 - Coding Runtime Sandbox Integration
+### Session 9 - Coding Runtime Environment Integration
 
-Goal: start one executor through a sandbox session.
+Goal: start one coding executor through an environment session.
 
-- [ ] Create sandbox session before executor start.
-- [ ] Pass sandbox-derived cwd/worktree to executor adapter.
-- [ ] Persist executor run and sandbox session ids.
-- [ ] Emit sandbox-created and executor-started events.
+- [ ] Create environment session before executor start.
+- [ ] Pass environment-derived cwd/worktree to executor adapter.
+- [ ] Persist executor run and environment session ids.
+- [ ] Emit environment-created and executor-started events.
 - [ ] Preserve fallback path where needed.
 
 Verification:
@@ -210,15 +249,15 @@ Verification:
 - [ ] Focused coding runtime tests.
 - [ ] Adapter tests for the migrated executor.
 
-### Session 10 - Sandbox-Mediated Process Execution
+### Session 10 - Environment-Mediated Process Execution
 
 Goal: stop one executor from owning raw process lifecycle directly.
 
-- [ ] Route one executor's process start through sandbox runtime.
+- [ ] Route one executor's process start through execution environment runtime.
 - [ ] Keep low-level process spawn as internal implementation detail.
-- [ ] Propagate timeout through sandbox runtime.
-- [ ] Propagate cancellation through sandbox runtime.
-- [ ] Collect logs through sandbox runtime.
+- [ ] Propagate timeout through execution environment runtime.
+- [ ] Propagate cancellation through execution environment runtime.
+- [ ] Collect logs through execution environment runtime.
 
 Verification:
 
@@ -295,7 +334,7 @@ Goal: make failed runs retryable from known state.
 - [ ] Add failure classification.
 - [ ] Add attempt number.
 - [ ] Add parent attempt id.
-- [ ] Snapshot task/agent/executor/sandbox policy per attempt.
+- [ ] Snapshot task/agent/executor/environment policy per attempt.
 - [ ] Implement safe retry scheduling for reversible failures.
 - [ ] Add retry decision tests.
 
@@ -310,7 +349,7 @@ Goal: make execution status understandable to users.
 
 - [ ] Show planning/executing/verifying/delivering phases.
 - [ ] Show active agent and executor.
-- [ ] Show sandbox and executor lifecycle events.
+- [ ] Show environment and executor lifecycle events.
 - [ ] Show artifacts and verification status.
 - [ ] Show retry attempts and blocked state.
 - [ ] Keep detailed logs collapsible.
@@ -386,7 +425,7 @@ Verification:
 Goal: prepare the contracts for remote/cloud agents without selecting a provider.
 
 - [ ] Define cloud executor adapter contract.
-- [ ] Ensure sandbox/session/artifact/event contracts do not require local paths as source of truth.
+- [ ] Ensure environment/session/artifact/event contracts do not require local paths as source of truth.
 - [ ] Add remote artifact references.
 - [ ] Add remote log streaming abstraction.
 - [ ] Add remote cancellation semantics.
@@ -472,3 +511,4 @@ Verification:
 - [ ] Permission UI/store tests if present.
 - [ ] Approval route/service tests.
 - [ ] Manual UI smoke test for approve, revoke, and exceed-plan flows.
+

@@ -18,6 +18,7 @@ import { createSqlitePermissionMemoryRepo } from "./permission-memory-repo.js";
 import { createSqliteAgentRunEventRepo } from "./agent-run-event-repo.js";
 import { createSqliteEventLogRepo } from "./event-log-repo.js";
 import { createSqliteAuditLogRepo } from "./audit-log-repo.js";
+import { createSqliteExecutorRunRepo } from "./executor-run-repo.js";
 
 export function createSqliteRepositories(): Repositories {
   return {
@@ -40,5 +41,6 @@ export function createSqliteRepositories(): Repositories {
     agentRunEvents: createSqliteAgentRunEventRepo(),
     eventLog: createSqliteEventLogRepo(),
     auditLog: createSqliteAuditLogRepo(),
+    executorRuns: createSqliteExecutorRunRepo(),
   };
 }

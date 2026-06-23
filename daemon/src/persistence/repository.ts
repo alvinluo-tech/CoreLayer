@@ -114,6 +114,14 @@ export type {
   AuditLogRepository,
 } from "./repository/observability.js";
 
+export type {
+  ExecutorRunRow,
+  CreateExecutorRunInput,
+  UpdateExecutorRunInput,
+  ExecutorRunStatus,
+  ExecutorRunRepository,
+} from "./repository/executor-run.js";
+
 // ---- Aggregate ----
 
 import type { TaskRepository } from "./repository/task.js";
@@ -129,6 +137,7 @@ import type { WorkspaceRepository } from "./repository/workspace.js";
 import type { ProjectRepository } from "./repository/project.js";
 import type { ApprovalRequestRepository, PermissionMemoryRepository } from "./repository/authorization.js";
 import type { EventLogRepository, AuditLogRepository } from "./repository/observability.js";
+import type { ExecutorRunRepository } from "./repository/executor-run.js";
 
 export interface Repositories {
   tasks: TaskRepository;
@@ -150,4 +159,5 @@ export interface Repositories {
   agentRunEvents: AgentRunEventRepository;
   eventLog: EventLogRepository;
   auditLog: AuditLogRepository;
+  executorRuns: ExecutorRunRepository;
 }

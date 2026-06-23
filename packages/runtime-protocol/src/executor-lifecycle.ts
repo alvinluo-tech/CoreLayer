@@ -1,8 +1,12 @@
 /**
  * Executor Lifecycle Types
  *
- * Shared vocabulary for managed executors (Claude Code, Codex, OpenCode, future cloud agents).
- * These types define the unified contract that all executor adapters must implement.
+ * Domain-agnostic vocabulary for managed executors.
+ * These types define the unified contract that all executor adapters must implement,
+ * regardless of domain (coding, research, image generation, messaging, etc.).
+ *
+ * Coding-specific details (git, worktree, diff, lint, test) belong in
+ * coding-domain packages and adapters, not here.
  */
 
 // ─── Executor Statuses ───────────────────────────────────────────────────────
@@ -11,7 +15,7 @@
 export type ExecutorStatus =
   | 'created'
   | 'queued'
-  | 'preparing_workspace'
+  | 'preparing_environment'
   | 'waiting_for_permission'
   | 'starting_executor'
   | 'running'
@@ -32,11 +36,11 @@ export type ExecutorEventType =
   | 'executor.discovered'
   | 'executor.prepared'
   | 'executor.started'
-  | 'executor.stdout'
-  | 'executor.stderr'
+  | 'executor.output'
+  | 'executor.error_output'
   | 'executor.permission_blocked'
-  | 'executor.file_changed'
-  | 'executor.test_result'
+  | 'executor.artifact_produced'
+  | 'executor.verification_result'
   | 'executor.completed'
   | 'executor.failed'
   | 'executor.cancelled'
@@ -65,8 +69,7 @@ export interface ExecutorPreparedEvent extends ExecutorEvent {
   type: 'executor.prepared';
   metadata: {
     adapterId: string;
-    workspacePath: string;
-    worktreePath?: string;
+    environmentKind: string;
   };
 }
 
@@ -75,20 +78,20 @@ export interface ExecutorStartedEvent extends ExecutorEvent {
   metadata: {
     adapterId: string;
     pid?: number;
-    command?: string;
   };
 }
 
-export interface ExecutorStdoutEvent extends ExecutorEvent {
-  type: 'executor.stdout';
+export interface ExecutorOutputEvent extends ExecutorEvent {
+  type: 'executor.output';
   metadata: {
     line: string;
     lineNumber: number;
+    stream: 'stdout' | 'stderr';
   };
 }
 
-export interface ExecutorStderrEvent extends ExecutorEvent {
-  type: 'executor.stderr';
+export interface ExecutorErrorOutputEvent extends ExecutorEvent {
+  type: 'executor.error_output';
   metadata: {
     line: string;
     lineNumber: number;
@@ -104,22 +107,22 @@ export interface ExecutorPermissionBlockedEvent extends ExecutorEvent {
   };
 }
 
-export interface ExecutorFileChangedEvent extends ExecutorEvent {
-  type: 'executor.file_changed';
+export interface ExecutorArtifactProducedEvent extends ExecutorEvent {
+  type: 'executor.artifact_produced';
   metadata: {
-    path: string;
-    changeType: 'created' | 'modified' | 'deleted';
+    artifactType: string;
+    artifactId?: string;
+    path?: string;
+    summary?: string;
   };
 }
 
-export interface ExecutorTestResultEvent extends ExecutorEvent {
-  type: 'executor.test_result';
+export interface ExecutorVerificationResultEvent extends ExecutorEvent {
+  type: 'executor.verification_result';
   metadata: {
-    command: string;
-    exitCode: number;
-    stdout?: string;
-    stderr?: string;
+    checkName: string;
     passed: boolean;
+    details?: string;
   };
 }
 
@@ -161,7 +164,7 @@ export interface ExecutorTimedOutEvent extends ExecutorEvent {
 export interface ExecutorCleanedEvent extends ExecutorEvent {
   type: 'executor.cleaned';
   metadata: {
-    worktreeRemoved: boolean;
+    environmentDisposed: boolean;
     cleanupSuccess: boolean;
   };
 }
@@ -171,11 +174,11 @@ export type AnyExecutorEvent =
   | ExecutorDiscoveredEvent
   | ExecutorPreparedEvent
   | ExecutorStartedEvent
-  | ExecutorStdoutEvent
-  | ExecutorStderrEvent
+  | ExecutorOutputEvent
+  | ExecutorErrorOutputEvent
   | ExecutorPermissionBlockedEvent
-  | ExecutorFileChangedEvent
-  | ExecutorTestResultEvent
+  | ExecutorArtifactProducedEvent
+  | ExecutorVerificationResultEvent
   | ExecutorCompletedEvent
   | ExecutorFailedEvent
   | ExecutorCancelledEvent
@@ -190,9 +193,9 @@ export type ExecutorFailureCategory =
   | 'permission_denied'
   | 'permission_blocked'
   | 'timeout'
-  | 'test_failed'
+  | 'output_quality_failed'
   | 'verification_failed'
-  | 'sandbox_policy_violation'
+  | 'policy_violation'
   | 'artifact_missing'
   | 'user_cancelled'
   | 'unknown';
@@ -204,31 +207,49 @@ export interface ExecutorCapabilityProfile {
   /** Executor adapter ID */
   adapterId: string;
 
+  /** Domain this executor operates in (coding, research, image-generation, messaging, etc.) */
+  domain: string;
+
   /** Supports non-interactive/headless execution */
   nonInteractive: boolean;
-  /** Supports streaming events from stdout/stderr */
+  /** Supports streaming events */
   streamEvents: boolean;
-  /** Supports structured JSON output */
-  jsonOutput: boolean;
+  /** Supports structured output (JSON, etc.) */
+  structuredOutput: boolean;
   /** Supports permission mode configuration */
   permissionMode: boolean;
-  /** Supports MCP config injection */
-  mcpConfig: boolean;
-  /** Supports isolated HOME/config directory */
-  isolatedHome: boolean;
-  /** Supports cancellation via signal */
+  /** Supports tool/config injection */
+  toolConfigInjection: boolean;
+  /** Supports isolated environment (HOME, config, tmp) */
+  isolatedEnvironment: boolean;
+  /** Supports cancellation */
   cancellation: boolean;
   /** Supports resumable sessions */
   resumableSession: boolean;
 
-  /** Supported backend kinds */
-  supportedBackends: Array<'local' | 'worktree' | 'docker' | 'ssh' | 'cloud'>;
-
   /** Default timeout in milliseconds */
   defaultTimeoutMs: number;
 
-  /** Known CLI flags or SDK options */
-  knownFlags?: string[];
+  /** Domain-specific capability metadata */
+  metadata?: Record<string, unknown>;
+}
+
+// ─── Environment ─────────────────────────────────────────────────────────────
+
+/**
+ * Generic execution environment descriptor.
+ *
+ * Coding example: { kind: 'git-worktree', workingDirectory: '/repo', branch: 'feat/x' }
+ * Research example: { kind: 'browser-session', startUrl: 'https://...' }
+ * Image gen example: { kind: 'canvas', dimensions: { width: 1024, height: 768 } }
+ */
+export interface ExecutionEnvironment {
+  /** Environment kind identifier */
+  readonly kind: string;
+  /** Working directory or primary context path */
+  workingDirectory?: string;
+  /** Domain-specific environment configuration */
+  metadata?: Record<string, unknown>;
 }
 
 // ─── Request / Result Types ──────────────────────────────────────────────────
@@ -242,15 +263,19 @@ export interface ExecutorRunRequest {
   agentId: string;
   adapterId: string;
 
+  /** The task prompt or instruction for the executor */
   taskPrompt: string;
-  repoPath: string;
-  worktreePath?: string;
-  branchName?: string;
 
-  allowedPaths?: string[];
-  testCommands?: string[];
+  /** Execution environment (coding: worktree, research: browser session, etc.) */
+  environment: ExecutionEnvironment;
+
+  /** Timeout in milliseconds */
   timeoutMs?: number;
+  /** Permission policy override */
   permissionPolicy?: 'strict' | 'normal' | 'permissive';
+
+  /** Domain-specific request configuration */
+  metadata?: Record<string, unknown>;
 }
 
 /** Handle returned when an executor run is started */
@@ -262,25 +287,33 @@ export interface ExecutorHandle {
   startedAt: string;
 }
 
+/**
+ * Generic artifact produced by an executor run.
+ *
+ * Coding example: { type: 'diff', content: '--- a/file.ts\n+++ b/file.ts\n...' }
+ * Research example: { type: 'report', content: '...', metadata: { sources: [...] } }
+ * Image gen example: { type: 'image', content: '/path/to/output.png', metadata: { format: 'png' } }
+ */
+export interface ExecutorArtifact {
+  /** Artifact type identifier */
+  type: string;
+  /** Artifact content or path */
+  content: string;
+  /** Human-readable summary */
+  summary?: string;
+  /** Domain-specific artifact metadata */
+  metadata?: Record<string, unknown>;
+}
+
 /** Artifacts collected from a completed executor run */
 export interface ExecutorArtifacts {
   runId: string;
-  diff?: string;
-  changedFiles: string[];
-  testResults: Array<{
-    command: string;
-    exitCode: number;
-    passed: boolean;
-    stdout?: string;
-    stderr?: string;
-  }>;
+  /** All artifacts produced by this run */
+  artifacts: ExecutorArtifact[];
+  /** Final summary of the run outcome */
   finalSummary?: string;
+  /** Path to execution logs */
   logPath?: string;
-  additional: Array<{
-    type: string;
-    content: string;
-    metadata?: Record<string, unknown>;
-  }>;
 }
 
 // ─── Executor Adapter Interface ──────────────────────────────────────────────
@@ -288,9 +321,9 @@ export interface ExecutorArtifacts {
 /**
  * Unified executor adapter contract.
  *
- * All coding executors (Claude Code, Codex, OpenCode, future cloud agents)
- * implement this interface. The runtime uses this contract for lifecycle
- * management, sandbox integration, and artifact collection.
+ * Domain-agnostic: coding executors (Claude Code, Codex, OpenCode),
+ * research executors, image generation executors, and messaging executors
+ * all implement this same interface.
  */
 export interface ExecutorAdapter {
   /** Unique adapter identifier */
@@ -298,21 +331,21 @@ export interface ExecutorAdapter {
   /** Human-readable display name */
   readonly displayName: string;
 
-  /** Check if this executor is available on this machine */
+  /** Check if this executor is available */
   discover(): Promise<{
     available: boolean;
     version?: string;
     reason?: string;
-    transport: 'sdk' | 'cli';
+    transport: 'sdk' | 'cli' | 'api';
   }>;
 
   /** Return the capability profile for this executor */
   getCapabilities(): ExecutorCapabilityProfile;
 
-  /** Prepare a run (validate inputs, set up workspace references) */
+  /** Prepare a run (validate inputs, set up environment) */
   prepare(request: ExecutorRunRequest): Promise<ExecutorHandle>;
 
-  /** Start the executor process */
+  /** Start the executor */
   start(handle: ExecutorHandle): Promise<ExecutorHandle>;
 
   /** Stream normalized events from a running executor */
@@ -325,12 +358,12 @@ export interface ExecutorAdapter {
     durationMs?: number;
   }>;
 
-  /** Request cancellation of a running executor */
+  /** Request cancellation */
   requestCancel(runId: string): Promise<void>;
 
   /** Collect artifacts from a completed run */
   collectArtifacts(runId: string): Promise<ExecutorArtifacts>;
 
-  /** Clean up resources (worktree, temp files, etc.) */
+  /** Clean up resources */
   cleanup(runId: string): Promise<void>;
 }
