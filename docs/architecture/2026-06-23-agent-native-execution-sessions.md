@@ -231,17 +231,17 @@ Verification:
 
 Goal: make isolated git worktrees the default coding-domain environment implementation.
 
-- [ ] Implement `GitWorktreeEnvironment`.
-- [ ] Create per-run worktree.
-- [ ] Persist run workspace state.
-- [ ] Enforce worktree path under approved project root.
-- [ ] Collect changed files.
-- [ ] Add cleanup and abandoned-worktree recovery.
+- [x] Implement `GitWorktreeEnvironment`.
+- [x] Create per-run worktree.
+- [x] Persist run workspace state.
+- [x] Enforce worktree path under approved project root.
+- [x] Collect changed files.
+- [x] Add cleanup and abandoned-worktree recovery.
 
 Verification:
 
-- [ ] Path validation tests.
-- [ ] Temporary git repo integration test.
+- [x] Path validation tests.
+- [x] Temporary git repo integration test.
 
 ### Session 9 - Coding Runtime Environment Integration
 

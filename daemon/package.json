@@ -19,6 +19,7 @@
     "@ai-sdk/openai": "^3.0.66",
     "@discordjs/opus": "^0.10.0",
     "@hono/node-server": "^1.14.0",
+    "@jarvis/execution-environment": "workspace:*",
     "@jarvis/mcp-client": "workspace:*",
     "@jarvis/model-gateway": "workspace:*",
     "@jarvis/permission-guard": "workspace:*",
