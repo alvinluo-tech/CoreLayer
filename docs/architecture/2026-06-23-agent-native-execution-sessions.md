@@ -387,16 +387,16 @@ Verification:
 
 Goal: add optional stronger isolation after worktree backend is stable.
 
-- [ ] Implement Docker backend behind explicit config.
-- [ ] Mount workspace according to policy.
-- [ ] Use isolated HOME/config/tmp.
-- [ ] Add network mode support.
-- [ ] Add container cleanup.
+- [x] Implement Docker backend behind explicit config.
+- [x] Mount workspace according to policy.
+- [x] Use isolated HOME/config/tmp.
+- [x] Add network mode support.
+- [x] Add container cleanup.
 - [ ] Add Docker-gated integration tests.
 
 Verification:
 
-- [ ] Unit tests pass without Docker.
+- [x] Unit tests pass without Docker.
 - [ ] Optional Docker integration tests pass when Docker is available.
 
 ### Session 19 - MCP Gateway Policy
@@ -418,15 +418,15 @@ Verification:
 
 Goal: make team mode a structured task graph, not free-form chat.
 
-- [ ] Define team role mapping.
-- [ ] Assign planner/builder/reviewer/tester roles.
-- [ ] Route tasks to compatible agents/executors.
-- [ ] Add reviewer handoff after builder output.
-- [ ] Track per-agent performance data.
+- [x] Define team role mapping.
+- [x] Assign planner/builder/reviewer/tester roles.
+- [x] Route tasks to compatible agents/executors.
+- [x] Add reviewer handoff after builder output.
+- [x] Track per-agent performance data.
 
 Verification:
 
-- [ ] Agent broker tests.
+- [x] Agent broker tests.
 - [ ] Task graph service tests.
 
 ### Session 21 - Cloud Executor Readiness
@@ -449,19 +449,19 @@ Verification:
 
 Goal: make user goals and plans durable, not just transient orchestration output.
 
-- [ ] Add or validate persistent `Goal` model coverage.
-- [ ] Add persistent `Plan` model if missing.
-- [ ] Add persistent `TaskGraph` or task dependency graph model if missing.
-- [ ] Store planner output as a versioned plan artifact.
-- [ ] Link goals, plans, tasks, agent runs, and artifacts.
+- [x] Add or validate persistent `Goal` model coverage.
+- [x] Add persistent `Plan` model if missing.
+- [x] Add persistent `TaskGraph` or task dependency graph model if missing.
+- [x] Store planner output as a versioned plan artifact.
+- [x] Link goals, plans, tasks, agent runs, and artifacts.
 - [ ] Add repository methods and tests.
-- [ ] Add migration coverage where needed.
+- [x] Add migration coverage where needed.
 
 Verification:
 
 - [ ] Repository tests pass.
 - [ ] Task graph service tests pass.
-- [ ] Workspace detail can load goal, plan, tasks, and runs together.
+- [x] Workspace detail can load goal, plan, tasks, and runs together.
 
 ### Session 23 - AgentSpec, TeamSpec, And Capability Registry
 

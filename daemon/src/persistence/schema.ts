@@ -479,6 +479,23 @@ export const goals = sqliteTable("goals", {
   updatedAt: text("updated_at").default("CURRENT_TIMESTAMP").notNull(),
 });
 
+// ---- Persistent Plans ----
+
+export const plans = sqliteTable("plans", {
+  id: text("id").primaryKey(),
+  goalId: text("goal_id").references(() => goals.id),
+  workspaceId: text("workspace_id").references(() => workspaces.id),
+  version: integer("version").notNull().default(1),
+  strategy: text("strategy").notNull(), // Human-readable plan description
+  taskCount: integer("task_count").notNull().default(0),
+  status: text("status", { enum: ["draft", "active", "completed", "superseded"] })
+    .default("draft")
+    .notNull(),
+  metadata: text("metadata").default("{}"), // JSON stored as text
+  createdAt: text("created_at").default("CURRENT_TIMESTAMP").notNull(),
+  updatedAt: text("updated_at").default("CURRENT_TIMESTAMP").notNull(),
+});
+
 // ---- Event Log ----
 
 export const eventLog = sqliteTable("event_log", {

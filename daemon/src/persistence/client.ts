@@ -810,6 +810,22 @@ sqlite.exec(`
   );
 
   CREATE INDEX IF NOT EXISTS idx_env_events_session ON environment_events(session_id, sequence);
+
+  CREATE TABLE IF NOT EXISTS plans (
+    id TEXT PRIMARY KEY,
+    goal_id TEXT REFERENCES goals(id),
+    workspace_id TEXT REFERENCES workspaces(id),
+    version INTEGER NOT NULL DEFAULT 1,
+    strategy TEXT NOT NULL,
+    task_count INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft', 'active', 'completed', 'superseded')),
+    metadata TEXT DEFAULT '{}',
+    created_at TEXT NOT NULL DEFAULT 'CURRENT_TIMESTAMP',
+    updated_at TEXT NOT NULL DEFAULT 'CURRENT_TIMESTAMP'
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_plans_goal ON plans(goal_id);
+  CREATE INDEX IF NOT EXISTS idx_plans_workspace ON plans(workspace_id);
 `);
 
 export { db };
