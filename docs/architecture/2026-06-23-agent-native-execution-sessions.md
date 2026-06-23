@@ -278,17 +278,17 @@ Verification:
 
 Goal: make completion depend on artifacts and checks, not self-report.
 
-- [ ] Add artifact collection phase.
-- [ ] Add verification result model if missing.
-- [ ] Add changed-files artifact.
-- [ ] Add final-summary artifact.
-- [ ] Add path-policy verification.
-- [ ] Add test-command verification hook.
+- [x] Add artifact collection phase.
+- [x] Add verification result model if missing.
+- [x] Add changed-files artifact.
+- [x] Add final-summary artifact.
+- [x] Add path-policy verification.
+- [x] Add test-command verification hook.
 
 Verification:
 
-- [ ] Verification unit tests.
-- [ ] Changed-files integration test.
+- [x] Verification unit tests.
+- [x] Changed-files integration test.
 
 ### Session 12 - Plan-Scoped Permission Grants
 
