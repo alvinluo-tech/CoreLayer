@@ -247,16 +247,16 @@ Verification:
 
 Goal: start one coding executor through an environment session.
 
-- [ ] Create environment session before executor start.
-- [ ] Pass environment-derived cwd/worktree to executor adapter.
-- [ ] Persist executor run and environment session ids.
-- [ ] Emit environment-created and executor-started events.
-- [ ] Preserve fallback path where needed.
+- [x] Create environment session before executor start.
+- [x] Pass environment-derived cwd/worktree to executor adapter.
+- [x] Persist executor run and environment session ids.
+- [x] Emit environment-created and executor-started events.
+- [x] Preserve fallback path where needed.
 
 Verification:
 
-- [ ] Focused coding runtime tests.
-- [ ] Adapter tests for the migrated executor.
+- [x] Focused coding runtime tests.
+- [x] Adapter tests for the migrated executor.
 
 ### Session 10 - Environment-Mediated Process Execution
 
