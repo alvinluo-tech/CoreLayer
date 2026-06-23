@@ -144,16 +144,16 @@ Verification:
 
 Goal: wrap existing coding executors behind the unified lifecycle contract.
 
-- [ ] Wrap Claude Code adapter behind `ExecutorAdapter`.
-- [ ] Wrap Codex adapter behind `ExecutorAdapter`.
-- [ ] Wrap OpenCode adapter behind `ExecutorAdapter`.
-- [ ] Add discovery tests.
-- [ ] Avoid changing executor CLI flags unless required for compatibility.
+- [x] Wrap Claude Code adapter behind `ExecutorAdapter`.
+- [x] Wrap Codex adapter behind `ExecutorAdapter`.
+- [x] Wrap OpenCode adapter behind `ExecutorAdapter`.
+- [x] Add discovery tests.
+- [x] Avoid changing executor CLI flags unless required for compatibility.
 
 Verification:
 
-- [ ] Focused coding runtime adapter tests.
-- [ ] Typecheck daemon package.
+- [x] Focused coding runtime adapter tests.
+- [x] Typecheck daemon package.
 
 ### Session 4 - Claude Code Conformance Harness
 
@@ -194,14 +194,23 @@ Goal: introduce a backend-agnostic execution environment contract before impleme
 - [ ] Add `packages/execution-environment`.
 - [ ] Define `ExecutionEnvironment`.
 - [ ] Define `EnvironmentSessionRequest`.
+- [ ] Define `EnvironmentSession`.
+- [ ] Define `EnvironmentState`.
+- [ ] Define `AccessPolicy`.
 - [ ] Define command/file/artifact result types.
+- [ ] Define generic action request/result types that do not require shell execution.
 - [ ] Add request validation helpers.
+- [ ] Add non-coding environment examples in tests or docs:
+  - [ ] `BrowserSessionEnvironment`
+  - [ ] `ImageWorkspaceEnvironment`
+  - [ ] `MessageDraftEnvironment`
 - [ ] Add validation tests.
 
 Verification:
 
 - [ ] Execution environment package tests pass.
 - [ ] Workspace typecheck passes.
+- [ ] Core interfaces do not mention Claude Code, Codex, OpenCode, git, worktree, diff, lint, typecheck, or test commands.
 
 ### Session 7 - Environment Persistence
 
