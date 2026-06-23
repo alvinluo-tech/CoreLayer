@@ -262,17 +262,17 @@ Verification:
 
 Goal: stop one executor from owning raw process lifecycle directly.
 
-- [ ] Route one executor's process start through execution environment runtime.
-- [ ] Keep low-level process spawn as internal implementation detail.
-- [ ] Propagate timeout through execution environment runtime.
-- [ ] Propagate cancellation through execution environment runtime.
-- [ ] Collect logs through execution environment runtime.
+- [x] Route one executor's process start through execution environment runtime.
+- [x] Keep low-level process spawn as internal implementation detail.
+- [x] Propagate timeout through execution environment runtime.
+- [x] Propagate cancellation through execution environment runtime.
+- [x] Collect logs through execution environment runtime.
 
 Verification:
 
-- [ ] Cancellation test.
-- [ ] Timeout test.
-- [ ] Log collection test.
+- [x] Cancellation test.
+- [x] Timeout test.
+- [x] Log collection test.
 
 ### Session 11 - Artifact And Verification Core
 
