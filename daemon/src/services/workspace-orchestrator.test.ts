@@ -58,6 +58,12 @@ vi.mock("../shared/errors.js", () => ({
   logError: vi.fn(),
 }));
 
+// Mock event emitter
+const mockEmitWorkspaceEvent = vi.fn();
+vi.mock("./workspace-event-emitter.js", () => ({
+  emitWorkspaceEvent: (...args: unknown[]) => mockEmitWorkspaceEvent(...args),
+}));
+
 // Mock Drizzle ORM — full chain needed by repos + orchestrator
 const mockAll = vi.fn().mockReturnValue([]);
 const mockGet = vi.fn().mockReturnValue(undefined);
@@ -206,6 +212,7 @@ describe("orchestrateFromGoal", () => {
   it("should log orchestration event", async () => {
     await orchestrateFromGoal("Build app");
 
+    // Should emit the final orchestrated summary event via eventLog.create
     expect(mockEventLogCreate).toHaveBeenCalledWith(
       expect.objectContaining({
         type: "workspace.orchestrated",
@@ -214,6 +221,35 @@ describe("orchestrateFromGoal", () => {
         }),
       }),
     );
+  });
+
+  it("should emit structured workspace events during orchestration", async () => {
+    await orchestrateFromGoal("Build app");
+
+    // Verify the emitter was called for key lifecycle events
+    const emittedTypes = mockEmitWorkspaceEvent.mock.calls.map(
+      (call: any[]) => call[0].type,
+    );
+
+    expect(emittedTypes).toContain("workspace.created");
+    expect(emittedTypes).toContain("workspace.spec.generated");
+    expect(emittedTypes).toContain("workspace.project.created");
+    expect(emittedTypes).toContain("workspace.tasks.decomposed");
+    expect(emittedTypes).toContain("workspace.team.assigned");
+    expect(emittedTypes).toContain("workspace.artifact.created");
+    expect(emittedTypes).toContain("workspace.task.queued");
+  });
+
+  it("should emit spec fallback event when LLM fails", async () => {
+    mockGenerateText.mockRejectedValue(new Error("LLM unavailable"));
+
+    await orchestrateFromGoal("Build app");
+
+    const emittedTypes = mockEmitWorkspaceEvent.mock.calls.map(
+      (call: any[]) => call[0].type,
+    );
+
+    expect(emittedTypes).toContain("workspace.spec.fallback");
   });
 
   it("should create spec artifact when spec is generated", async () => {
@@ -270,5 +306,54 @@ describe("orchestrateFromGoal", () => {
 
     // Should create fallback task
     expect(result.tasks.length).toBe(1);
+  });
+
+  it("should use provided spec option and skip LLM call", async () => {
+    mockGenerateText.mockClear();
+
+    const result = await orchestrateFromGoal("Build app", {
+      spec: {
+        summary: "Provided summary",
+        nonGoals: ["nong1"],
+        techStack: "Vue, Python",
+        constraints: ["const1"],
+        milestones: ["mile1"],
+      },
+    });
+
+    expect(mockGenerateText).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: expect.stringContaining("You are a project planner"),
+      }),
+    );
+    expect(JSON.parse(result.project.spec!)).toEqual({
+      summary: "Provided summary",
+      nonGoals: ["nong1"],
+      techStack: "Vue, Python",
+      constraints: ["const1"],
+      milestones: ["mile1"],
+    });
+    expect(result.project.techStack).toBe("Vue, Python");
+  });
+
+  it("should assign only provided agentIds and bypass proposeTeam", async () => {
+    const { proposeTeam } = await import("./agent-broker.js");
+    vi.mocked(proposeTeam).mockClear();
+
+    mockAgentProfilesGetById.mockImplementation(async (id: string) => {
+      if (id === "agent-custom-1") {
+        return { id: "agent-custom-1", name: "Custom Coder", role: "coding" };
+      }
+      return null;
+    });
+
+    const result = await orchestrateFromGoal("Build app", {
+      agentIds: ["agent-custom-1", "nonexistent-agent"],
+    });
+
+    expect(proposeTeam).not.toHaveBeenCalled();
+    expect(result.agents).toEqual([
+      { id: "agent-custom-1", name: "Custom Coder", role: "coding" },
+    ]);
   });
 });

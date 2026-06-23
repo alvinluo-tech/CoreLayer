@@ -23,6 +23,7 @@ export interface CreateEventLogInput {
 export interface EventLogFilters {
   type?: string;
   projectId?: string;
+  workspaceId?: string;
   agentRunId?: string;
   runtimeId?: string;
   since?: string;

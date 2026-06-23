@@ -17,6 +17,7 @@ import * as capabilityBroker from "../../../capabilities/os-capability-broker.js
 import * as auditLog from "../../../persistence/audit-log.js";
 import * as artifactPersistence from "../artifact-persistence.js";
 import * as persistenceFactory from "../../../persistence/factory.js";
+import * as workspaceEventEmitter from "../../../services/workspace-event-emitter.js";
 
 // ---- Helpers ----
 
@@ -95,7 +96,10 @@ describe("CodexAdapter", () => {
 
     vi.spyOn(persistenceFactory, "getRepositories").mockReturnValue({
       agentRuns: { updateArtifacts: vi.fn(async () => {}) },
+      eventLog: { create: vi.fn(async () => {}) },
     } as any);
+
+    vi.spyOn(workspaceEventEmitter, "emitWorkspaceEvent").mockImplementation(async () => {});
   });
 
   afterEach(() => {
@@ -710,6 +714,72 @@ describe("CodexAdapter", () => {
       expect(status.status).toBe("failed");
       expect(status.completedAt).toBeDefined();
       expect(status.error).toContain("spawn codex ENOENT");
+    });
+  });
+
+  // =========================================================================
+  // Workspace event emissions
+  // =========================================================================
+
+  describe("workspace event emissions", () => {
+    it("emits run.started event on successful run start", async () => {
+      (processSpawner.isCommandAvailable as any).mockReturnValue(true);
+
+      await adapter.createRun(makeTask());
+
+      expect(workspaceEventEmitter.emitWorkspaceEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "workspace.run.started",
+        }),
+      );
+    });
+
+    it("emits run.completed event on process exit code 0", async () => {
+      (processSpawner.isCommandAvailable as any).mockReturnValue(true);
+
+      const mock = makeMockProcess();
+      (processSpawner.spawnProcessLive as any).mockReturnValue(makeMockHandle(mock));
+
+      await adapter.createRun(makeTask());
+      mock.emitClose(0);
+
+      expect(workspaceEventEmitter.emitWorkspaceEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "workspace.run.completed",
+        }),
+      );
+    });
+
+    it("emits run.failed event on non-zero exit code", async () => {
+      (processSpawner.isCommandAvailable as any).mockReturnValue(true);
+
+      const mock = makeMockProcess();
+      (processSpawner.spawnProcessLive as any).mockReturnValue(makeMockHandle(mock));
+
+      await adapter.createRun(makeTask());
+      mock.emitClose(1);
+
+      expect(workspaceEventEmitter.emitWorkspaceEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "workspace.run.failed",
+        }),
+      );
+    });
+
+    it("emits run.failed event on process error", async () => {
+      (processSpawner.isCommandAvailable as any).mockReturnValue(true);
+
+      const mock = makeMockProcess();
+      (processSpawner.spawnProcessLive as any).mockReturnValue(makeMockHandle(mock));
+
+      await adapter.createRun(makeTask());
+      mock.emitError(new Error("ENOENT"));
+
+      expect(workspaceEventEmitter.emitWorkspaceEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "workspace.run.failed",
+        }),
+      );
     });
   });
 });

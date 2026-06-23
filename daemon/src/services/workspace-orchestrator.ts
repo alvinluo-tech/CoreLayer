@@ -20,6 +20,7 @@ import { proposeTeam } from "./agent-broker.js";
 import { enqueue } from "../workflow/queue-service.js";
 import { logError } from "../shared/errors.js";
 import { resolveAppPaths } from "../config/app-paths.js";
+import { emitWorkspaceEvent } from "./workspace-event-emitter.js";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
@@ -68,7 +69,19 @@ Return ONLY the JSON object, no other text.`;
 /**
  * Full orchestrator pipeline: goal → workspace → spec → team → tasks → artifacts.
  */
-export async function orchestrateFromGoal(goal: string): Promise<OrchestratorResult> {
+export async function orchestrateFromGoal(
+  goal: string,
+  options?: {
+    spec?: {
+      summary?: string;
+      nonGoals?: string[];
+      techStack?: string;
+      constraints?: string[];
+      milestones?: string[];
+    };
+    agentIds?: string[];
+  }
+): Promise<OrchestratorResult> {
   const { workspaces, projects, tasks, agentProfiles, eventLog } = getRepositories();
 
   // 1. Create workspace with goal, status = planning
@@ -80,27 +93,67 @@ export async function orchestrateFromGoal(goal: string): Promise<OrchestratorRes
     status: "planning",
   });
 
+  emitWorkspaceEvent({
+    type: "workspace.created",
+    title: "Workspace created",
+    summary: `Goal: ${goal.length > 80 ? goal.slice(0, 77) + "..." : goal}`,
+    workspaceId: workspace.id,
+    payload: { workspaceId: workspace.id, goal },
+  });
+
   // 2. Generate project spec via LLM
   let spec: string | null = null;
   let techStack: string | null = null;
 
-  try {
-    const gateway = getModelGateway();
-    const modelId = gateway.selectModel({ mode: "text" });
-    const model = gateway.getModel(modelId);
+  if (options?.spec) {
+    spec = JSON.stringify(options.spec, null, 2);
+    techStack = typeof options.spec.techStack === "string" ? options.spec.techStack : (Array.isArray(options.spec.techStack) ? (options.spec.techStack as string[]).join(", ") : null);
 
-    const result = await generateText({
-      model,
-      system: SPEC_SYSTEM_PROMPT,
-      messages: [{ role: "user", content: goal }],
+    emitWorkspaceEvent({
+      type: "workspace.spec.generated",
+      title: "Spec provided",
+      summary: `Tech stack: ${techStack ?? "not specified"}`,
+      severity: "success",
+      workspaceId: workspace.id,
+      payload: { workspaceId: workspace.id, projectId: "", techStack },
     });
+  } else {
+    try {
+      const gateway = getModelGateway();
+      const modelId = gateway.selectModel({ mode: "text" });
+      const model = gateway.getModel(modelId);
 
-    const specJson = parseSpecResponse(result.text);
-    spec = JSON.stringify(specJson, null, 2);
-    techStack = typeof specJson.techStack === "string" ? specJson.techStack : (Array.isArray(specJson.techStack) ? specJson.techStack.join(", ") : null);
-  } catch (err) {
-    logError("orchestrator/spec-gen", err);
-    // Continue without spec — non-blocking
+      const result = await generateText({
+        model,
+        system: SPEC_SYSTEM_PROMPT,
+        messages: [{ role: "user", content: goal }],
+      });
+
+      const specJson = parseSpecResponse(result.text);
+      spec = JSON.stringify(specJson, null, 2);
+      techStack = typeof specJson.techStack === "string" ? specJson.techStack : (Array.isArray(specJson.techStack) ? specJson.techStack.join(", ") : null);
+
+      emitWorkspaceEvent({
+        type: "workspace.spec.generated",
+        title: "Spec generated",
+        summary: `Tech stack: ${techStack ?? "not specified"}`,
+        severity: "success",
+        workspaceId: workspace.id,
+        payload: { workspaceId: workspace.id, projectId: "", techStack },
+      });
+    } catch (err) {
+      logError("orchestrator/spec-gen", err);
+
+      emitWorkspaceEvent({
+        type: "workspace.spec.fallback",
+        title: "Spec generation failed",
+        summary: "Continuing without spec",
+        severity: "warning",
+        workspaceId: workspace.id,
+        payload: { workspaceId: workspace.id, projectId: "", reason: err instanceof Error ? err.message : "Unknown error" },
+      });
+      // Continue without spec — non-blocking
+    }
   }
 
   // Create physical workspace directory for agent runs
@@ -139,16 +192,50 @@ export async function orchestrateFromGoal(goal: string): Promise<OrchestratorRes
   // Set active project on workspace
   await workspaces.update(workspace.id, { activeProjectId: project.id });
 
+  emitWorkspaceEvent({
+    type: "workspace.project.created",
+    title: "Project created",
+    summary: project.name,
+    workspaceId: workspace.id,
+    projectId: project.id,
+    payload: {
+      workspaceId: workspace.id,
+      projectId: project.id,
+      projectName: project.name,
+      rootPath: projectRootPath,
+    },
+  });
+
   // 4. Decompose tasks using LLM
   const createdTasks = await decomposeTasksForWorkspace(goal, project.id, workspace.id);
 
+  emitWorkspaceEvent({
+    type: "workspace.tasks.decomposed",
+    title: "Tasks decomposed",
+    summary: `${createdTasks.length} tasks, ${createdTasks.reduce((sum, t) => sum + t.dependencies.length, 0)} dependencies`,
+    workspaceId: workspace.id,
+    projectId: project.id,
+    payload: {
+      workspaceId: workspace.id,
+      projectId: project.id,
+      taskCount: createdTasks.length,
+      dependencyCount: createdTasks.reduce((sum, t) => sum + t.dependencies.length, 0),
+    },
+  });
+
   // 5. Select agents via broker
-  const proposal = proposeTeam({ goal, maxAgents: 5 });
+  let agentIdsToAssign: string[] = [];
+  if (options?.agentIds) {
+    agentIdsToAssign = options.agentIds;
+  } else {
+    const proposal = proposeTeam({ goal, maxAgents: 5 });
+    agentIdsToAssign = proposal.agents.map((a) => a.id);
+  }
 
   // 6. Write workspace_agents
   const selectedAgents: OrchestratorResult["agents"] = [];
-  for (const agent of proposal.agents) {
-    const profile = await agentProfiles.getById(agent.id);
+  for (const agentId of agentIdsToAssign) {
+    const profile = await agentProfiles.getById(agentId);
     if (!profile) continue;
 
     // Insert into workspace_agents table
@@ -165,7 +252,7 @@ export async function orchestrateFromGoal(goal: string): Promise<OrchestratorRes
       .where(
         and(
           eq(schema.workspaceAgents.workspaceId, workspace.id),
-          eq(schema.workspaceAgents.agentProfileId, agent.id)
+          eq(schema.workspaceAgents.agentProfileId, agentId)
         )
       )
       .get();
@@ -174,14 +261,26 @@ export async function orchestrateFromGoal(goal: string): Promise<OrchestratorRes
       await db.insert(schema.workspaceAgents).values({
         id: crypto.randomUUID(),
         workspaceId: workspace.id,
-        agentProfileId: agent.id,
+        agentProfileId: agentId,
         roleInWorkspace: workspaceRole,
         status: "idle",
       });
     }
 
-    selectedAgents.push({ id: agent.id, name: agent.name, role: agent.role });
+    selectedAgents.push({ id: profile.id, name: profile.name, role: profile.role });
   }
+
+  emitWorkspaceEvent({
+    type: "workspace.team.assigned",
+    title: "Team assigned",
+    summary: `${selectedAgents.length} agents: ${selectedAgents.map((a) => a.role).join(", ")}`,
+    workspaceId: workspace.id,
+    payload: {
+      workspaceId: workspace.id,
+      agentCount: selectedAgents.length,
+      roles: selectedAgents.map((a) => a.role),
+    },
+  });
 
   // 7. Create artifacts (spec + plan)
   const createdArtifacts: OrchestratorResult["artifacts"] = [];
@@ -195,6 +294,21 @@ export async function orchestrateFromGoal(goal: string): Promise<OrchestratorRes
       content: spec,
     });
     createdArtifacts.push(specArtifact);
+
+    emitWorkspaceEvent({
+      type: "workspace.artifact.created",
+      title: "Spec artifact created",
+      summary: "Project Specification",
+      workspaceId: workspace.id,
+      projectId: project.id,
+      artifactId: specArtifact.id,
+      payload: {
+        workspaceId: workspace.id,
+        projectId: project.id,
+        artifactType: "spec",
+        artifactIndex: 0,
+      },
+    });
   }
 
   // Create plan artifact from task list
@@ -210,6 +324,21 @@ export async function orchestrateFromGoal(goal: string): Promise<OrchestratorRes
     content: planContent,
   });
   createdArtifacts.push(planArtifact);
+
+  emitWorkspaceEvent({
+    type: "workspace.artifact.created",
+    title: "Plan artifact created",
+    summary: "Task Plan",
+    workspaceId: workspace.id,
+    projectId: project.id,
+    artifactId: planArtifact.id,
+    payload: {
+      workspaceId: workspace.id,
+      projectId: project.id,
+      artifactType: "plan",
+      artifactIndex: createdArtifacts.length - 1,
+    },
+  });
 
   // 8. Auto-enqueue tasks that have no dependencies (ready to execute)
   // Find the first available agent for execution (prefer coding/builder roles)
@@ -234,6 +363,22 @@ export async function orchestrateFromGoal(goal: string): Promise<OrchestratorRes
           mode: "workflow",
         });
         enqueuedRunIds.push(entry.runId);
+
+        emitWorkspaceEvent({
+          type: "workspace.task.queued",
+          title: "Task queued",
+          summary: task.title,
+          workspaceId: workspace.id,
+          projectId: project.id,
+          taskId: task.id,
+          payload: {
+            workspaceId: workspace.id,
+            projectId: project.id,
+            taskId: task.id,
+            taskTitle: task.title,
+            assignedAgentId: executorAgent?.id,
+          },
+        });
       } catch (err) {
         logError("orchestrator/enqueue", err);
       }

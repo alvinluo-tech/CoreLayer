@@ -12,7 +12,16 @@ import { mkdirSync, writeFileSync, readFileSync, existsSync } from "fs";
 import path from "path";
 import { resolveAppPaths } from "../../config/app-paths.js";
 import { ensureSessionDir, recordArtifactInSession } from "../../services/session-manager.js";
+import { emitWorkspaceEvent } from "../../services/workspace-event-emitter.js";
 import type { CodingArtifact } from "./types.js";
+
+export interface ArtifactEventContext {
+  workspaceId?: string;
+  projectId?: string;
+  taskId?: string;
+  agentRunId?: string;
+  runtimeId?: string;
+}
 
 /** In-memory artifact registry keyed by runId */
 const artifactRegistry = new Map<string, CodingArtifact[]>();
@@ -29,16 +38,45 @@ function getRunArtifactDir(runId: string): string {
 /**
  * Persist artifacts for a coding run to disk and cache in memory.
  * Optionally also writes to the session directory when conversationId is provided.
+ * When eventContext is provided, emits workspace.artifact.created events.
  */
 export function persistArtifacts(
   runId: string,
   artifacts: CodingArtifact[],
   conversationId?: string,
+  eventContext?: ArtifactEventContext,
 ): void {
   if (artifacts.length === 0) return;
 
   // Cache in memory
   artifactRegistry.set(runId, artifacts);
+
+  // Emit artifact created events when context is provided
+  if (eventContext?.workspaceId) {
+    for (let i = 0; i < artifacts.length; i++) {
+      const artifact = artifacts[i];
+      emitWorkspaceEvent({
+        type: "workspace.artifact.created",
+        title: `Artifact: ${artifact.type}`,
+        summary: artifact.content?.slice(0, 80) ?? artifact.type,
+        workspaceId: eventContext.workspaceId,
+        projectId: eventContext.projectId,
+        taskId: eventContext.taskId,
+        agentRunId: eventContext.agentRunId,
+        runtimeId: eventContext.runtimeId,
+        artifactId: `${runId}-${i}`,
+        payload: {
+          workspaceId: eventContext.workspaceId,
+          projectId: eventContext.projectId,
+          taskId: eventContext.taskId,
+          agentRunId: eventContext.agentRunId,
+          artifactType: artifact.type,
+          artifactIndex: i,
+          metadata: artifact.metadata,
+        },
+      });
+    }
+  }
 
   // Write to run-specific directory
   try {

@@ -1,11 +1,23 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
-const { mockProposeTeam } = vi.hoisted(() => ({
+const { mockProposeTeam, mockGenerateText } = vi.hoisted(() => ({
   mockProposeTeam: vi.fn(),
+  mockGenerateText: vi.fn(),
 }));
 
 vi.mock("../../../services/agent-broker.js", () => ({
   proposeTeam: (...args: unknown[]) => mockProposeTeam(...args),
+}));
+
+vi.mock("ai", () => ({
+  generateText: (...args: unknown[]) => mockGenerateText(...args),
+}));
+
+vi.mock("../../../gateways/model/gateway.js", () => ({
+  getModelGateway: () => ({
+    selectModel: vi.fn(() => "model-1"),
+    getModel: vi.fn(() => ({ id: "model-1" })),
+  }),
 }));
 
 vi.mock("../../../shared/errors.js", () => ({
@@ -30,21 +42,31 @@ function makeRequest(path: string, method = "POST", body?: unknown) {
 describe("agent-broker route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGenerateText.mockResolvedValue({
+      text: JSON.stringify({
+        summary: "test spec summary",
+        nonGoals: ["nongoal1"],
+        techStack: "TypeScript",
+        constraints: ["constraint1"],
+        milestones: ["milestone1"],
+      }),
+    });
   });
 
   it("POST /propose-team returns proposal for valid goal", async () => {
     mockProposeTeam.mockReturnValue({
       agents: [{ id: "a1", role: "builder" }],
-      rationale: "test",
+      warnings: ["warning1"],
     });
 
     const res = await app.fetch(
       makeRequest("/propose-team", "POST", { goal: "build a web app" }),
     );
-    const json = (await res.json()) as { data: { agents: unknown[] } };
+    const json = (await res.json()) as { data: { agents: unknown[]; warnings: string[]; spec: unknown } };
 
     expect(res.status).toBe(200);
     expect(json.data.agents).toHaveLength(1);
+    expect(json.data.warnings).toEqual(["warning1"]);
     expect(mockProposeTeam).toHaveBeenCalledWith({
       goal: "build a web app",
       requiredCapabilities: undefined,
@@ -53,7 +75,7 @@ describe("agent-broker route", () => {
   });
 
   it("passes optional fields to proposeTeam", async () => {
-    mockProposeTeam.mockReturnValue({ agents: [], rationale: "" });
+    mockProposeTeam.mockReturnValue({ agents: [], warnings: [] });
 
     await app.fetch(
       makeRequest("/propose-team", "POST", {
@@ -68,6 +90,65 @@ describe("agent-broker route", () => {
       requiredCapabilities: ["coding"],
       maxAgents: 3,
     });
+  });
+
+  it("POST /propose-team returns generated spec from LLM", async () => {
+    mockProposeTeam.mockReturnValue({
+      agents: [{ id: "a1", role: "builder" }],
+      warnings: [],
+    });
+    mockGenerateText.mockResolvedValue({
+      text: JSON.stringify({
+        summary: "a test app",
+        nonGoals: ["nothing"],
+        techStack: "TypeScript",
+        constraints: ["none"],
+        milestones: ["m1"],
+      }),
+    });
+
+    const res = await app.fetch(
+      makeRequest("/propose-team", "POST", { goal: "build a web app" }),
+    );
+    const json = (await res.json()) as {
+      data: {
+        agents: unknown[];
+        warnings: string[];
+        spec: Record<string, unknown>;
+      };
+    };
+
+    expect(res.status).toBe(200);
+    expect(json.data.spec).toEqual({
+      summary: "a test app",
+      nonGoals: ["nothing"],
+      techStack: "TypeScript",
+      constraints: ["none"],
+      milestones: ["m1"],
+    });
+  });
+
+  it("POST /propose-team returns fallback spec when LLM fails", async () => {
+    mockProposeTeam.mockReturnValue({
+      agents: [{ id: "a1", role: "builder" }],
+      warnings: [],
+    });
+    mockGenerateText.mockRejectedValue(new Error("LLM failure"));
+
+    const res = await app.fetch(
+      makeRequest("/propose-team", "POST", { goal: "build a web app" }),
+    );
+    const json = (await res.json()) as {
+      data: {
+        agents: unknown[];
+        warnings: string[];
+        spec: Record<string, unknown>;
+      };
+    };
+
+    expect(res.status).toBe(200);
+    expect(json.data.spec.summary).toBe("build a web app");
+    expect(json.data.spec.techStack).toBe("TypeScript");
   });
 
   it("returns 400 when goal is missing", async () => {

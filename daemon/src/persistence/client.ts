@@ -7,6 +7,7 @@ import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
 import { migrateAgentRunsStatusConstraint } from "./sqlite/agent-runs-migration.js";
 import { migrateApprovalRequestsStatusConstraint } from "./sqlite/approval-status-migration.js";
+import { migrateMessageFts } from "./sqlite/message-fts-migration.js";
 
 type BetterSqlite3Constructor = new (
   filename: string,
@@ -229,6 +230,23 @@ try {
   // Column already exists — ignore
 }
 
+// Migration: add spec, tech_stack, and root_path to projects
+try {
+  sqlite.exec(`ALTER TABLE projects ADD COLUMN spec TEXT`);
+} catch {
+  // Column already exists.
+}
+try {
+  sqlite.exec(`ALTER TABLE projects ADD COLUMN tech_stack TEXT`);
+} catch {
+  // Column already exists.
+}
+try {
+  sqlite.exec(`ALTER TABLE projects ADD COLUMN root_path TEXT`);
+} catch {
+  // Column already exists.
+}
+
 // Migration: clean up legacy '*🤖 via' footers in message content and set model_used structurally
 try {
   const stmt = sqlite.prepare("SELECT id, content, model_used FROM messages WHERE role = 'assistant' AND content LIKE '%\n\n*🤖 via %*'");
@@ -308,47 +326,7 @@ try { sqlite.exec(`ALTER TABLE conversations ADD COLUMN workspace_id TEXT`); } c
 try { sqlite.exec(`ALTER TABLE conversations ADD COLUMN project_id TEXT`); } catch {} // eslint-disable-line no-empty
 
 // Migration: FTS5 for message search (Phase 15)
-try {
-  const row = sqlite.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='messages_fts'").get() as { sql: string } | undefined;
-  if (row && !row.sql.includes("content='messages'")) {
-    console.info("[Migration] Re-creating messages_fts virtual table with correct content='messages' reference...");
-    sqlite.exec("DROP TABLE IF EXISTS messages_fts");
-    sqlite.exec("DROP TRIGGER IF EXISTS messages_ai");
-    sqlite.exec("DROP TRIGGER IF EXISTS messages_ad");
-    sqlite.exec("DROP TRIGGER IF EXISTS messages_au");
-  }
-} catch (err) {
-  console.error("[Migration] Failed to check/fix messages_fts table schema:", err);
-}
-
-sqlite.exec(`
-  CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
-    content, role, conversation_id, content='messages', content_rowid='rowid'
-  );
-
-  CREATE TRIGGER IF NOT EXISTS messages_ai AFTER INSERT ON messages BEGIN
-    INSERT INTO messages_fts(rowid, content, role, conversation_id)
-    VALUES (new.rowid, new.content, new.role, new.conversation_id);
-  END;
-
-  CREATE TRIGGER IF NOT EXISTS messages_ad AFTER DELETE ON messages BEGIN
-    INSERT INTO messages_fts(messages_fts, rowid, content, role, conversation_id)
-    VALUES('delete', old.rowid, old.content, old.role, old.conversation_id);
-  END;
-
-  CREATE TRIGGER IF NOT EXISTS messages_au AFTER UPDATE ON messages BEGIN
-    INSERT INTO messages_fts(messages_fts, rowid, content, role, conversation_id)
-    VALUES('delete', old.rowid, old.content, old.role, old.conversation_id);
-    INSERT INTO messages_fts(rowid, content, role, conversation_id)
-    VALUES (new.rowid, new.content, new.role, new.conversation_id);
-  END;
-`);
-
-try {
-  sqlite.exec(`INSERT OR IGNORE INTO messages_fts(rowid, content, role, conversation_id) SELECT rowid, content, role, conversation_id FROM messages`);
-} catch (err) {
-  console.error("[Migration] Failed to populate messages_fts index:", err);
-}
+migrateMessageFts(sqlite);
 
 // Migration: FTS5 for memory search
 sqlite.exec(`
@@ -419,6 +397,9 @@ sqlite.exec(`
     workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
     description TEXT,
+    spec TEXT,
+    tech_stack TEXT,
+    root_path TEXT,
     status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'archived', 'completed')),
     settings TEXT,
     created_at TEXT DEFAULT 'CURRENT_TIMESTAMP',

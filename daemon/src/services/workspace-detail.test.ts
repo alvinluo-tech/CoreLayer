@@ -23,7 +23,7 @@ vi.mock("../persistence/client.js", () => ({
     agentProfiles: { id: "ap_id", name: "ap_name", role: "ap_role" },
     tasks: { status: "t_status", projectId: "t_projectId", workspaceId: "t_wsId" },
     projects: { id: "p_id", name: "p_name", description: "p_desc", status: "p_status", workspaceId: "p_wsId" },
-    agentRuns: { id: "ar_id", status: "ar_status", startedAt: "ar_started", completedAt: "ar_completed", agentId: "ar_agentId", workspaceId: "ar_wsId" },
+    agentRuns: { id: "ar_id", status: "ar_status", startedAt: "ar_started", completedAt: "ar_completed", agentId: "ar_agentId", taskId: "ar_taskId", workspaceId: "ar_wsId" },
     approvalRequests: { id: "apr_id", toolName: "apr_tool", risk: "apr_risk", createdAt: "apr_created", runId: "apr_runId", status: "apr_status" },
   },
 }));
@@ -190,7 +190,35 @@ describe("getWorkspaceDetail", () => {
 
     expect(result!.agents).toHaveLength(1);
     expect(result!.agents[0]).toEqual({
-      id: "wa-1", name: "Coder", role: "coding", status: "idle", joinedAt: "2026-01-01",
+      id: "wa-1", agentProfileId: "ap-1", name: "Coder", role: "coding", status: "idle", currentTaskId: null, latestRunId: null, joinedAt: "2026-01-01",
+    });
+  });
+
+  it("should derive workspace agent status from latest run", async () => {
+    const workspace = {
+      id: "ws-1", name: "W", description: null, goal: null,
+      status: "idle", activeProjectId: null, completedAt: null,
+      createdAt: "2026-01-01", updatedAt: "2026-01-01",
+    };
+    mockGet.mockReturnValue(workspace);
+    mockAll
+      .mockReturnValueOnce([{
+        id: "wa-1", agentProfileId: "ap-1", roleInWorkspace: "builder",
+        status: "idle", joinedAt: "2026-01-01", agentName: "Coder", agentRole: "coding",
+      }])
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([
+        { id: "r1", status: "running", startedAt: "2026-01-01", completedAt: null, agentId: "ap-1", taskId: "task-1", agentName: "Coder" },
+      ])
+      .mockReturnValueOnce([]);
+
+    const result = await getWorkspaceDetail("ws-1");
+
+    expect(result!.agents[0]).toMatchObject({
+      status: "running",
+      currentTaskId: "task-1",
+      latestRunId: "r1",
     });
   });
 

@@ -6,7 +6,8 @@ import { WorkspaceSidebar } from './WorkspaceSidebar';
 import { WorkspaceCenter } from './WorkspaceCenter';
 import { WorkspaceRightPanel } from './WorkspaceRightPanel';
 import { AgentTeamProposalModal } from './AgentTeamProposalModal';
-import { ProjectSpecModal } from './ProjectSpecModal';
+import { ProjectSpecModal, type SpecData } from './ProjectSpecModal';
+import { useAgentStore } from '@/stores/agentStore';
 import './workspaceView.css';
 
 interface ProposedAgent {
@@ -22,12 +23,14 @@ export function WorkspaceView() {
   const { workspaces, currentWorkspace, selectWorkspace, loadWorkspaces, createWorkspace } =
     useWorkspaceStore();
   const { detail, isLoading, fetchDetail, clearDetail } = useWorkspaceDetailStore();
+  const { agents: allAgents, fetchAgents } = useAgentStore();
 
   // New workspace flow state
   const [goal, setGoal] = useState('');
   const [showGoalInput, setShowGoalInput] = useState(false);
   const [showSpecModal, setShowSpecModal] = useState(false);
   const [showTeamModal, setShowTeamModal] = useState(false);
+  const [editedSpec, setEditedSpec] = useState<SpecData | null>(null);
   const [proposedAgents, setProposedAgents] = useState<ProposedAgent[]>([]);
   const [teamWarnings, setTeamWarnings] = useState<string[]>([]);
   const [isProposing, setIsProposing] = useState(false);
@@ -37,6 +40,10 @@ export function WorkspaceView() {
   }, [loadWorkspaces]);
 
   useEffect(() => {
+    fetchAgents();
+  }, [fetchAgents]);
+
+  useEffect(() => {
     if (currentWorkspace) {
       fetchDetail(currentWorkspace.id);
     } else {
@@ -44,46 +51,95 @@ export function WorkspaceView() {
     }
   }, [currentWorkspace, fetchDetail, clearDetail]);
 
+  useEffect(() => {
+    if (!currentWorkspace) return;
+    const interval = window.setInterval(() => {
+      fetchDetail(currentWorkspace.id);
+    }, 5000);
+    return () => window.clearInterval(interval);
+  }, [currentWorkspace, fetchDetail]);
+
   const handleCreateWorkspace = async () => {
     if (!goal.trim()) return;
-    setShowGoalInput(false);
-    setShowSpecModal(true);
-  };
-
-  const handleConfirmSpec = async () => {
-    setShowSpecModal(false);
     setIsProposing(true);
     try {
       const resp = await jarvisClient.post<{
-        data: { agents: ProposedAgent[]; warnings: string[] };
+        data: { spec: SpecData; agents: ProposedAgent[]; warnings: string[] };
       }>('/api/agent-broker/propose-team', { goal: goal.trim(), maxAgents: 5 });
+      setEditedSpec(resp.data.spec);
       setProposedAgents(resp.data.agents);
-      setTeamWarnings(resp.data.warnings);
-      setShowTeamModal(true);
+      setTeamWarnings(resp.data.warnings || []);
+      setShowGoalInput(false);
+      setShowSpecModal(true);
     } catch {
-      // If broker fails, go straight to orchestrator
-      await handleConfirmTeam();
+      // Fallback
+      setEditedSpec({
+        summary: '',
+        nonGoals: [],
+        techStack: '',
+        constraints: [],
+        milestones: [],
+      });
+      setProposedAgents([]);
+      setTeamWarnings([]);
+      setShowGoalInput(false);
+      setShowSpecModal(true);
     } finally {
       setIsProposing(false);
     }
   };
 
-  const handleConfirmTeam = async () => {
+  const handleConfirmSpec = (spec: SpecData) => {
+    setEditedSpec(spec);
+    setShowSpecModal(false);
+    setShowTeamModal(true);
+  };
+
+  const handleAddProposedAgent = (agentId: string) => {
+    const agent = allAgents.find((a) => a.id === agentId);
+    if (!agent) return;
+    if (proposedAgents.some((a) => a.id === agentId)) return;
+    setProposedAgents([
+      ...proposedAgents,
+      {
+        id: agent.id,
+        name: agent.name,
+        role: agent.role,
+        reason: 'Manually added to the team.',
+        risk: 'low',
+        permissions: agent.permissions || [],
+      },
+    ]);
+  };
+
+  const handleRemoveProposedAgent = (agentId: string) => {
+    setProposedAgents(proposedAgents.filter((a) => a.id !== agentId));
+  };
+
+  const handleConfirmTeam = async (selectedAgentIds: string[]) => {
     setShowTeamModal(false);
     setIsProposing(true);
     try {
       // Use the full orchestrator pipeline: goal → workspace → spec → tasks → agents
       const resp = await jarvisClient.post<{ data: { workspace: { id: string } } }>(
         '/api/workspaces/from-goal',
-        { goal: goal.trim() }
+        {
+          goal: goal.trim(),
+          spec: editedSpec,
+          agentIds: selectedAgentIds,
+        }
       );
       setGoal('');
+      setEditedSpec(null);
+      setProposedAgents([]);
       await loadWorkspaces();
       selectWorkspace(resp.data.workspace.id);
     } catch {
       // Fallback: create workspace directly
       const ws = await createWorkspace('Workspace', goal.trim());
       setGoal('');
+      setEditedSpec(null);
+      setProposedAgents([]);
       selectWorkspace(ws.id);
     } finally {
       setIsProposing(false);
@@ -221,6 +277,7 @@ export function WorkspaceView() {
       {showSpecModal && (
         <ProjectSpecModal
           goal={goal}
+          spec={editedSpec}
           onConfirm={handleConfirmSpec}
           onCancel={() => setShowSpecModal(false)}
         />
@@ -232,6 +289,9 @@ export function WorkspaceView() {
           warnings={teamWarnings}
           onConfirm={handleConfirmTeam}
           onCancel={() => setShowTeamModal(false)}
+          allAgents={allAgents}
+          onAddAgent={handleAddProposedAgent}
+          onRemoveAgent={handleRemoveProposedAgent}
         />
       )}
     </div>

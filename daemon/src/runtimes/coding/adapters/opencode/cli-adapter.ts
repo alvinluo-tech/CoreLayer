@@ -20,6 +20,8 @@ import { getCapabilityBroker } from "../../../../capabilities/os-capability-brok
 import { spawnProcessLive, killProcessTree, isCommandAvailable, validateWorkdirPolicy } from "../../process-spawner.js";
 import { logAuditEntry } from "../../../../persistence/audit-log.js";
 import { persistArtifacts } from "../../artifact-persistence.js";
+import { emitWorkspaceEvent } from "../../../../services/workspace-event-emitter.js";
+import { emitVerificationEvent } from "../../../../services/workspace-verification.js";
 import { getRepositories } from "../../../../persistence/factory.js";
 import { maskObjectSecrets } from "../../../../shared/secret-masking.js";
 import { createRunConfig } from "./config-writer.js";
@@ -143,6 +145,28 @@ export class OpenCodeCliAdapter implements CodingAgentAdapter {
 
     emitter.emit(runId, { type: "run_started", runId });
 
+    emitWorkspaceEvent({
+      type: "workspace.run.started",
+      title: "Run started",
+      summary: `OpenCode run started for task`,
+      severity: "info",
+      workspaceId: task.workspaceId ?? "",
+      projectId: task.projectId,
+      taskId: task.dbTaskId,
+      agentRunId: runId,
+      runtimeId: "opencode",
+      payload: {
+        workspaceId: task.workspaceId ?? "",
+        projectId: task.projectId ?? "",
+        taskId: task.dbTaskId ?? "",
+        agentRunId: runId,
+        runtimeId: "opencode",
+        repoPath: task.repoPath,
+        worktreePath: task.worktreePath,
+        timeoutMs: task.timeoutMs,
+      },
+    });
+
     // Create per-run config
     const appDataDir = process.env.JARVIS_APP_DATA_DIR ?? ".jarvis";
     createRunConfig(appDataDir, runId, { workDir: cwd });
@@ -183,28 +207,66 @@ export class OpenCodeCliAdapter implements CodingAgentAdapter {
       info.completedAt = new Date().toISOString();
       info.durationMs = Date.now() - new Date(info.startedAt).getTime();
 
+      const eventCtx = {
+        workspaceId: task.workspaceId ?? "",
+        projectId: task.projectId ?? "",
+        taskId: task.dbTaskId ?? "",
+        agentRunId: runId,
+        runtimeId: "opencode" as const,
+      };
+
       if (code === 0) {
         info.status = "succeeded";
         const summary = handle.stdout.join("") || "Task completed successfully";
         info.artifacts.push({ type: "final_summary", content: summary });
         emitter.emit(runId, { type: "run_completed", summary });
+
+        emitWorkspaceEvent({
+          type: "workspace.run.completed",
+          title: "Run completed",
+          summary,
+          severity: "success",
+          ...eventCtx,
+          payload: {
+            ...eventCtx,
+            durationMs: info.durationMs,
+            artifactCount: info.artifacts.length,
+          },
+        });
       } else {
         info.status = "failed";
         info.error = handle.stderr.join("") || `Exit code ${code}`;
         info.artifacts.push({ type: "error", content: info.error });
         emitter.emit(runId, { type: "run_failed", error: info.error });
+
+        emitWorkspaceEvent({
+          type: "workspace.run.failed",
+          title: "Run failed",
+          summary: info.error,
+          severity: "error",
+          ...eventCtx,
+          payload: {
+            ...eventCtx,
+            error: info.error,
+          },
+        });
       }
 
       // Collect changed files artifact via git diff
       this.collectChangedFiles(info, task);
 
       // Persist artifacts to disk and DB
-      persistArtifacts(runId, info.artifacts, task.conversationId);
+      persistArtifacts(runId, info.artifacts, task.conversationId, eventCtx);
       try {
         const { agentRuns } = getRepositories();
         agentRuns.updateArtifacts(runId, info.artifacts).catch(() => {});
       } catch {
         // DB persistence is best-effort
+      }
+
+      // Run verification commands if provided
+      if (code === 0 && task.testCommands?.length) {
+        this.runVerification(task, runId);
       }
     });
 
@@ -218,7 +280,27 @@ export class OpenCodeCliAdapter implements CodingAgentAdapter {
       info.completedAt = new Date().toISOString();
       info.artifacts.push({ type: "error", content: info.error });
 
-      persistArtifacts(runId, info.artifacts, task.conversationId);
+      const eventCtx = {
+        workspaceId: task.workspaceId ?? "",
+        projectId: task.projectId ?? "",
+        taskId: task.dbTaskId ?? "",
+        agentRunId: runId,
+        runtimeId: "opencode" as const,
+      };
+
+      emitWorkspaceEvent({
+        type: "workspace.run.failed",
+        title: "Run failed",
+        summary: err.message,
+        severity: "error",
+        ...eventCtx,
+        payload: {
+          ...eventCtx,
+          error: err.message,
+        },
+      });
+
+      persistArtifacts(runId, info.artifacts, task.conversationId, eventCtx);
       try {
         const { agentRuns } = getRepositories();
         agentRuns.updateArtifacts(runId, info.artifacts);
@@ -230,6 +312,41 @@ export class OpenCodeCliAdapter implements CodingAgentAdapter {
     });
 
     return handle.pid;
+  }
+
+  private async runVerification(task: CodingTask, runId: string): Promise<void> {
+    const cwd = task.worktreePath ?? task.repoPath;
+    for (const cmd of task.testCommands ?? []) {
+      try {
+        const output = execFileSync("sh", ["-c", cmd], {
+          cwd,
+          timeout: 60_000,
+          stdio: ["pipe", "pipe", "pipe"],
+          encoding: "utf-8",
+        });
+        await emitVerificationEvent({
+          workspaceId: task.workspaceId ?? "",
+          projectId: task.projectId,
+          taskId: task.dbTaskId,
+          agentRunId: runId,
+          command: cmd,
+          exitCode: 0,
+          output,
+        });
+      } catch (err: unknown) {
+        const exitCode = (err as { status?: number }).status ?? 1;
+        const stderr = (err as { stderr?: string }).stderr ?? "";
+        await emitVerificationEvent({
+          workspaceId: task.workspaceId ?? "",
+          projectId: task.projectId,
+          taskId: task.dbTaskId,
+          agentRunId: runId,
+          command: cmd,
+          exitCode,
+          output: stderr,
+        });
+      }
+    }
   }
 
   private collectChangedFiles(info: CodingRunInfo, task: CodingTask): void {

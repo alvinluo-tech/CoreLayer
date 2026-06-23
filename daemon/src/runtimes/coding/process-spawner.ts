@@ -216,6 +216,24 @@ export function spawnProcessLive(
 
   const stdout: string[] = [];
   const stderr: string[] = [];
+  const handle: SpawnedProcess = {
+    pid: child.pid ?? 0,
+    process: child,
+    stdout,
+    stderr,
+    exitCode: null,
+    killed: false,
+  };
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+
+  if (options.timeoutMs && options.timeoutMs > 0) {
+    timeout = setTimeout(() => {
+      if (child.pid) {
+        handle.killed = true;
+        killProcessTree(child.pid);
+      }
+    }, options.timeoutMs);
+  }
 
   // Write to log files if logDir is provided
   let logFile: string | undefined;
@@ -254,22 +272,18 @@ export function spawnProcessLive(
     }
   });
 
-  child.on("close", () => {
+  child.on("close", (code) => {
+    if (timeout) clearTimeout(timeout);
+    handle.exitCode = code;
     if (child.pid) activeProcesses.delete(child.pid);
   });
 
   child.on("error", () => {
+    if (timeout) clearTimeout(timeout);
     if (child.pid) activeProcesses.delete(child.pid);
   });
 
-  return {
-    pid: child.pid ?? 0,
-    process: child,
-    stdout,
-    stderr,
-    exitCode: null,
-    killed: false,
-  };
+  return handle;
 }
 
 /**

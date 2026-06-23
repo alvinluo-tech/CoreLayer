@@ -72,11 +72,44 @@ describe("events route", () => {
     expect(mockQuery).toHaveBeenCalledWith({
       type: "error",
       projectId: "p1",
+      workspaceId: undefined,
       agentRunId: undefined,
       runtimeId: undefined,
       since: undefined,
       limit: 10,
       offset: 5,
+    });
+  });
+
+  it("passes workspaceId filter to repo", async () => {
+    mockQuery.mockResolvedValue([{ id: "e1", type: "workspace.created" }]);
+    mockCount.mockResolvedValue(1);
+
+    const res = await app.fetch(makeRequest("/?workspaceId=ws-123"));
+    const json = (await res.json()) as { events: unknown[]; total: number; count: number };
+
+    expect(res.status).toBe(200);
+    expect(mockQuery).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId: "ws-123" }),
+    );
+    expect(json.events).toHaveLength(1);
+  });
+
+  it("combines workspaceId with other filters", async () => {
+    mockQuery.mockResolvedValue([]);
+    mockCount.mockResolvedValue(0);
+
+    await app.fetch(makeRequest("/?workspaceId=ws-1&projectId=proj-1&limit=20"));
+
+    expect(mockQuery).toHaveBeenCalledWith({
+      type: undefined,
+      projectId: "proj-1",
+      workspaceId: "ws-1",
+      agentRunId: undefined,
+      runtimeId: undefined,
+      since: undefined,
+      limit: 20,
+      offset: undefined,
     });
   });
 

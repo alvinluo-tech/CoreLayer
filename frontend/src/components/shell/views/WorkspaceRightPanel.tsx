@@ -9,11 +9,15 @@ import {
   File,
   CheckCircle,
   Trash2,
+  Plus,
 } from 'lucide-react';
 import type { WorkspaceDetail } from '@/lib/apiSchemas';
+import type { Artifact } from '@/lib/apiSchemas';
 import { useApprovalStore } from '@/stores/approvalStore';
 import { jarvisClient } from '@/lib/jarvisClient';
 import { useWorkspaceStore } from '@/stores/workspaceStore';
+import { useAgentStore } from '@/stores/agentStore';
+import { useWorkspaceDetailStore } from '@/stores/workspaceDetailStore';
 
 interface WorkspaceRightPanelProps {
   detail: WorkspaceDetail | null | undefined;
@@ -38,13 +42,80 @@ const riskColors: Record<string, string> = {
   critical: 'var(--rose)',
 };
 
+function parseArtifactMetadata(metadata: string | null) {
+  if (!metadata) return null;
+  try {
+    return JSON.parse(metadata) as Record<string, unknown>;
+  } catch {
+    return { raw: metadata };
+  }
+}
+
+function artifactLocation(artifact: Artifact) {
+  const metadata = parseArtifactMetadata(artifact.metadata);
+  const metadataPath =
+    typeof metadata?.path === 'string'
+      ? metadata.path
+      : typeof metadata?.file === 'string'
+        ? metadata.file
+        : undefined;
+  return artifact.path ?? metadataPath ?? null;
+}
+
+function artifactPreview(artifact: Artifact) {
+  if (artifact.content) return artifact.content;
+  const metadata = parseArtifactMetadata(artifact.metadata);
+  if (!metadata) return '';
+  return JSON.stringify(metadata, null, 2);
+}
+
 export function WorkspaceRightPanel({ detail }: WorkspaceRightPanelProps) {
   const [activeTab, setActiveTab] = useState<Tab>('Agents');
   const { approvals, fetchApprovals, approve, deny } = useApprovalStore();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [artifacts, setArtifacts] = useState<any[]>([]);
+  const [artifacts, setArtifacts] = useState<Artifact[]>([]);
+  const [selectedArtifactId, setSelectedArtifactId] = useState<string | null>(null);
 
   const { deleteProject, deleteProjects } = useWorkspaceStore();
+  const { agents: allAgents, fetchAgents } = useAgentStore();
+  const [isUpdatingTeam, setIsUpdatingTeam] = useState(false);
+  const [showAddDropdown, setShowAddDropdown] = useState(false);
+
+  const assignedAgentIds = new Set(detail?.agents.map((a) => a.agentProfileId) || []);
+  const availableAgents = allAgents.filter((a) => !assignedAgentIds.has(a.id));
+
+  const handleAddAgent = async (agentProfileId: string) => {
+    if (!detail) return;
+    setIsUpdatingTeam(true);
+    try {
+      await jarvisClient.post(`/api/workspaces/${detail.id}/agents`, {
+        agentProfileId,
+        roleInWorkspace: 'builder',
+      });
+      const { fetchDetail } = useWorkspaceDetailStore.getState();
+      await fetchDetail(detail.id);
+    } catch (err) {
+      console.error('Failed to add agent:', err);
+    } finally {
+      setIsUpdatingTeam(false);
+      setShowAddDropdown(false);
+    }
+  };
+
+  const handleRemoveAgent = async (agentProfileId: string, name: string) => {
+    if (!detail) return;
+    if (!window.confirm(`Are you sure you want to remove ${name} from this workspace?`)) return;
+    setIsUpdatingTeam(true);
+    try {
+      await jarvisClient.del(`/api/workspaces/${detail.id}/agents/${agentProfileId}`);
+      const { fetchDetail } = useWorkspaceDetailStore.getState();
+      await fetchDetail(detail.id);
+    } catch (err) {
+      console.error('Failed to remove agent:', err);
+    } finally {
+      setIsUpdatingTeam(false);
+    }
+  };
+
   const [selectedProjIds, setSelectedProjIds] = useState<Set<string>>(new Set());
   const [isProjMultiSelect, setIsProjMultiSelect] = useState(false);
 
@@ -91,6 +162,9 @@ export function WorkspaceRightPanel({ detail }: WorkspaceRightPanelProps) {
   useEffect(() => {
     setSelectedProjIds(new Set());
     setIsProjMultiSelect(false);
+    if (activeTab !== 'Artifacts') {
+      setSelectedArtifactId(null);
+    }
   }, [activeTab, detail?.id]);
 
   useEffect(() => {
@@ -100,24 +174,45 @@ export function WorkspaceRightPanel({ detail }: WorkspaceRightPanelProps) {
   }, [activeTab, fetchApprovals]);
 
   useEffect(() => {
+    if (activeTab === 'Agents') {
+      fetchAgents();
+    }
+  }, [activeTab, fetchAgents]);
+
+  useEffect(() => {
     const loadArtifacts = async () => {
-      if (!detail?.id) return;
+      if (!detail?.id) {
+        setArtifacts([]);
+        setSelectedArtifactId(null);
+        return;
+      }
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const resp = await jarvisClient.get<{ data: any[] }>(
           `/api/workspaces/${detail.id}/artifacts`
         );
-        setArtifacts(resp.data || []);
+        const nextArtifacts = resp.data || [];
+        setArtifacts(nextArtifacts);
+        setSelectedArtifactId((current) =>
+          current && nextArtifacts.some((artifact) => artifact.id === current)
+            ? current
+            : (nextArtifacts[0]?.id ?? null)
+        );
       } catch {
         setArtifacts([]);
+        setSelectedArtifactId(null);
       }
     };
     if (detail?.id && activeTab === 'Artifacts') {
       loadArtifacts();
+      const interval = window.setInterval(loadArtifacts, 5000);
+      return () => window.clearInterval(interval);
     }
   }, [detail?.id, activeTab]);
 
   const pendingApprovals = approvals.filter((a) => a.status === 'pending');
+  const selectedArtifact =
+    artifacts.find((artifact) => artifact.id === selectedArtifactId) ?? artifacts[0] ?? null;
 
   return (
     <div
@@ -148,39 +243,109 @@ export function WorkspaceRightPanel({ detail }: WorkspaceRightPanelProps) {
           <div>
             {!detail ? (
               <EmptyTab message="Select a workspace to view agents" />
-            ) : detail.agents.length === 0 ? (
-              <EmptyTab message="No agents assigned" />
             ) : (
-              detail.agents.map((agent) => (
-                <div key={agent.id} className="agent-mini">
-                  <div
-                    className="agent-mini-icon"
+              <>
+                <div className="flex items-center justify-between px-1 mb-2.5 relative">
+                  <span
                     style={{
-                      background: `${roleColors[agent.role] ?? 'var(--text-tertiary)'}1a`,
-                      border: `1px solid ${roleColors[agent.role] ?? 'var(--text-tertiary)'}26`,
+                      fontFamily: 'var(--font-hud)',
+                      fontSize: 10,
+                      color: 'var(--text-tertiary)',
+                      letterSpacing: 0.5,
                     }}
                   >
-                    <Bot
-                      size={14}
-                      style={{ color: roleColors[agent.role] ?? 'var(--text-tertiary)' }}
-                    />
-                  </div>
-                  <div className="agent-mini-info">
-                    <div className="agent-mini-name">{agent.name}</div>
-                    <div className="agent-mini-role">
-                      {agent.role} · {agent.status}
-                    </div>
-                  </div>
-                  <span
-                    className={`status-badge status-${agent.status === 'running' ? 'running' : agent.status === 'completed' ? 'succeeded' : 'queued'}`}
-                  >
-                    <span
-                      className={`status-dot dot-${agent.status === 'running' ? 'blue' : agent.status === 'completed' ? 'green' : 'gray'}`}
-                    />
-                    {agent.status}
+                    Assigned Team
                   </span>
+                  <button
+                    onClick={() => setShowAddDropdown((prev) => !prev)}
+                    className="p-1 rounded bg-white/5 hover:bg-white/10 text-white/60 hover:text-white transition-colors"
+                    title="Add Agent"
+                    disabled={isUpdatingTeam}
+                  >
+                    <Plus size={12} />
+                  </button>
+                  {showAddDropdown && (
+                    <div
+                      className="absolute right-0 top-7 w-48 rounded-md border shadow-lg py-1 z-50 max-h-60 overflow-y-auto"
+                      style={{
+                        background: 'rgba(10, 15, 30, 0.95)',
+                        borderColor: 'var(--glass-border)',
+                        backdropFilter: 'blur(4px)',
+                      }}
+                    >
+                      {availableAgents.length === 0 ? (
+                        <div
+                          className="px-3 py-2 text-[10px]"
+                          style={{ color: 'var(--text-tertiary)' }}
+                        >
+                          No other agents available
+                        </div>
+                      ) : (
+                        availableAgents.map((agent) => (
+                          <button
+                            key={agent.id}
+                            onClick={() => handleAddAgent(agent.id)}
+                            className="w-full text-left px-3 py-1.5 text-xs hover:bg-white/5 transition-colors flex flex-col cursor-pointer"
+                            style={{ color: 'rgba(255, 255, 255, 0.8)' }}
+                          >
+                            <span className="font-medium">{agent.name}</span>
+                            <span className="text-[9px]" style={{ color: 'var(--text-tertiary)' }}>
+                              {agent.role}
+                            </span>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
                 </div>
-              ))
+
+                {detail.agents.length === 0 ? (
+                  <EmptyTab message="No agents assigned" />
+                ) : (
+                  detail.agents.map((agent) => (
+                    <div key={agent.id} className="agent-mini relative group">
+                      <div
+                        className="agent-mini-icon"
+                        style={{
+                          background: `${roleColors[agent.role] ?? 'var(--text-tertiary)'}1a`,
+                          border: `1px solid ${roleColors[agent.role] ?? 'var(--text-tertiary)'}26`,
+                        }}
+                      >
+                        <Bot
+                          size={14}
+                          style={{ color: roleColors[agent.role] ?? 'var(--text-tertiary)' }}
+                        />
+                      </div>
+                      <div className="agent-mini-info">
+                        <div className="agent-mini-name">{agent.name}</div>
+                        <div className="agent-mini-role">
+                          {agent.role} · {agent.status}
+                          {agent.currentTaskId ? ` · ${agent.currentTaskId.slice(0, 8)}` : ''}
+                        </div>
+                      </div>
+                      <span
+                        className={`status-badge status-${agent.status === 'running' ? 'running' : agent.status === 'completed' ? 'succeeded' : agent.status === 'failed' ? 'failed' : agent.status === 'blocked' ? 'blocked' : 'queued'} transition-opacity group-hover:opacity-0`}
+                      >
+                        <span
+                          className={`status-dot dot-${agent.status === 'running' ? 'blue' : agent.status === 'completed' ? 'green' : agent.status === 'failed' ? 'red' : agent.status === 'blocked' ? 'amber' : 'gray'}`}
+                        />
+                        {agent.status}
+                      </span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRemoveAgent(agent.agentProfileId, agent.name);
+                        }}
+                        className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-white/10 text-white/40 hover:text-red-400 transition-all absolute right-2 top-1/2 -translate-y-1/2 cursor-pointer z-10"
+                        title="Remove agent"
+                        disabled={isUpdatingTeam}
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </>
             )}
             {detail && pendingApprovals.length > 0 && (
               <div className="mt-3">
@@ -439,40 +604,70 @@ export function WorkspaceRightPanel({ detail }: WorkspaceRightPanelProps) {
         )}
 
         {activeTab === 'Artifacts' && (
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-2">
             {!detail ? (
               <EmptyTab message="Select a workspace to view artifacts" />
             ) : artifacts.length === 0 ? (
               <EmptyTab message="No artifacts yet" />
             ) : (
-              artifacts.map((art) => (
-                <div
-                  key={art.id}
-                  className="artifact-card"
-                  onClick={() =>
-                    window.alert(`Viewing ${art.title}\nPath: ${art.path || 'no path'}`)
-                  }
-                >
-                  <div className="artifact-header">
-                    <div className="flex items-center justify-center mr-1">
-                      {art.type === 'spec' ? (
-                        <FileText size={14} style={{ color: 'var(--violet)' }} />
-                      ) : art.type === 'plan' ? (
-                        <Layout size={14} style={{ color: 'var(--cyan)' }} />
-                      ) : art.type === 'file' ? (
-                        <File size={14} style={{ color: 'var(--emerald)' }} />
-                      ) : (
-                        <CheckCircle size={14} style={{ color: 'var(--emerald)' }} />
-                      )}
-                    </div>
-                    <span className="artifact-title">{art.title}</span>
-                  </div>
-                  <div className="artifact-meta">
-                    {art.type} · {art.path || 'no path'} ·{' '}
-                    {new Date(art.createdAt).toLocaleTimeString()}
-                  </div>
+              <>
+                <div className="artifact-list">
+                  {artifacts.map((art) => {
+                    const location = artifactLocation(art);
+                    const isSelected = selectedArtifact?.id === art.id;
+                    return (
+                      <button
+                        key={art.id}
+                        type="button"
+                        className={`artifact-card ${isSelected ? 'selected' : ''}`}
+                        onClick={() => setSelectedArtifactId(art.id)}
+                      >
+                        <div className="artifact-header">
+                          <div className="flex items-center justify-center mr-1">
+                            {art.type === 'spec' ? (
+                              <FileText size={14} style={{ color: 'var(--violet)' }} />
+                            ) : art.type === 'plan' ? (
+                              <Layout size={14} style={{ color: 'var(--cyan)' }} />
+                            ) : art.type === 'file' ? (
+                              <File size={14} style={{ color: 'var(--emerald)' }} />
+                            ) : (
+                              <CheckCircle size={14} style={{ color: 'var(--emerald)' }} />
+                            )}
+                          </div>
+                          <span className="artifact-title">{art.title}</span>
+                        </div>
+                        <div className="artifact-meta">
+                          {art.type} · {location ?? 'inline'} ·{' '}
+                          {new Date(art.createdAt).toLocaleTimeString()}
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
-              ))
+                {selectedArtifact && (
+                  <div className="artifact-detail">
+                    <div className="artifact-detail-header">
+                      <span className="artifact-detail-title">{selectedArtifact.title}</span>
+                      <span
+                        className={`status-badge status-${selectedArtifact.type === 'file' ? 'succeeded' : 'queued'}`}
+                      >
+                        {selectedArtifact.type}
+                      </span>
+                    </div>
+                    {artifactLocation(selectedArtifact) && (
+                      <div className="artifact-path">
+                        <File size={10} />
+                        <span>{artifactLocation(selectedArtifact)}</span>
+                      </div>
+                    )}
+                    {artifactPreview(selectedArtifact) ? (
+                      <pre className="artifact-preview">{artifactPreview(selectedArtifact)}</pre>
+                    ) : (
+                      <div className="artifact-empty-preview">No inline preview available</div>
+                    )}
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}

@@ -11,6 +11,7 @@
 import { getRepositories } from "../persistence/factory.js";
 import type { TaskRow } from "../persistence/repository.js";
 import { isTaskComplete, isTaskExecutable } from "./task-status.js";
+import { emitWorkspaceEvent } from "../services/workspace-event-emitter.js";
 
 export class TaskGraph {
   /**
@@ -75,9 +76,27 @@ export class TaskGraph {
     const task = await tasks.getById(taskId);
     if (!task) throw new Error(`Task ${taskId} not found`);
 
-    if (isTaskComplete(task.status)) return;
+    const wasAlreadyComplete = isTaskComplete(task.status);
 
-    await tasks.update(taskId, { status: "completed" });
+    if (!wasAlreadyComplete) {
+      await tasks.update(taskId, { status: "completed" });
+
+      emitWorkspaceEvent({
+        type: "workspace.task.completed",
+        title: "Task completed",
+        summary: task.title,
+        severity: "success",
+        workspaceId: task.workspaceId ?? "",
+        projectId: task.projectId ?? undefined,
+        taskId: task.id,
+        payload: {
+          workspaceId: task.workspaceId ?? "",
+          projectId: task.projectId ?? "",
+          taskId: task.id,
+          taskTitle: task.title,
+        },
+      });
+    }
 
     const projectTasks = task.projectId
       ? await tasks.getByProjectId(task.projectId)
@@ -87,10 +106,30 @@ export class TaskGraph {
       if (!dependent.dependencies.includes(taskId)) continue;
 
       const blockedBy = await this.getIncompleteDependencies(dependent.id);
-      if (blockedBy.length === 0 && dependent.status === "blocked") {
+      if (
+        blockedBy.length === 0 &&
+        (dependent.status === "blocked" || isTaskExecutable(dependent.status))
+      ) {
         await tasks.update(dependent.id, {
           status: "queued",
           blockedBy: [],
+        });
+
+        emitWorkspaceEvent({
+          type: "workspace.task.unblocked",
+          title: "Task unblocked",
+          summary: dependent.title,
+          severity: "info",
+          workspaceId: dependent.workspaceId ?? "",
+          projectId: dependent.projectId ?? undefined,
+          taskId: dependent.id,
+          payload: {
+            workspaceId: dependent.workspaceId ?? "",
+            projectId: dependent.projectId ?? "",
+            taskId: dependent.id,
+            taskTitle: dependent.title,
+            unblockedBy: taskId,
+          },
         });
       } else if (blockedBy.length !== dependent.blockedBy.length ||
         blockedBy.some((id, index) => id !== dependent.blockedBy[index])) {
@@ -178,6 +217,23 @@ export class TaskGraph {
       await tasks.update(taskId, {
         status: "blocked",
         blockedBy,
+      });
+
+      emitWorkspaceEvent({
+        type: "workspace.task.blocked",
+        title: "Task blocked",
+        summary: `${task.title} blocked by ${blockedBy.length} dependencies`,
+        severity: "warning",
+        workspaceId: task.workspaceId ?? "",
+        projectId: task.projectId ?? undefined,
+        taskId: task.id,
+        payload: {
+          workspaceId: task.workspaceId ?? "",
+          projectId: task.projectId ?? "",
+          taskId: task.id,
+          taskTitle: task.title,
+          blockedBy,
+        },
       });
     } else if (task.status === "blocked") {
       await tasks.update(taskId, { status: "queued", blockedBy: [] });

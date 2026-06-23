@@ -1,4 +1,4 @@
-import { X, Bot, AlertTriangle, ShieldCheck } from 'lucide-react';
+import { X, Bot, AlertTriangle, ShieldCheck, Trash2 } from 'lucide-react';
 
 interface ProposedAgent {
   id: string;
@@ -12,8 +12,11 @@ interface ProposedAgent {
 interface AgentTeamProposalModalProps {
   agents: ProposedAgent[];
   warnings: string[];
-  onConfirm: () => void;
+  onConfirm: (agentIds: string[]) => void;
   onCancel: () => void;
+  allAgents: Array<{ id: string; name: string; role: string }>;
+  onAddAgent: (agentId: string) => void;
+  onRemoveAgent: (agentId: string) => void;
 }
 
 const riskColors: Record<string, { bg: string; border: string; text: string }> = {
@@ -46,7 +49,12 @@ export function AgentTeamProposalModal({
   warnings,
   onConfirm,
   onCancel,
+  allAgents,
+  onAddAgent,
+  onRemoveAgent,
 }: AgentTeamProposalModalProps) {
+  const availableAgents = allAgents.filter((aa) => !agents.some((a) => a.id === aa.id));
+
   return (
     <div className="modal-overlay" onClick={onCancel}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 520 }}>
@@ -121,111 +129,177 @@ export function AgentTeamProposalModal({
               return (
                 <div
                   key={agent.id}
-                  className="flex items-start gap-3 px-3 py-2.5"
+                  className="flex items-start justify-between gap-3 px-3 py-2.5"
                   style={{
                     borderRadius: 8,
                     background: 'rgba(255,255,255,0.02)',
                     border: '1px solid rgba(255,255,255,0.06)',
                   }}
                 >
-                  <div
-                    style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: 8,
-                      background: `${roleColor}15`,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexShrink: 0,
-                    }}
-                  >
-                    <Bot size={18} style={{ color: roleColor }} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <span
-                        style={{
-                          fontFamily: 'var(--font-body)',
-                          fontSize: 13,
-                          fontWeight: 500,
-                          color: 'var(--text-primary)',
-                        }}
-                      >
-                        {agent.name}
-                      </span>
-                      <span
-                        style={{
-                          fontFamily: 'var(--font-data)',
-                          fontSize: 9,
-                          color: roleColor,
-                          background: `${roleColor}15`,
-                          padding: '1px 5px',
-                          borderRadius: 4,
-                          textTransform: 'uppercase',
-                        }}
-                      >
-                        {agent.role}
-                      </span>
-                      <span
-                        style={{
-                          fontFamily: 'var(--font-data)',
-                          fontSize: 9,
-                          color: risk.text,
-                          background: risk.bg,
-                          border: `1px solid ${risk.border}`,
-                          padding: '1px 5px',
-                          borderRadius: 4,
-                          textTransform: 'uppercase',
-                        }}
-                      >
-                        {agent.risk}
-                      </span>
-                    </div>
+                  <div className="flex items-start gap-3 flex-1 min-w-0">
                     <div
                       style={{
-                        fontFamily: 'var(--font-data)',
-                        fontSize: 11,
-                        color: 'var(--text-tertiary)',
-                        lineHeight: 1.4,
+                        width: 36,
+                        height: 36,
+                        borderRadius: 8,
+                        background: `${roleColor}15`,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
                       }}
                     >
-                      {agent.reason}
+                      <Bot size={18} style={{ color: roleColor }} />
                     </div>
-                    {agent.permissions && agent.permissions.length > 0 && (
-                      <div className="flex items-center gap-1 mt-1 flex-wrap">
-                        {agent.permissions.slice(0, 4).map((p) => (
-                          <span
-                            key={p}
-                            style={{
-                              fontFamily: 'var(--font-data)',
-                              fontSize: 9,
-                              color: 'var(--text-tertiary)',
-                              background: 'rgba(255,255,255,0.04)',
-                              padding: '1px 4px',
-                              borderRadius: 3,
-                            }}
-                          >
-                            {p}
-                          </span>
-                        ))}
-                        {agent.permissions.length > 4 && (
-                          <span
-                            style={{
-                              fontFamily: 'var(--font-data)',
-                              fontSize: 9,
-                              color: 'var(--text-tertiary)',
-                            }}
-                          >
-                            +{agent.permissions.length - 4}
-                          </span>
-                        )}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span
+                          style={{
+                            fontFamily: 'var(--font-body)',
+                            fontSize: 13,
+                            fontWeight: 500,
+                            color: 'var(--text-primary)',
+                          }}
+                        >
+                          {agent.name}
+                        </span>
+                        <span
+                          style={{
+                            fontFamily: 'var(--font-data)',
+                            fontSize: 9,
+                            color: roleColor,
+                            background: `${roleColor}15`,
+                            padding: '1px 5px',
+                            borderRadius: 4,
+                            textTransform: 'uppercase',
+                          }}
+                        >
+                          {agent.role}
+                        </span>
+                        <span
+                          style={{
+                            fontFamily: 'var(--font-data)',
+                            fontSize: 9,
+                            color: risk.text,
+                            background: risk.bg,
+                            border: `1px solid ${risk.border}`,
+                            padding: '1px 5px',
+                            borderRadius: 4,
+                            textTransform: 'uppercase',
+                          }}
+                        >
+                          {agent.risk}
+                        </span>
                       </div>
-                    )}
+                      <div
+                        style={{
+                          fontFamily: 'var(--font-data)',
+                          fontSize: 11,
+                          color: 'var(--text-tertiary)',
+                          lineHeight: 1.4,
+                        }}
+                      >
+                        {agent.reason}
+                      </div>
+                      {agent.permissions && agent.permissions.length > 0 && (
+                        <div className="flex items-center gap-1 mt-1 flex-wrap">
+                          {agent.permissions.slice(0, 4).map((p) => (
+                            <span
+                              key={p}
+                              style={{
+                                fontFamily: 'var(--font-data)',
+                                fontSize: 9,
+                                color: 'var(--text-tertiary)',
+                                background: 'rgba(255,255,255,0.04)',
+                                padding: '1px 4px',
+                                borderRadius: 3,
+                              }}
+                            >
+                              {p}
+                            </span>
+                          ))}
+                          {agent.permissions.length > 4 && (
+                            <span
+                              style={{
+                                fontFamily: 'var(--font-data)',
+                                fontSize: 9,
+                                color: 'var(--text-tertiary)',
+                              }}
+                            >
+                              +{agent.permissions.length - 4}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
+
+                  <button
+                    onClick={() => onRemoveAgent(agent.id)}
+                    style={{
+                      color: 'var(--text-tertiary)',
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      padding: 4,
+                      marginTop: 2,
+                      alignSelf: 'flex-start',
+                    }}
+                  >
+                    <Trash2 size={14} />
+                  </button>
                 </div>
               );
             })}
+
+          {availableAgents.length > 0 && (
+            <div
+              className="flex items-center justify-between gap-3 px-3 py-2 mt-2"
+              style={{
+                borderRadius: 8,
+                background: 'rgba(0,212,255,0.02)',
+                border: '1px dashed rgba(0,212,255,0.15)',
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: 'var(--font-data)',
+                  fontSize: 11,
+                  color: 'var(--text-secondary)',
+                }}
+              >
+                Add Agent
+              </span>
+              <select
+                value=""
+                onChange={(e) => {
+                  if (e.target.value) {
+                    onAddAgent(e.target.value);
+                  }
+                }}
+                style={{
+                  fontFamily: 'var(--font-data)',
+                  fontSize: 11,
+                  color: 'var(--text-primary)',
+                  background: 'rgba(0,0,0,0.3)',
+                  border: '1px solid rgba(255,255,255,0.06)',
+                  borderRadius: 6,
+                  padding: '4px 8px',
+                  outline: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                <option value="" disabled>
+                  Select agent to add...
+                </option>
+                {availableAgents.map((aa) => (
+                  <option key={aa.id} value={aa.id} style={{ background: '#1c1c1e' }}>
+                    {aa.name} ({aa.role})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
 
         {/* Footer */}
@@ -249,7 +323,7 @@ export function AgentTeamProposalModal({
             Cancel
           </button>
           <button
-            onClick={onConfirm}
+            onClick={() => onConfirm(agents.map((a) => a.id))}
             style={{
               fontFamily: 'var(--font-data)',
               fontSize: 11,

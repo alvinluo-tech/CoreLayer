@@ -22,6 +22,12 @@ export type CodingRunStatus =
 export interface CodingTask {
   /** Optional DB run ID — adapters should use this instead of generating their own */
   dbRunId?: string;
+  /** Optional DB task ID for workspace event context */
+  dbTaskId?: string;
+  /** Workspace ID for event context */
+  workspaceId?: string;
+  /** Project ID for event context */
+  projectId?: string;
   /** Conversation ID for session file tracking */
   conversationId?: string;
   /** Repository path (absolute) */

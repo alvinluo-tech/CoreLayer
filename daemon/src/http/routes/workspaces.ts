@@ -37,12 +37,26 @@ workspaceRoutes.get("/default", withErrorHandling("workspaces/default", async (c
  * Creates workspace + project + spec + tasks + agents from a goal string
  */
 workspaceRoutes.post("/from-goal", withErrorHandling("workspaces/from-goal", async (c) => {
-  const body = await c.req.json<{ goal: string }>();
+  const body = await c.req.json<{
+    goal: string;
+    spec?: {
+      summary?: string;
+      nonGoals?: string[];
+      techStack?: string;
+      constraints?: string[];
+      milestones?: string[];
+    };
+    agentIds?: string[];
+  }>();
+
   if (!body.goal?.trim()) {
     return apiError(c, "Goal is required", 400);
   }
 
-  const result = await orchestrateFromGoal(body.goal);
+  const result = await orchestrateFromGoal(body.goal, {
+    spec: body.spec,
+    agentIds: body.agentIds,
+  });
   return c.json({ data: result }, 201);
 }));
 

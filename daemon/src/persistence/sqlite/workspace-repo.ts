@@ -1,6 +1,7 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { workspaces } from "../schema.js";
 import { db } from "../client.js";
+import * as schema from "../schema.js";
 import type {
   WorkspaceRepository,
   WorkspaceRow,
@@ -78,8 +79,102 @@ export function createSqliteWorkspaceRepo(): WorkspaceRepository {
     },
 
     async delete(id: string): Promise<boolean> {
-      const result = await db.delete(workspaces).where(eq(workspaces.id, id));
-      return result.changes > 0;
+      return db.transaction((tx) => {
+        // 1. Get projects of this workspace
+        const workspaceProjects = tx
+          .select({ id: schema.projects.id })
+          .from(schema.projects)
+          .where(eq(schema.projects.workspaceId, id))
+          .all();
+        const projectIds = workspaceProjects.map((p) => p.id);
+
+        // 2. Get conversations of this workspace and its projects
+        let workspaceConversations = tx
+          .select({ id: schema.conversations.id })
+          .from(schema.conversations)
+          .where(eq(schema.conversations.workspaceId, id))
+          .all();
+
+        if (projectIds.length > 0) {
+          const projectConversations = tx
+            .select({ id: schema.conversations.id })
+            .from(schema.conversations)
+            .where(inArray(schema.conversations.projectId, projectIds))
+            .all();
+          workspaceConversations = [...workspaceConversations, ...projectConversations];
+        }
+        const conversationIds = Array.from(new Set(workspaceConversations.map((c) => c.id)));
+
+        // 3. Get agent runs of this workspace and its projects
+        let workspaceRuns = tx
+          .select({ id: schema.agentRuns.id })
+          .from(schema.agentRuns)
+          .where(eq(schema.agentRuns.workspaceId, id))
+          .all();
+
+        if (projectIds.length > 0) {
+          const projectRuns = tx
+            .select({ id: schema.agentRuns.id })
+            .from(schema.agentRuns)
+            .where(inArray(schema.agentRuns.projectId, projectIds))
+            .all();
+          workspaceRuns = [...workspaceRuns, ...projectRuns];
+        }
+        const runIds = Array.from(new Set(workspaceRuns.map((r) => r.id)));
+
+        // 4. Delete agent run events & approval requests
+        if (runIds.length > 0) {
+          tx.delete(schema.agentRunEvents)
+            .where(inArray(schema.agentRunEvents.runId, runIds))
+            .run();
+          tx.delete(schema.approvalRequests)
+            .where(inArray(schema.approvalRequests.runId, runIds))
+            .run();
+        }
+
+        // 5. Delete agent runs
+        tx.delete(schema.agentRuns).where(eq(schema.agentRuns.workspaceId, id)).run();
+        if (projectIds.length > 0) {
+          tx.delete(schema.agentRuns).where(inArray(schema.agentRuns.projectId, projectIds)).run();
+        }
+
+        // 6. Delete messages & conversations
+        if (conversationIds.length > 0) {
+          tx.delete(schema.messages)
+            .where(inArray(schema.messages.conversationId, conversationIds))
+            .run();
+        }
+        tx.delete(schema.conversations).where(eq(schema.conversations.workspaceId, id)).run();
+        if (projectIds.length > 0) {
+          tx.delete(schema.conversations).where(inArray(schema.conversations.projectId, projectIds)).run();
+        }
+
+        // 7. Delete tasks
+        tx.delete(schema.tasks).where(eq(schema.tasks.workspaceId, id)).run();
+        if (projectIds.length > 0) {
+          tx.delete(schema.tasks).where(inArray(schema.tasks.projectId, projectIds)).run();
+        }
+
+        // 8. Delete permission memories
+        if (projectIds.length > 0) {
+          tx.delete(schema.permissionMemories)
+            .where(inArray(schema.permissionMemories.projectId, projectIds))
+            .run();
+        }
+
+        // 9. Delete artifacts before projects because artifacts.project_id references projects.id.
+        tx.delete(schema.artifacts).where(eq(schema.artifacts.workspaceId, id)).run();
+
+        // 10. Delete projects
+        tx.delete(schema.projects).where(eq(schema.projects.workspaceId, id)).run();
+
+        // 11. Delete workspace agents (profile links)
+        tx.delete(schema.workspaceAgents).where(eq(schema.workspaceAgents.workspaceId, id)).run();
+
+        // 12. Delete workspace itself
+        const result = tx.delete(workspaces).where(eq(workspaces.id, id)).run();
+        return result.changes > 0;
+      });
     },
   };
 }

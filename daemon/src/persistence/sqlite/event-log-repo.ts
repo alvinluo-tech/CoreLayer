@@ -8,6 +8,11 @@ import type {
   EventLogFilters,
 } from "../repository.js";
 
+/** Build a SQL condition that extracts workspaceId from the JSON payload column. */
+function workspaceIdCondition(workspaceId: string) {
+  return sql`json_extract(${schema.eventLog.payload}, '$.workspaceId') = ${workspaceId}`;
+}
+
 type DrizzleDb = BetterSQLite3Database<typeof schema>;
 
 function normalize(row: typeof schema.eventLog.$inferSelect): EventLogRow {
@@ -47,6 +52,7 @@ export function createSqliteEventLogRepo(database?: DrizzleDb): EventLogReposito
       const conditions = [];
       if (filters?.type) conditions.push(eq(schema.eventLog.type, filters.type));
       if (filters?.projectId) conditions.push(eq(schema.eventLog.projectId, filters.projectId));
+      if (filters?.workspaceId) conditions.push(workspaceIdCondition(filters.workspaceId));
       if (filters?.agentRunId) conditions.push(eq(schema.eventLog.agentRunId, filters.agentRunId));
       if (filters?.runtimeId) conditions.push(eq(schema.eventLog.runtimeId, filters.runtimeId));
       if (filters?.since) conditions.push(gte(schema.eventLog.createdAt, filters.since));
@@ -70,6 +76,7 @@ export function createSqliteEventLogRepo(database?: DrizzleDb): EventLogReposito
       const conditions = [];
       if (filters?.type) conditions.push(eq(schema.eventLog.type, filters.type));
       if (filters?.projectId) conditions.push(eq(schema.eventLog.projectId, filters.projectId));
+      if (filters?.workspaceId) conditions.push(workspaceIdCondition(filters.workspaceId));
       if (filters?.agentRunId) conditions.push(eq(schema.eventLog.agentRunId, filters.agentRunId));
       if (filters?.runtimeId) conditions.push(eq(schema.eventLog.runtimeId, filters.runtimeId));
       if (filters?.since) conditions.push(gte(schema.eventLog.createdAt, filters.since));

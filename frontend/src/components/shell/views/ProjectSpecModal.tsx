@@ -1,12 +1,67 @@
+import { useState, useEffect } from 'react';
 import { X, FileText } from 'lucide-react';
+
+export interface SpecData {
+  summary: string;
+  nonGoals: string[];
+  techStack: string;
+  constraints: string[];
+  milestones: string[];
+}
 
 interface ProjectSpecModalProps {
   goal: string;
-  onConfirm: () => void;
+  spec: SpecData | null;
+  onConfirm: (spec: SpecData) => void;
   onCancel: () => void;
 }
 
-export function ProjectSpecModal({ goal, onConfirm, onCancel }: ProjectSpecModalProps) {
+const inputStyle = {
+  width: '100%',
+  fontFamily: 'var(--font-data)',
+  fontSize: 12,
+  color: 'var(--text-primary)',
+  background: 'rgba(0,0,0,0.3)',
+  border: '1px solid rgba(255,255,255,0.06)',
+  borderRadius: 6,
+  padding: '8px 10px',
+  outline: 'none',
+};
+
+const textareaStyle = {
+  ...inputStyle,
+  resize: 'vertical' as const,
+};
+
+export function ProjectSpecModal({ goal, spec, onConfirm, onCancel }: ProjectSpecModalProps) {
+  const [summary, setSummary] = useState('');
+  const [nonGoals, setNonGoals] = useState('');
+  const [techStack, setTechStack] = useState('');
+  const [constraints, setConstraints] = useState('');
+
+  useEffect(() => {
+    setSummary(spec?.summary || '');
+    setNonGoals(spec?.nonGoals ? spec.nonGoals.join('\n') : '');
+    setTechStack(spec?.techStack || '');
+    setConstraints(spec?.constraints ? spec.constraints.join('\n') : '');
+  }, [spec]);
+
+  const handleStart = () => {
+    onConfirm({
+      summary,
+      nonGoals: nonGoals
+        .split('\n')
+        .map((x) => x.trim())
+        .filter(Boolean),
+      techStack,
+      constraints: constraints
+        .split('\n')
+        .map((x) => x.trim())
+        .filter(Boolean),
+      milestones: spec?.milestones || [],
+    });
+  };
+
   return (
     <div className="modal-overlay" onClick={onCancel}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 520 }}>
@@ -44,20 +99,73 @@ export function ProjectSpecModal({ goal, onConfirm, onCancel }: ProjectSpecModal
 
         {/* Content */}
         <div className="px-4 py-3 space-y-3" style={{ maxHeight: 400, overflowY: 'auto' }}>
-          <SpecSection title="Goal" content={goal} />
-          <SpecSection
-            title="Summary"
-            content="AI-powered workspace for coordinated agent execution."
-          />
-          <SpecSection
-            title="Non-Goals"
-            content="No manual task management. Agents handle planning and execution autonomously."
-          />
-          <SpecSection title="Tech Stack" content="TypeScript, React, Hono, SQLite, Drizzle ORM" />
-          <SpecSection
-            title="Constraints"
-            content="Single-user desktop app. Local-first. No external dependencies required."
-          />
+          <div>
+            <div className="hud-label" style={{ marginBottom: 4 }}>
+              Goal
+            </div>
+            <div
+              style={{
+                fontFamily: 'var(--font-data)',
+                fontSize: 12,
+                color: 'var(--text-secondary)',
+                background: 'rgba(0,0,0,0.2)',
+                border: '1px solid rgba(255,255,255,0.04)',
+                borderRadius: 6,
+                padding: '8px 10px',
+                lineHeight: 1.5,
+              }}
+            >
+              {goal}
+            </div>
+          </div>
+
+          <div>
+            <div className="hud-label" style={{ marginBottom: 4 }}>
+              Summary
+            </div>
+            <textarea
+              value={summary}
+              onChange={(e) => setSummary(e.target.value)}
+              style={textareaStyle}
+              rows={2}
+            />
+          </div>
+
+          <div>
+            <div className="hud-label" style={{ marginBottom: 4 }}>
+              Non-Goals (One per line)
+            </div>
+            <textarea
+              value={nonGoals}
+              onChange={(e) => setNonGoals(e.target.value)}
+              style={textareaStyle}
+              rows={3}
+            />
+          </div>
+
+          <div>
+            <div className="hud-label" style={{ marginBottom: 4 }}>
+              Tech Stack
+            </div>
+            <input
+              type="text"
+              value={techStack}
+              onChange={(e) => setTechStack(e.target.value)}
+              style={inputStyle}
+            />
+          </div>
+
+          <div>
+            <div className="hud-label" style={{ marginBottom: 4 }}>
+              Constraints (One per line)
+            </div>
+            <textarea
+              value={constraints}
+              onChange={(e) => setConstraints(e.target.value)}
+              style={textareaStyle}
+              rows={3}
+            />
+          </div>
         </div>
 
         {/* Footer */}
@@ -81,7 +189,7 @@ export function ProjectSpecModal({ goal, onConfirm, onCancel }: ProjectSpecModal
             Cancel
           </button>
           <button
-            onClick={onConfirm}
+            onClick={handleStart}
             style={{
               fontFamily: 'var(--font-data)',
               fontSize: 11,
@@ -96,30 +204,6 @@ export function ProjectSpecModal({ goal, onConfirm, onCancel }: ProjectSpecModal
             Start Workspace
           </button>
         </div>
-      </div>
-    </div>
-  );
-}
-
-function SpecSection({ title, content }: { title: string; content: string }) {
-  return (
-    <div>
-      <div className="hud-label" style={{ marginBottom: 4 }}>
-        {title}
-      </div>
-      <div
-        style={{
-          fontFamily: 'var(--font-data)',
-          fontSize: 12,
-          color: 'var(--text-secondary)',
-          background: 'rgba(0,0,0,0.2)',
-          border: '1px solid rgba(255,255,255,0.04)',
-          borderRadius: 6,
-          padding: '8px 10px',
-          lineHeight: 1.5,
-        }}
-      >
-        {content}
       </div>
     </div>
   );

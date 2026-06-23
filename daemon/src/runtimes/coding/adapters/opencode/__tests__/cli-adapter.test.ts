@@ -21,6 +21,10 @@ vi.mock("../../../../../persistence/factory.js", () => ({
   getRepositories: vi.fn(),
 }));
 
+vi.mock("../../../../../services/workspace-event-emitter.js", () => ({
+  emitWorkspaceEvent: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("../../../../../shared/secret-masking.js", () => ({
   maskObjectSecrets: (obj: Record<string, unknown>) => obj,
 }));
@@ -59,6 +63,7 @@ vi.mock("../../../process-spawner.js", () => ({
 import { OpenCodeCliAdapter } from "../cli-adapter.js";
 import * as capabilityBroker from "../../../../../capabilities/os-capability-broker.js";
 import * as persistenceFactory from "../../../../../persistence/factory.js";
+import * as workspaceEventEmitter from "../../../../../services/workspace-event-emitter.js";
 
 function makeTask(overrides?: { repoPath?: string; worktreePath?: string; dbRunId?: string }) {
   return {
@@ -127,7 +132,10 @@ describe("OpenCodeCliAdapter", () => {
 
     vi.mocked(persistenceFactory.getRepositories).mockReturnValue({
       agentRuns: { updateArtifacts: vi.fn(async () => {}) },
+      eventLog: { create: vi.fn(async () => {}) },
     } as any);
+
+    vi.mocked(workspaceEventEmitter.emitWorkspaceEvent).mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -141,6 +149,7 @@ describe("OpenCodeCliAdapter", () => {
     } as any);
     vi.mocked(persistenceFactory.getRepositories).mockReturnValue({
       agentRuns: { updateArtifacts: vi.fn(async () => {}) },
+      eventLog: { create: vi.fn(async () => {}) },
     } as any);
   }
 
@@ -342,6 +351,65 @@ describe("OpenCodeCliAdapter", () => {
       const info = await adapter.getRunStatus(runHandle.runId);
       expect(info.status).toBe("failed");
       expect(info.error).toBe("spawn failed");
+    });
+  });
+
+  describe("workspace event emissions", () => {
+    it("emits run.started event on successful run start", async () => {
+      setupDefaultMocks();
+
+      await adapter.startRun(makeTask());
+
+      expect(workspaceEventEmitter.emitWorkspaceEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "workspace.run.started",
+        }),
+      );
+    });
+
+    it("emits run.completed event on process exit code 0", async () => {
+      setupDefaultMocks();
+      const mockProc = makeMockProcess();
+      mockSpawnProcessLive.mockReturnValue(makeMockHandle(mockProc) as any);
+
+      await adapter.startRun(makeTask());
+      mockProc.emitClose(0);
+
+      expect(workspaceEventEmitter.emitWorkspaceEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "workspace.run.completed",
+        }),
+      );
+    });
+
+    it("emits run.failed event on non-zero exit code", async () => {
+      setupDefaultMocks();
+      const mockProc = makeMockProcess();
+      mockSpawnProcessLive.mockReturnValue(makeMockHandle(mockProc) as any);
+
+      await adapter.startRun(makeTask());
+      mockProc.emitClose(1);
+
+      expect(workspaceEventEmitter.emitWorkspaceEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "workspace.run.failed",
+        }),
+      );
+    });
+
+    it("emits run.failed event on process error", async () => {
+      setupDefaultMocks();
+      const mockProc = makeMockProcess();
+      mockSpawnProcessLive.mockReturnValue(makeMockHandle(mockProc) as any);
+
+      await adapter.startRun(makeTask());
+      mockProc.emitError(new Error("ENOENT"));
+
+      expect(workspaceEventEmitter.emitWorkspaceEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "workspace.run.failed",
+        }),
+      );
     });
   });
 });

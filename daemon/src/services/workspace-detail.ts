@@ -23,9 +23,12 @@ interface WorkspaceDetailViewModel {
   };
   agents: Array<{
     id: string;
+    agentProfileId: string;
     name: string;
     role: string;
     status: string;
+    currentTaskId: string | null;
+    latestRunId: string | null;
     joinedAt: string;
   }>;
   recentRuns: Array<{
@@ -154,6 +157,8 @@ export async function getWorkspaceDetail(
       status: schema.agentRuns.status,
       startedAt: schema.agentRuns.startedAt,
       completedAt: schema.agentRuns.completedAt,
+      agentId: schema.agentRuns.agentId,
+      taskId: schema.agentRuns.taskId,
       agentName: schema.agentProfiles.name,
     })
     .from(schema.agentRuns)
@@ -163,10 +168,37 @@ export async function getWorkspaceDetail(
     )
     .where(eq(schema.agentRuns.workspaceId, workspaceId))
     .orderBy(desc(schema.agentRuns.startedAt))
-    .limit(5)
+    .limit(20)
     .all();
 
   const activeRuns = recentRuns.filter((r) => r.status === "running").length;
+  const latestRunByAgent = new Map<string, typeof recentRuns[number]>();
+  for (const run of recentRuns) {
+    const agentId = "agentId" in run ? run.agentId : null;
+    if (agentId && !latestRunByAgent.has(agentId)) {
+      latestRunByAgent.set(agentId, run);
+    }
+  }
+
+  const deriveAgentStatus = (workspaceAgentStatus: string, run?: typeof recentRuns[number]) => {
+    if (!run) return workspaceAgentStatus;
+    switch (run.status) {
+      case "queued":
+        return "queued";
+      case "running":
+        return "running";
+      case "waiting_for_approval":
+        return "blocked";
+      case "succeeded":
+        return "completed";
+      case "failed":
+        return "failed";
+      case "cancelled":
+        return "idle";
+      default:
+        return workspaceAgentStatus;
+    }
+  };
 
   // Get pending approvals
   const pendingApprovals = db
@@ -211,10 +243,21 @@ export async function getWorkspaceDetail(
     },
     projects,
     agents: workspaceAgents.map((a) => ({
+      ...(() => {
+        const latestRun = latestRunByAgent.get(a.agentProfileId);
+        return {
+          status: deriveAgentStatus(a.status, latestRun),
+          currentTaskId:
+            latestRun && (latestRun.status === "queued" || latestRun.status === "running" || latestRun.status === "waiting_for_approval")
+              ? latestRun.taskId
+              : null,
+          latestRunId: latestRun?.id ?? null,
+        };
+      })(),
       id: a.id,
+      agentProfileId: a.agentProfileId,
       name: a.agentName,
       role: a.agentRole,
-      status: a.status,
       joinedAt: a.joinedAt,
     })),
     recentRuns: recentRuns.map((r) => ({

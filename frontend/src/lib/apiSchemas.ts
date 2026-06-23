@@ -265,9 +265,12 @@ export const workspaceDetailSchema = z.object({
   agents: z.array(
     z.object({
       id: z.string(),
+      agentProfileId: z.string(),
       name: z.string(),
       role: z.string(),
       status: z.string(),
+      currentTaskId: z.string().nullable().optional(),
+      latestRunId: z.string().nullable().optional(),
       joinedAt: z.string(),
     })
   ),

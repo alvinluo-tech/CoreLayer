@@ -89,6 +89,11 @@ vi.mock("../persistence/factory.js", () => ({
   }),
 }));
 
+const mockEmitWorkspaceEvent = vi.fn();
+vi.mock("../services/workspace-event-emitter.js", () => ({
+  emitWorkspaceEvent: (...args: unknown[]) => mockEmitWorkspaceEvent(...args),
+}));
+
 const { createSqliteTaskRepo } = await import("../persistence/sqlite/task-repo.js");
 const { TaskGraph } = await import("./task-graph-service.js");
 
@@ -234,6 +239,52 @@ describe("TaskGraph", () => {
       expect(updated?.blockedBy).toEqual([]);
     });
 
+    it("should unblock dependents even when dependency is already completed", async () => {
+      const wsId = "test-ws";
+      const projId = "test-proj";
+      testDb.insert(schema.workspaces).values({ id: wsId, name: "Test", ownerId: "user" }).run();
+      testDb.insert(schema.projects).values({ id: projId, workspaceId: wsId, name: "Test" }).run();
+
+      const dep = await tasks.create({ title: "Dep" });
+      testDb.update(schema.tasks).set({ projectId: projId }).where(eq(schema.tasks.id, dep.id)).run();
+      await tasks.update(dep.id, { status: "completed" });
+
+      const main = await tasks.create({
+        title: "Main",
+        dependencies: [dep.id],
+      });
+      testDb.update(schema.tasks).set({ projectId: projId }).where(eq(schema.tasks.id, main.id)).run();
+      await tasks.update(main.id, { status: "blocked", blockedBy: [dep.id] });
+
+      await graph.completeTask(dep.id);
+
+      const updated = await tasks.getById(main.id);
+      expect(updated?.status).toBe("queued");
+      expect(updated?.blockedBy).toEqual([]);
+    });
+
+    it("should queue pending dependents when dependencies become complete", async () => {
+      const wsId = "test-ws";
+      const projId = "test-proj";
+      testDb.insert(schema.workspaces).values({ id: wsId, name: "Test", ownerId: "user" }).run();
+      testDb.insert(schema.projects).values({ id: projId, workspaceId: wsId, name: "Test" }).run();
+
+      const dep = await tasks.create({ title: "Dep" });
+      testDb.update(schema.tasks).set({ projectId: projId }).where(eq(schema.tasks.id, dep.id)).run();
+
+      const main = await tasks.create({
+        title: "Main",
+        dependencies: [dep.id],
+      });
+      testDb.update(schema.tasks).set({ projectId: projId }).where(eq(schema.tasks.id, main.id)).run();
+
+      await graph.completeTask(dep.id);
+
+      const updated = await tasks.getById(main.id);
+      expect(updated?.status).toBe("queued");
+      expect(updated?.blockedBy).toEqual([]);
+    });
+
     it("should throw for non-existent task", async () => {
       await expect(graph.completeTask("non-existent")).rejects.toThrow(
         "not found",
@@ -249,6 +300,44 @@ describe("TaskGraph", () => {
 
       const updated = await tasks.getById(task.id);
       expect(updated?.status).toBe("completed");
+    });
+
+    it("should emit task.completed event when completing a task", async () => {
+      mockEmitWorkspaceEvent.mockClear();
+      const task = await tasks.create({ title: "Complete me" });
+      await graph.completeTask(task.id);
+
+      expect(mockEmitWorkspaceEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "workspace.task.completed",
+          taskId: task.id,
+        }),
+      );
+    });
+
+    it("should emit task.unblocked event for dependent tasks", async () => {
+      const wsId = "test-ws";
+      const projId = "test-proj";
+      testDb.insert(schema.workspaces).values({ id: wsId, name: "Test", ownerId: "user" }).run();
+      testDb.insert(schema.projects).values({ id: projId, workspaceId: wsId, name: "Test" }).run();
+
+      mockEmitWorkspaceEvent.mockClear();
+
+      const dep = await tasks.create({ title: "Dep" });
+      testDb.update(schema.tasks).set({ projectId: projId, workspaceId: wsId }).where(eq(schema.tasks.id, dep.id)).run();
+
+      const main = await tasks.create({ title: "Main", dependencies: [dep.id] });
+      testDb.update(schema.tasks).set({ projectId: projId, workspaceId: wsId }).where(eq(schema.tasks.id, main.id)).run();
+      await tasks.update(main.id, { status: "blocked", blockedBy: [dep.id] });
+
+      await graph.completeTask(dep.id);
+
+      const unblockedEvent = mockEmitWorkspaceEvent.mock.calls.find(
+        (call: any[]) => call[0].type === "workspace.task.unblocked",
+      );
+      expect(unblockedEvent).toBeDefined();
+      expect(unblockedEvent![0].taskId).toBe(main.id);
+      expect(unblockedEvent![0].payload.unblockedBy).toBe(dep.id);
     });
   });
 
@@ -373,6 +462,21 @@ describe("TaskGraph", () => {
       updated = await tasks.getById(task.id);
       expect(updated?.status).toBe("queued");
       expect(updated?.blockedBy).toEqual([]);
+    });
+
+    it("should emit task.blocked event when setting incomplete dependencies", async () => {
+      mockEmitWorkspaceEvent.mockClear();
+      const dep = await tasks.create({ title: "Dep" });
+      const task = await tasks.create({ title: "Main" });
+
+      await graph.setDependencies(task.id, [dep.id]);
+
+      expect(mockEmitWorkspaceEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "workspace.task.blocked",
+          taskId: task.id,
+        }),
+      );
     });
   });
 });

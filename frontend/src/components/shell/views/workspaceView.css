@@ -339,6 +339,9 @@
 /* ---- Artifact Card ---- */
 
 .artifact-card {
+  display: block;
+  width: 100%;
+  text-align: left;
   background: rgba(255, 255, 255, 0.015);
   border: 1px solid rgba(0, 212, 255, 0.05);
   border-radius: 8px;
@@ -350,6 +353,11 @@
 
 .artifact-card:hover {
   border-color: rgba(0, 212, 255, 0.12);
+}
+
+.artifact-card.selected {
+  border-color: rgba(0, 212, 255, 0.24);
+  background: rgba(0, 212, 255, 0.045);
 }
 
 .artifact-header {
@@ -369,6 +377,78 @@
   font-family: 'Share Tech Mono', monospace;
   font-size: 9px;
   color: rgba(255, 255, 255, 0.25);
+}
+
+.artifact-detail {
+  border: 1px solid rgba(0, 212, 255, 0.08);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.18);
+  padding: 10px;
+}
+
+.artifact-detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.artifact-detail-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.artifact-path {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  margin-bottom: 8px;
+  padding: 4px 6px;
+  border-radius: 5px;
+  border: 1px solid rgba(0, 230, 138, 0.12);
+  background: rgba(0, 230, 138, 0.05);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: #00e68a;
+}
+
+.artifact-path span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.artifact-preview {
+  max-height: 220px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+  padding: 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.56);
+}
+
+.artifact-empty-preview {
+  padding: 10px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.02);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.3);
 }
 
 /* ---- Task Tree ---- */

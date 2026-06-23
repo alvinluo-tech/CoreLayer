@@ -148,6 +148,35 @@ describe("workspaces route", () => {
       expect(json.data.workspace.id).toBe("ws-1");
     });
 
+    it("orchestrates from goal string with options", async () => {
+      mockOrchestrateFromGoal.mockResolvedValue({ workspace: { id: "ws-1" } });
+
+      const spec = {
+        summary: "a customized spec",
+        nonGoals: ["n1"],
+        techStack: "React",
+        constraints: ["c1"],
+        milestones: ["ms1"],
+      };
+      const agentIds = ["agent-1", "agent-2"];
+
+      const res = await app.fetch(
+        makeRequest("/from-goal", "POST", {
+          goal: "Build a todo app",
+          spec,
+          agentIds,
+        }),
+      );
+      const json = (await res.json()) as { data: { workspace: { id: string } } };
+
+      expect(res.status).toBe(201);
+      expect(json.data.workspace.id).toBe("ws-1");
+      expect(mockOrchestrateFromGoal).toHaveBeenCalledWith("Build a todo app", {
+        spec,
+        agentIds,
+      });
+    });
+
     it("returns 400 when goal is empty", async () => {
       const res = await app.fetch(
         makeRequest("/from-goal", "POST", { goal: "" }),

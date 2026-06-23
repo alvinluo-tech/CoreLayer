@@ -17,6 +17,7 @@ import * as capabilityBroker from "../../../capabilities/os-capability-broker.js
 import * as auditLog from "../../../persistence/audit-log.js";
 import * as artifactPersistence from "../artifact-persistence.js";
 import * as persistenceFactory from "../../../persistence/factory.js";
+import * as workspaceEventEmitter from "../../../services/workspace-event-emitter.js";
 
 // ---- Helpers ----
 
@@ -31,6 +32,7 @@ function makeTask(overrides?: { repoPath?: string; timeoutMs?: number }) {
 function makeMockProcess() {
   const emitter = new EventEmitter();
   const listeners: Record<string, (...args: unknown[]) => void> = {};
+  const stdin = { write: vi.fn() };
 
   const originalOn = emitter.on.bind(emitter);
   emitter.on = vi.fn((event: string, fn: (...args: unknown[]) => void) => {
@@ -39,7 +41,8 @@ function makeMockProcess() {
   }) as unknown as typeof emitter.on;
 
   return {
-    process: emitter,
+    process: Object.assign(emitter, { stdin }),
+    stdin,
     listeners,
     emitClose(code: number | null) {
       listeners["close"]?.(code);
@@ -96,6 +99,8 @@ describe("ClaudeCodeAdapter", () => {
     vi.spyOn(persistenceFactory, "getRepositories").mockReturnValue({
       agentRuns: { updateArtifacts: vi.fn(async () => {}) },
     } as any);
+
+    vi.spyOn(workspaceEventEmitter, "emitWorkspaceEvent").mockImplementation(async () => {});
   });
 
   afterEach(() => {
@@ -346,6 +351,19 @@ describe("ClaudeCodeAdapter", () => {
           decision: "allowed",
         }),
       );
+    });
+
+    it("auto-responds to low-risk interactive prompts", async () => {
+      (processSpawner.isCommandAvailable as any).mockReturnValue(true);
+      const mock = makeMockProcess();
+      (processSpawner.spawnProcessLive as any).mockReturnValue(makeMockHandle(mock));
+
+      await adapter.startRun(makeTask());
+
+      const call = (processSpawner.spawnProcessLive as any).mock.calls[0][0];
+      call.onStdout("Do you want to continue? [y/N]");
+
+      expect(mock.stdin.write).toHaveBeenCalledWith("y\n");
     });
   });
 
@@ -703,6 +721,89 @@ describe("ClaudeCodeAdapter", () => {
       expect(status.status).toBe("failed");
       expect(status.completedAt).toBeDefined();
       expect(status.error).toContain("spawn claude ENOENT");
+    });
+  });
+
+  // =========================================================================
+  // Workspace event emissions
+  // =========================================================================
+
+  describe("workspace event emissions", () => {
+    it("emits run.started event on successful run start", async () => {
+      (processSpawner.isCommandAvailable as any).mockReturnValue(true);
+
+      await adapter.createRun(makeTask());
+
+      expect(workspaceEventEmitter.emitWorkspaceEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "workspace.run.started",
+        }),
+      );
+    });
+
+    it("emits run.completed event on process exit code 0", async () => {
+      (processSpawner.isCommandAvailable as any).mockReturnValue(true);
+
+      const mock = makeMockProcess();
+      (processSpawner.spawnProcessLive as any).mockReturnValue(makeMockHandle(mock));
+
+      await adapter.createRun(makeTask());
+      mock.emitClose(0);
+
+      expect(workspaceEventEmitter.emitWorkspaceEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "workspace.run.completed",
+        }),
+      );
+    });
+
+    it("emits run.failed event on non-zero exit code", async () => {
+      (processSpawner.isCommandAvailable as any).mockReturnValue(true);
+
+      const mock = makeMockProcess();
+      (processSpawner.spawnProcessLive as any).mockReturnValue(makeMockHandle(mock));
+
+      await adapter.createRun(makeTask());
+      mock.emitClose(1);
+
+      expect(workspaceEventEmitter.emitWorkspaceEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "workspace.run.failed",
+        }),
+      );
+    });
+
+    it("emits run.failed event on process error", async () => {
+      (processSpawner.isCommandAvailable as any).mockReturnValue(true);
+
+      const mock = makeMockProcess();
+      (processSpawner.spawnProcessLive as any).mockReturnValue(makeMockHandle(mock));
+
+      await adapter.createRun(makeTask());
+      mock.emitError(new Error("ENOENT"));
+
+      expect(workspaceEventEmitter.emitWorkspaceEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "workspace.run.failed",
+        }),
+      );
+    });
+
+    it("emits autonomy.decision event on interactive prompt", async () => {
+      (processSpawner.isCommandAvailable as any).mockReturnValue(true);
+      const mock = makeMockProcess();
+      (processSpawner.spawnProcessLive as any).mockReturnValue(makeMockHandle(mock));
+
+      await adapter.startRun(makeTask());
+
+      const call = (processSpawner.spawnProcessLive as any).mock.calls[0][0];
+      call.onStdout("Do you want to continue? [y/N]");
+
+      expect(workspaceEventEmitter.emitWorkspaceEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "workspace.autonomy.decision",
+        }),
+      );
     });
   });
 });

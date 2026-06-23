@@ -262,7 +262,7 @@ agentProfileRoutes.post(
       return apiError(c, "Agent profile not found", 404);
     }
 
-    const executorPolicy = profile.executorPolicy as Record<string, any> | null;
+    const executorPolicy = profile.executorPolicy as Record<string, unknown> | null;
     const executor = executorPolicy?.executor || "self";
 
     const startTime = Date.now();
@@ -341,7 +341,7 @@ agentProfileRoutes.post(
         // Cleanup temp folder
         try {
           fs.rmSync(tempDir, { recursive: true, force: true });
-        } catch (cleanupErr) {
+        } catch {
           // Ignore cleanup errors to prevent failing the route
         }
 

@@ -70,4 +70,22 @@ describe("spawnProcessLive", () => {
     // Clean up the long-running process
     handle.process.kill();
   });
+
+  it("kills live processes after timeoutMs", async () => {
+    const handle = spawnProcessLive({
+      command: "node",
+      args: ["-e", "setTimeout(() => {}, 60000)"],
+      timeoutMs: 50,
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
+    try {
+      expect(handle.killed).toBe(true);
+    } finally {
+      if (!handle.killed) {
+        handle.process.kill();
+      }
+    }
+  });
 });

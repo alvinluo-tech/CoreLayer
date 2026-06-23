@@ -110,7 +110,7 @@ app.put(
 app.delete(
   "/:id",
   withErrorHandling("scheduled-tasks/delete", async (c) => {
-    const id = c.req.param("id")!!;
+    const id = c.req.param("id")!;
     const deleted = await getRepositories().scheduledTasks.delete(id);
     if (!deleted) {
       return apiError(c, "Scheduled task not found", 404);
@@ -122,7 +122,7 @@ app.delete(
 app.post(
   "/:id/trigger",
   withErrorHandling("scheduled-tasks/trigger", async (c) => {
-    const id = c.req.param("id")!!;
+    const id = c.req.param("id")!;
     const result = await triggerTask(id);
     if (!result) {
       return apiError(c, "Scheduled task not found", 404);

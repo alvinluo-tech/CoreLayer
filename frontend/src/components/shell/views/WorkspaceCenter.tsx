@@ -35,6 +35,51 @@ const statusColors: Record<string, string> = {
   cancelled: 'var(--text-tertiary)',
 };
 
+type TimelineEventView = {
+  id: string;
+  type: string;
+  createdAt: string;
+  payload?: Record<string, unknown>;
+};
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function buildFallbackTimeline(detail: WorkspaceDetail, tasks: any[]): TimelineEventView[] {
+  const runEvents = detail.recentRuns.map((run) => ({
+    id: `run-${run.id}`,
+    type: 'agent',
+    createdAt: run.completedAt ?? run.startedAt ?? new Date().toISOString(),
+    payload: { title: `${run.agentName || 'Agent'} ${run.status} workflow run`, ...run },
+  }));
+
+  const taskEvents = tasks
+    .filter(
+      (task) =>
+        task.status === 'running' ||
+        task.status === 'completed' ||
+        task.status === 'failed' ||
+        task.status === 'blocked'
+    )
+    .slice(0, 12)
+    .map((task) => ({
+      id: `task-${task.id}`,
+      type: task.status === 'blocked' ? 'approval' : 'system',
+      createdAt: task.updatedAt ?? task.completedAt ?? task.createdAt ?? new Date().toISOString(),
+      payload: { title: `${task.title || 'Task'} is ${task.status}`, ...task },
+    }));
+
+  const approvalEvents = detail.pendingApprovals.map((approval) => ({
+    id: `approval-${approval.id}`,
+    type: 'approval',
+    createdAt: approval.createdAt ?? new Date().toISOString(),
+    payload: { title: `${approval.toolName} approval pending`, ...approval },
+  }));
+
+  return [...runEvents, ...taskEvents, ...approvalEvents]
+    .filter((event) => event.createdAt)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, 24);
+}
+
 export function WorkspaceCenter({ detail, onShowSpec, onShowProposal }: WorkspaceCenterProps) {
   const status = detail.status || 'draft';
   const color = statusColors[status] ?? 'var(--text-tertiary)';
@@ -57,7 +102,7 @@ export function WorkspaceCenter({ detail, onShowSpec, onShowProposal }: Workspac
 
   const loadTasksAndEvents = useCallback(async () => {
     const projId = detail.activeProjectId || detail.projects[0]?.id;
-    if (!projId) {
+    if (!detail.id) {
       setTasks([]);
       setEvents([]);
       return;
@@ -71,15 +116,16 @@ export function WorkspaceCenter({ detail, onShowSpec, onShowProposal }: Workspac
       setTasks([]);
     }
     try {
+      // Query by workspaceId to get all workspace-level events
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const eventsResp = await jarvisClient.get<{ events: any[] }>(
-        `/api/events?projectId=${projId}`
+        `/api/events?workspaceId=${detail.id}`
       );
       setEvents(eventsResp.events || []);
     } catch {
       setEvents([]);
     }
-  }, [detail.activeProjectId, detail.projects, fetchApprovals]);
+  }, [detail.id, detail.activeProjectId, detail.projects, fetchApprovals]);
 
   useEffect(() => {
     loadTasksAndEvents();
@@ -110,23 +156,7 @@ export function WorkspaceCenter({ detail, onShowSpec, onShowProposal }: Workspac
     showToast('Starting workspace...');
   };
 
-  // Map backend EventLogRow to TimelineEvent shape
-  const timelineEvents = events.map((e) => {
-    const t = e.type.toLowerCase();
-    let mappedType = 'system';
-    if (t.includes('agent')) mappedType = 'agent';
-    else if (t.includes('tool')) mappedType = 'tool';
-    else if (t.includes('memory')) mappedType = 'memory';
-    else if (t.includes('approval')) mappedType = 'approval';
-
-    return {
-      id: e.id,
-      type: mappedType,
-      message: e.message,
-      timestamp: new Date(e.createdAt).toLocaleTimeString(),
-      payload: e.payload,
-    };
-  });
+  const timelineEvents = events.length > 0 ? events : buildFallbackTimeline(detail, tasks);
 
   return (
     <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
@@ -321,7 +351,7 @@ export function WorkspaceCenter({ detail, onShowSpec, onShowProposal }: Workspac
       {/* Timeline */}
       <div className="timeline" style={{ flex: 1, overflowY: 'auto' }}>
         <div className="timeline-header">
-          <div className="timeline-title">Timeline</div>
+          <div className="timeline-title">Timeline ({timelineEvents.length})</div>
         </div>
         <WorkspaceTimeline events={timelineEvents} />
       </div>
