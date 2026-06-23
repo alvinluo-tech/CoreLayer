@@ -407,12 +407,12 @@ Goal: make executor MCP access explicit and scoped.
 - [x] Support strict MCP config for Claude Code if verified.
 - [x] Deny unapproved MCP servers by default.
 - [x] Log MCP exposure and visible calls.
-- [ ] Add config generation tests.
+- [x] Add config generation tests.
 
 Verification:
 
-- [ ] MCP config generation tests.
-- [ ] MCP route tests if touched.
+- [x] MCP config generation tests.
+- [x] MCP route tests if touched.
 
 ### Session 20 - Team Mode Orchestration
 
