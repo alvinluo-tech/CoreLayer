@@ -13,7 +13,7 @@ import path from "path";
 import { resolveAppPaths } from "../../config/app-paths.js";
 import { ensureSessionDir, recordArtifactInSession } from "../../services/session-manager.js";
 import { emitWorkspaceEvent } from "../../services/workspace-event-emitter.js";
-import type { CodingArtifact } from "./types.js";
+import type { CodingArtifact, DurableCodingArtifactType } from "./types.js";
 
 export interface ArtifactEventContext {
   workspaceId?: string;
@@ -26,15 +26,16 @@ export interface ArtifactEventContext {
 /** In-memory artifact registry keyed by runId */
 const artifactRegistry = new Map<string, CodingArtifact[]>();
 
-const PERSISTABLE_ARTIFACT_TYPES = new Set<CodingArtifact["type"]>([
+const PERSISTABLE_ARTIFACT_TYPES = new Set<DurableCodingArtifactType>([
   "changed_files",
   "diff_summary",
   "test_report",
+  "generated_file",
   "log_path",
 ]);
 
 export function isPersistableCodingArtifact(artifact: CodingArtifact): boolean {
-  return PERSISTABLE_ARTIFACT_TYPES.has(artifact.type);
+  return PERSISTABLE_ARTIFACT_TYPES.has(artifact.type as DurableCodingArtifactType);
 }
 
 function getArtifactsDir(): string {

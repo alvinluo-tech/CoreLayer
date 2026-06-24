@@ -166,9 +166,8 @@ describe("CodingExecutorAdapterWrapper", () => {
     it("should map coding artifacts to generic artifacts", async () => {
       const result = await wrapper.collectArtifacts("run-1");
       expect(result.runId).toBe("run-1");
-      expect(result.artifacts).toHaveLength(1);
-      expect(result.artifacts[0].type).toBe("final_summary");
-      expect(result.artifacts[0].content).toBe("Done");
+      // final_summary is excluded from artifacts array (status-only metadata)
+      expect(result.artifacts).toHaveLength(0);
       expect(result.finalSummary).toBe("Done");
     });
 

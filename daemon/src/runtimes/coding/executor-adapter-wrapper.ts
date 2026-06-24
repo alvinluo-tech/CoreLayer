@@ -101,17 +101,41 @@ export class CodingExecutorAdapterWrapper implements ExecutorAdapter {
 
   async collectArtifacts(runId: string): Promise<ExecutorArtifacts> {
     const codingArtifacts = await this.inner.collectArtifacts(runId);
-    const artifacts: ExecutorArtifact[] = codingArtifacts.map((a) => ({
-      type: a.type,
-      content: a.content,
-      summary: a.metadata?.summary as string | undefined,
-      metadata: a.metadata,
-    }));
+
+    // Separate durable deliverables from status-only metadata
+    const DURABLE_TYPES = new Set(["changed_files", "diff_summary", "test_report", "generated_file", "log_path"]);
+
+    const durableArtifacts: ExecutorArtifact[] = [];
+    let finalSummary: string | undefined;
+    let logPath: string | undefined;
+
+    for (const a of codingArtifacts) {
+      if (a.type === "final_summary") {
+        finalSummary = a.content;
+      } else if (a.type === "log_path") {
+        logPath = a.content;
+        durableArtifacts.push({
+          type: a.type,
+          content: a.content,
+          summary: a.metadata?.summary as string | undefined,
+          metadata: a.metadata,
+        });
+      } else if (DURABLE_TYPES.has(a.type)) {
+        durableArtifacts.push({
+          type: a.type,
+          content: a.content,
+          summary: a.metadata?.summary as string | undefined,
+          metadata: a.metadata,
+        });
+      }
+      // error and other non-durable types are excluded from artifacts
+    }
+
     return {
       runId,
-      artifacts,
-      finalSummary: artifacts.find((a) => a.type === "final_summary")?.content,
-      logPath: artifacts.find((a) => a.type === "log_path")?.content,
+      artifacts: durableArtifacts,
+      finalSummary,
+      logPath,
     };
   }
 

@@ -48,9 +48,27 @@ export interface CodingTask {
   permissionPolicy?: "strict" | "normal" | "permissive";
 }
 
+/** All coding artifact types */
+export type CodingArtifactType =
+  | "changed_files"
+  | "diff_summary"
+  | "test_report"
+  | "generated_file"
+  | "log_path"
+  | "final_summary"
+  | "error";
+
+/** Durable coding artifact types that are persisted as workspace deliverables */
+export type DurableCodingArtifactType =
+  | "changed_files"
+  | "diff_summary"
+  | "test_report"
+  | "generated_file"
+  | "log_path";
+
 /** Artifact produced by a coding run */
 export interface CodingArtifact {
-  type: "diff_summary" | "changed_files" | "test_report" | "final_summary" | "log_path" | "error";
+  type: CodingArtifactType;
   content: string;
   metadata?: Record<string, unknown>;
 }
