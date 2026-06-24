@@ -227,6 +227,12 @@ export interface ExecutorCapabilityProfile {
   /** Supports resumable sessions */
   resumableSession: boolean;
 
+  /** How permission prompts are projected to Jarvis */
+  permissionProjection: 'native' | 'stdout-pattern' | 'unsupported';
+
+  /** How to resume after approval */
+  approvalResumeStrategy: 'native_session_resume' | 'prompted_reentry' | 'manual_block';
+
   /** Default timeout in milliseconds */
   defaultTimeoutMs: number;
 

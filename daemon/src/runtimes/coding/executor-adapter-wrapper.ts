@@ -58,6 +58,8 @@ export class CodingExecutorAdapterWrapper implements ExecutorAdapter {
       isolatedEnvironment: true,
       cancellation: true,
       resumableSession: false,
+      permissionProjection: "stdout-pattern",
+      approvalResumeStrategy: "prompted_reentry",
       defaultTimeoutMs: 300_000,
     };
   }
