@@ -25,6 +25,7 @@ vi.mock("../http/routes/audit.js", () => ({ default: "audit-routes" }));
 vi.mock("../http/routes/runtime.js", () => ({ default: "runtime-routes" }));
 vi.mock("../http/routes/runtimes.js", () => ({ default: "runtimes-routes" }));
 vi.mock("../http/routes/agent-broker.js", () => ({ default: "agent-broker-routes" }));
+vi.mock("../http/routes/trajectory.js", () => ({ default: "trajectory-routes" }));
 
 const { registerRoutes } = await import("./register-routes.js");
 
@@ -36,11 +37,11 @@ describe("registerRoutes", () => {
   it("registers all route groups", () => {
     registerRoutes(mockHonoInstance as any);
 
-    // 22 route registrations: chat, conversations, tasks, articles, reviews,
+    // 23 route registrations: chat, conversations, tasks, articles, reviews,
     // settings, voice, mcp, tools, tasks/scheduled, approvals, workspaces,
-    // projects, runtimes, runtime/queue, memories, agent-profiles, events,
-    // audit, runtime, agent-broker
-    expect(mockRoute).toHaveBeenCalledTimes(22);
+    // projects, runs, runtimes, runtime/queue, memories, agent-profiles,
+    // events, audit, runtime, agent-broker, runs(trajectory)
+    expect(mockRoute).toHaveBeenCalledTimes(23);
   });
 
   it("registers chat routes at /api/chat", () => {
@@ -104,7 +105,7 @@ describe("registerRoutes", () => {
       "/api/agent-broker",
     ];
 
-    expect(paths).toHaveLength(22);
+    expect(paths).toHaveLength(23); // 22 unique + 1 trajectory under /api/runs
     for (const path of expectedPaths) {
       expect(paths).toContain(path);
     }
