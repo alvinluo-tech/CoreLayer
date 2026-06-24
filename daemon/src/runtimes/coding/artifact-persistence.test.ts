@@ -46,7 +46,7 @@ describe("persistArtifacts", () => {
     expect(mockEmitWorkspaceEvent).not.toHaveBeenCalled();
   });
 
-  it("should emit artifact created events when event context is provided", () => {
+  it("should only emit artifact created events for durable deliverables", () => {
     const artifacts = [
       { type: "final_summary" as const, content: "Task completed" },
       { type: "changed_files" as const, content: "src/index.ts" },
@@ -60,7 +60,7 @@ describe("persistArtifacts", () => {
       runtimeId: "claude-code",
     });
 
-    expect(mockEmitWorkspaceEvent).toHaveBeenCalledTimes(2);
+    expect(mockEmitWorkspaceEvent).toHaveBeenCalledTimes(1);
 
     expect(mockEmitWorkspaceEvent).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -71,18 +71,8 @@ describe("persistArtifacts", () => {
         agentRunId: "run-1",
         runtimeId: "claude-code",
         payload: expect.objectContaining({
-          artifactType: "final_summary",
-          artifactIndex: 0,
-        }),
-      }),
-    );
-
-    expect(mockEmitWorkspaceEvent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: "workspace.artifact.created",
-        payload: expect.objectContaining({
           artifactType: "changed_files",
-          artifactIndex: 1,
+          artifactIndex: 0,
         }),
       }),
     );
@@ -96,9 +86,24 @@ describe("persistArtifacts", () => {
     expect(mockEmitWorkspaceEvent).not.toHaveBeenCalled();
   });
 
-  it("should handle missing optional IDs in event context", () => {
+  it("should not persist status-only artifacts", () => {
     const artifacts = [
       { type: "error" as const, content: "Something went wrong" },
+      { type: "final_summary" as const, content: "Needs approval" },
+    ];
+
+    persistArtifacts("run-1", artifacts, undefined, {
+      workspaceId: "ws-1",
+    });
+
+    expect(fs.mkdirSync).not.toHaveBeenCalled();
+    expect(fs.writeFileSync).not.toHaveBeenCalled();
+    expect(mockEmitWorkspaceEvent).not.toHaveBeenCalled();
+  });
+
+  it("should handle missing optional IDs in event context", () => {
+    const artifacts = [
+      { type: "test_report" as const, content: "Tests passed" },
     ];
 
     persistArtifacts("run-1", artifacts, undefined, {
@@ -114,6 +119,7 @@ describe("persistArtifacts", () => {
           projectId: undefined,
           taskId: undefined,
           agentRunId: undefined,
+          artifactType: "test_report",
         }),
       }),
     );

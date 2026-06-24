@@ -9,7 +9,8 @@ import { getRepositories } from "../persistence/factory.js";
 import { SlotManager } from "./slot-manager.js";
 import { getResourceStatus, isResourcePressureHigh } from "./resource-monitor.js";
 import { getCodingRuntime } from "../runtimes/coding/registry.js";
-import type { CodingTask } from "../runtimes/coding/types.js";
+import type { CodingArtifact, CodingTask } from "../runtimes/coding/types.js";
+import { isPersistableCodingArtifact } from "../runtimes/coding/artifact-persistence.js";
 import { isAgentExecutorPolicy } from "../shared/agent-profile-types.js";
 import { TaskGraph } from "../workspaces/task-graph-service.js";
 import { cancelActiveRun } from "../runtimes/agent/run.js";
@@ -146,6 +147,10 @@ async function dispatchToCodingRuntime(
 
   const codingTask: CodingTask = {
     dbRunId: runId,
+    dbTaskId: taskId ?? undefined,
+    workspaceId: runRecord?.workspaceId ?? undefined,
+    projectId: runRecord?.projectId ?? undefined,
+    conversationId: runRecord?.conversationId ?? undefined,
     repoPath,
     taskPrompt,
     timeoutMs: 300_000, // 5 min default
@@ -299,7 +304,7 @@ export function getDispatcherStatus() {
  */
 async function syncArtifactsToTable(
   runId: string,
-  artifacts: Array<{ type: string; metadata?: Record<string, unknown> }>,
+  artifacts: CodingArtifact[],
   workspaceId: string | null,
   projectId: string | null,
 ): Promise<void> {
@@ -308,6 +313,10 @@ async function syncArtifactsToTable(
   const { db, schema } = await import("../persistence/client.js");
 
   for (const artifact of artifacts) {
+    if (!isPersistableCodingArtifact(artifact)) {
+      continue;
+    }
+
     const title = artifact.metadata?.title
       ?? artifact.metadata?.file
       ?? `${artifact.type} artifact`;
@@ -319,7 +328,7 @@ async function syncArtifactsToTable(
       runId,
       type: artifact.type === "changed_files" ? "file" : "report",
       title: String(title),
-      content: artifact.metadata ? JSON.stringify(artifact.metadata) : null,
+      content: artifact.content ?? (artifact.metadata ? JSON.stringify(artifact.metadata) : null),
     }).catch(() => {
       // Best-effort — don't fail the run over artifact persistence
     });

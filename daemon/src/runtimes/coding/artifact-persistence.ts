@@ -26,6 +26,17 @@ export interface ArtifactEventContext {
 /** In-memory artifact registry keyed by runId */
 const artifactRegistry = new Map<string, CodingArtifact[]>();
 
+const PERSISTABLE_ARTIFACT_TYPES = new Set<CodingArtifact["type"]>([
+  "changed_files",
+  "diff_summary",
+  "test_report",
+  "log_path",
+]);
+
+export function isPersistableCodingArtifact(artifact: CodingArtifact): boolean {
+  return PERSISTABLE_ARTIFACT_TYPES.has(artifact.type);
+}
+
 function getArtifactsDir(): string {
   const paths = resolveAppPaths();
   return path.join(paths.appDataDir, "artifacts");
@@ -46,15 +57,16 @@ export function persistArtifacts(
   conversationId?: string,
   eventContext?: ArtifactEventContext,
 ): void {
-  if (artifacts.length === 0) return;
+  const persistableArtifacts = artifacts.filter(isPersistableCodingArtifact);
+  if (persistableArtifacts.length === 0) return;
 
-  // Cache in memory
-  artifactRegistry.set(runId, artifacts);
+  // Cache only durable deliverables. Status messages remain on the run record.
+  artifactRegistry.set(runId, persistableArtifacts);
 
   // Emit artifact created events when context is provided
   if (eventContext?.workspaceId) {
-    for (let i = 0; i < artifacts.length; i++) {
-      const artifact = artifacts[i];
+    for (let i = 0; i < persistableArtifacts.length; i++) {
+      const artifact = persistableArtifacts[i];
       emitWorkspaceEvent({
         type: "workspace.artifact.created",
         title: `Artifact: ${artifact.type}`,
@@ -86,9 +98,9 @@ export function persistArtifacts(
     const manifest = {
       runId,
       conversationId: conversationId ?? null,
-      artifactCount: artifacts.length,
+      artifactCount: persistableArtifacts.length,
       persistedAt: new Date().toISOString(),
-      artifacts: artifacts.map((a, i) => ({
+      artifacts: persistableArtifacts.map((a, i) => ({
         index: i,
         type: a.type,
         metadata: a.metadata,
@@ -101,8 +113,8 @@ export function persistArtifacts(
       "utf-8",
     );
 
-    for (let i = 0; i < artifacts.length; i++) {
-      const artifact = artifacts[i];
+    for (let i = 0; i < persistableArtifacts.length; i++) {
+      const artifact = persistableArtifacts[i];
       writeFileSync(
         path.join(dir, `artifact-${i}.json`),
         JSON.stringify(artifact, null, 2),
@@ -123,7 +135,7 @@ export function persistArtifacts(
       const ref = {
         runId,
         type: "run-artifacts",
-        artifactCount: artifacts.length,
+        artifactCount: persistableArtifacts.length,
         persistedAt: new Date().toISOString(),
       };
       writeFileSync(
