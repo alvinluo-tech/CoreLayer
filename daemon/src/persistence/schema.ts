@@ -294,6 +294,30 @@ export const scheduledTasks = sqliteTable("scheduled_tasks", {
   updatedAt: text("updated_at").default("CURRENT_TIMESTAMP").notNull(),
 });
 
+// ---- Pending Actions ----
+
+export const pendingActions = sqliteTable("pending_actions", {
+  id: text("id").primaryKey(),
+  approvalRequestId: text("approval_request_id").notNull(),
+  runId: text("run_id").notNull(),
+  executorRunId: text("executor_run_id"),
+  workspaceId: text("workspace_id"),
+  projectId: text("project_id"),
+  taskId: text("task_id"),
+  actionFingerprint: text("action_fingerprint").notNull(),
+  actionPayload: text("action_payload").notNull(), // JSON RuntimeAction or operation payload
+  resumePayload: text("resume_payload").notNull(), // JSON resume strategy payload
+  status: text("status", {
+    enum: ["blocked", "approved", "resuming", "executing", "completed", "failed", "cancelled", "expired"],
+  })
+    .default("blocked")
+    .notNull(),
+  error: text("error"),
+  createdAt: text("created_at").default("CURRENT_TIMESTAMP").notNull(),
+  updatedAt: text("updated_at").default("CURRENT_TIMESTAMP").notNull(),
+  completedAt: text("completed_at"),
+});
+
 // ---- Capability Grants ----
 
 export const capabilityGrants = sqliteTable("capability_grants", {

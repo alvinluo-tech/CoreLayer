@@ -1,5 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { executeApprovedTool } from "../resume-service.js";
+import {
+  executeApprovedTool,
+  createPendingAction,
+  approvePendingAction,
+  completePendingAction,
+  cancelPendingAction,
+  isDuplicateApproval,
+  resetPendingActions,
+} from "../resume-service.js";
+import type { RuntimeAction } from "@jarvis/runtime-protocol";
 
 const mockTool = {
   id: "shell:exec",
@@ -104,5 +113,120 @@ describe("executeApprovedTool", () => {
 
     expect(result.toolResult.success).toBe(false);
     expect(result.toolResult.error).toContain("Tool not found");
+  });
+});
+
+const sampleAction: RuntimeAction = {
+  id: "action-1",
+  type: "file.write",
+  target: "src/index.ts",
+  runId: "run-1",
+  agentId: "agent-1",
+  workspaceId: "ws-1",
+};
+
+describe("Pending Actions", () => {
+  beforeEach(() => {
+    resetPendingActions();
+  });
+
+  it("should create a pending action", () => {
+    const action = createPendingAction({
+      approvalRequestId: "approval-1",
+      runId: "run-1",
+      action: sampleAction,
+      strategy: "prompted_reentry",
+    });
+
+    expect(action.id).toBeDefined();
+    expect(action.status).toBe("blocked");
+    expect(action.actionFingerprint).toContain("file.write");
+  });
+
+  it("should approve a blocked action", () => {
+    const action = createPendingAction({
+      approvalRequestId: "approval-1",
+      runId: "run-1",
+      action: sampleAction,
+      strategy: "prompted_reentry",
+    });
+
+    const approved = approvePendingAction(action.id);
+    expect(approved).not.toBeNull();
+    expect(approved!.status).toBe("approved");
+  });
+
+  it("should not approve a non-blocked action", () => {
+    const action = createPendingAction({
+      approvalRequestId: "approval-1",
+      runId: "run-1",
+      action: sampleAction,
+      strategy: "prompted_reentry",
+    });
+
+    approvePendingAction(action.id);
+    const result = approvePendingAction(action.id);
+    expect(result).toBeNull();
+  });
+
+  it("should complete an action successfully", () => {
+    const action = createPendingAction({
+      approvalRequestId: "approval-1",
+      runId: "run-1",
+      action: sampleAction,
+      strategy: "prompted_reentry",
+    });
+
+    const completed = completePendingAction(action.id, true);
+    expect(completed).not.toBeNull();
+    expect(completed!.status).toBe("completed");
+  });
+
+  it("should complete an action with failure", () => {
+    const action = createPendingAction({
+      approvalRequestId: "approval-1",
+      runId: "run-1",
+      action: sampleAction,
+      strategy: "prompted_reentry",
+    });
+
+    const failed = completePendingAction(action.id, false, "Permission denied");
+    expect(failed).not.toBeNull();
+    expect(failed!.status).toBe("failed");
+    expect(failed!.error).toBe("Permission denied");
+  });
+
+  it("should cancel an action", () => {
+    const action = createPendingAction({
+      approvalRequestId: "approval-1",
+      runId: "run-1",
+      action: sampleAction,
+      strategy: "prompted_reentry",
+    });
+
+    const cancelled = cancelPendingAction(action.id);
+    expect(cancelled).not.toBeNull();
+    expect(cancelled!.status).toBe("cancelled");
+  });
+
+  it("should detect duplicate approval", () => {
+    createPendingAction({
+      approvalRequestId: "approval-1",
+      runId: "run-1",
+      action: sampleAction,
+      strategy: "prompted_reentry",
+    });
+
+    expect(isDuplicateApproval("file.write:src/index.ts:run-1")).toBe(false);
+
+    const action2 = createPendingAction({
+      approvalRequestId: "approval-2",
+      runId: "run-1",
+      action: sampleAction,
+      strategy: "prompted_reentry",
+    });
+
+    completePendingAction(action2.id, true);
+    expect(isDuplicateApproval("file.write:src/index.ts:run-1")).toBe(true);
   });
 });

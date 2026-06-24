@@ -832,6 +832,28 @@ sqlite.exec(`
     revoked_at TEXT
   );
 
+  CREATE TABLE IF NOT EXISTS pending_actions (
+    id TEXT PRIMARY KEY,
+    approval_request_id TEXT NOT NULL,
+    run_id TEXT NOT NULL,
+    executor_run_id TEXT,
+    workspace_id TEXT,
+    project_id TEXT,
+    task_id TEXT,
+    action_fingerprint TEXT NOT NULL,
+    action_payload TEXT NOT NULL,
+    resume_payload TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'blocked' CHECK(status IN ('blocked', 'approved', 'resuming', 'executing', 'completed', 'failed', 'cancelled', 'expired')),
+    error TEXT,
+    created_at TEXT NOT NULL DEFAULT 'CURRENT_TIMESTAMP',
+    updated_at TEXT NOT NULL DEFAULT 'CURRENT_TIMESTAMP',
+    completed_at TEXT
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_pending_actions_run ON pending_actions(run_id);
+  CREATE INDEX IF NOT EXISTS idx_pending_actions_approval ON pending_actions(approval_request_id);
+  CREATE INDEX IF NOT EXISTS idx_pending_actions_status ON pending_actions(status);
+
   CREATE INDEX IF NOT EXISTS idx_cap_grants_workspace ON capability_grants(workspace_id);
   CREATE INDEX IF NOT EXISTS idx_cap_grants_agent ON capability_grants(agent_id);
   CREATE INDEX IF NOT EXISTS idx_cap_grants_status ON capability_grants(status);
