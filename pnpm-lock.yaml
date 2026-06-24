@@ -65,6 +65,9 @@ importers:
       '@hono/node-server':
         specifier: ^1.14.0
         version: 1.19.14(hono@4.12.23)
+      '@jarvis/execution-environment':
+        specifier: workspace:*
+        version: link:../packages/execution-environment
       '@jarvis/mcp-client':
         specifier: workspace:*
         version: link:../packages/mcp-client
@@ -244,6 +247,12 @@ importers:
       vite:
         specifier: ^6.0.0
         version: 6.4.2(@types/node@25.9.1)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.3)(yaml@2.9.0)
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@25.9.1)(jsdom@29.1.1)(lightningcss@1.32.0)
+
+  packages/execution-environment:
+    devDependencies:
       vitest:
         specifier: ^2.1.0
         version: 2.1.9(@types/node@25.9.1)(jsdom@29.1.1)(lightningcss@1.32.0)

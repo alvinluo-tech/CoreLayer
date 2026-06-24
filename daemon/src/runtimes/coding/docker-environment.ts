@@ -19,7 +19,7 @@ import type {
   Artifact,
 } from "@jarvis/execution-environment";
 import { execFileSync, spawn } from "child_process";
-import { mkdirSync, writeFileSync } from "fs";
+import { mkdirSync, unlinkSync, writeFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 
@@ -185,7 +185,11 @@ export class DockerEnvironment implements ExecutionEnvironment {
         { stdio: "pipe", timeout: 10_000 },
       );
     } finally {
-      try { require("fs").unlinkSync(tmpFile); } catch {}
+      try {
+        unlinkSync(tmpFile);
+      } catch {
+        // Best-effort cleanup; Docker copy failure should remain the surfaced error.
+      }
     }
 
     return { path, bytesWritten: Buffer.byteLength(content, "utf-8") };

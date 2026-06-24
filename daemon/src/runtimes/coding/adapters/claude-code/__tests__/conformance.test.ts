@@ -30,9 +30,20 @@ function isCommandAvailable(cmd: string): boolean {
 
 const CLAUDE_AVAILABLE = isCommandAvailable("claude");
 const GIT_AVAILABLE = isCommandAvailable("git");
+const CONFORMANCE_ENABLED = process.env.CLAUDE_CODE_CONFORMANCE === "1";
 
-const describeIfClaude = CLAUDE_AVAILABLE ? describe : describe.skip;
-const describeIfBoth = CLAUDE_AVAILABLE && GIT_AVAILABLE ? describe : describe.skip;
+const describeIfClaude = CONFORMANCE_ENABLED && CLAUDE_AVAILABLE ? describe : describe.skip;
+const describeIfBoth = CONFORMANCE_ENABLED && CLAUDE_AVAILABLE && GIT_AVAILABLE ? describe : describe.skip;
+
+function removeTempDir(dir: string): void {
+  if (!existsSync(dir)) return;
+  rmSync(dir, {
+    recursive: true,
+    force: true,
+    maxRetries: process.platform === "win32" ? 10 : 0,
+    retryDelay: process.platform === "win32" ? 250 : 0,
+  });
+}
 
 describe("Claude Code Conformance", () => {
   let adapter: ClaudeCodeCliAdapter;
@@ -120,7 +131,7 @@ describe("Claude Code Conformance", () => {
         expect(info).toBeDefined();
         expect(info!.status).toBe("succeeded");
       } finally {
-        if (existsSync(tmpDir)) rmSync(tmpDir, { recursive: true, force: true });
+        removeTempDir(tmpDir);
       }
     }, 90_000);
 
@@ -146,7 +157,7 @@ describe("Claude Code Conformance", () => {
         const artifacts = await adapter.collectArtifacts(handle.runId);
         expect(Array.isArray(artifacts)).toBe(true);
       } finally {
-        if (existsSync(tmpDir)) rmSync(tmpDir, { recursive: true, force: true });
+        removeTempDir(tmpDir);
       }
     }, 90_000);
   });
@@ -176,7 +187,7 @@ describe("Claude Code Conformance", () => {
         expect(info).toBeDefined();
         expect(["failed", "cancelled", "timed_out"]).toContain(info!.status);
       } finally {
-        if (existsSync(tmpDir)) rmSync(tmpDir, { recursive: true, force: true });
+        removeTempDir(tmpDir);
       }
     }, 30_000);
   });
@@ -204,7 +215,7 @@ describe("Claude Code Conformance", () => {
         const info = await adapter.getRunStatus(handle.runId);
         expect(["cancelled", "failed"]).toContain(info.status);
       } finally {
-        if (existsSync(tmpDir)) rmSync(tmpDir, { recursive: true, force: true });
+        removeTempDir(tmpDir);
       }
     }, 30_000);
   });
