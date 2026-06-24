@@ -294,6 +294,22 @@ export const scheduledTasks = sqliteTable("scheduled_tasks", {
   updatedAt: text("updated_at").default("CURRENT_TIMESTAMP").notNull(),
 });
 
+// ---- Execution Logs ----
+
+export const executionLogs = sqliteTable("execution_logs", {
+  id: text("id").primaryKey(),
+  runId: text("run_id").notNull(),
+  executorRunId: text("executor_run_id"),
+  workspaceId: text("workspace_id"),
+  projectId: text("project_id"),
+  taskId: text("task_id"),
+  stream: text("stream", { enum: ["stdout", "stderr", "system", "executor"] }).notNull(),
+  sequence: integer("sequence").notNull(),
+  content: text("content").notNull(),
+  metadata: text("metadata"), // JSON stored as text
+  createdAt: text("created_at").default("CURRENT_TIMESTAMP").notNull(),
+});
+
 // ---- Environment Sessions ----
 
 export const environmentSessions = sqliteTable("environment_sessions", {

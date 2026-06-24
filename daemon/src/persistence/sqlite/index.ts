@@ -20,6 +20,7 @@ import { createSqliteEventLogRepo } from "./event-log-repo.js";
 import { createSqliteAuditLogRepo } from "./audit-log-repo.js";
 import { createSqliteExecutorRunRepo } from "./executor-run-repo.js";
 import { createSqliteEnvironmentSessionRepo, createSqliteEnvironmentEventRepo } from "./environment-repo.js";
+import { createSqliteExecutionLogRepo } from "./execution-log-repo.js";
 
 export function createSqliteRepositories(): Repositories {
   return {
@@ -45,5 +46,6 @@ export function createSqliteRepositories(): Repositories {
     executorRuns: createSqliteExecutorRunRepo(),
     environmentSessions: createSqliteEnvironmentSessionRepo(),
     environmentEvents: createSqliteEnvironmentEventRepo(),
+    executionLogs: createSqliteExecutionLogRepo(),
   };
 }

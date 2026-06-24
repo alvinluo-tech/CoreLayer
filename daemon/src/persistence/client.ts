@@ -796,6 +796,23 @@ sqlite.exec(`
     updated_at TEXT NOT NULL DEFAULT 'CURRENT_TIMESTAMP'
   );
 
+  CREATE TABLE IF NOT EXISTS execution_logs (
+    id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL,
+    executor_run_id TEXT,
+    workspace_id TEXT,
+    project_id TEXT,
+    task_id TEXT,
+    stream TEXT NOT NULL CHECK(stream IN ('stdout', 'stderr', 'system', 'executor')),
+    sequence INTEGER NOT NULL,
+    content TEXT NOT NULL,
+    metadata TEXT,
+    created_at TEXT NOT NULL DEFAULT 'CURRENT_TIMESTAMP'
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_exec_logs_run ON execution_logs(run_id, sequence);
+  CREATE INDEX IF NOT EXISTS idx_exec_logs_workspace ON execution_logs(workspace_id);
+
   CREATE INDEX IF NOT EXISTS idx_env_sessions_workspace ON environment_sessions(workspace_id);
   CREATE INDEX IF NOT EXISTS idx_env_sessions_run ON environment_sessions(run_id);
   CREATE INDEX IF NOT EXISTS idx_env_sessions_state ON environment_sessions(state);

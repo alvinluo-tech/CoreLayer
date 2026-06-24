@@ -133,6 +133,12 @@ export type {
   EnvironmentEventRepository,
 } from "./repository/environment.js";
 
+export type {
+  ExecutionLogRow,
+  CreateExecutionLogInput,
+  ExecutionLogRepository,
+} from "./repository/execution-log.js";
+
 // ---- Aggregate ----
 
 import type { TaskRepository } from "./repository/task.js";
@@ -150,6 +156,7 @@ import type { ApprovalRequestRepository, PermissionMemoryRepository } from "./re
 import type { EventLogRepository, AuditLogRepository } from "./repository/observability.js";
 import type { ExecutorRunRepository } from "./repository/executor-run.js";
 import type { EnvironmentSessionRepository, EnvironmentEventRepository } from "./repository/environment.js";
+import type { ExecutionLogRepository } from "./repository/execution-log.js";
 
 export interface Repositories {
   tasks: TaskRepository;
@@ -174,4 +181,5 @@ export interface Repositories {
   executorRuns: ExecutorRunRepository;
   environmentSessions: EnvironmentSessionRepository;
   environmentEvents: EnvironmentEventRepository;
+  executionLogs: ExecutionLogRepository;
 }
