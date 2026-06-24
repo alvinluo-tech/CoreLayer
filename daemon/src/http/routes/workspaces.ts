@@ -197,16 +197,32 @@ workspaceRoutes.delete("/:id/agents/:agentId", withErrorHandling("workspaces/rem
 
 /**
  * GET /api/workspaces/:id/artifacts - Get artifacts for workspace
+ * Returns deliverable artifacts by default. Pass ?includeDebug=true for all.
  */
 workspaceRoutes.get("/:id/artifacts", withErrorHandling("workspaces/artifacts", async (c) => {
   const workspaceId = c.req.param("id")!;
-  const artifactsList = db
+  const includeDebug = c.req.query("includeDebug") === "true";
+
+  const allArtifacts = db
     .select()
     .from(schema.artifacts)
     .where(eq(schema.artifacts.workspaceId, workspaceId))
     .all();
 
-  return c.json({ data: artifactsList });
+  // Filter to deliverable artifacts by default
+  const filtered = includeDebug
+    ? allArtifacts
+    : allArtifacts.filter((a) => {
+        try {
+          const meta = a.metadata ? JSON.parse(a.metadata) : {};
+          // Include deliverables and artifacts without explicit class (legacy)
+          return !meta.artifactClass || meta.artifactClass === "deliverable";
+        } catch {
+          return true; // Include if metadata is unparseable
+        }
+      });
+
+  return c.json({ data: filtered });
 }));
 
 export default workspaceRoutes;

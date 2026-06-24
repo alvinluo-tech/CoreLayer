@@ -321,6 +321,13 @@ async function syncArtifactsToTable(
       ?? artifact.metadata?.file
       ?? `${artifact.type} artifact`;
 
+    const artifactMetadata = {
+      artifactClass: "deliverable",
+      domain: "coding",
+      source: "executor",
+      runId,
+    };
+
     await db.insert(schema.artifacts).values({
       id: crypto.randomUUID(),
       workspaceId,
@@ -329,6 +336,7 @@ async function syncArtifactsToTable(
       type: artifact.type === "changed_files" ? "file" : "report",
       title: String(title),
       content: artifact.content ?? (artifact.metadata ? JSON.stringify(artifact.metadata) : null),
+      metadata: JSON.stringify(artifactMetadata),
     }).catch(() => {
       // Best-effort — don't fail the run over artifact persistence
     });
