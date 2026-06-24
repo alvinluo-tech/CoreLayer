@@ -813,6 +813,29 @@ sqlite.exec(`
   CREATE INDEX IF NOT EXISTS idx_exec_logs_run ON execution_logs(run_id, sequence);
   CREATE INDEX IF NOT EXISTS idx_exec_logs_workspace ON execution_logs(workspace_id);
 
+  CREATE TABLE IF NOT EXISTS capability_grants (
+    id TEXT PRIMARY KEY,
+    workspace_id TEXT,
+    project_id TEXT,
+    task_id TEXT,
+    run_id TEXT,
+    agent_id TEXT,
+    executor_id TEXT,
+    profile TEXT NOT NULL,
+    actions TEXT NOT NULL DEFAULT '[]',
+    resources TEXT NOT NULL DEFAULT '[]',
+    constraints TEXT DEFAULT '{}',
+    status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'revoked', 'expired', 'consumed')),
+    created_by TEXT NOT NULL DEFAULT 'system',
+    created_at TEXT NOT NULL DEFAULT 'CURRENT_TIMESTAMP',
+    expires_at TEXT,
+    revoked_at TEXT
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_cap_grants_workspace ON capability_grants(workspace_id);
+  CREATE INDEX IF NOT EXISTS idx_cap_grants_agent ON capability_grants(agent_id);
+  CREATE INDEX IF NOT EXISTS idx_cap_grants_status ON capability_grants(status);
+
   CREATE INDEX IF NOT EXISTS idx_env_sessions_workspace ON environment_sessions(workspace_id);
   CREATE INDEX IF NOT EXISTS idx_env_sessions_run ON environment_sessions(run_id);
   CREATE INDEX IF NOT EXISTS idx_env_sessions_state ON environment_sessions(state);

@@ -294,6 +294,40 @@ export const scheduledTasks = sqliteTable("scheduled_tasks", {
   updatedAt: text("updated_at").default("CURRENT_TIMESTAMP").notNull(),
 });
 
+// ---- Capability Grants ----
+
+export const capabilityGrants = sqliteTable("capability_grants", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id"),
+  projectId: text("project_id"),
+  taskId: text("task_id"),
+  runId: text("run_id"),
+  agentId: text("agent_id"),
+  executorId: text("executor_id"),
+  profile: text("profile", {
+    enum: [
+      "read_only",
+      "workspace_write",
+      "coding_standard",
+      "dependency_install",
+      "network_read",
+      "network_write",
+      "git_remote_write",
+      "system_admin",
+    ],
+  }).notNull(),
+  actions: text("actions").notNull().default("[]"), // JSON array of RuntimeActionType
+  resources: text("resources").notNull().default("[]"), // JSON array of resource patterns
+  constraints: text("constraints").default("{}"), // JSON
+  status: text("status", { enum: ["active", "revoked", "expired", "consumed"] })
+    .default("active")
+    .notNull(),
+  createdBy: text("created_by").notNull().default("system"),
+  createdAt: text("created_at").default("CURRENT_TIMESTAMP").notNull(),
+  expiresAt: text("expires_at"),
+  revokedAt: text("revoked_at"),
+});
+
 // ---- Execution Logs ----
 
 export const executionLogs = sqliteTable("execution_logs", {
