@@ -11,11 +11,11 @@
 <h1 align="center">CoreLayer — powered by Jarvis</h1>
 
 <p align="center">
-  <strong>A desktop AI control layer for your personal apps.</strong>
+  <strong>A local-first AI execution control layer for agents, tools, and personal workspaces.</strong>
 </p>
 
 <p align="center">
-  Jarvis is the built-in assistant persona that helps you control tasks, tools, models, MCP apps, and voice workflows.
+  Jarvis is the built-in assistant persona that helps coordinate workspaces, tasks, agents, tools, models, approvals, artifacts, MCP apps, and voice workflows.
 </p>
 
 <p align="center">
@@ -36,44 +36,73 @@
 
 ---
 
+## Product Vision
+
+Most AI products still treat work as a chat thread. CoreLayer treats work as an execution system.
+
+You give Jarvis a goal. CoreLayer turns it into a workspace with tasks, agent runs, approvals, artifacts, logs, memory, and runtime state. Coding agents such as Claude Code, Codex, and OpenCode become managed executors inside a local-first control plane instead of unrestricted tools running on your machine.
+
+```text
+Goal
+  -> Workspace
+  -> Task Graph
+  -> Agent Runs
+  -> Scoped Approvals
+  -> Artifacts + Logs
+  -> Verified Delivery
+```
+
+CoreLayer's long-term direction is a local-first Agent OS: a desktop-native layer for managing agents, tools, model runtimes, permissions, workspaces, memory, and deliverables.
+
+The first practical wedge is coding execution governance:
+
+- **Workspace orchestration** — goals become projects, tasks, agents, timelines, and artifacts.
+- **Executor governance** — Claude Code, Codex, and OpenCode are adapter-backed workers with lifecycle tracking.
+- **Permission-first runtime** — risky actions create approvals, pending actions, grants, and audit records.
+- **Artifact-driven delivery** — durable outputs are separated from logs, transcripts, and status noise.
+- **Local-first architecture** — Tauri desktop app, local daemon, SQLite-first storage, MCP extensibility.
+
+---
+
 ## What is CoreLayer?
 
-**CoreLayer** is a desktop AI command layer for personal apps.
+**CoreLayer** is a local-first desktop control plane for AI agents, tools, and personal workspaces.
 
 It is not another AI chat window.
-It is a local-first desktop control center that connects your tasks, tools, models, MCP apps, voice workflows, and personal data into one AI-operable interface.
+It is a local-first workspace that turns goals into tasks, agent runs, approvals, artifacts, memory, and verifiable execution traces.
 
 The built-in assistant persona is called **Jarvis**.
 
 Jarvis can help you:
 
-- ask about today's tasks and priorities
-- manage your reading list and track progress
-- capture daily reviews with automated summaries
-- control connected personal apps through MCP
+- create and manage workspaces from high-level goals
+- decompose work into project tasks and agent runs
+- coordinate coding executors such as Claude Code, Codex, and OpenCode
+- track approvals, artifacts, logs, and run timelines
+- control connected personal apps and MCP servers
 - call tools safely through permission policies
 - route requests across different AI models
 - interact through voice with streaming TTS
-- connect to external MCP servers
 
 ---
 
 ## Why CoreLayer?
 
-Most AI assistants are either:
+AI assistants are powerful, but serious work needs more than a prompt box.
 
-- general-purpose chatbots with no tool awareness
-- single-app copilots locked to one ecosystem
-- cloud-first automation tools that own your data
-- plugin-heavy dashboards with no safety model
+Today, agent work is often hard to trust because:
 
-CoreLayer is different.
+- tasks disappear into chat history instead of becoming durable project state
+- tool calls and shell actions are difficult to inspect or approve consistently
+- multiple agents and executors do not share one workspace, memory, or artifact model
+- outputs are mixed with logs, permission prompts, and status text
+- local coding tools can be useful but need lifecycle, permission, and delivery boundaries
 
-It is designed around a simple idea:
+CoreLayer is built around a stricter product idea:
 
-> Your personal apps should remain independent, but Jarvis should be able to understand, call, and coordinate them safely.
+> Jarvis manages the work. Specialized tools execute the work.
 
-CoreLayer is the control layer between you, your tools, your models, and your personal app ecosystem.
+That boundary lets CoreLayer coordinate models, agents, MCP tools, coding executors, permissions, artifacts, and memory without becoming locked to one provider or one IDE.
 
 ---
 
@@ -88,15 +117,15 @@ CoreLayer is the control layer between you, your tools, your models, and your pe
     </td>
     <td width="50%">
       <img src="./public/assets/icons/registry.svg" width="32" />
-      <h3>Unified Tool Calling</h3>
-      <p>Register, route, execute, and display tools from native modules, MCP, skills, and REST adapters.</p>
+      <h3>Workspace Execution</h3>
+      <p>Turn goals into workspaces, projects, task graphs, agent runs, and durable artifacts.</p>
     </td>
   </tr>
   <tr>
     <td width="50%">
       <img src="./public/assets/icons/guard.svg" width="32" />
-      <h3>Permission Guard</h3>
-      <p>Classify risky actions, pause for confirmation, and keep audit logs for every tool call.</p>
+      <h3>Permission Runtime</h3>
+      <p>Classify risky actions, request scoped approval, resume pending actions, and keep audit logs.</p>
     </td>
     <td width="50%">
       <img src="./public/assets/icons/models.svg" width="32" />
@@ -113,7 +142,7 @@ CoreLayer is the control layer between you, your tools, your models, and your pe
     <td width="50%">
       <img src="./public/assets/icons/control-center.svg" width="32" />
       <h3>Control Center</h3>
-      <p>Manage models, apps, tools, permissions, voice profiles, daemon health, and logs.</p>
+      <p>Manage models, agents, apps, tools, permissions, voice profiles, daemon health, and logs.</p>
     </td>
   </tr>
 </table>
@@ -123,41 +152,34 @@ CoreLayer is the control layer between you, your tools, your models, and your pe
 ## Architecture
 
 ```text
-User
- │
-Voice / Text / Shortcut
- │
-CoreLayer Desktop App (Tauri 2.0)
- │
-├── Tauri Shell
-│   ├── Floating Jarvis Window
-│   ├── Command Palette
-│   └── Control Center UI
-│
-├── JarvisClient (Frontend)
-│   ├── HTTP Client with Retry
-│   ├── SSE Streaming Parser
-│   ├── ASR / TTS Client
-│   └── Zustand State Stores
-│
-├── Node.js Daemon (Hono)
-│   ├── AI Orchestrator
-│   ├── Model Gateway
-│   ├── Tool Registry
-│   ├── Permission Guard
-│   ├── MCP Client Manager
-│   └── Audit Logger
-│
-├── Tool Sources
-│   ├── Native Tools (Todo, Reading, Review)
-│   ├── MCP Tools
-│   ├── Skills
-│   └── REST Adapters
-│
-└── Data Layer
-    ├── SQLite (local-first)
-    ├── Supabase (cloud sync)
-    └── PostgreSQL (general)
+User goal / voice / shortcut
+  ↓
+CoreLayer Desktop Workspace (Tauri + React)
+  ├─ Workspace UI
+  ├─ Task graph and timeline
+  ├─ Agent / run / approval / artifact views
+  └─ Control Center
+  ↓
+Jarvis Runtime Daemon (Hono + TypeScript)
+  ├─ Workspace Orchestrator
+  │   └─ Goal → project spec → tasks → agent assignments
+  ├─ Agent Runtime
+  │   └─ chat / voice / scheduled / workflow runs
+  ├─ Coding Runtime
+  │   └─ Claude Code / Codex / OpenCode adapters
+  ├─ Permission Runtime
+  │   └─ policy decisions → approvals → pending actions → grants
+  ├─ Artifact + Log Store
+  │   └─ deliverables, execution logs, run events, audit trail
+  ├─ Tool Runtime
+  │   └─ native tools, MCP tools, skills, REST adapters
+  └─ Model Gateway
+      └─ MiMo / Groq / OpenRouter / Ollama / OpenAI-compatible
+  ↓
+Local-first Data Layer
+  ├─ SQLite repositories
+  ├─ Supabase repositories
+  └─ PostgreSQL configuration (experimental)
 ```
 
 ---
@@ -185,12 +207,13 @@ Coreling is the assistant avatar used in onboarding, voice mode, loading states,
 | Desktop         | Tauri 2                                           |
 | Frontend        | React 19, Vite, Tailwind CSS, shadcn/ui           |
 | State           | Zustand                                           |
-| Daemon          | Node.js, Hono                                     |
+| Daemon          | Node.js 22+, Hono                                 |
 | Database        | SQLite, Drizzle ORM                               |
 | AI SDK          | Vercel AI SDK                                     |
 | Models          | MiMo, Groq, OpenRouter, Ollama, OpenAI-compatible |
 | Voice           | Web Speech API, Groq Whisper, MiMo TTS            |
 | Protocol        | MCP (Model Context Protocol)                      |
+| Executors       | Claude Code, Codex, OpenCode adapters             |
 | Package Manager | pnpm workspaces                                   |
 
 ---
@@ -214,25 +237,25 @@ corelayer/
 │           ├── lib.rs           # Tauri commands
 │           └── daemon_supervisor.rs
 │
-├── daemon/                      # Node.js backend
+├── daemon/                      # Node.js runtime daemon
 │   └── src/
-│       ├── api/                 # Hono REST endpoints
-│       ├── orchestrator/        # AI orchestrator & prompt builder
-│       ├── tools/               # Native tools
-│       │   ├── todo/            # Task management
-│       │   ├── reading/         # Reading list
-│       │   └── review/          # Daily/weekly reviews
-│       ├── voice/               # ASR & TTS
-│       ├── config/              # Env & storage config
-│       └── db/
-│           ├── sqlite/          # SQLite repositories
-│           └── supabase/        # Cloud repositories
+│       ├── http/routes/         # Hono REST endpoints
+│       ├── runtimes/            # agent, coding, tool, voice, memory, scheduler runtimes
+│       ├── workflow/            # run dispatch, queues, slots, resources
+│       ├── services/            # workspace orchestration and detail aggregation
+│       ├── capabilities/        # permission and capability policy
+│       ├── approvals/           # approval and resume services
+│       ├── persistence/         # SQLite/Supabase repositories
+│       └── config/              # Env & storage config
 │
 ├── packages/                    # Shared packages
 │   ├── types/                   # Shared TypeScript types
 │   ├── model-gateway/           # Multi-provider model routing
 │   ├── mcp-client/              # MCP server connections
 │   ├── tool-registry/           # Unified tool registration
+│   ├── runtime-core/            # Managed runtime primitives
+│   ├── runtime-protocol/        # Runtime actions, approvals, lifecycle protocol
+│   ├── execution-environment/   # Execution environment contract
 │   └── permission-guard/        # Risk-based execution guard
 │
 ├── public/
@@ -251,7 +274,7 @@ corelayer/
 
 ### Prerequisites
 
-- Node.js 20+
+- Node.js 22+
 - pnpm 9+
 - Rust (latest stable, for Tauri)
 - Tauri prerequisites for your OS
@@ -266,34 +289,28 @@ pnpm install
 
 ### Environment
 
-Create `.env` in the project root:
+Create `.env` in the project root. The minimal local setup is:
 
 ```env
-AI_PROVIDER=mimo
-
-MIMO_API_KEY=your_mimo_key
-MIMO_MODEL=mimo-v2.5
-
-GROQ_API_KEY=your_groq_key
-OPENROUTER_API_KEY=your_openrouter_key
-
-SQLITE_DB_PATH=./daemon/data/corelayer.db
+STORAGE_MODE=local
 DAEMON_PORT=3001
+DAEMON_HOST=127.0.0.1
 ```
 
-### Run daemon
+Provider keys such as `MIMO_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY`, `DATABASE_URL`, `SUPABASE_URL`, and `SUPABASE_SERVICE_ROLE_KEY` are optional and can be added when enabling those integrations.
+
+### Run all
+
+```bash
+pnpm dev
+```
+
+### Run daemon or desktop app separately
 
 ```bash
 pnpm --filter daemon dev
-```
-
-### Run desktop app
-
-```bash
 pnpm --filter frontend tauri dev
 ```
-
-This starts the Hono daemon and Tauri desktop window concurrently.
 
 ---
 
@@ -325,31 +342,31 @@ This starts the Hono daemon and Tauri desktop window concurrently.
 Ask Jarvis:
 
 ```text
-What should I focus on today?
+Create a workspace for building the packaged runtime supervisor.
 ```
 
 ```text
-Show me my current tasks sorted by priority.
+Break this goal into implementation tasks and assign suitable agents.
 ```
 
 ```text
-Add this article to my reading list.
+Run the coding agent with Codex and keep changes isolated.
 ```
 
 ```text
-Summarize my weekly progress.
+Show me what this agent run changed and which checks passed.
 ```
 
 ```text
-Connect to my GitHub MCP server.
+Approve this file write for the current task only.
 ```
 
 ```text
-Use the fast model for this voice command.
+Show all pending approvals for this workspace.
 ```
 
 ```text
-What tools are currently enabled?
+Connect my GitHub MCP server and list available tools.
 ```
 
 ---
@@ -406,15 +423,15 @@ Providers can be added via the Control Center UI with preset catalogs or custom 
 
 ## Storage Modes
 
-CoreLayer supports three storage modes, hot-swappable at runtime:
+CoreLayer has three storage modes in the UI/config layer:
 
-| Mode             | Description                                             |
-| ---------------- | ------------------------------------------------------- |
-| **Local SQLite** | Zero-config, offline-first, data stays on your machine. |
-| **Supabase**     | One-click multi-device cloud sync.                      |
-| **PostgreSQL**   | Compatible with AWS RDS, Neon, Aiven, or self-hosted.   |
+| Mode             | Description                                                                                                        |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------ |
+| **Local SQLite** | Zero-config, offline-first, data stays on your machine.                                                            |
+| **Supabase**     | Cloud sync mode backed by Supabase repositories.                                                                   |
+| **PostgreSQL**   | Configuration and connection testing exist; repository support is experimental and currently falls back to SQLite. |
 
-Switch databases in real-time without restarting the app.
+Switching storage modes is supported from settings, but PostgreSQL should be treated as a work in progress.
 
 ---
 
@@ -442,41 +459,36 @@ Voice profiles are configurable with different languages, models, and voice sett
 
 ## Roadmap
 
-### Phase 1 — Core Desktop Layer
+### Implemented
 
-- [x] Tauri desktop shell
-- [x] Local daemon with Hono
-- [x] Unified JarvisClient
-- [x] Streaming chat with tool calling
-- [x] Tool Registry
-- [x] Permission Guard
-- [x] Tool call audit logs
-- [x] Model routing gateway
-- [x] Voice profile manager
-- [x] Smart Todo, Reading, Review tools
+- [x] Tauri desktop shell with local daemon supervision
+- [x] React workspace UI, command palette, control center, and voice overlay
+- [x] Unified JarvisClient with HTTP retry and SSE streaming
+- [x] Model gateway for MiMo, Groq, OpenRouter, Ollama, and OpenAI-compatible providers
+- [x] Tool registry for native tools, MCP tools, skills, and REST adapters
+- [x] Voice pipeline with ASR, streaming response, TTS, and interruption
+- [x] Local skills runtime and scheduled automation foundations
+- [x] Local-first SQLite storage with Supabase repository support
+- [x] Workspace, project, task graph, agent run, artifact, approval, and environment-session data model
+- [x] Workspace UI with task graph, timeline, agents, runs, approvals, and artifacts
+- [x] Coding runtime adapters for Claude Code, Codex, and OpenCode
+- [x] Runtime protocol, execution environment, capability grant, pending action, and execution log foundations
 
-### Phase 2 — Control Center
+### Current Focus
 
-- [x] Settings as a full Control Center
-- [x] Model profile management UI
-- [x] MCP connection manager UI
-- [x] Tool registry explorer
-- [x] Permission matrix UI
-- [x] Voice test console
-- [x] Daemon health dashboard
+- [ ] Harden third-party executor permissions and approval projection
+- [ ] Enforce workspace and execution environment boundaries before side effects
+- [ ] Separate deliverable artifacts from logs, transcripts, permission prompts, and status output
+- [ ] Add trajectory export for reconstructing an agent run from events, logs, approvals, and artifacts
+- [ ] Make verified delivery the default completion path for coding tasks
 
-### Phase 3 — Personal App Ecosystem
+### Next
 
-- [x] Veridia MCP integration (REST adapter)
-- [x] TaskFlow integration (native repo adapter)
-- [x] FlexiLog integration (REST adapter)
-
-### Phase 4 — Skills and Automation
-
-- [x] Local skills runtime
-- [x] Workflow skills
-- [x] Scheduled reviews
-- [x] Plugin marketplace experiments
+- [ ] Mature the Agent OS workspace around project memory, decision records, and reusable workflows
+- [ ] Expand executor governance beyond coding into research, writing, browser, messaging, and media workflows
+- [ ] Move more host-level authority into Rust/Tauri Core: process supervision, app paths, secrets, permissions, updates, and audit logs
+- [ ] Stabilize runtime protocols for future managed runtimes and plugin ecosystems
+- [ ] Keep marketplace-style sharing behind stable permission, memory, runtime, and artifact contracts
 
 ---
 
@@ -526,4 +538,5 @@ Coreling  = the holographic AI core companion
 
 CoreLayer is currently experimental and built for personal use first.
 
-The long-term goal is to become an MCP-first, local-first desktop AI control layer for personal apps.
+The near-term wedge is a local-first control plane for coding executors such as Claude Code, Codex, and OpenCode.
+The long-term goal is to become a local-first Agent OS for managing agents, tasks, workspaces, tools, permissions, memory, artifacts, and model runtimes.

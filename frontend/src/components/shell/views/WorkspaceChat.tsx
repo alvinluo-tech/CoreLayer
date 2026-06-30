@@ -170,7 +170,15 @@ export function WorkspaceChat({ workspaceId }: WorkspaceChatProps) {
       </div>
 
       {/* Input */}
-      <div className="chat-input-row flex-shrink-0">
+      <div
+        className="chat-input-row flex-shrink-0"
+        onMouseDown={(e) => {
+          if ((e.target as HTMLElement).closest('button')) return;
+          if (e.target === inputRef.current) return;
+          e.preventDefault();
+          inputRef.current?.focus();
+        }}
+      >
         <input
           ref={inputRef}
           className="chat-input"
@@ -178,7 +186,6 @@ export function WorkspaceChat({ workspaceId }: WorkspaceChatProps) {
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
           placeholder="Send a message to workspace agents..."
-          disabled={isLoading}
         />
         <button onClick={handleSend} disabled={!input.trim() || isLoading} className="chat-send">
           Send

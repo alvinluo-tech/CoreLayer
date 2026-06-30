@@ -1,4 +1,4 @@
-import { useState, type KeyboardEvent } from 'react';
+import { useRef, useState, type KeyboardEvent } from 'react';
 import { Send, Square } from 'lucide-react';
 
 const MAX_MESSAGE_LENGTH = 4000;
@@ -11,6 +11,7 @@ interface ChatInputProps {
 
 export function ChatInput({ onSend, disabled, onStop }: ChatInputProps) {
   const [text, setText] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const handleSend = () => {
     const trimmed = text.trim();
@@ -31,6 +32,12 @@ export function ChatInput({ onSend, disabled, onStop }: ChatInputProps) {
   return (
     <div
       className="flex items-center gap-2.5 w-full h-11 px-4 rounded-xl transition-all duration-300"
+      onMouseDown={(e) => {
+        if ((e.target as HTMLElement).closest('button')) return;
+        if (e.target === inputRef.current) return;
+        e.preventDefault();
+        inputRef.current?.focus();
+      }}
       style={{
         border: '1px solid var(--glass-border)',
         background: 'var(--glass-bg)',
@@ -38,14 +45,14 @@ export function ChatInput({ onSend, disabled, onStop }: ChatInputProps) {
       }}
     >
       <input
+        ref={inputRef}
         type="text"
         value={text}
         onChange={(e) => setText(e.target.value.slice(0, MAX_MESSAGE_LENGTH))}
         onKeyDown={handleKeyDown}
         placeholder={disabled ? 'Jarvis is processing...' : 'Send a message...'}
-        disabled={disabled}
         maxLength={MAX_MESSAGE_LENGTH}
-        className="w-full bg-transparent text-sm focus:outline-none disabled:cursor-not-allowed"
+        className="w-full bg-transparent text-sm focus:outline-none"
         style={{
           color: 'var(--text-primary)',
           fontFamily: 'var(--font-body)',
