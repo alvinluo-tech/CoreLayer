@@ -4,7 +4,7 @@
  */
 
 /** Which executor runs this agent's tasks */
-export type ExecutorType = "self" | "codex" | "claude-code" | "opencode";
+export type ExecutorType = string;
 
 /** Model preference policy — controls model selection */
 export interface AgentModelPolicy {
@@ -33,18 +33,18 @@ export interface AgentExecutorPolicy {
 }
 
 /** Valid executor type values for validation */
-export const VALID_EXECUTORS: readonly ExecutorType[] = [
+export const BUILT_IN_EXECUTORS = [
   "self",
   "codex",
   "claude-code",
   "opencode",
-];
+] as const;
 
 /**
  * Check whether a value is a valid ExecutorType.
  */
 export function isValidExecutor(value: unknown): value is ExecutorType {
-  return typeof value === "string" && (VALID_EXECUTORS as readonly string[]).includes(value);
+  return typeof value === "string" && value.trim().length > 0;
 }
 
 /**

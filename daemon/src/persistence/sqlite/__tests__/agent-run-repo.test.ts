@@ -28,6 +28,7 @@ function createTestDb() {
       tool_calls TEXT,
       artifacts TEXT,
       approvals TEXT,
+      agent_snapshot TEXT,
       started_at TEXT DEFAULT 'CURRENT_TIMESTAMP',
       completed_at TEXT,
       duration_ms INTEGER,
@@ -171,6 +172,46 @@ describe("AgentRun Repository", () => {
       const updated = await agentRuns.getById(run.id);
       expect(updated!.status).toBe("cancelled");
       expect(updated!.error).toBeNull();
+    });
+  });
+
+  describe("claimQueued", () => {
+    it("atomically claims a queued run only once", async () => {
+      const run = await agentRuns.create({});
+
+      await expect(agentRuns.claimQueued(run.id)).resolves.toBe(true);
+      await expect(agentRuns.claimQueued(run.id)).resolves.toBe(false);
+      await expect(agentRuns.getById(run.id)).resolves.toMatchObject({ status: "running" });
+    });
+
+    it("does not claim a terminal run", async () => {
+      const run = await agentRuns.create({});
+      await agentRuns.updateStatus(run.id, "failed", "boom");
+
+      await expect(agentRuns.claimQueued(run.id)).resolves.toBe(false);
+    });
+  });
+
+  describe("agent snapshot", () => {
+    it("persists the immutable agent configuration used for the run", async () => {
+      const agentSnapshot = {
+        profileId: "agent-1",
+      profileUpdatedAt: "2026-07-11T00:00:00.000Z",
+      profileDigest: "digest-1",
+        capabilities: ["coding"],
+        skills: ["tdd-workflow"],
+        tools: ["shell"],
+        knowledgeScopes: ["workspace"],
+        permissions: ["file_write"],
+        memoryScopes: ["project"],
+        modelPolicy: { preferredModels: ["model-1"] },
+        executorPolicy: { executor: "codex" as const },
+      };
+
+      const run = await agentRuns.create({ agentId: "agent-1", agentSnapshot });
+
+      expect(run.agentSnapshot).toEqual(agentSnapshot);
+      expect((await agentRuns.getById(run.id))?.agentSnapshot).toEqual(agentSnapshot);
     });
   });
 });

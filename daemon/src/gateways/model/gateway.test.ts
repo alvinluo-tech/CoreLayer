@@ -54,7 +54,7 @@ describe("ModelGateway", () => {
     mockGetActiveProvider.mockReturnValue("default-provider");
     mockGetProviders.mockReturnValue([]);
     mockGetRepositories.mockReturnValue({
-      modelProfiles: { getAll: () => [] },
+      modelProfiles: { getAllSync: () => [] },
     });
     mockResolveProvider.mockReturnValue({
       baseURL: "https://api.openai.com/v1",
@@ -91,7 +91,7 @@ describe("ModelGateway", () => {
     it("uses DB profiles when available", () => {
       mockGetRepositories.mockReturnValue({
         modelProfiles: {
-          getAll: () => [
+          getAllSync: () => [
             {
               id: "db-model-1",
               provider: "db-provider",
@@ -190,7 +190,7 @@ describe("ModelGateway", () => {
       mockGetActiveModel.mockReturnValue("my-model");
       mockGetRepositories.mockReturnValue({
         modelProfiles: {
-          getAll: () => [
+          getAllSync: () => [
             {
               id: "my-model",
               provider: "special-provider",

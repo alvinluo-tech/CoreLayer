@@ -95,6 +95,7 @@ export interface UpsertModelProfileInput {
 
 export interface ModelProfileRepository {
   getAll(): Promise<ModelProfileRow[]>;
+  getAllSync(): ModelProfileRow[];  // sync read for gateway init (better-sqlite3 is sync)
   getDefault(): Promise<ModelProfileRow | null>;
   upsert(input: UpsertModelProfileInput): Promise<ModelProfileRow>;
   setDefault(id: string): Promise<void>;

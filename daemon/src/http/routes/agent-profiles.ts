@@ -1,10 +1,6 @@
 import { Hono } from "hono";
 import { getRepositories } from "../../persistence/factory.js";
 import { apiError } from "../../shared/errors.js";
-import {
-  isAgentModelPolicy,
-  isAgentExecutorPolicy,
-} from "../../shared/agent-profile-types.js";
 import type { CreateAgentProfileInput, UpdateAgentProfileData } from "../../persistence/repository.js";
 import { withErrorHandling } from "../middleware/error-handler.js";
 import { logAuditEntry } from "../../persistence/audit-log.js";
@@ -12,107 +8,79 @@ import * as os from "node:os";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { spawnProcess, isCommandAvailable } from "../../runtimes/coding/public-api.js";
+import { z } from "zod";
 
 const agentProfileRoutes = new Hono();
 
+const executorTypeSchema = z.enum(["self", "codex", "claude-code", "opencode"]);
+
+const agentModelPolicySchema = z.object({
+  preferredModels: z.array(z.string()).optional(),
+  fallbackModel: z.string().optional(),
+  maxTokens: z.number().optional(),
+  temperature: z.number().optional(),
+  provider: z.string().optional(),
+});
+
+const agentExecutorPolicySchema = z.object({
+  executor: executorTypeSchema,
+  maxConcurrent: z.number().optional(),
+  workDir: z.string().optional(),
+  extraArgs: z.array(z.string()).optional(),
+});
+
+const createProfileSchema = z.object({
+  name: z.string().min(1, "name is required and must be a string"),
+  description: z.any().transform(val => typeof val === "string" ? val : undefined).optional(),
+  modelPolicy: agentModelPolicySchema.optional(),
+  executorPolicy: agentExecutorPolicySchema.optional(),
+  skills: z.array(z.string()).optional(),
+  tools: z.array(z.string()).optional(),
+  knowledgeScopes: z.array(z.string()).optional(),
+  permissions: z.array(z.string()).optional(),
+  memoryScopes: z.array(z.string()).optional(),
+  isDefault: z.boolean().optional(),
+});
+
+const updateProfileSchema = z.object({
+  name: z.string().optional(),
+  description: z.string().nullable().optional(),
+  modelPolicy: agentModelPolicySchema.nullable().optional(),
+  executorPolicy: agentExecutorPolicySchema.nullable().optional(),
+  skills: z.array(z.string()).optional(),
+  tools: z.array(z.string()).optional(),
+  knowledgeScopes: z.array(z.string()).optional(),
+  permissions: z.array(z.string()).optional(),
+  memoryScopes: z.array(z.string()).optional(),
+  isDefault: z.boolean().optional(),
+});
+
 function validateCreateInput(body: unknown): { ok: true; input: CreateAgentProfileInput } | { ok: false; error: string } {
-  if (!body || typeof body !== "object") {
-    return { ok: false, error: "Request body is required" };
+  const result = createProfileSchema.safeParse(body);
+  if (!result.success) {
+    return { ok: false, error: result.error.errors[0]?.message || "Validation failed" };
   }
-  const b = body as Record<string, unknown>;
-  if (!b.name || typeof b.name !== "string") {
-    return { ok: false, error: "name is required and must be a string" };
-  }
-  if (b.skills !== undefined && !Array.isArray(b.skills)) {
-    return { ok: false, error: "skills must be an array" };
-  }
-  if (b.tools !== undefined && !Array.isArray(b.tools)) {
-    return { ok: false, error: "tools must be an array" };
-  }
-  if (b.knowledgeScopes !== undefined && !Array.isArray(b.knowledgeScopes)) {
-    return { ok: false, error: "knowledgeScopes must be an array" };
-  }
-  if (b.permissions !== undefined && !Array.isArray(b.permissions)) {
-    return { ok: false, error: "permissions must be an array" };
-  }
-  if (b.memoryScopes !== undefined && !Array.isArray(b.memoryScopes)) {
-    return { ok: false, error: "memoryScopes must be an array" };
-  }
-  if (b.modelPolicy !== undefined && b.modelPolicy !== null && !isAgentModelPolicy(b.modelPolicy)) {
-    return { ok: false, error: "modelPolicy must have preferredModels (string[]), fallbackModel (string), maxTokens (number), temperature (number), or provider (string)" };
-  }
-  if (b.executorPolicy !== undefined && b.executorPolicy !== null && !isAgentExecutorPolicy(b.executorPolicy)) {
-    return { ok: false, error: "executorPolicy must have executor (one of: self, codex, claude-code, opencode)" };
-  }
-  return {
-    ok: true,
-    input: {
-      name: b.name as string,
-      description: typeof b.description === "string" ? b.description : undefined,
-      modelPolicy: b.modelPolicy ?? undefined,
-      executorPolicy: b.executorPolicy ?? undefined,
-      skills: Array.isArray(b.skills) ? (b.skills as string[]) : undefined,
-      tools: Array.isArray(b.tools) ? (b.tools as string[]) : undefined,
-      knowledgeScopes: Array.isArray(b.knowledgeScopes) ? (b.knowledgeScopes as string[]) : undefined,
-      permissions: Array.isArray(b.permissions) ? (b.permissions as string[]) : undefined,
-      memoryScopes: Array.isArray(b.memoryScopes) ? (b.memoryScopes as string[]) : undefined,
-      isDefault: typeof b.isDefault === "boolean" ? b.isDefault : undefined,
-    },
-  };
+  return { ok: true, input: result.data };
 }
 
 function validateUpdateInput(body: unknown): { ok: true; data: UpdateAgentProfileData } | { ok: false; error: string } {
-  if (!body || typeof body !== "object") {
-    return { ok: false, error: "Request body is required" };
+  const result = updateProfileSchema.safeParse(body);
+  if (!result.success) {
+    return { ok: false, error: result.error.errors[0]?.message || "Validation failed" };
   }
-  const b = body as Record<string, unknown>;
-  const data: UpdateAgentProfileData = {};
-  if (b.name !== undefined) {
-    if (typeof b.name !== "string") return { ok: false, error: "name must be a string" };
-    data.name = b.name;
-  }
-  if (b.description !== undefined) {
-    if (typeof b.description !== "string" && b.description !== null) {
-      return { ok: false, error: "description must be a string or null" };
-    }
-    data.description = b.description === null ? undefined : b.description;
-  }
-  if (b.modelPolicy !== undefined) {
-    if (b.modelPolicy !== null && !isAgentModelPolicy(b.modelPolicy)) {
-      return { ok: false, error: "modelPolicy must have preferredModels (string[]), fallbackModel (string), maxTokens (number), temperature (number), or provider (string)" };
-    }
-    data.modelPolicy = b.modelPolicy ?? undefined;
-  }
-  if (b.executorPolicy !== undefined) {
-    if (b.executorPolicy !== null && !isAgentExecutorPolicy(b.executorPolicy)) {
-      return { ok: false, error: "executorPolicy must have executor (one of: self, codex, claude-code, opencode)" };
-    }
-    data.executorPolicy = b.executorPolicy;
-  }
-  if (b.skills !== undefined) {
-    if (!Array.isArray(b.skills)) return { ok: false, error: "skills must be an array" };
-    data.skills = b.skills as string[];
-  }
-  if (b.tools !== undefined) {
-    if (!Array.isArray(b.tools)) return { ok: false, error: "tools must be an array" };
-    data.tools = b.tools as string[];
-  }
-  if (b.knowledgeScopes !== undefined) {
-    if (!Array.isArray(b.knowledgeScopes)) return { ok: false, error: "knowledgeScopes must be an array" };
-    data.knowledgeScopes = b.knowledgeScopes as string[];
-  }
-  if (b.permissions !== undefined) {
-    if (!Array.isArray(b.permissions)) return { ok: false, error: "permissions must be an array" };
-    data.permissions = b.permissions as string[];
-  }
-  if (b.memoryScopes !== undefined) {
-    if (!Array.isArray(b.memoryScopes)) return { ok: false, error: "memoryScopes must be an array" };
-    data.memoryScopes = b.memoryScopes as string[];
-  }
-  if (b.isDefault !== undefined) {
-    if (typeof b.isDefault !== "boolean") return { ok: false, error: "isDefault must be a boolean" };
-    data.isDefault = b.isDefault;
-  }
+  
+  const data: UpdateAgentProfileData = {
+    name: result.data.name,
+    description: result.data.description === null ? undefined : result.data.description,
+    modelPolicy: result.data.modelPolicy === null ? undefined : result.data.modelPolicy,
+    executorPolicy: result.data.executorPolicy === null ? undefined : result.data.executorPolicy,
+    skills: result.data.skills,
+    tools: result.data.tools,
+    knowledgeScopes: result.data.knowledgeScopes,
+    permissions: result.data.permissions,
+    memoryScopes: result.data.memoryScopes,
+    isDefault: result.data.isDefault,
+  };
   return { ok: true, data };
 }
 

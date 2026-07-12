@@ -8,8 +8,21 @@ import { handleMessageInConversation } from "../../runtimes/agent/public-api.js"
 import { executeOperation } from "../../operations/executors/operation-executor.js";
 import { formatReceiptMessage } from "../../operations/receipts/operation-receipt.js";
 import type { AuditLogRepository, ApprovalRequestRepository, ToolCallLogRepository } from "../../persistence/repository.js";
+import { z } from "zod";
 
 const approvalRoutes = new Hono();
+
+const batchPayloadSchema = z.object({
+  ids: z.array(z.string()).default([]),
+});
+
+const rememberPayloadSchema = z.object({
+  decision: z.enum(["auto", "confirm", "deny"]),
+  scope: z.enum(["global", "project", "session"]).optional(),
+  projectId: z.string().optional(),
+  runId: z.string().optional(),
+});
+
 
 // ---- Shared helpers ----
 
@@ -182,8 +195,12 @@ approvalRoutes.get("/", withErrorHandling("approvals/list", async (c) => {
  */
 approvalRoutes.post("/batch/approve", withErrorHandling("approvals/batch/approve", async (c) => {
   const { approvalRequests, agentRuns, auditLog } = getRepositories();
-  const body = await c.req.json<{ ids: string[] }>();
-  const ids = body.ids ?? [];
+  const body = await c.req.json().catch(() => ({}));
+  const parsed = batchPayloadSchema.safeParse(body);
+  if (!parsed.success) {
+    return apiError(c, "Invalid batch payload: " + parsed.error.message, 400);
+  }
+  const ids = parsed.data.ids;
 
   if (ids.length === 0) {
     return c.json({ data: [] });
@@ -246,8 +263,12 @@ approvalRoutes.post("/batch/approve", withErrorHandling("approvals/batch/approve
  */
 approvalRoutes.post("/batch/deny", withErrorHandling("approvals/batch/deny", async (c) => {
   const { approvalRequests, toolCallLogs, agentRuns, auditLog } = getRepositories();
-  const body = await c.req.json<{ ids: string[] }>();
-  const ids = body.ids ?? [];
+  const body = await c.req.json().catch(() => ({}));
+  const parsed = batchPayloadSchema.safeParse(body);
+  if (!parsed.success) {
+    return apiError(c, "Invalid batch payload: " + parsed.error.message, 400);
+  }
+  const ids = parsed.data.ids;
   const updatedList: Awaited<ReturnType<typeof approvalRequests.deny>>[] = [];
   const runIdsToFail = new Set<string>();
 
@@ -360,16 +381,12 @@ approvalRoutes.post("/:id/deny", withErrorHandling("approvals/deny", async (c) =
 approvalRoutes.post("/:id/remember", withErrorHandling("approvals/remember", async (c) => {
   const { approvalRequests, permissionMemories, agentRuns, toolCallLogs } = getRepositories();
   const id = c.req.param("id")!;
-  const body = await c.req.json<{
-    decision: "auto" | "confirm" | "deny";
-    scope?: "global" | "project" | "session";
-    projectId?: string;
-    runId?: string;
-  }>();
-
-  if (!body.decision || !["auto", "confirm", "deny"].includes(body.decision)) {
+  const body = await c.req.json().catch(() => ({}));
+  const parsed = rememberPayloadSchema.safeParse(body);
+  if (!parsed.success) {
     return apiError(c, "Invalid decision value", 400);
   }
+  const validData = parsed.data;
 
   const existing = await approvalRequests.getById(id);
   if (!existing) {
@@ -379,14 +396,14 @@ approvalRoutes.post("/:id/remember", withErrorHandling("approvals/remember", asy
   await permissionMemories.create({
     toolId: existing.toolId,
     risk: existing.risk,
-    decision: body.decision,
-    scope: body.scope ?? "global",
-    projectId: body.projectId ?? null,
-    runId: body.runId ?? existing.runId ?? null,
+    decision: validData.decision,
+    scope: validData.scope ?? "global",
+    projectId: validData.projectId ?? null,
+    runId: validData.runId ?? existing.runId ?? null,
   });
 
   if (existing.status === "pending") {
-    const approved = body.decision !== "deny";
+    const approved = validData.decision !== "deny";
     toolRuntime.getPermissionGuard().resolvePendingConfirmation(id, approved);
 
     const { auditLog } = getRepositories();

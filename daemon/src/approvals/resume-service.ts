@@ -16,6 +16,12 @@ import { getRepositories } from "../persistence/factory.js";
 import { getRegistry } from "../runtimes/tool/public-api.js";
 import type { ToolResult } from "@jarvis/types";
 import type { RuntimeAction } from "@jarvis/runtime-protocol";
+import type {
+  PendingActionRow,
+  PendingActionStatus,
+  PendingActionResumeStrategy,
+} from "../persistence/repository/pending-action.js";
+import { createHash } from "node:crypto";
 
 export interface ResumeResult {
   approvalRequestId: string;
@@ -26,43 +32,18 @@ export interface ResumeResult {
 }
 
 /** Resume strategy types */
-export type ResumeStrategy =
-  | "native_session_resume"
-  | "prompted_reentry"
-  | "manual_block";
+export type ResumeStrategy = PendingActionResumeStrategy;
 
 /** Pending action status */
-export type PendingActionStatus =
-  | "blocked"
-  | "approved"
-  | "resuming"
-  | "executing"
-  | "completed"
-  | "failed"
-  | "cancelled"
-  | "expired";
+export type { PendingActionStatus };
 
 /** Pending action record */
-export interface PendingActionRecord {
-  id: string;
-  approvalRequestId: string;
-  runId: string;
-  executorRunId?: string;
-  workspaceId?: string;
-  actionFingerprint: string;
-  actionPayload: RuntimeAction;
-  resumePayload: { strategy: ResumeStrategy; executorSessionId?: string };
-  status: PendingActionStatus;
-  error?: string;
-}
-
-/** In-memory pending action store (will be DB-backed) */
-const pendingActions = new Map<string, PendingActionRecord>();
+export type PendingActionRecord = PendingActionRow;
 
 /**
  * Create a pending action when approval is required.
  */
-export function createPendingAction(input: {
+export async function createPendingAction(input: {
   approvalRequestId: string;
   runId: string;
   executorRunId?: string;
@@ -70,66 +51,64 @@ export function createPendingAction(input: {
   action: RuntimeAction;
   strategy: ResumeStrategy;
   executorSessionId?: string;
-}): PendingActionRecord {
-  const id = crypto.randomUUID();
-
-  const record: PendingActionRecord = {
-    id,
+  nativeResumeSupported?: boolean;
+}): Promise<PendingActionRecord> {
+  if (input.strategy === "native_session_resume" && !input.nativeResumeSupported) {
+    throw new Error("native_session_resume requires an adapter with resumableSession capability");
+  }
+  const { pendingActions } = getRepositories();
+  return pendingActions.create({
     approvalRequestId: input.approvalRequestId,
     runId: input.runId,
     executorRunId: input.executorRunId,
     workspaceId: input.workspaceId,
-    actionFingerprint: `${input.action.type}:${input.action.target ?? ""}:${input.runId}`,
+    actionFingerprint: createHash("sha256")
+      .update(`${input.runId}:${canonicalJson(input.action)}`)
+      .digest("hex"),
     actionPayload: input.action,
     resumePayload: {
       strategy: input.strategy,
       executorSessionId: input.executorSessionId,
     },
-    status: "blocked",
-  };
-
-  pendingActions.set(id, record);
-  return record;
+  });
 }
 
 /**
  * Approve a pending action.
  */
-export function approvePendingAction(id: string): PendingActionRecord | null {
-  const action = pendingActions.get(id);
-  if (!action || action.status !== "blocked") return null;
-  action.status = "approved";
-  return action;
+export async function approvePendingAction(id: string): Promise<PendingActionRecord | null> {
+  return getRepositories().pendingActions.transition(id, ["blocked"], "approved");
 }
 
 /**
  * Complete a pending action.
  */
-export function completePendingAction(id: string, success: boolean, error?: string): PendingActionRecord | null {
-  const action = pendingActions.get(id);
-  if (!action) return null;
-  action.status = success ? "completed" : "failed";
-  action.error = error;
-  return action;
+export async function completePendingAction(id: string, success: boolean, error?: string): Promise<PendingActionRecord | null> {
+  return getRepositories().pendingActions.transition(
+    id,
+    ["approved", "resuming", "executing", "blocked"],
+    success ? "completed" : "failed",
+    error,
+  );
 }
 
 /**
  * Cancel a pending action (user denied).
  */
-export function cancelPendingAction(id: string): PendingActionRecord | null {
-  const action = pendingActions.get(id);
-  if (!action) return null;
-  action.status = "cancelled";
-  return action;
+export async function cancelPendingAction(id: string): Promise<PendingActionRecord | null> {
+  return getRepositories().pendingActions.transition(
+    id,
+    ["blocked", "approved"],
+    "cancelled",
+  );
 }
 
 /**
  * Check for duplicate approval (idempotency).
  */
-export function isDuplicateApproval(fingerprint: string): boolean {
-  return [...pendingActions.values()].some(
-    (a) => a.actionFingerprint === fingerprint && (a.status === "completed" || a.status === "resuming"),
-  );
+export async function isDuplicateApproval(fingerprint: string): Promise<boolean> {
+  const action = await getRepositories().pendingActions.getByFingerprint(fingerprint);
+  return action?.status === "completed" || action?.status === "resuming" || action?.status === "executing";
 }
 
 /**
@@ -141,7 +120,7 @@ export function isDuplicateApproval(fingerprint: string): boolean {
 export async function executeApprovedTool(
   approvalRequestId: string,
 ): Promise<ResumeResult> {
-  const { approvalRequests } = getRepositories();
+  const { approvalRequests, pendingActions } = getRepositories();
   const request = await approvalRequests.getById(approvalRequestId);
 
   if (!request) {
@@ -156,33 +135,66 @@ export async function executeApprovedTool(
     throw new Error(`Approval request missing resume payload: ${approvalRequestId}`);
   }
 
+  const pending = await pendingActions.getByApprovalRequest(approvalRequestId);
+  if (pending?.status === "completed" && pending.result) {
+    return pending.result as ResumeResult;
+  }
+  if (pending) {
+    const claimed = await pendingActions.transition(pending.id, ["approved"], "executing");
+    if (!claimed) {
+      throw new Error(`Approval action is already being resumed: ${approvalRequestId}`);
+    }
+  }
+
   const payload = request.operationPayload as { args: unknown };
 
   const registry = getRegistry();
   const tool = registry.resolveTool(request.toolId) ?? registry.getTool(`native:${request.toolId}`);
 
   if (!tool) {
-    return {
+    const result = {
       approvalRequestId,
       toolResult: { success: false, error: `Tool not found: ${request.toolId}` },
       toolId: request.toolId,
       toolName: request.toolName,
       runId: request.runId,
     };
+    if (pending) await pendingActions.transition(pending.id, ["executing"], "completed", undefined, result);
+    return result;
   }
 
   const toolResult = await tool.execute(payload.args);
 
-  return {
+  const result = {
     approvalRequestId,
     toolResult,
     toolId: request.toolId,
     toolName: request.toolName,
     runId: request.runId,
   };
+  if (pending) {
+    await pendingActions.transition(
+      pending.id,
+      ["executing"],
+      toolResult.success ? "completed" : "failed",
+      toolResult.success ? undefined : toolResult.error,
+      result,
+    );
+  }
+  return result;
 }
 
 /** Reset pending actions (for testing) */
-export function resetPendingActions(): void {
-  pendingActions.clear();
+export async function resetPendingActions(): Promise<void> {
+  await getRepositories().pendingActions.deleteAll();
+}
+
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record).sort().map((key) =>
+      `${JSON.stringify(key)}:${canonicalJson(record[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
 }

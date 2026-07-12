@@ -313,6 +313,7 @@ export const pendingActions = sqliteTable("pending_actions", {
     .default("blocked")
     .notNull(),
   error: text("error"),
+  result: text("result"), // JSON cached result for idempotent resume
   createdAt: text("created_at").default("CURRENT_TIMESTAMP").notNull(),
   updatedAt: text("updated_at").default("CURRENT_TIMESTAMP").notNull(),
   completedAt: text("completed_at"),
@@ -414,6 +415,13 @@ export const executorRuns = sqliteTable("executor_runs", {
   taskId: text("task_id"),
   agentId: text("agent_id").references(() => agentProfiles.id),
   adapterId: text("adapter_id").notNull(),
+  attemptNumber: integer("attempt_number").notNull().default(1),
+  nativeSessionId: text("native_session_id"),
+  nativeTurnId: text("native_turn_id"),
+  eventCursor: integer("event_cursor").notNull().default(0),
+  heartbeatAt: text("heartbeat_at"),
+  leaseOwner: text("lease_owner"),
+  leaseExpiresAt: text("lease_expires_at"),
   domain: text("domain").notNull().default("coding"), // coding, research, image-generation, messaging, etc.
   status: text("status", {
     enum: [
@@ -477,6 +485,7 @@ export const agentRuns = sqliteTable("agent_runs", {
   toolCallCount: integer("tool_call_count").default(0),
   artifacts: text("artifacts").default("[]"), // JSON array
   approvals: text("approvals").default("[]"), // JSON array
+  agentSnapshot: text("agent_snapshot"), // immutable resolved AgentProfile JSON
   startedAt: text("started_at").default("CURRENT_TIMESTAMP").notNull(),
   completedAt: text("completed_at"),
   durationMs: integer("duration_ms"),

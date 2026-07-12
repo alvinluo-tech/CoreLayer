@@ -1,11 +1,34 @@
 import { ToolRegistry as BaseToolRegistry } from "@jarvis/tool-registry";
 import type { JarvisTool, JSONSchema, RiskLevel, ToolResult } from "@jarvis/types";
 import type { Tool } from "ai";
+import { jsonSchema } from "ai";
 
 /**
- * Global tool registry instance.
- * Uses @jarvis/tool-registry under the hood, with backward-compatible API.
+ * Normalize a stored inputSchema to a format AI SDK v6 accepts.
+ *
+ * AI SDK v6 `asSchema()` handles:
+ *   - Objects with `~standard` (Zod / Standard Schema)  → zodSchema()
+ *   - Objects with `jsonSchema` + `validate`            → used directly
+ *   - Otherwise it calls `schema()` treating it as a factory — which crashes
+ *     on plain JSON Schema objects.
+ *
+ * So: Zod schemas pass through; plain JSON objects get wrapped with jsonSchema().
  */
+function normalizeInputSchema(schema: unknown): unknown {
+  if (schema == null) return jsonSchema({ type: "object", properties: {} });
+  // Zod / Standard Schema — AI SDK knows how to handle these natively
+  if (typeof schema === "object" && "~standard" in (schema as object)) return schema;
+  // Already a proper Schema wrapper (has jsonSchema + validate)
+  if (
+    typeof schema === "object" &&
+    "jsonSchema" in (schema as object) &&
+    "validate" in (schema as object)
+  ) return schema;
+  // Plain JSON Schema object — wrap it so SDK doesn't try to call it as a function
+  return jsonSchema(schema as Record<string, unknown>);
+}
+
+
 const registry = new BaseToolRegistry();
 
 /**
@@ -51,10 +74,10 @@ export function getTool(name: string): Tool | undefined {
   const tool = registry.resolveTool(name) ?? registry.getTool(`native:${name}`);
   if (!tool) return undefined;
 
-  // Return in Vercel AI SDK format for backward compatibility
+  // AI SDK v6 uses `inputSchema`, not `parameters`
   return {
     description: tool.description,
-    parameters: tool.inputSchema,
+    inputSchema: normalizeInputSchema(tool.inputSchema),
     execute: tool.execute as Tool["execute"],
   } as unknown as Tool;
 }
@@ -68,7 +91,7 @@ export function getAllTools(): Record<string, Tool> {
   for (const tool of registry.getAllTools()) {
     result[tool.name] = {
       description: tool.description,
-      parameters: tool.inputSchema,
+      inputSchema: normalizeInputSchema(tool.inputSchema),
       execute: tool.execute as Tool["execute"],
     } as unknown as Tool;
   }

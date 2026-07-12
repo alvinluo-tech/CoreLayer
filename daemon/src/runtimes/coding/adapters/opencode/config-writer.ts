@@ -17,6 +17,7 @@ export interface OpenCodeConfig {
   maxTokens?: number;
   /** Temperature */
   temperature?: number;
+  permissionPolicy?: "strict" | "normal" | "permissive";
 }
 
 /**
@@ -28,21 +29,27 @@ export function createRunConfig(
   runId: string,
   config: OpenCodeConfig,
 ): string {
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(runId)) {
+    throw new Error(`Invalid OpenCode run ID: ${runId}`);
+  }
   const runDir = join(appDataDir, "runs", runId);
 
   if (!existsSync(runDir)) {
     mkdirSync(runDir, { recursive: true });
   }
 
+  const permission = config.permissionPolicy === "strict"
+    ? { "*": "deny", read: "allow", glob: "allow", grep: "allow", lsp: "allow" }
+    : config.permissionPolicy === "permissive"
+      ? { "*": "allow", external_directory: "deny" }
+      : { "*": "allow", external_directory: "deny", question: "deny" };
   const opencodeConfig = {
-    workDir: config.workDir,
-    model: config.model ?? "default",
-    maxTokens: config.maxTokens ?? 4096,
-    temperature: config.temperature ?? 0.7,
-    logDir: join(runDir, "logs"),
+    $schema: "https://opencode.ai/config.json",
+    ...(config.model && config.model !== "default" ? { model: config.model } : {}),
+    permission,
   };
 
-  const configPath = join(runDir, "opencode-config.json");
+  const configPath = join(runDir, "opencode.json");
   writeFileSync(configPath, JSON.stringify(opencodeConfig, null, 2), "utf-8");
 
   // Create log directory

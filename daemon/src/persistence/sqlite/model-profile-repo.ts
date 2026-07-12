@@ -26,6 +26,13 @@ export function createSqliteModelProfileRepo(database?: DrizzleDb): ModelProfile
       return rows.map(normalize);
     },
 
+    // Synchronous variant for callers that cannot await (e.g. gateway.ts sync init).
+    // Safe because better-sqlite3 is a fully synchronous driver.
+    getAllSync(): ModelProfileRow[] {
+      const rows = db.select().from(schema.modelProfiles).all();
+      return rows.map(normalize);
+    },
+
     async getDefault(): Promise<ModelProfileRow | null> {
       const row = db
         .select()

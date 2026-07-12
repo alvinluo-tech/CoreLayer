@@ -9,8 +9,16 @@ import { ClaudeCodeCliAdapter } from "./adapters/claude-code/cli-adapter.js";
 import { CodexCliAdapter } from "./adapters/codex/cli-adapter.js";
 import { OpenCodeCliAdapter } from "./adapters/opencode/cli-adapter.js";
 import { getCapabilityBroker } from "../../capabilities/os-capability-broker.js";
+import type { ExecutorAdapter } from "@jarvis/runtime-protocol";
+import { CodingExecutorAdapterWrapper } from "./executor-adapter-wrapper.js";
 
 const adapters = new Map<string, CodingAgentAdapter>();
+const executorAdapters = new Map<string, ExecutorAdapter>();
+
+export interface ExecutorSelection {
+  adapterId: string;
+  routeReason: string;
+}
 
 /** Register built-in adapters */
 function registerDefaults(): void {
@@ -31,6 +39,64 @@ function registerDefaults(): void {
 export function getCodingRuntime(adapterId: string): CodingAgentAdapter | undefined {
   registerDefaults();
   return adapters.get(adapterId);
+}
+
+export function getExecutorAdapter(adapterId: string): ExecutorAdapter | undefined {
+  const existing = executorAdapters.get(adapterId);
+  if (existing) return existing;
+  const adapter = getCodingRuntime(adapterId);
+  if (!adapter) return undefined;
+  const wrapped = new CodingExecutorAdapterWrapper(adapter);
+  executorAdapters.set(adapterId, wrapped);
+  return wrapped;
+}
+
+export function registerCodingRuntime(adapter: CodingAgentAdapter): void {
+  adapters.set(adapter.id, adapter);
+  executorAdapters.delete(adapter.id);
+}
+
+export async function selectExecutorAdapter(input: {
+  preferredAdapterId?: string;
+  permissionPolicy: "strict" | "normal" | "permissive";
+  requireIsolation?: boolean;
+}): Promise<ExecutorSelection> {
+  registerDefaults();
+  const registeredIds = Array.from(adapters.keys()).sort();
+  const candidates = input.preferredAdapterId
+    ? [input.preferredAdapterId, ...registeredIds.filter((id) => id !== input.preferredAdapterId)]
+    : registeredIds;
+  const reasons: string[] = [];
+
+  for (const adapterId of candidates) {
+    if (adapterId === "self") continue;
+    const adapter = getExecutorAdapter(adapterId);
+    if (!adapter) {
+      reasons.push(`${adapterId}: not registered`);
+      continue;
+    }
+    const capabilities = adapter.getCapabilities();
+    if (capabilities.domain !== "coding") continue;
+    if (input.requireIsolation && !capabilities.isolatedEnvironment) {
+      reasons.push(`${adapterId}: no isolated environment`);
+      continue;
+    }
+    if (!capabilities.permissionMode) {
+      reasons.push(`${adapterId}: cannot project permission policy`);
+      continue;
+    }
+    const availability = await adapter.discover();
+    if (!availability.available) {
+      reasons.push(`${adapterId}: ${availability.reason ?? "unavailable"}`);
+      continue;
+    }
+    const preference = adapterId === input.preferredAdapterId ? "explicit preference" : "deterministic fallback";
+    return {
+      adapterId,
+      routeReason: `${preference}; coding domain; ${input.permissionPolicy} permission projection; ${availability.transport}`,
+    };
+  }
+  throw new Error(`No eligible coding executor: ${reasons.join("; ")}`);
 }
 
 /**

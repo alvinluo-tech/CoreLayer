@@ -20,10 +20,25 @@ export interface AgentRunRow {
   toolCallCount: number | null;
   artifacts: unknown[] | null;
   approvals: unknown[] | null;
+  agentSnapshot: AgentRunSnapshot | null;
   startedAt: string;
   completedAt: string | null;
   durationMs: number | null;
   error: string | null;
+}
+
+export interface AgentRunSnapshot {
+  profileId: string;
+  profileUpdatedAt: string;
+  profileDigest: string;
+  capabilities: string[];
+  skills: string[];
+  tools: string[];
+  knowledgeScopes: string[];
+  permissions: string[];
+  memoryScopes: string[];
+  modelPolicy: import("../../shared/agent-profile-types.js").AgentModelPolicy;
+  executorPolicy: import("../../shared/agent-profile-types.js").AgentExecutorPolicy | null;
 }
 
 export interface CreateAgentRunInput {
@@ -38,6 +53,7 @@ export interface CreateAgentRunInput {
   selectedModel?: string;
   routeReason?: string;
   selectedTools?: string[];
+  agentSnapshot?: AgentRunSnapshot | null;
 }
 
 export interface AgentRunRepository {
@@ -46,8 +62,11 @@ export interface AgentRunRepository {
   getByConversation(conversationId: string): Promise<AgentRunRow[]>;
   getRecent(limit?: number): Promise<AgentRunRow[]>;
   getQueued(limit?: number): Promise<AgentRunRow[]>;
+  getActive(limit?: number): Promise<AgentRunRow[]>;
+  claimQueued(id: string): Promise<boolean>;
   updateStatus(id: string, status: AgentRunRow["status"], error?: string): Promise<void>;
   updateArtifacts(id: string, artifacts: unknown[]): Promise<void>;
+  updateRouting(id: string, routeReason: string): Promise<void>;
 }
 
 export interface AgentRunEventRow {

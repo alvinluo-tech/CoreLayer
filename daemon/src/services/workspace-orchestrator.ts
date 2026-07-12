@@ -21,8 +21,8 @@ import { enqueue } from "../workflow/queue-service.js";
 import { logError } from "../shared/errors.js";
 import { resolveAppPaths } from "../config/app-paths.js";
 import { emitWorkspaceEvent } from "./workspace-event-emitter.js";
-import * as fs from "node:fs";
 import * as path from "node:path";
+import { initializeWorkspaceRepository } from "../capabilities/adapters/workspace-bootstrap-adapter.js";
 
 export interface OrchestratorResult {
   workspace: {
@@ -162,19 +162,12 @@ export async function orchestrateFromGoal(
   const projectName = goal.length > 40 ? goal.slice(0, 37) + "..." : goal;
 
   try {
-    const { execSync } = await import("node:child_process");
-    fs.mkdirSync(projectRootPath, { recursive: true });
-    // Initialize git repository
-    execSync("git init", { cwd: projectRootPath, stdio: "ignore" });
-    // Create initial README.md
-    fs.writeFileSync(
-      path.join(projectRootPath, "README.md"),
-      `# ${projectName}\n\nGenerated from goal: ${goal}\n`
-    );
-    // Configure local git and add commit
-    execSync("git config user.name \"Jarvis Agent\"", { cwd: projectRootPath, stdio: "ignore" });
-    execSync("git config user.email \"agent@jarvis.local\"", { cwd: projectRootPath, stdio: "ignore" });
-    execSync("git add . && git commit -m \"initial commit\"", { cwd: projectRootPath, stdio: "ignore" });
+    await initializeWorkspaceRepository({
+      workspaceRoot: path.join(appDataDir, "workspaces"),
+      projectRoot: projectRootPath,
+      projectName,
+      goal,
+    });
   } catch (err) {
     logError("orchestrator/workspace-dir-init", err);
   }

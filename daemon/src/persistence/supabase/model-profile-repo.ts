@@ -9,6 +9,9 @@ export function createSupabaseModelProfileRepo(): ModelProfileRepository {
     async getAll(): Promise<ModelProfileRow[]> {
       throw new Error("Supabase ModelProfileRepository not implemented — use SQLite mode");
     },
+    getAllSync(): ModelProfileRow[] {
+      throw new Error("Supabase ModelProfileRepository not implemented — use SQLite mode");
+    },
     async getDefault(): Promise<ModelProfileRow | null> {
       throw new Error("Supabase ModelProfileRepository not implemented — use SQLite mode");
     },

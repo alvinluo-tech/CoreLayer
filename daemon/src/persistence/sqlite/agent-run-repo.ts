@@ -1,4 +1,4 @@
-import { eq, desc, asc } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import { db as defaultDb, schema } from "../client.js";
 import type {
@@ -30,6 +30,7 @@ function mapRow(row: typeof schema.agentRuns.$inferSelect): AgentRunRow {
     toolCallCount: row.toolCallCount,
     artifacts: row.artifacts ? JSON.parse(row.artifacts) : null,
     approvals: row.approvals ? JSON.parse(row.approvals) : null,
+    agentSnapshot: row.agentSnapshot ? JSON.parse(row.agentSnapshot) : null,
     startedAt: row.startedAt,
     completedAt: row.completedAt,
     durationMs: row.durationMs,
@@ -57,6 +58,7 @@ export function createSqliteAgentRunRepo(database?: DrizzleDb): AgentRunReposito
           selectedModel: input.selectedModel ?? null,
           routeReason: input.routeReason ?? null,
           selectedTools: input.selectedTools ? JSON.stringify(input.selectedTools) : "[]",
+          agentSnapshot: input.agentSnapshot ? JSON.stringify(input.agentSnapshot) : null,
           startedAt: now,
         })
         .run();
@@ -107,6 +109,26 @@ export function createSqliteAgentRunRepo(database?: DrizzleDb): AgentRunReposito
       return rows.map(mapRow);
     },
 
+    async getActive(limit = 100): Promise<AgentRunRow[]> {
+      const rows = db
+        .select()
+        .from(schema.agentRuns)
+        .where(inArray(schema.agentRuns.status, ["running", "waiting_for_approval"]))
+        .orderBy(asc(schema.agentRuns.startedAt))
+        .limit(limit)
+        .all();
+      return rows.map(mapRow);
+    },
+
+    async claimQueued(id: string): Promise<boolean> {
+      const result = db
+        .update(schema.agentRuns)
+        .set({ status: "running", completedAt: null, durationMs: null, error: null })
+        .where(and(eq(schema.agentRuns.id, id), eq(schema.agentRuns.status, "queued")))
+        .run();
+      return result.changes === 1;
+    },
+
     async updateStatus(
       id: string,
       status: AgentRunRow["status"],
@@ -150,6 +172,13 @@ export function createSqliteAgentRunRepo(database?: DrizzleDb): AgentRunReposito
     async updateArtifacts(id: string, artifacts: unknown[]): Promise<void> {
       db.update(schema.agentRuns)
         .set({ artifacts: JSON.stringify(artifacts) })
+        .where(eq(schema.agentRuns.id, id))
+        .run();
+    },
+
+    async updateRouting(id: string, routeReason: string): Promise<void> {
+      db.update(schema.agentRuns)
+        .set({ routeReason })
         .where(eq(schema.agentRuns.id, id))
         .run();
     },

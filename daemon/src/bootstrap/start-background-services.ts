@@ -4,8 +4,12 @@ import { registerSensor, startSensors, setSensorChangeHandler } from "../runtime
 import { createTodoSensor } from "../runtimes/scheduler/sensors/todo-sensor.js";
 import { createReadingSensor } from "../runtimes/scheduler/sensors/reading-sensor.js";
 import { dispatchRuns } from "../workflow/run-dispatcher.js";
+import { recoverInterruptedExecutorRuns } from "../workflow/executor-lifecycle-service.js";
 
 export async function startBackgroundServices(): Promise<void> {
+  // Reconcile durable non-terminal attempts before any new work can be dispatched.
+  await recoverInterruptedExecutorRuns();
+
   // Start scheduler and register default report schedules
   await startScheduler();
   await registerDefaultReportSchedules();

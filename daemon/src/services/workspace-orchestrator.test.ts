@@ -53,6 +53,10 @@ vi.mock("../workflow/queue-service.js", () => ({
   enqueue: vi.fn(async () => ({ runId: "run-1" })),
 }));
 
+vi.mock("../capabilities/adapters/workspace-bootstrap-adapter.js", () => ({
+  initializeWorkspaceRepository: vi.fn().mockResolvedValue(undefined),
+}));
+
 // Mock errors
 vi.mock("../shared/errors.js", () => ({
   logError: vi.fn(),

@@ -396,31 +396,27 @@ describe("Non-runtime modules must import runtimes only via public-api", () => {
   }
 });
 
-describe("Runtime modules must not directly import node:child_process", () => {
-  const runtimeFiles = listTsFiles(resolve(srcDir, "runtimes")).filter(
-    (f) => !f.includes("__tests__") && !f.includes(".test."),
-  );
-
-  for (const file of runtimeFiles) {
-    it(`${file} must not import node:child_process`, () => {
-      const source = readFile(file);
-      expect(source).not.toMatch(/import.*from\s+["']node:child_process/);
-    });
-  }
-});
-
-describe("Non-adapter daemon source must not import node:child_process", () => {
+describe("Only capability/execution adapters may use child_process", () => {
+  const allowedAuthorityPaths = [
+    "capabilities/adapters/",
+    "runtimes/coding/adapters/",
+    "runtimes/coding/process-spawner.ts",
+    "runtimes/coding/docker-environment.ts",
+    "runtimes/external-agent/local-cli-adapter.ts",
+  ];
   const allDaemonFiles = listTsFiles(srcDir).filter(
     (f) =>
       !f.includes("__tests__") &&
       !f.includes(".test.") &&
-      !f.includes("capabilities/adapters/"),
+      !allowedAuthorityPaths.some((allowed) => f.startsWith(allowed)),
   );
 
   for (const file of allDaemonFiles) {
-    it(`${file} must not import node:child_process`, () => {
+    it(`${file} must not acquire child_process authority`, () => {
       const source = readFile(file);
-      expect(source).not.toMatch(/import.*from\s+["']node:child_process/);
+      expect(source).not.toMatch(
+        /(?:from\s+|import\s*\(\s*|require\s*\(\s*)["'](?:node:)?child_process["']/,
+      );
     });
   }
 });

@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { listCodingRuntimes, getCodingRuntime } from "../registry.js";
+import {
+  listCodingRuntimes,
+  getCodingRuntime,
+  registerCodingRuntime,
+  selectExecutorAdapter,
+} from "../registry.js";
 
 describe("CodingRuntime Registry", () => {
   it("lists default adapters", () => {
@@ -26,6 +31,30 @@ describe("CodingRuntime Registry", () => {
   it("returns undefined for unknown adapter", () => {
     const adapter = getCodingRuntime("unknown");
     expect(adapter).toBeUndefined();
+  });
+
+  it("selects a future registered adapter by explicit preference", async () => {
+    registerCodingRuntime({
+      id: "future-cli",
+      displayName: "Future CLI",
+      name: "Future CLI",
+      discover: async () => ({ available: true, transport: "cli" }),
+      startRun: async () => ({ runId: "run", adapterId: "future-cli", status: "running", startedAt: new Date().toISOString() }),
+      createRun: async () => { throw new Error("unused"); },
+      getRunStatus: async () => { throw new Error("unused"); },
+      async *streamRunEvents() {},
+      cancelRun: async () => true,
+      collectArtifacts: async () => [],
+    } as never);
+
+    await expect(selectExecutorAdapter({
+      preferredAdapterId: "future-cli",
+      permissionPolicy: "normal",
+      requireIsolation: true,
+    })).resolves.toEqual(expect.objectContaining({
+      adapterId: "future-cli",
+      routeReason: expect.stringContaining("explicit preference"),
+    }));
   });
 
   it("claude-code adapter can create and track a run", async () => {

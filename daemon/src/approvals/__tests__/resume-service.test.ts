@@ -33,10 +33,47 @@ vi.mock("../../runtimes/tool/adapters/native-tools/registry.js", () => ({
 const mockApprovalRequests = {
   getById: vi.fn(),
 };
+const pendingStore = new Map<string, any>();
+const mockPendingActions = {
+  create: vi.fn(async (input: any) => {
+    const now = new Date().toISOString();
+    const row = {
+      id: crypto.randomUUID(),
+      ...input,
+      executorRunId: input.executorRunId ?? null,
+      workspaceId: input.workspaceId ?? null,
+      projectId: input.projectId ?? null,
+      taskId: input.taskId ?? null,
+      status: "blocked",
+      error: null,
+      result: null,
+      createdAt: now,
+      updatedAt: now,
+      completedAt: null,
+    };
+    pendingStore.set(row.id, row);
+    return row;
+  }),
+  transition: vi.fn(async (id: string, from: string[], to: string, error?: string, result?: unknown) => {
+    const row = pendingStore.get(id);
+    if (!row || !from.includes(row.status)) return null;
+    const updated = { ...row, status: to, error: error ?? null, result: result ?? row.result };
+    pendingStore.set(id, updated);
+    return updated;
+  }),
+  getByFingerprint: vi.fn(async (fingerprint: string) =>
+    [...pendingStore.values()].reverse().find((row) => row.actionFingerprint === fingerprint) ?? null),
+  getByApprovalRequest: vi.fn(async (approvalRequestId: string) =>
+    [...pendingStore.values()].reverse().find((row) => row.approvalRequestId === approvalRequestId) ?? null),
+  getOpenByWorkspace: vi.fn(async (workspaceId: string) =>
+    [...pendingStore.values()].filter((row) => row.workspaceId === workspaceId && !["completed", "failed", "cancelled", "expired"].includes(row.status))),
+  deleteAll: vi.fn(async () => pendingStore.clear()),
+};
 
 vi.mock("../../persistence/factory.js", () => ({
   getRepositories: () => ({
     approvalRequests: mockApprovalRequests,
+    pendingActions: mockPendingActions,
   }),
 }));
 
@@ -114,6 +151,31 @@ describe("executeApprovedTool", () => {
     expect(result.toolResult.success).toBe(false);
     expect(result.toolResult.error).toContain("Tool not found");
   });
+
+  it("executes a durable approved action only once", async () => {
+    mockApprovalRequests.getById.mockResolvedValue({
+      id: "req-idempotent",
+      status: "approved",
+      toolId: "shell:exec",
+      toolName: "shell.execute",
+      runId: "run-1",
+      operationKind: "tool.execute",
+      operationPayload: { args: { command: "ls" } },
+    });
+    const pending = await createPendingAction({
+      approvalRequestId: "req-idempotent",
+      runId: "run-1",
+      action: sampleAction,
+      strategy: "manual_block",
+    });
+    await approvePendingAction(pending.id);
+
+    const first = await executeApprovedTool("req-idempotent");
+    const second = await executeApprovedTool("req-idempotent");
+
+    expect(second).toEqual(first);
+    expect(mockTool.execute).toHaveBeenCalledTimes(1);
+  });
 });
 
 const sampleAction: RuntimeAction = {
@@ -126,12 +188,12 @@ const sampleAction: RuntimeAction = {
 };
 
 describe("Pending Actions", () => {
-  beforeEach(() => {
-    resetPendingActions();
+  beforeEach(async () => {
+    await resetPendingActions();
   });
 
-  it("should create a pending action", () => {
-    const action = createPendingAction({
+  it("should create a pending action", async () => {
+    const action = await createPendingAction({
       approvalRequestId: "approval-1",
       runId: "run-1",
       action: sampleAction,
@@ -140,93 +202,93 @@ describe("Pending Actions", () => {
 
     expect(action.id).toBeDefined();
     expect(action.status).toBe("blocked");
-    expect(action.actionFingerprint).toContain("file.write");
+    expect(action.actionFingerprint).toMatch(/^[a-f0-9]{64}$/);
   });
 
-  it("should approve a blocked action", () => {
-    const action = createPendingAction({
+  it("should approve a blocked action", async () => {
+    const action = await createPendingAction({
       approvalRequestId: "approval-1",
       runId: "run-1",
       action: sampleAction,
       strategy: "prompted_reentry",
     });
 
-    const approved = approvePendingAction(action.id);
+    const approved = await approvePendingAction(action.id);
     expect(approved).not.toBeNull();
     expect(approved!.status).toBe("approved");
   });
 
-  it("should not approve a non-blocked action", () => {
-    const action = createPendingAction({
+  it("should not approve a non-blocked action", async () => {
+    const action = await createPendingAction({
       approvalRequestId: "approval-1",
       runId: "run-1",
       action: sampleAction,
       strategy: "prompted_reentry",
     });
 
-    approvePendingAction(action.id);
-    const result = approvePendingAction(action.id);
+    await approvePendingAction(action.id);
+    const result = await approvePendingAction(action.id);
     expect(result).toBeNull();
   });
 
-  it("should complete an action successfully", () => {
-    const action = createPendingAction({
+  it("should complete an action successfully", async () => {
+    const action = await createPendingAction({
       approvalRequestId: "approval-1",
       runId: "run-1",
       action: sampleAction,
       strategy: "prompted_reentry",
     });
 
-    const completed = completePendingAction(action.id, true);
+    const completed = await completePendingAction(action.id, true);
     expect(completed).not.toBeNull();
     expect(completed!.status).toBe("completed");
   });
 
-  it("should complete an action with failure", () => {
-    const action = createPendingAction({
+  it("should complete an action with failure", async () => {
+    const action = await createPendingAction({
       approvalRequestId: "approval-1",
       runId: "run-1",
       action: sampleAction,
       strategy: "prompted_reentry",
     });
 
-    const failed = completePendingAction(action.id, false, "Permission denied");
+    const failed = await completePendingAction(action.id, false, "Permission denied");
     expect(failed).not.toBeNull();
     expect(failed!.status).toBe("failed");
     expect(failed!.error).toBe("Permission denied");
   });
 
-  it("should cancel an action", () => {
-    const action = createPendingAction({
+  it("should cancel an action", async () => {
+    const action = await createPendingAction({
       approvalRequestId: "approval-1",
       runId: "run-1",
       action: sampleAction,
       strategy: "prompted_reentry",
     });
 
-    const cancelled = cancelPendingAction(action.id);
+    const cancelled = await cancelPendingAction(action.id);
     expect(cancelled).not.toBeNull();
     expect(cancelled!.status).toBe("cancelled");
   });
 
-  it("should detect duplicate approval", () => {
-    createPendingAction({
+  it("should detect duplicate approval", async () => {
+    const first = await createPendingAction({
       approvalRequestId: "approval-1",
       runId: "run-1",
       action: sampleAction,
       strategy: "prompted_reentry",
     });
 
-    expect(isDuplicateApproval("file.write:src/index.ts:run-1")).toBe(false);
+    await expect(isDuplicateApproval(first.actionFingerprint)).resolves.toBe(false);
 
-    const action2 = createPendingAction({
+    const action2 = await createPendingAction({
       approvalRequestId: "approval-2",
       runId: "run-1",
       action: sampleAction,
       strategy: "prompted_reentry",
     });
 
-    completePendingAction(action2.id, true);
-    expect(isDuplicateApproval("file.write:src/index.ts:run-1")).toBe(true);
+    await completePendingAction(action2.id, true);
+    await expect(isDuplicateApproval(action2.actionFingerprint)).resolves.toBe(true);
   });
 });

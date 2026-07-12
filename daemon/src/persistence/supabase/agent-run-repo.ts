@@ -21,10 +21,19 @@ export function createSupabaseAgentRunRepo(): AgentRunRepository {
     async getQueued(_limit?: number): Promise<AgentRunRow[]> {
       throw new Error("Supabase AgentRunRepository not implemented — use SQLite mode");
     },
+    async getActive(_limit?: number): Promise<AgentRunRow[]> {
+      throw new Error("Supabase AgentRunRepository not implemented — use SQLite mode");
+    },
+    async claimQueued(_id: string): Promise<boolean> {
+      throw new Error("Supabase AgentRunRepository not implemented — use SQLite mode");
+    },
     async updateStatus(_id: string, _status: AgentRunRow["status"], _error?: string): Promise<void> {
       throw new Error("Supabase AgentRunRepository not implemented — use SQLite mode");
     },
     async updateArtifacts(_id: string, _artifacts: unknown[]): Promise<void> {
+      throw new Error("Supabase AgentRunRepository not implemented — use SQLite mode");
+    },
+    async updateRouting(_id: string, _routeReason: string): Promise<void> {
       throw new Error("Supabase AgentRunRepository not implemented — use SQLite mode");
     },
   };

@@ -8,13 +8,21 @@
 import { getRepositories } from "../persistence/factory.js";
 import { SlotManager } from "./slot-manager.js";
 import { getResourceStatus, isResourcePressureHigh } from "./resource-monitor.js";
-import { getCodingRuntime } from "../runtimes/coding/registry.js";
-import type { CodingArtifact, CodingTask } from "../runtimes/coding/types.js";
+import type { ExecutorArtifact } from "@jarvis/runtime-protocol";
+import type { CodingArtifact } from "../runtimes/coding/types.js";
 import { isPersistableCodingArtifact } from "../runtimes/coding/artifact-persistence.js";
 import { isAgentExecutorPolicy } from "../shared/agent-profile-types.js";
 import { TaskGraph } from "../workspaces/task-graph-service.js";
 import { cancelActiveRun } from "../runtimes/agent/run.js";
 import { enqueue } from "./queue-service.js";
+import {
+  cancelExecutorAttempt,
+  executeExecutorAttempt,
+  selectExecutorForAttempt,
+} from "./executor-lifecycle-service.js";
+import { reconcileWorkspaceStatus } from "../workspaces/workspace-completion.js";
+import type { AgentRunRow } from "../persistence/repository/agent.js";
+import { parseCompletionPolicy } from "./completion-policy.js";
 
 const taskGraph = new TaskGraph();
 
@@ -75,11 +83,16 @@ export async function dispatchRuns(): Promise<DispatchResult> {
       continue;
     }
 
-    // Transition queued → running
-    await agentRuns.updateStatus(run.id, "running");
+    // Atomically claim queued → running. Another dispatcher may have won the race.
+    const claimed = await agentRuns.claimQueued(run.id);
+    if (!claimed) {
+      slotManager.releaseAgentRun(run.id);
+      skipped++;
+      continue;
+    }
 
     // Dispatch to coding executor
-    dispatchToCodingRuntime(run.id, run.agentId, run.taskId).catch((err) => {
+    dispatchToCodingRuntime(run).catch((err) => {
       // If dispatch fails, mark run as failed and release slot
       completeRun(run.id, false, err instanceof Error ? err.message : String(err));
     });
@@ -97,34 +110,28 @@ export async function dispatchRuns(): Promise<DispatchResult> {
  * Dispatch a single run to the coding runtime based on the agent's executor policy.
  */
 async function dispatchToCodingRuntime(
-  runId: string,
-  agentId: string | null,
-  taskId: string | null,
+  runRecord: AgentRunRow,
 ): Promise<void> {
   const { agentRuns, agentProfiles, tasks, projects } = getRepositories();
+  const runId = runRecord.id;
+  const agentId = runRecord.agentId;
+  const taskId = runRecord.taskId;
 
   // Resolve adapter ID from agent profile's executor policy
-  let adapterId = "claude-code"; // default
+  let preferredAdapterId: string | undefined;
   let workDir: string | undefined;
 
-  if (agentId) {
-    const profile = await agentProfiles.getById(agentId);
-    if (profile?.executorPolicy && isAgentExecutorPolicy(profile.executorPolicy)) {
-      if (profile.executorPolicy.executor === "self") {
+  const profile = agentId ? await agentProfiles.getById(agentId) : null;
+  const executorPolicy = runRecord.agentSnapshot?.executorPolicy ?? profile?.executorPolicy;
+  if (executorPolicy && isAgentExecutorPolicy(executorPolicy)) {
+      if (executorPolicy.executor === "self") {
         throw new Error("Executor 'self' is not supported for coding tasks — use 'claude-code', 'codex', or 'opencode'");
       }
-      adapterId = profile.executorPolicy.executor;
-      workDir = profile.executorPolicy.workDir;
-    }
-  }
-
-  const adapter = getCodingRuntime(adapterId);
-  if (!adapter) {
-    throw new Error(`Unknown coding adapter: ${adapterId}`);
+      preferredAdapterId = executorPolicy.executor;
+      workDir = executorPolicy.workDir;
   }
 
   // Resolve project root path
-  const runRecord = await agentRuns.getById(runId);
   let projectRootPath: string | undefined;
   if (runRecord?.projectId) {
     const project = await projects.getById(runRecord.projectId);
@@ -136,62 +143,69 @@ async function dispatchToCodingRuntime(
   // Build CodingTask from task + run info
   let taskPrompt = `Execute agent run ${runId}`;
   const repoPath = workDir ?? projectRootPath ?? process.cwd();
+  let completionPolicy = parseCompletionPolicy([]);
 
   if (taskId) {
     const task = await tasks.getById(taskId);
     if (task) {
       taskPrompt = task.objective ?? task.description ?? task.title;
+      completionPolicy = parseCompletionPolicy(task.acceptanceCriteria);
       // TODO: task may have a repoPath field in the future
     }
   }
 
-  const codingTask: CodingTask = {
-    dbRunId: runId,
-    dbTaskId: taskId ?? undefined,
-    workspaceId: runRecord?.workspaceId ?? undefined,
-    projectId: runRecord?.projectId ?? undefined,
-    conversationId: runRecord?.conversationId ?? undefined,
-    repoPath,
-    taskPrompt,
-    timeoutMs: 300_000, // 5 min default
-  };
-
-  // Create run via adapter — adapter will spawn subprocess
-  const codingRun = await adapter.createRun(codingTask);
-
-  // Persist artifacts when adapter completes
-  const pollCompletion = async (): Promise<void> => {
-    const maxWait = codingTask.timeoutMs! + 10_000;
-    const start = Date.now();
-    while (Date.now() - start < maxWait) {
-      const info = await adapter.getRunStatus(codingRun.runId);
-      if (info.status === "succeeded" || info.status === "failed" || info.status === "cancelled") {
-        await agentRuns.updateArtifacts(runId, info.artifacts);
-
-        // Sync coding artifacts to the artifacts table
-        if (info.artifacts.length > 0) {
-          const runRecord = await agentRuns.getById(runId);
-          await syncArtifactsToTable(runId, info.artifacts, runRecord?.workspaceId ?? null, runRecord?.projectId ?? null);
-        }
-
-        await completeRun(runId, info.status === "succeeded", info.error);
-        return;
-      }
-      await new Promise((r) => setTimeout(r, 1000));
-    }
-    // Timeout — mark as failed
-    await completeRun(runId, false, "Coding run timed out");
-  };
-
-  pollCompletion().catch(() => {
-    // Best-effort completion tracking
+  const permissions = runRecord.agentSnapshot?.permissions ?? profile?.permissions ?? [];
+  const permissionPolicy = permissions.includes("unrestricted")
+    ? "permissive"
+    : permissions.includes("write")
+      ? "normal"
+      : "strict";
+  const selection = await selectExecutorForAttempt({
+    preferredAdapterId,
+    permissionPolicy,
+    requireIsolation: true,
   });
+  await agentRuns.updateRouting(runId, selection.routeReason);
+
+  const outcome = await executeExecutorAttempt({
+    agentRunId: runId,
+    workspaceId: runRecord.workspaceId ?? undefined,
+    projectId: runRecord.projectId ?? undefined,
+    taskId: taskId ?? undefined,
+    agentId: agentId ?? "unassigned",
+    adapterId: selection.adapterId,
+    taskPrompt,
+    workingDirectory: repoPath,
+    timeoutMs: 300_000,
+    permissionPolicy,
+    testCommands: completionPolicy.testCommands,
+    requiredArtifactTypes: completionPolicy.requiredArtifactTypes,
+    allowedPaths: completionPolicy.allowedPaths,
+    manualCriteria: completionPolicy.manualCriteria,
+    allowedTools: runRecord.agentSnapshot?.tools ?? profile?.tools ?? [],
+  });
+
+  await agentRuns.updateArtifacts(runId, outcome.artifacts.artifacts);
+  if (outcome.artifacts.artifacts.length > 0) {
+    await syncArtifactsToTable(
+      runId,
+      outcome.artifacts.artifacts,
+      runRecord.workspaceId,
+      runRecord.projectId,
+    );
+  }
+  await completeRun(runId, outcome.success, outcome.error, outcome.manualInterventionRequired);
 }
 
 /**
  * Mark a run as completed, update task status, unlock dependents, and enqueue newly ready tasks.
  */
-export async function completeRun(runId: string, success: boolean, error?: string): Promise<void> {
+export async function completeRun(
+  runId: string,
+  success: boolean,
+  error?: string,
+  manualInterventionRequired = false,
+): Promise<void> {
   const { agentRuns, tasks } = getRepositories();
   const status = success ? "succeeded" : "failed";
   await agentRuns.updateStatus(runId, status, error);
@@ -202,10 +216,15 @@ export async function completeRun(runId: string, success: boolean, error?: strin
   if (run?.taskId) {
     const task = await tasks.getById(run.taskId);
     if (task) {
-      const taskStatus = success ? "completed" : "failed";
+      const taskStatus = success ? "completed" : manualInterventionRequired ? "blocked" : "failed";
       await tasks.update(run.taskId, {
         status: taskStatus,
+        ...(manualInterventionRequired ? { manualInterventionRequired: true } : {}),
         ...(success ? { completedAt: new Date().toISOString() } : {}),
+        runHistory: [
+          ...(task.runHistory ?? []),
+          { runId, status, error: error ?? null, completedAt: new Date().toISOString() },
+        ],
       });
 
       // If task succeeded, unlock downstream tasks and enqueue newly ready ones
@@ -215,14 +234,14 @@ export async function completeRun(runId: string, success: boolean, error?: strin
         // Find and enqueue any tasks that are now unblocked
         const executableTasks = await taskGraph.getExecutableTasks(task.projectId);
         for (const readyTask of executableTasks) {
-          if (readyTask.status === "queued" && !readyTask.assignedAgentId) {
-            // Assign an agent and enqueue
-            await tasks.update(readyTask.id, {
-              assignedAgentId: run.agentId ?? undefined,
-            });
+          if (readyTask.status === "queued") {
+            const assignedAgentId = readyTask.assignedAgentId ?? run.agentId ?? undefined;
+            if (!readyTask.assignedAgentId && assignedAgentId) {
+              await tasks.update(readyTask.id, { assignedAgentId });
+            }
             await enqueue({
               taskId: readyTask.id,
-              agentId: run.agentId ?? undefined,
+              agentId: assignedAgentId,
               workspaceId: readyTask.workspaceId ?? undefined,
               projectId: readyTask.projectId ?? undefined,
               mode: "workflow",
@@ -232,6 +251,10 @@ export async function completeRun(runId: string, success: boolean, error?: strin
       }
     }
   }
+
+  if (run?.workspaceId) {
+    await reconcileWorkspaceStatus(run.workspaceId);
+  }
 }
 
 /**
@@ -239,7 +262,7 @@ export async function completeRun(runId: string, success: boolean, error?: strin
  * Also kills the external process if one was spawned.
  */
 export async function cancelRun(runId: string): Promise<boolean> {
-  const { agentRuns, agentProfiles } = getRepositories();
+  const { agentRuns } = getRepositories();
   const run = await agentRuns.getById(runId);
   if (!run) return false;
 
@@ -250,21 +273,7 @@ export async function cancelRun(runId: string): Promise<boolean> {
   // Abort any in-flight runTurn for this run
   cancelActiveRun(runId);
 
-  // Try to kill the external process via the adapter
-  if (run.agentId) {
-    try {
-      const profile = await agentProfiles.getById(run.agentId);
-      if (profile?.executorPolicy && isAgentExecutorPolicy(profile.executorPolicy)) {
-        const adapterId = profile.executorPolicy.executor === "self" ? "claude-code" : profile.executorPolicy.executor;
-        const adapter = getCodingRuntime(adapterId);
-        if (adapter) {
-          await adapter.cancelRun(runId).catch(() => {});
-        }
-      }
-    } catch {
-      // Best-effort process kill — DB update still proceeds
-    }
-  }
+  await cancelExecutorAttempt(runId).catch(() => false);
 
   await agentRuns.updateStatus(runId, "cancelled");
   slotManager.releaseAgentRun(runId);
@@ -304,7 +313,7 @@ export function getDispatcherStatus() {
  */
 async function syncArtifactsToTable(
   runId: string,
-  artifacts: CodingArtifact[],
+  artifacts: ExecutorArtifact[],
   workspaceId: string | null,
   projectId: string | null,
 ): Promise<void> {
@@ -313,7 +322,7 @@ async function syncArtifactsToTable(
   const { db, schema } = await import("../persistence/client.js");
 
   for (const artifact of artifacts) {
-    if (!isPersistableCodingArtifact(artifact)) {
+    if (!isPersistableCodingArtifact(artifact as CodingArtifact)) {
       continue;
     }
 

@@ -139,6 +139,14 @@ export type {
   ExecutionLogRepository,
 } from "./repository/execution-log.js";
 
+export type {
+  PendingActionRow,
+  PendingActionStatus,
+  PendingActionResumeStrategy,
+  CreatePendingActionInput,
+  PendingActionRepository,
+} from "./repository/pending-action.js";
+
 // ---- Aggregate ----
 
 import type { TaskRepository } from "./repository/task.js";
@@ -157,6 +165,7 @@ import type { EventLogRepository, AuditLogRepository } from "./repository/observ
 import type { ExecutorRunRepository } from "./repository/executor-run.js";
 import type { EnvironmentSessionRepository, EnvironmentEventRepository } from "./repository/environment.js";
 import type { ExecutionLogRepository } from "./repository/execution-log.js";
+import type { PendingActionRepository } from "./repository/pending-action.js";
 
 export interface Repositories {
   tasks: TaskRepository;
@@ -182,4 +191,5 @@ export interface Repositories {
   environmentSessions: EnvironmentSessionRepository;
   environmentEvents: EnvironmentEventRepository;
   executionLogs: ExecutionLogRepository;
+  pendingActions: PendingActionRepository;
 }

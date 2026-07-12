@@ -55,6 +55,9 @@ interface ModelState {
   ) => Promise<void>;
   removeProvider: (id: string) => Promise<void>;
   discoverModels: (providerId: string) => Promise<{ id: string; name: string }[]>;
+  discoverAndSeed: (
+    providerId: string
+  ) => Promise<{ seeded: number; skipped: number; error?: string }>;
   testProvider: (
     providerId: string
   ) => Promise<{ success: boolean; latencyMs?: number; error?: string; keyConfigured?: boolean }>;
@@ -226,6 +229,44 @@ export const useModelStore = create<ModelState>((set, get) => ({
     } catch (e) {
       set({ error: String(e) });
       return [];
+    }
+  },
+
+  // Discover models from a provider and auto-register any that aren't already
+  // in the profile library. Backend fills capabilities/limits/cost defaults.
+  discoverAndSeed: async (providerId) => {
+    set({ isLoading: true, error: null });
+    try {
+      const resp = await tauriDiscoverModels(providerId);
+      const discovered = resp.models;
+
+      const existing = new Set(
+        get()
+          .modelProfiles.filter((p) => p.provider === providerId)
+          .map((p) => p.modelName)
+      );
+      const toSeed = discovered.filter((m) => !existing.has(m.id));
+
+      // Register sequentially so a single failure doesn't abort the batch.
+      let seeded = 0;
+      for (const m of toSeed) {
+        try {
+          await tauriUpsertProfile({
+            provider: providerId,
+            modelName: m.id,
+            displayName: m.name || m.id,
+          });
+          seeded += 1;
+        } catch (e) {
+          set({ error: `部分模型注册失败: ${String(e)}` });
+        }
+      }
+
+      await get().fetchAll();
+      return { seeded, skipped: discovered.length - toSeed.length };
+    } catch (e) {
+      set({ error: String(e), isLoading: false });
+      return { seeded: 0, skipped: 0, error: String(e) };
     }
   },
 

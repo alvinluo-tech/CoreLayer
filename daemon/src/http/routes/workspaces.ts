@@ -7,8 +7,39 @@ import { orchestrateFromGoal } from "../../services/workspace-orchestrator.js";
 import { db, schema } from "../../persistence/client.js";
 import { eq, and } from "drizzle-orm";
 import { logAuditEntry } from "../../persistence/audit-log.js";
+import { z } from "zod";
 
 const workspaceRoutes = new Hono();
+
+const workspaceFromGoalSchema = z.object({
+  goal: z.string().min(1, "Goal is required"),
+  spec: z.object({
+    summary: z.string().optional(),
+    nonGoals: z.array(z.string()).optional(),
+    techStack: z.string().optional(),
+    constraints: z.array(z.string()).optional(),
+    milestones: z.array(z.string()).optional(),
+  }).optional(),
+  agentIds: z.array(z.string()).optional(),
+});
+
+const createWorkspaceSchema = z.object({
+  name: z.string().optional(),
+  description: z.string().optional(),
+});
+
+const updateWorkspaceSchema = z.object({
+  name: z.string().optional(),
+  description: z.string().optional(),
+  goal: z.string().optional(),
+  status: z.enum(["draft", "planning", "running", "blocked", "succeeded", "failed", "cancelled"]).optional(),
+});
+
+const addAgentSchema = z.object({
+  agentProfileId: z.string().min(1, "agentProfileId is required"),
+  roleInWorkspace: z.enum(["owner", "planner", "builder", "reviewer", "tester", "observer"]).optional(),
+});
+
 
 /**
  * GET /api/workspaces - List all workspaces for the default owner
@@ -37,25 +68,16 @@ workspaceRoutes.get("/default", withErrorHandling("workspaces/default", async (c
  * Creates workspace + project + spec + tasks + agents from a goal string
  */
 workspaceRoutes.post("/from-goal", withErrorHandling("workspaces/from-goal", async (c) => {
-  const body = await c.req.json<{
-    goal: string;
-    spec?: {
-      summary?: string;
-      nonGoals?: string[];
-      techStack?: string;
-      constraints?: string[];
-      milestones?: string[];
-    };
-    agentIds?: string[];
-  }>();
-
-  if (!body.goal?.trim()) {
-    return apiError(c, "Goal is required", 400);
+  const body = await c.req.json().catch(() => ({}));
+  const parsed = workspaceFromGoalSchema.safeParse(body);
+  if (!parsed.success) {
+    return apiError(c, parsed.error.errors[0]?.message || "Validation failed", 400);
   }
+  const validData = parsed.data;
 
-  const result = await orchestrateFromGoal(body.goal, {
-    spec: body.spec,
-    agentIds: body.agentIds,
+  const result = await orchestrateFromGoal(validData.goal, {
+    spec: validData.spec,
+    agentIds: validData.agentIds,
   });
   return c.json({ data: result }, 201);
 }));
@@ -65,20 +87,25 @@ workspaceRoutes.post("/from-goal", withErrorHandling("workspaces/from-goal", asy
  */
 workspaceRoutes.post("/", withErrorHandling("workspaces/create", async (c) => {
   const { workspaces, projects } = getRepositories();
-  const body = await c.req.json<{ name?: string; description?: string }>();
+  const body = await c.req.json().catch(() => ({}));
+  const parsed = createWorkspaceSchema.safeParse(body);
+  if (!parsed.success) {
+    return apiError(c, parsed.error.errors[0]?.message || "Validation failed", 400);
+  }
+  const validData = parsed.data;
   const ws = await workspaces.create({
-    name: body.name,
-    description: body.description,
+    name: validData.name,
+    description: validData.description,
     ownerId: "default",
   });
 
-  const projectName = body.name
-    ? body.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "default"
+  const projectName = validData.name
+    ? validData.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "default"
     : "default";
   await projects.create({
     workspaceId: ws.id,
     name: projectName,
-    description: body.description,
+    description: validData.description,
   });
 
   await logAuditEntry({
@@ -111,11 +138,13 @@ workspaceRoutes.patch("/:id", withErrorHandling("workspaces/update", async (c) =
   const id = c.req.param("id")!;
   const existing = await workspaces.getById(id);
   if (!existing) return apiError(c, "Workspace not found", 404);
-  const body = await c.req.json<{ name?: string; description?: string; goal?: string; status?: string }>();
-  const updated = await workspaces.update(id, {
-    ...body,
-    status: body.status as "draft" | "planning" | "running" | "blocked" | "succeeded" | "failed" | "cancelled" | undefined,
-  });
+  const body = await c.req.json().catch(() => ({}));
+  const parsed = updateWorkspaceSchema.safeParse(body);
+  if (!parsed.success) {
+    return apiError(c, parsed.error.errors[0]?.message || "Validation failed", 400);
+  }
+  const validData = parsed.data;
+  const updated = await workspaces.update(id, validData);
 
   await logAuditEntry({
     actor: "user",
@@ -163,17 +192,22 @@ workspaceRoutes.get("/:id/detail", withErrorHandling("workspaces/detail", async 
  */
 workspaceRoutes.post("/:id/agents", withErrorHandling("workspaces/add-agent", async (c) => {
   const workspaceId = c.req.param("id")!;
-  const body = await c.req.json<{ agentProfileId: string; roleInWorkspace?: string }>();
+  const body = await c.req.json().catch(() => ({}));
+  const parsed = addAgentSchema.safeParse(body);
+  if (!parsed.success) {
+    return apiError(c, parsed.error.errors[0]?.message || "Validation failed", 400);
+  }
+  const validData = parsed.data;
 
   const id = crypto.randomUUID();
   await db.insert(schema.workspaceAgents).values({
     id,
     workspaceId,
-    agentProfileId: body.agentProfileId,
-    roleInWorkspace: (body.roleInWorkspace as "builder") || "builder",
+    agentProfileId: validData.agentProfileId,
+    roleInWorkspace: validData.roleInWorkspace || "builder",
   });
 
-  return c.json({ data: { id, workspaceId, ...body } }, 201);
+  return c.json({ data: { id, workspaceId, ...validData } }, 201);
 }));
 
 /**

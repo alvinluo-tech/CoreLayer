@@ -3,8 +3,16 @@ import { getRepositories } from "../../persistence/factory.js";
 import { apiError } from "../../shared/errors.js";
 import { withErrorHandling } from "../middleware/error-handler.js";
 import { logAuditEntry } from "../../persistence/audit-log.js";
+import { z } from "zod";
 
 const memoryRoutes = new Hono();
+
+const updateMemorySchema = z.object({
+  key: z.string().optional(),
+  value: z.string().optional(),
+  type: z.enum(["fact", "preference", "context", "summary"]).optional(),
+});
+
 
 memoryRoutes.get(
   "/",
@@ -49,7 +57,12 @@ memoryRoutes.patch(
   withErrorHandling("memories/update", async (c) => {
     const { memories } = getRepositories();
     const id = c.req.param("id")!;
-    const body = await c.req.json<{ key?: string; value?: string; type?: string }>();
+    const body = await c.req.json().catch(() => ({}));
+    const parsed = updateMemorySchema.safeParse(body);
+    if (!parsed.success) {
+      return apiError(c, parsed.error.errors[0]?.message || "Validation failed", 400);
+    }
+    const validData = parsed.data;
 
     const existing = await memories.getAll().then((all) => all.find((m) => m.id === id));
     if (!existing) {
@@ -57,9 +70,9 @@ memoryRoutes.patch(
     }
 
     const updated = await memories.upsert({
-      key: body.key ?? existing.key,
-      value: body.value ?? existing.value,
-      type: (body.type as "fact" | "preference" | "context" | "summary") ?? existing.type,
+      key: validData.key ?? existing.key,
+      value: validData.value ?? existing.value,
+      type: validData.type ?? existing.type,
       scopeType: existing.scopeType,
       scopeId: existing.scopeId,
     });

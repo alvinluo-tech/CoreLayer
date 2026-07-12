@@ -20,7 +20,11 @@ export const TASK_STATUSES = {
 
 export type CanonicalTaskStatus = (typeof TASK_STATUSES)[keyof typeof TASK_STATUSES];
 
-/** Legacy alias → canonical mapping */
+/**
+ * Legacy alias → canonical mapping.
+ * Removal window: keep only at persistence/API compatibility edges until the
+ * first 1.x schema migration; new core workflow code must emit canonical values.
+ */
 const LEGACY_MAP: Record<string, CanonicalTaskStatus> = {
   pending: "queued",
   in_progress: "running",

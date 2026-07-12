@@ -10,14 +10,14 @@ import {
   isValidExecutor,
   isAgentModelPolicy,
   isAgentExecutorPolicy,
-  VALID_EXECUTORS,
+  BUILT_IN_EXECUTORS,
 } from "../agent-profile-types.js";
 
 // ---- isValidExecutor ----
 
 describe("isValidExecutor", () => {
   it("returns true for all valid executor values", () => {
-    for (const value of VALID_EXECUTORS) {
+    for (const value of BUILT_IN_EXECUTORS) {
       expect(isValidExecutor(value)).toBe(true);
     }
   });
@@ -42,8 +42,8 @@ describe("isValidExecutor", () => {
     expect(isValidExecutor("")).toBe(false);
   });
 
-  it("returns false for unknown executor string", () => {
-    expect(isValidExecutor("unknown-executor")).toBe(false);
+  it("accepts registry-extensible executor IDs", () => {
+    expect(isValidExecutor("future-executor")).toBe(true);
   });
 
   it("returns false for number", () => {
@@ -158,7 +158,7 @@ describe("isAgentExecutorPolicy", () => {
   });
 
   it("returns true for each valid executor type", () => {
-    for (const executor of VALID_EXECUTORS) {
+    for (const executor of BUILT_IN_EXECUTORS) {
       expect(isAgentExecutorPolicy({ executor })).toBe(true);
     }
   });
@@ -175,8 +175,8 @@ describe("isAgentExecutorPolicy", () => {
     expect(isAgentExecutorPolicy({})).toBe(false);
   });
 
-  it("returns false for invalid executor value", () => {
-    expect(isAgentExecutorPolicy({ executor: "invalid" })).toBe(false);
+  it("returns true for a future registry executor", () => {
+    expect(isAgentExecutorPolicy({ executor: "future-executor" })).toBe(true);
   });
 
   it("returns false when maxConcurrent is not a number", () => {

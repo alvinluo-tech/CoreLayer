@@ -20,6 +20,7 @@ import type {
   CodingTask,
 } from "./types.js";
 import type { NormalizedEvent } from "./events/coding-event.js";
+import { maskObjectSecrets } from "../../shared/secret-masking.js";
 
 /**
  * Wraps a CodingAgentAdapter as an ExecutorAdapter.
@@ -47,6 +48,7 @@ export class CodingExecutorAdapterWrapper implements ExecutorAdapter {
   }
 
   getCapabilities(): ExecutorCapabilityProfile {
+    const toolConfigInjection = this.id === "claude-code" || this.id === "opencode";
     return {
       adapterId: this.id,
       domain: "coding",
@@ -54,13 +56,19 @@ export class CodingExecutorAdapterWrapper implements ExecutorAdapter {
       streamEvents: true,
       structuredOutput: true,
       permissionMode: true,
-      toolConfigInjection: true,
+      toolConfigInjection,
       isolatedEnvironment: true,
       cancellation: true,
       resumableSession: false,
       permissionProjection: "stdout-pattern",
-      approvalResumeStrategy: "prompted_reentry",
+      approvalResumeStrategy: "manual_block",
       defaultTimeoutMs: 300_000,
+      metadata: {
+        transport: "cli",
+        structuredEventFormat: this.id === "claude-code" ? "stream-json" : "jsonl",
+        approvalGranularity: "coarse",
+        nativeToolApprovalIntercepted: false,
+      },
     };
   }
 
@@ -160,6 +168,7 @@ export class CodingExecutorAdapterWrapper implements ExecutorAdapter {
       testCommands: env.metadata?.testCommands as string[] | undefined,
       timeoutMs: request.timeoutMs,
       permissionPolicy: request.permissionPolicy,
+      allowedTools: request.metadata?.allowedTools as string[] | undefined,
     };
   }
 
@@ -179,7 +188,7 @@ export class CodingExecutorAdapterWrapper implements ExecutorAdapter {
       type: this.mapEventType(normalized),
       runId,
       timestamp: normalized.createdAt ?? new Date().toISOString(),
-      metadata: normalized.event,
+      metadata: maskObjectSecrets(normalized.event as unknown as Record<string, unknown>),
     };
   }
 

@@ -28,6 +28,13 @@ function mapRow(row: typeof schema.executorRuns.$inferSelect): ExecutorRunRow {
     taskId: row.taskId,
     agentId: row.agentId,
     adapterId: row.adapterId,
+    attemptNumber: row.attemptNumber,
+    nativeSessionId: row.nativeSessionId,
+    nativeTurnId: row.nativeTurnId,
+    eventCursor: row.eventCursor,
+    heartbeatAt: row.heartbeatAt,
+    leaseOwner: row.leaseOwner,
+    leaseExpiresAt: row.leaseExpiresAt,
     domain: row.domain,
     status: row.status as ExecutorRunStatus,
     taskPrompt: row.taskPrompt,
@@ -62,6 +69,13 @@ export function createSqliteExecutorRunRepo(database?: DrizzleDb): ExecutorRunRe
           taskId: input.taskId ?? null,
           agentId: input.agentId ?? null,
           adapterId: input.adapterId,
+          attemptNumber: input.attemptNumber ?? 1,
+          nativeSessionId: input.nativeSessionId ?? null,
+          nativeTurnId: input.nativeTurnId ?? null,
+          eventCursor: input.eventCursor ?? 0,
+          heartbeatAt: input.heartbeatAt ?? null,
+          leaseOwner: input.leaseOwner ?? null,
+          leaseExpiresAt: input.leaseExpiresAt ?? null,
           domain: input.domain ?? "coding",
           status: "created",
           taskPrompt: input.taskPrompt,
@@ -133,6 +147,12 @@ export function createSqliteExecutorRunRepo(database?: DrizzleDb): ExecutorRunRe
       if (data.artifacts !== undefined) set.artifacts = JSON.stringify(data.artifacts);
       if (data.completedAt !== undefined) set.completedAt = data.completedAt;
       if (data.durationMs !== undefined) set.durationMs = data.durationMs;
+      if (data.nativeSessionId !== undefined) set.nativeSessionId = data.nativeSessionId;
+      if (data.nativeTurnId !== undefined) set.nativeTurnId = data.nativeTurnId;
+      if (data.eventCursor !== undefined) set.eventCursor = data.eventCursor;
+      if (data.heartbeatAt !== undefined) set.heartbeatAt = data.heartbeatAt;
+      if (data.leaseOwner !== undefined) set.leaseOwner = data.leaseOwner;
+      if (data.leaseExpiresAt !== undefined) set.leaseExpiresAt = data.leaseExpiresAt;
 
       if (Object.keys(set).length === 0) return;
       db.update(schema.executorRuns)
@@ -160,6 +180,9 @@ export function createSqliteExecutorRunRepo(database?: DrizzleDb): ExecutorRunRe
             completedAt: now,
             durationMs,
             error: error ?? null,
+            heartbeatAt: now,
+            leaseOwner: null,
+            leaseExpiresAt: null,
           })
           .where(eq(schema.executorRuns.id, id))
           .run();
@@ -170,6 +193,7 @@ export function createSqliteExecutorRunRepo(database?: DrizzleDb): ExecutorRunRe
             completedAt: null,
             durationMs: null,
             error: null,
+            heartbeatAt: now,
           })
           .where(eq(schema.executorRuns.id, id))
           .run();

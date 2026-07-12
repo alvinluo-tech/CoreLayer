@@ -145,7 +145,8 @@ function createTestDb() {
       memory_writes TEXT DEFAULT '[]',
       tool_calls TEXT DEFAULT '[]',
       artifacts TEXT DEFAULT '[]',
-      approvals TEXT DEFAULT '[]'
+      approvals TEXT DEFAULT '[]',
+      agent_snapshot TEXT
     );
 
     CREATE TABLE IF NOT EXISTS approval_requests (

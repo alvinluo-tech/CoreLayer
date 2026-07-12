@@ -63,6 +63,7 @@ function createTestDb() {
       tool_call_count INTEGER DEFAULT 0,
       artifacts TEXT DEFAULT '[]',
       approvals TEXT DEFAULT '[]',
+      agent_snapshot TEXT,
       started_at TEXT DEFAULT 'CURRENT_TIMESTAMP',
       completed_at TEXT,
       duration_ms INTEGER,
@@ -77,6 +78,13 @@ function createTestDb() {
       task_id TEXT,
       agent_id TEXT REFERENCES agent_profiles(id),
       adapter_id TEXT NOT NULL,
+      attempt_number INTEGER NOT NULL DEFAULT 1,
+      native_session_id TEXT,
+      native_turn_id TEXT,
+      event_cursor INTEGER NOT NULL DEFAULT 0,
+      heartbeat_at TEXT,
+      lease_owner TEXT,
+      lease_expires_at TEXT,
       domain TEXT NOT NULL DEFAULT 'coding',
       status TEXT NOT NULL DEFAULT 'created' CHECK(status IN (
         'created', 'queued', 'preparing_environment', 'waiting_for_permission',
@@ -173,12 +181,24 @@ describe("ExecutorRunRepository", () => {
       workingDirectory: "/tmp/repo",
       environmentConfig: { branch: "feat/test" },
       timeoutMs: 60000,
+      attemptNumber: 2,
+      nativeSessionId: "session-1",
+      nativeTurnId: "turn-1",
+      eventCursor: 4,
+      heartbeatAt: "2026-07-11T12:00:00.000Z",
+      leaseOwner: "daemon:test",
+      leaseExpiresAt: "2026-07-11T12:01:00.000Z",
     });
 
     expect(row.agentRunId).toBe("run-1");
     expect(row.workspaceId).toBe("ws-1");
     expect(row.agentId).toBe("agent-1");
     expect(row.timeoutMs).toBe(60000);
+    expect(row.attemptNumber).toBe(2);
+    expect(row.nativeSessionId).toBe("session-1");
+    expect(row.nativeTurnId).toBe("turn-1");
+    expect(row.eventCursor).toBe(4);
+    expect(row.leaseOwner).toBe("daemon:test");
   });
 
   it("should get by id", async () => {

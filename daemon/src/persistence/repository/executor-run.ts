@@ -6,6 +6,13 @@ export interface ExecutorRunRow {
   taskId: string | null;
   agentId: string | null;
   adapterId: string;
+  attemptNumber: number;
+  nativeSessionId: string | null;
+  nativeTurnId: string | null;
+  eventCursor: number;
+  heartbeatAt: string | null;
+  leaseOwner: string | null;
+  leaseExpiresAt: string | null;
   domain: string;
   status: ExecutorRunStatus;
   taskPrompt: string;
@@ -53,6 +60,13 @@ export interface CreateExecutorRunInput {
   environmentConfig?: Record<string, unknown>;
   workingDirectory?: string;
   timeoutMs?: number;
+  attemptNumber?: number;
+  nativeSessionId?: string;
+  nativeTurnId?: string;
+  eventCursor?: number;
+  heartbeatAt?: string;
+  leaseOwner?: string;
+  leaseExpiresAt?: string;
 }
 
 export interface UpdateExecutorRunInput {
@@ -66,6 +80,12 @@ export interface UpdateExecutorRunInput {
   artifacts?: Record<string, unknown>;
   completedAt?: string;
   durationMs?: number;
+  nativeSessionId?: string | null;
+  nativeTurnId?: string | null;
+  eventCursor?: number;
+  heartbeatAt?: string | null;
+  leaseOwner?: string | null;
+  leaseExpiresAt?: string | null;
 }
 
 export interface ExecutorRunRepository {

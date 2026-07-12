@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1783446034029,
+      "tag": "0000_giant_genesis",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1783798391574,
+      "tag": "0001_deep_red_ghost",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1783799072426,
+      "tag": "0002_classy_tiger_shark",
+      "breakpoints": true
+    }
+  ]
+}

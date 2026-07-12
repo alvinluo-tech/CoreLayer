@@ -46,6 +46,8 @@ export interface CodingTask {
   timeoutMs?: number;
   /** Permission policy override */
   permissionPolicy?: "strict" | "normal" | "permissive";
+  /** Native executor tool names explicitly enabled for this run. */
+  allowedTools?: string[];
 }
 
 /** All coding artifact types */

@@ -20,15 +20,14 @@ import { getCapabilityBroker } from "../../../../capabilities/os-capability-brok
 import { spawnProcessLive, killProcessTree, isCommandAvailable, validateWorkdirPolicy } from "../../process-spawner.js";
 import { logAuditEntry } from "../../../../persistence/audit-log.js";
 import { persistArtifacts } from "../../artifact-persistence.js";
-import { getRepositories } from "../../../../persistence/factory.js";
 import { maskObjectSecrets } from "../../../../shared/secret-masking.js";
 import { emitWorkspaceEvent } from "../../../../services/workspace-event-emitter.js";
-import { emitVerificationEvent } from "../../../../services/workspace-verification.js";
 import {
   createDefaultExecutionPolicy,
   evaluateInteraction,
   type ExecutionPolicy,
 } from "../../interaction-broker.js";
+import { JsonlEventDecoder } from "../../events/jsonl-decoder.js";
 
 /** In-memory store for run tracking */
 const runs = new Map<string, CodingRunInfo>();
@@ -185,12 +184,23 @@ export class ClaudeCodeCliAdapter implements CodingAgentAdapter {
 
   private spawnClaude(runId: string, task: CodingTask): number | undefined {
     // Claude Code CLI uses --print for non-interactive mode with a prompt
-    const args = ["--print", task.taskPrompt];
+    const args = ["--print", "--output-format", "stream-json", "--verbose"];
+    if (task.permissionPolicy === "strict") {
+      args.push("--permission-mode", "plan", "--disallowedTools", "Edit", "Write", "Bash");
+    } else if (task.permissionPolicy === "permissive") {
+      args.push("--permission-mode", "acceptEdits");
+    }
+    const nativeTools = (task.allowedTools ?? []).filter((tool) =>
+      ["Bash", "Read", "Edit", "Write", "Glob", "Grep", "WebFetch", "WebSearch", "Task"].includes(tool),
+    );
+    if (nativeTools.length > 0) args.push("--allowedTools", ...nativeTools);
+    args.push(task.taskPrompt);
     const logDir = task.worktreePath
       ? `${task.worktreePath}/.jarvis/logs`
       : undefined;
     const policy = policyForTask(task);
     const handleRef: { current?: ReturnType<typeof spawnProcessLive> } = {};
+    const decoder = new JsonlEventDecoder();
 
     const handleInteractiveChunk = (chunk: string) => {
       const decision = evaluateInteraction(chunk, policy);
@@ -240,12 +250,6 @@ export class ClaudeCodeCliAdapter implements CodingAgentAdapter {
           agentRunId: runId,
           runtimeId: this.id,
         });
-        try {
-          const { agentRuns } = getRepositories();
-          agentRuns.updateArtifacts(runId, info.artifacts).catch(() => {});
-        } catch {
-          // DB persistence is best-effort
-        }
       }
 
       if (handleRef.current?.pid) {
@@ -262,7 +266,9 @@ export class ClaudeCodeCliAdapter implements CodingAgentAdapter {
       timeoutMs: task.timeoutMs ?? 300_000,
       logDir,
       onStdout: (chunk) => {
-        emitter.emit(runId, { type: "agent_message", text: chunk });
+        for (const event of decoder.push(chunk)) {
+          emitter.emit(runId, { type: "agent_message", text: event.text, native: event.native });
+        }
         handleInteractiveChunk(chunk);
       },
       onStderr: (chunk) => {
@@ -351,17 +357,6 @@ export class ClaudeCodeCliAdapter implements CodingAgentAdapter {
         agentRunId: runId,
         runtimeId: this.id,
       });
-      try {
-        const { agentRuns } = getRepositories();
-        agentRuns.updateArtifacts(runId, info.artifacts).catch(() => {});
-      } catch {
-        // DB persistence is best-effort
-      }
-
-      // Run verification commands if provided
-      if (code === 0 && task.testCommands?.length) {
-        this.runVerification(task, runId);
-      }
     });
 
     handle.process.on("error", (err) => {
@@ -381,13 +376,6 @@ export class ClaudeCodeCliAdapter implements CodingAgentAdapter {
         agentRunId: runId,
         runtimeId: this.id,
       });
-      try {
-        const { agentRuns } = getRepositories();
-        agentRuns.updateArtifacts(runId, info.artifacts);
-      } catch {
-        // DB persistence is best-effort
-      }
-
       emitter.emit(runId, { type: "run_failed", error: err.message });
 
       emitWorkspaceEvent({
@@ -412,41 +400,6 @@ export class ClaudeCodeCliAdapter implements CodingAgentAdapter {
     });
 
     return handle.pid;
-  }
-
-  private async runVerification(task: CodingTask, runId: string): Promise<void> {
-    const cwd = task.worktreePath ?? task.repoPath;
-    for (const cmd of task.testCommands ?? []) {
-      try {
-        const output = execFileSync("sh", ["-c", cmd], {
-          cwd,
-          timeout: 60_000,
-          stdio: ["pipe", "pipe", "pipe"],
-          encoding: "utf-8",
-        });
-        await emitVerificationEvent({
-          workspaceId: task.workspaceId ?? "",
-          projectId: task.projectId,
-          taskId: task.dbTaskId,
-          agentRunId: runId,
-          command: cmd,
-          exitCode: 0,
-          output,
-        });
-      } catch (err: unknown) {
-        const exitCode = (err as { status?: number }).status ?? 1;
-        const stderr = (err as { stderr?: string }).stderr ?? "";
-        await emitVerificationEvent({
-          workspaceId: task.workspaceId ?? "",
-          projectId: task.projectId,
-          taskId: task.dbTaskId,
-          agentRunId: runId,
-          command: cmd,
-          exitCode,
-          output: stderr,
-        });
-      }
-    }
   }
 
   private collectChangedFiles(info: CodingRunInfo, task: CodingTask): void {

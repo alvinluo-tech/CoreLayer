@@ -21,10 +21,9 @@ import { spawnProcessLive, killProcessTree, isCommandAvailable, validateWorkdirP
 import { logAuditEntry } from "../../../../persistence/audit-log.js";
 import { persistArtifacts } from "../../artifact-persistence.js";
 import { emitWorkspaceEvent } from "../../../../services/workspace-event-emitter.js";
-import { emitVerificationEvent } from "../../../../services/workspace-verification.js";
-import { getRepositories } from "../../../../persistence/factory.js";
 import { maskObjectSecrets } from "../../../../shared/secret-masking.js";
 import { createRunConfig } from "./config-writer.js";
+import { JsonlEventDecoder } from "../../events/jsonl-decoder.js";
 
 /** In-memory store for run tracking */
 const runs = new Map<string, CodingRunInfo>();
@@ -96,7 +95,7 @@ export class OpenCodeCliAdapter implements CodingAgentAdapter {
     const maskedPrompt = maskObjectSecrets({ taskPrompt: task.taskPrompt }).taskPrompt as string;
     const decision = await broker.requestShellExec(
       "coding-runtime",
-      `opencode --prompt "${String(maskedPrompt).slice(0, 100)}..."`,
+      `opencode run --format json "${String(maskedPrompt).slice(0, 100)}..."`,
       {
         reason: `OpenCode run for repo: ${task.repoPath}`,
       },
@@ -169,7 +168,7 @@ export class OpenCodeCliAdapter implements CodingAgentAdapter {
 
     // Create per-run config
     const appDataDir = process.env.JARVIS_APP_DATA_DIR ?? ".jarvis";
-    createRunConfig(appDataDir, runId, { workDir: cwd });
+    createRunConfig(appDataDir, runId, { workDir: cwd, permissionPolicy: task.permissionPolicy });
 
     // Spawn opencode subprocess with live tracking
     const pid = this.spawnOpenCode(runId, task);
@@ -178,7 +177,13 @@ export class OpenCodeCliAdapter implements CodingAgentAdapter {
   }
 
   private spawnOpenCode(runId: string, task: CodingTask): number | undefined {
-    const args = ["--prompt", task.taskPrompt];
+    const decoder = new JsonlEventDecoder();
+    const args = ["run", "--format", "json", task.taskPrompt];
+    const appDataDir = process.env.JARVIS_APP_DATA_DIR ?? ".jarvis";
+    const configPath = createRunConfig(appDataDir, runId, {
+      workDir: task.worktreePath ?? task.repoPath,
+      permissionPolicy: task.permissionPolicy,
+    });
     const logDir = task.worktreePath
       ? `${task.worktreePath}/.jarvis/logs`
       : undefined;
@@ -188,8 +193,13 @@ export class OpenCodeCliAdapter implements CodingAgentAdapter {
       args,
       cwd: task.worktreePath ?? task.repoPath,
       timeoutMs: task.timeoutMs ?? 300_000,
+      env: { OPENCODE_CONFIG: configPath },
       logDir,
-      onStdout: (chunk) => emitter.emit(runId, { type: "agent_message", text: chunk }),
+      onStdout: (chunk) => {
+        for (const event of decoder.push(chunk)) {
+          emitter.emit(runId, { type: "agent_message", text: event.text, native: event.native });
+        }
+      },
       onStderr: (chunk) => emitter.emit(runId, { type: "agent_message", text: `[stderr] ${chunk}` }),
     });
 
@@ -257,17 +267,6 @@ export class OpenCodeCliAdapter implements CodingAgentAdapter {
 
       // Persist artifacts to disk and DB
       persistArtifacts(runId, info.artifacts, task.conversationId, eventCtx);
-      try {
-        const { agentRuns } = getRepositories();
-        agentRuns.updateArtifacts(runId, info.artifacts).catch(() => {});
-      } catch {
-        // DB persistence is best-effort
-      }
-
-      // Run verification commands if provided
-      if (code === 0 && task.testCommands?.length) {
-        this.runVerification(task, runId);
-      }
     });
 
     handle.process.on("error", (err) => {
@@ -301,52 +300,10 @@ export class OpenCodeCliAdapter implements CodingAgentAdapter {
       });
 
       persistArtifacts(runId, info.artifacts, task.conversationId, eventCtx);
-      try {
-        const { agentRuns } = getRepositories();
-        agentRuns.updateArtifacts(runId, info.artifacts);
-      } catch {
-        // DB persistence is best-effort
-      }
-
       emitter.emit(runId, { type: "run_failed", error: err.message });
     });
 
     return handle.pid;
-  }
-
-  private async runVerification(task: CodingTask, runId: string): Promise<void> {
-    const cwd = task.worktreePath ?? task.repoPath;
-    for (const cmd of task.testCommands ?? []) {
-      try {
-        const output = execFileSync("sh", ["-c", cmd], {
-          cwd,
-          timeout: 60_000,
-          stdio: ["pipe", "pipe", "pipe"],
-          encoding: "utf-8",
-        });
-        await emitVerificationEvent({
-          workspaceId: task.workspaceId ?? "",
-          projectId: task.projectId,
-          taskId: task.dbTaskId,
-          agentRunId: runId,
-          command: cmd,
-          exitCode: 0,
-          output,
-        });
-      } catch (err: unknown) {
-        const exitCode = (err as { status?: number }).status ?? 1;
-        const stderr = (err as { stderr?: string }).stderr ?? "";
-        await emitVerificationEvent({
-          workspaceId: task.workspaceId ?? "",
-          projectId: task.projectId,
-          taskId: task.dbTaskId,
-          agentRunId: runId,
-          command: cmd,
-          exitCode,
-          output: stderr,
-        });
-      }
-    }
   }
 
   private collectChangedFiles(info: CodingRunInfo, task: CodingTask): void {

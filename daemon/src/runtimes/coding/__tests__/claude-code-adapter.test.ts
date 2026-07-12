@@ -310,7 +310,13 @@ describe("ClaudeCodeAdapter", () => {
       expect(processSpawner.spawnProcessLive).toHaveBeenCalledWith(
         expect.objectContaining({
           command: "claude",
-          args: ["--print", "Fix the bug in main.ts"],
+          args: [
+            "--print",
+            "--output-format",
+            "stream-json",
+            "--verbose",
+            "Fix the bug in main.ts",
+          ],
         }),
       );
     });

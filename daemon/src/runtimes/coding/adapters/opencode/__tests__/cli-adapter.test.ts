@@ -30,7 +30,7 @@ vi.mock("../../../../../shared/secret-masking.js", () => ({
 }));
 
 vi.mock("../config-writer.js", () => ({
-  createRunConfig: vi.fn(),
+  createRunConfig: vi.fn().mockReturnValue("/tmp/jarvis-run/opencode.json"),
 }));
 
 vi.mock("../../../events/normalize-event.js", () => ({
@@ -64,6 +64,7 @@ import { OpenCodeCliAdapter } from "../cli-adapter.js";
 import * as capabilityBroker from "../../../../../capabilities/os-capability-broker.js";
 import * as persistenceFactory from "../../../../../persistence/factory.js";
 import * as workspaceEventEmitter from "../../../../../services/workspace-event-emitter.js";
+import * as configWriter from "../config-writer.js";
 
 function makeTask(overrides?: { repoPath?: string; worktreePath?: string; dbRunId?: string }) {
   return {
@@ -232,6 +233,18 @@ describe("OpenCodeCliAdapter", () => {
       expect(run.status).toBe("running");
       expect(run.pid).toBe(12345);
       expect(mockSpawnProcessLive).toHaveBeenCalled();
+    });
+
+    it("uses the documented non-interactive JSON command and per-run config", async () => {
+      setupDefaultMocks();
+      vi.mocked(configWriter.createRunConfig).mockReturnValue("/tmp/jarvis-run/opencode.json");
+      await adapter.startRun(makeTask());
+
+      expect(mockSpawnProcessLive).toHaveBeenCalledWith(expect.objectContaining({
+        command: "opencode",
+        args: ["run", "--format", "json", "Fix the bug in main.ts"],
+        env: expect.objectContaining({ OPENCODE_CONFIG: expect.anything() }),
+      }));
     });
 
     it("uses provided dbRunId", async () => {

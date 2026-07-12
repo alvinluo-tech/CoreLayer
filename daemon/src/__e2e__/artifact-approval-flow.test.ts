@@ -39,12 +39,12 @@ describe("E2E: Artifact filtering", () => {
 });
 
 describe("E2E: Permission resume flow", () => {
-  beforeEach(() => {
-    resetPendingActions();
+  beforeEach(async () => {
+    await resetPendingActions();
     resetGrants();
   });
 
-  it("should create approval and resume on approve", () => {
+  it("should create approval and resume on approve", async () => {
     const action: RuntimeAction = {
       id: "action-1",
       type: "file.write",
@@ -59,7 +59,7 @@ describe("E2E: Permission resume flow", () => {
     expect(decision.decision).toBe("require_approval");
 
     // Create pending action
-    const pending = createPendingAction({
+    const pending = await createPendingAction({
       approvalRequestId: "approval-1",
       runId: "run-1",
       action,
@@ -68,15 +68,15 @@ describe("E2E: Permission resume flow", () => {
     expect(pending.status).toBe("blocked");
 
     // User approves
-    const approved = approvePendingAction(pending.id);
+    const approved = await approvePendingAction(pending.id);
     expect(approved!.status).toBe("approved");
 
     // Complete after execution
-    const completed = completePendingAction(pending.id, true);
+    const completed = await completePendingAction(pending.id, true);
     expect(completed!.status).toBe("completed");
   });
 
-  it("should cancel on deny", () => {
+  it("should cancel on deny", async () => {
     const action: RuntimeAction = {
       id: "action-2",
       type: "shell.exec",
@@ -85,14 +85,14 @@ describe("E2E: Permission resume flow", () => {
       agentId: "agent-1",
     };
 
-    const pending = createPendingAction({
+    const pending = await createPendingAction({
       approvalRequestId: "approval-2",
       runId: "run-1",
       action,
       strategy: "prompted_reentry",
     });
 
-    const cancelled = cancelPendingAction(pending.id);
+    const cancelled = await cancelPendingAction(pending.id);
     expect(cancelled!.status).toBe("cancelled");
   });
 });

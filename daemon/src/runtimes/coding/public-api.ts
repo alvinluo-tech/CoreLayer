@@ -13,6 +13,9 @@ export {
   listCodingRuntimes,
   createCodingRun,
   collectCodingArtifacts,
+  getExecutorAdapter,
+  registerCodingRuntime,
+  selectExecutorAdapter,
 } from "./registry.js";
 
 export {

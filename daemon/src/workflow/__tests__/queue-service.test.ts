@@ -12,6 +12,7 @@ const mockGetRecent = vi.fn();
 const mockGetQueued = vi.fn();
 const mockGetById = vi.fn();
 const mockUpdateStatus = vi.fn();
+const mockAgentProfileGetById = vi.fn();
 
 vi.mock("../../persistence/factory.js", () => ({
   getRepositories: () => ({
@@ -21,6 +22,9 @@ vi.mock("../../persistence/factory.js", () => ({
       getQueued: mockGetQueued,
       getById: mockGetById,
       updateStatus: mockUpdateStatus,
+    },
+    agentProfiles: {
+      getById: mockAgentProfileGetById,
     },
   }),
 }));
@@ -49,6 +53,7 @@ function makeRun(overrides: Partial<AgentRunRow> = {}): AgentRunRow {
     toolCallCount: null,
     artifacts: null,
     approvals: null,
+    agentSnapshot: null,
     startedAt: "2026-01-01T00:00:00Z",
     completedAt: null,
     durationMs: null,
@@ -59,6 +64,7 @@ function makeRun(overrides: Partial<AgentRunRow> = {}): AgentRunRow {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockAgentProfileGetById.mockResolvedValue(null);
 });
 
 // ---- enqueue ----
@@ -78,8 +84,11 @@ describe("enqueue", () => {
       taskId: "task-001",
       agentId: "agent-001",
       conversationId: undefined,
+      workspaceId: undefined,
+      projectId: undefined,
       mode: "chat",
       selectedModel: undefined,
+      agentSnapshot: null,
     });
     expect(entry.runId).toBe("run-001");
     expect(entry.taskId).toBe("task-001");
@@ -97,6 +106,41 @@ describe("enqueue", () => {
     expect(mockCreate).toHaveBeenCalledWith(
       expect.objectContaining({ mode: "chat" }),
     );
+  });
+
+  it("freezes the assigned agent profile into the queued run", async () => {
+    const run = makeRun();
+    mockCreate.mockResolvedValue(run);
+    mockAgentProfileGetById.mockResolvedValue({
+      id: "agent-001",
+      updatedAt: "2026-07-11T00:00:00.000Z",
+      capabilities: ["coding"],
+      skills: ["tdd-workflow"],
+      tools: ["shell"],
+      knowledgeScopes: ["workspace"],
+      permissions: ["file_write"],
+      memoryScopes: ["project"],
+      modelPolicy: { preferredModels: ["model-1"] },
+      executorPolicy: { executor: "codex" },
+    });
+
+    await enqueue({ taskId: "task-001", agentId: "agent-001" });
+
+    expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({
+      agentSnapshot: {
+        profileId: "agent-001",
+        profileUpdatedAt: "2026-07-11T00:00:00.000Z",
+        profileDigest: expect.any(String),
+        capabilities: ["coding"],
+        skills: ["tdd-workflow"],
+        tools: ["shell"],
+        knowledgeScopes: ["workspace"],
+        permissions: ["file_write"],
+        memoryScopes: ["project"],
+        modelPolicy: { preferredModels: ["model-1"] },
+        executorPolicy: { executor: "codex" },
+      },
+    }));
   });
 });
 

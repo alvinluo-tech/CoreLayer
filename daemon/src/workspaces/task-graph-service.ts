@@ -202,6 +202,18 @@ export class TaskGraph {
       throw new Error("Task cannot depend on itself");
     }
 
+    for (const dependencyId of uniqueDependencyIds) {
+      const dependency = await tasks.getById(dependencyId);
+      if (!dependency) {
+        throw new Error(`Dependency task ${dependencyId} not found`);
+      }
+      if (dependency.projectId !== task.projectId) {
+        throw new Error(
+          `Dependency task ${dependencyId} must belong to project ${task.projectId ?? "none"}`,
+        );
+      }
+    }
+
     await tasks.update(taskId, { dependencies: uniqueDependencyIds });
 
     if (task.projectId) {

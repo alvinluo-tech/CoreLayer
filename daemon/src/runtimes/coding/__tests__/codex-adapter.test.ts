@@ -311,6 +311,7 @@ describe("CodexAdapter", () => {
           command: "codex",
           args: [
             "exec",
+            "--json",
             "--sandbox",
             "workspace-write",
             "--color",

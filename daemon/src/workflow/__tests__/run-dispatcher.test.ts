@@ -14,10 +14,15 @@ const mockGetQueued = vi.fn();
 const mockUpdateStatus = vi.fn();
 const mockGetById = vi.fn();
 const mockUpdateArtifacts = vi.fn();
+const mockClaimQueued = vi.fn();
+const mockUpdateRouting = vi.fn();
 const mockAgentProfilesGetById = vi.fn();
 const mockTasksGetById = vi.fn();
 const mockTasksUpdate = vi.fn().mockResolvedValue(undefined);
 const mockTasksGetByProjectId = vi.fn().mockResolvedValue([]);
+const mockTasksGetByWorkspaceId = vi.fn().mockResolvedValue([]);
+const mockWorkspacesUpdate = vi.fn().mockResolvedValue(undefined);
+const mockPendingActionsGetOpenByWorkspace = vi.fn().mockResolvedValue([]);
 
 vi.mock("../../persistence/factory.js", () => ({
   getRepositories: vi.fn(() => ({
@@ -27,6 +32,8 @@ vi.mock("../../persistence/factory.js", () => ({
       updateStatus: (...args: unknown[]) => mockUpdateStatus(...args),
       getById: (...args: unknown[]) => mockGetById(...args),
       updateArtifacts: (...args: unknown[]) => mockUpdateArtifacts(...args),
+      claimQueued: (...args: unknown[]) => mockClaimQueued(...args),
+      updateRouting: (...args: unknown[]) => mockUpdateRouting(...args),
     },
     agentProfiles: {
       getById: (...args: unknown[]) => mockAgentProfilesGetById(...args),
@@ -35,6 +42,13 @@ vi.mock("../../persistence/factory.js", () => ({
       getById: (...args: unknown[]) => mockTasksGetById(...args),
       update: (...args: unknown[]) => mockTasksUpdate(...args),
       getByProjectId: (...args: unknown[]) => mockTasksGetByProjectId(...args),
+      getByWorkspaceId: (...args: unknown[]) => mockTasksGetByWorkspaceId(...args),
+    },
+    workspaces: {
+      update: (...args: unknown[]) => mockWorkspacesUpdate(...args),
+    },
+    pendingActions: {
+      getOpenByWorkspace: (...args: unknown[]) => mockPendingActionsGetOpenByWorkspace(...args),
     },
     agentRunEvents: {
       create: vi.fn().mockResolvedValue({}),
@@ -97,7 +111,7 @@ vi.mock("../resource-monitor.js", () => ({
 }));
 
 const mockCanExecute = vi.fn().mockReturnValue(true);
-vi.mock("../workspaces/task-graph-service.js", () => ({
+vi.mock("../../workspaces/task-graph-service.js", () => ({
   TaskGraph: vi.fn().mockImplementation(() => ({
     canExecute: (...args: unknown[]) => mockCanExecute(...args),
     completeTask: vi.fn().mockResolvedValue(undefined),
@@ -117,6 +131,15 @@ vi.mock("../../persistence/client.js", () => ({
 
 vi.mock("../../runtimes/agent/run.js", () => ({
   cancelActiveRun: vi.fn().mockReturnValue(false),
+}));
+
+const mockExecuteExecutorAttempt = vi.fn();
+const mockCancelExecutorAttempt = vi.fn();
+const mockSelectExecutorForAttempt = vi.fn();
+vi.mock("../executor-lifecycle-service.js", () => ({
+  executeExecutorAttempt: (...args: unknown[]) => mockExecuteExecutorAttempt(...args),
+  cancelExecutorAttempt: (...args: unknown[]) => mockCancelExecutorAttempt(...args),
+  selectExecutorForAttempt: (...args: unknown[]) => mockSelectExecutorForAttempt(...args),
 }));
 
 // Import after mocks are set up
@@ -148,10 +171,20 @@ beforeEach(() => {
   mockGetById.mockResolvedValue(null);
   mockUpdateStatus.mockResolvedValue(undefined);
   mockUpdateArtifacts.mockResolvedValue(undefined);
+  mockClaimQueued.mockResolvedValue(true);
+  mockUpdateRouting.mockResolvedValue(undefined);
   mockAgentProfilesGetById.mockResolvedValue(null);
   mockTasksGetById.mockResolvedValue(null);
   mockTasksGetByProjectId.mockResolvedValue([]);
   mockCreateRun.mockResolvedValue({ runId: "coding-run-1", status: "running" });
+  mockExecuteExecutorAttempt.mockResolvedValue({
+    success: true,
+    attemptId: "attempt-1",
+    artifacts: { runId: "attempt-1", artifacts: [] },
+    verification: [],
+  });
+  mockCancelExecutorAttempt.mockResolvedValue(true);
+  mockSelectExecutorForAttempt.mockResolvedValue({ adapterId: "claude-code", routeReason: "test selection" });
   mockReleaseAgentRun.mockImplementation(() => {});
   mockSetAgentRunQueueDepth.mockImplementation(() => {});
   mockGetUsage.mockReturnValue({
@@ -189,6 +222,18 @@ describe("dispatchRuns", () => {
     expect(result.skipped).toBe(0);
     expect(mockAcquireAgentRun).toHaveBeenCalledWith("run-1");
     expect(mockAcquireAgentRun).toHaveBeenCalledWith("run-2");
+    expect(mockClaimQueued).toHaveBeenCalledTimes(2);
+    await vi.waitFor(() => expect(mockExecuteExecutorAttempt).toHaveBeenCalledTimes(2));
+  });
+
+  it("does not dispatch when another worker already claimed the run", async () => {
+    mockGetQueued.mockResolvedValue([createRun({ id: "run-1" })]);
+    mockClaimQueued.mockResolvedValue(false);
+
+    const result = await dispatchRuns();
+
+    expect(result).toEqual({ dispatched: 0, skipped: 1 });
+    expect(mockExecuteExecutorAttempt).not.toHaveBeenCalled();
   });
 
   it("skips runs when max concurrent limit is reached", async () => {
@@ -489,7 +534,7 @@ describe("dispatchRuns — task dependencies", () => {
     mockGetQueued.mockResolvedValue([
       createRun({ id: "run-1" }),
     ]);
-    mockCreateRun.mockRejectedValue(new Error("spawn failed"));
+    mockExecuteExecutorAttempt.mockRejectedValue(new Error("spawn failed"));
 
     const result = await dispatchRuns();
 
@@ -544,6 +589,32 @@ describe("completeRun — task integration", () => {
     }));
   });
 
+  it("closes the workspace after the final verified task", async () => {
+    mockGetById.mockResolvedValue({
+      id: "run-final",
+      taskId: "task-final",
+      agentId: "agent-1",
+      projectId: "proj-1",
+      workspaceId: "ws-1",
+    });
+    mockTasksGetById.mockResolvedValue({
+      id: "task-final",
+      projectId: "proj-1",
+      status: "running",
+      runHistory: [],
+    });
+    mockTasksGetByWorkspaceId.mockResolvedValue([
+      { id: "task-final", status: "completed", manualInterventionRequired: false },
+    ]);
+
+    await completeRun("run-final", true);
+
+    expect(mockWorkspacesUpdate).toHaveBeenCalledWith("ws-1", {
+      status: "succeeded",
+      completedAt: expect.any(String),
+    });
+  });
+
   it("updates task status to failed on failure", async () => {
     mockGetById.mockResolvedValue({
       id: "run-1",
@@ -559,9 +630,10 @@ describe("completeRun — task integration", () => {
 
     await completeRun("run-1", false, "error");
 
-    expect(mockTasksUpdate).toHaveBeenCalledWith("task-1", {
+    expect(mockTasksUpdate).toHaveBeenCalledWith("task-1", expect.objectContaining({
       status: "failed",
-    });
+      runHistory: expect.any(Array),
+    }));
   });
 
   it("does not enqueue tasks when task has no projectId", async () => {

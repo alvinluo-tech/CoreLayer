@@ -23,7 +23,7 @@ export type CodingRunEventType =
 /** Individual event payloads — discriminated union by `type` */
 export type CodingRunEvent =
   | { type: "run_started"; runId: string }
-  | { type: "agent_message"; text: string }
+  | { type: "agent_message"; text: string; native?: Record<string, unknown> }
   | { type: "tool_call"; toolName: string; input: unknown }
   | { type: "tool_result"; toolName: string; result: unknown }
   | { type: "file_read"; path: string }

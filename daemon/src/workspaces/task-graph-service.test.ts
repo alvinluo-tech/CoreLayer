@@ -448,6 +448,30 @@ describe("TaskGraph", () => {
       expect(restored?.dependencies).toEqual([]);
     });
 
+    it("should reject a dependency that does not exist", async () => {
+      const task = await tasks.create({ title: "Main" });
+
+      await expect(graph.setDependencies(task.id, ["missing-task"])).rejects.toThrow(
+        "Dependency task missing-task not found",
+      );
+      expect((await tasks.getById(task.id))?.dependencies).toEqual([]);
+    });
+
+    it("should reject dependencies from another project", async () => {
+      const wsId = "test-ws";
+      testDb.insert(schema.workspaces).values({ id: wsId, name: "Test", ownerId: "user" }).run();
+      testDb.insert(schema.projects).values({ id: "project-a", workspaceId: wsId, name: "A" }).run();
+      testDb.insert(schema.projects).values({ id: "project-b", workspaceId: wsId, name: "B" }).run();
+
+      const dep = await tasks.create({ title: "Dep", projectId: "project-b", workspaceId: wsId });
+      const task = await tasks.create({ title: "Main", projectId: "project-a", workspaceId: wsId });
+
+      await expect(graph.setDependencies(task.id, [dep.id])).rejects.toThrow(
+        "must belong to project project-a",
+      );
+      expect((await tasks.getById(task.id))?.dependencies).toEqual([]);
+    });
+
     it("should unblock task when dependencies are removed", async () => {
       const dep = await tasks.create({ title: "Dep" });
       const task = await tasks.create({ title: "Main" });

@@ -3,6 +3,43 @@ import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import * as schema from "../../schema.js";
 import { migrateAgentRunsStatusConstraint } from "../agent-runs-migration.js";
+import { runDbMigrations } from "../../migrator.js";
+import { migrations } from "../../migrations.js";
+
+function columnNames(sqlite: Database.Database, table: string): string[] {
+  return (sqlite.prepare(`PRAGMA table_info("${table}")`).all() as { name: string }[])
+    .map((column) => column.name);
+}
+
+describe("compiled forward migrations", () => {
+  it("creates the executor control-plane columns on a fresh database", async () => {
+    const sqlite = new Database(":memory:");
+    await runDbMigrations(sqlite);
+
+    expect(columnNames(sqlite, "agent_runs")).toContain("agent_snapshot");
+    expect(columnNames(sqlite, "executor_runs")).toEqual(expect.arrayContaining([
+      "attempt_number", "native_session_id", "native_turn_id", "event_cursor",
+      "heartbeat_at", "lease_owner", "lease_expires_at",
+    ]));
+    expect(columnNames(sqlite, "pending_actions")).toContain("result");
+    sqlite.close();
+  });
+
+  it("applies forward columns to an untracked legacy genesis database", async () => {
+    const sqlite = new Database(":memory:");
+    sqlite.exec(migrations[0].sql);
+    sqlite.prepare("INSERT INTO workspaces (id, name, owner_id) VALUES (?, ?, ?)")
+      .run("legacy-ws", "Legacy", "user-1");
+
+    await runDbMigrations(sqlite);
+
+    expect(columnNames(sqlite, "agent_runs")).toContain("agent_snapshot");
+    expect(columnNames(sqlite, "executor_runs")).toContain("attempt_number");
+    expect(columnNames(sqlite, "pending_actions")).toContain("result");
+    expect(sqlite.prepare("SELECT id FROM workspaces WHERE id = ?").get("legacy-ws")).toBeTruthy();
+    sqlite.close();
+  });
+});
 
 describe("DB Migration: uses column (BUG-M1 regression)", () => {
   it("adds uses column to existing memories table without it", () => {

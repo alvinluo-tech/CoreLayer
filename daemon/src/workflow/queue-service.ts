@@ -7,7 +7,9 @@
 
 import { getRepositories } from "../persistence/factory.js";
 import type { AgentRunRow } from "../persistence/repository.js";
+import type { AgentRunSnapshot } from "../persistence/repository/agent.js";
 import { dispatchRuns } from "./run-dispatcher.js";
+import { createHash } from "node:crypto";
 
 export interface QueueEntry {
   runId: string;
@@ -38,7 +40,29 @@ export async function enqueue(input: {
   mode?: AgentRunRow["mode"];
   selectedModel?: string;
 }): Promise<QueueEntry> {
-  const { agentRuns } = getRepositories();
+  const { agentRuns, agentProfiles } = getRepositories();
+  let agentSnapshot: AgentRunSnapshot | null = null;
+  if (input.agentId) {
+    const profile = await agentProfiles.getById(input.agentId);
+    if (profile) {
+      const snapshotPayload = {
+        capabilities: [...profile.capabilities],
+        skills: [...profile.skills],
+        tools: [...profile.tools],
+        knowledgeScopes: [...profile.knowledgeScopes],
+        permissions: [...profile.permissions],
+        memoryScopes: [...profile.memoryScopes],
+        modelPolicy: structuredClone(profile.modelPolicy),
+        executorPolicy: profile.executorPolicy ? structuredClone(profile.executorPolicy) : null,
+      };
+      agentSnapshot = {
+        profileId: profile.id,
+        profileUpdatedAt: profile.updatedAt,
+        profileDigest: createHash("sha256").update(JSON.stringify(snapshotPayload)).digest("hex"),
+        ...snapshotPayload,
+      };
+    }
+  }
   const run = await agentRuns.create({
     taskId: input.taskId,
     agentId: input.agentId,
@@ -47,6 +71,7 @@ export async function enqueue(input: {
     conversationId: input.conversationId,
     mode: input.mode ?? "chat",
     selectedModel: input.selectedModel,
+    agentSnapshot,
   });
 
   // Trigger dispatch immediately so queued runs don't wait for a tick

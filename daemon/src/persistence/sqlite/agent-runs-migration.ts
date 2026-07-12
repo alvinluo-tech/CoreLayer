@@ -16,6 +16,9 @@ export function migrateAgentRunsStatusConstraint(sqlite: SqliteDatabase): void {
     && (!createSql.sql.includes("'queued'") || !createSql.sql.includes("waiting_for_approval"));
 
   if (!needsStatusMigration) return;
+  const snapshotExpression = tableInfo.some((column) => column.name === "agent_snapshot")
+    ? "agent_snapshot"
+    : "NULL";
 
   // Disable foreign keys temporarily as we need to drop and rename the table
   sqlite.exec(`PRAGMA foreign_keys = OFF`);
@@ -42,6 +45,7 @@ export function migrateAgentRunsStatusConstraint(sqlite: SqliteDatabase): void {
       tool_call_count INTEGER DEFAULT 0,
       artifacts TEXT DEFAULT '[]',
       approvals TEXT DEFAULT '[]',
+      agent_snapshot TEXT,
       started_at TEXT DEFAULT 'CURRENT_TIMESTAMP',
       completed_at TEXT,
       duration_ms INTEGER,
@@ -68,6 +72,7 @@ export function migrateAgentRunsStatusConstraint(sqlite: SqliteDatabase): void {
         tool_call_count,
         artifacts,
         approvals,
+        agent_snapshot,
         started_at,
         completed_at,
         duration_ms,
@@ -96,6 +101,7 @@ export function migrateAgentRunsStatusConstraint(sqlite: SqliteDatabase): void {
         COALESCE(tool_call_count, 0),
         COALESCE(artifacts, '[]'),
         COALESCE(approvals, '[]'),
+        ${snapshotExpression},
         started_at,
         completed_at,
         duration_ms,

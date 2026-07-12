@@ -5,6 +5,52 @@ import { withErrorHandling } from "../middleware/error-handler.js";
 import { TaskGraph } from "../../workspaces/task-graph-service.js";
 import { decomposeTask } from "../../runtimes/agent/public-api.js";
 import { enqueue } from "../../workflow/queue-service.js";
+import { z } from "zod";
+
+const createTaskSchema = z.object({
+  title: z.string().min(1, "Title is required"),
+  priority: z.number().optional(),
+  dueDate: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+  description: z.string().optional(),
+  objective: z.string().optional(),
+  assignedAgentId: z.string().optional(),
+  parentTaskId: z.string().optional(),
+  dependencies: z.array(z.string()).optional(),
+  acceptanceCriteria: z.array(z.string()).optional(),
+  rollbackPlan: z.string().optional(),
+  workspaceId: z.string().optional(),
+  projectId: z.string().optional(),
+});
+
+const updateTaskSchema = z.object({
+  title: z.string().optional(),
+  priority: z.number().optional(),
+  status: z.string().optional(),
+  dueDate: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+  objective: z.string().optional(),
+  assignedAgentId: z.string().optional(),
+  parentTaskId: z.string().optional(),
+  dependencies: z.array(z.string()).optional(),
+  blockedBy: z.array(z.string()).optional(),
+  acceptanceCriteria: z.array(z.string()).optional(),
+  artifacts: z.array(z.any()).optional(),
+  runHistory: z.array(z.any()).optional(),
+  manualInterventionRequired: z.boolean().optional(),
+  rollbackPlan: z.string().optional(),
+});
+
+const setDependenciesSchema = z.object({
+  dependencies: z.array(z.string()).default([]),
+});
+
+const decomposeTaskSchema = z.object({
+  objective: z.string().min(1, "Objective is required"),
+  projectId: z.string().min(1, "ProjectId is required"),
+  agentId: z.string().optional(),
+});
+
 
 const app = new Hono();
 const taskGraph = new TaskGraph();
@@ -29,36 +75,27 @@ app.get(
 app.post(
   "/",
   withErrorHandling("tasks/create", async (c) => {
-    const body = await c.req.json<{
-      title: string;
-      priority?: number;
-      dueDate?: string;
-      tags?: string[];
-      description?: string;
-      objective?: string;
-      assignedAgentId?: string;
-      parentTaskId?: string;
-      dependencies?: string[];
-      acceptanceCriteria?: string[];
-      rollbackPlan?: string;
-    }>();
-
-    if (!body.title?.trim()) {
-      return apiError(c, "Title is required", 400);
+    const body = await c.req.json().catch(() => ({}));
+    const parsed = createTaskSchema.safeParse(body);
+    if (!parsed.success) {
+      return apiError(c, parsed.error.errors[0]?.message || "Validation failed", 400);
     }
+    const validData = parsed.data;
 
     const task = await getRepositories().tasks.create({
-      title: body.title,
-      description: body.description,
-      priority: body.priority,
-      dueDate: body.dueDate,
-      tags: body.tags,
-      objective: body.objective,
-      assignedAgentId: body.assignedAgentId,
-      parentTaskId: body.parentTaskId,
-      dependencies: body.dependencies,
-      acceptanceCriteria: body.acceptanceCriteria,
-      rollbackPlan: body.rollbackPlan,
+      title: validData.title,
+      description: validData.description,
+      priority: validData.priority,
+      dueDate: validData.dueDate,
+      tags: validData.tags,
+      objective: validData.objective,
+      assignedAgentId: validData.assignedAgentId,
+      parentTaskId: validData.parentTaskId,
+      dependencies: validData.dependencies,
+      acceptanceCriteria: validData.acceptanceCriteria,
+      rollbackPlan: validData.rollbackPlan,
+      workspaceId: validData.workspaceId,
+      projectId: validData.projectId,
     });
 
     return c.json({ task }, 201);
@@ -82,24 +119,12 @@ app.patch(
   withErrorHandling("tasks/update", async (c) => {
     const id = c.req.param("id")!;
     try {
-      const body = await c.req.json<{
-        title?: string;
-        priority?: number;
-        status?: string;
-        dueDate?: string;
-        tags?: string[];
-        objective?: string;
-        assignedAgentId?: string;
-        parentTaskId?: string;
-        dependencies?: string[];
-        blockedBy?: string[];
-        acceptanceCriteria?: string[];
-        artifacts?: unknown[];
-        runHistory?: unknown[];
-        manualInterventionRequired?: boolean;
-        rollbackPlan?: string;
-      }>();
-      const task = await getRepositories().tasks.update(id, body);
+      const body = await c.req.json().catch(() => ({}));
+      const parsed = updateTaskSchema.safeParse(body);
+      if (!parsed.success) {
+        return apiError(c, parsed.error.errors[0]?.message || "Validation failed", 400);
+      }
+      const task = await getRepositories().tasks.update(id, parsed.data);
       return c.json({ task });
     } catch (err) {
       const msg =
@@ -139,8 +164,12 @@ app.post(
   withErrorHandling("tasks/setDependencies", async (c) => {
     const id = c.req.param("id")!;
     try {
-      const body = await c.req.json<{ dependencies: string[] }>();
-      await taskGraph.setDependencies(id, body.dependencies);
+      const body = await c.req.json().catch(() => ({}));
+      const parsed = setDependenciesSchema.safeParse(body);
+      if (!parsed.success) {
+        return apiError(c, parsed.error.errors[0]?.message || "Validation failed", 400);
+      }
+      await taskGraph.setDependencies(id, parsed.data.dependencies);
       const task = await getRepositories().tasks.getById(id);
       return c.json({ task });
     } catch (err) {
@@ -196,17 +225,14 @@ app.get(
 app.post(
   "/decompose",
   withErrorHandling("tasks/decompose", async (c) => {
-    const body = await c.req.json<{
-      objective: string;
-      projectId: string;
-      agentId?: string;
-    }>();
-
-    if (!body.objective?.trim()) {
-      return apiError(c, "Objective is required", 400);
+    const body = await c.req.json().catch(() => ({}));
+    const parsed = decomposeTaskSchema.safeParse(body);
+    if (!parsed.success) {
+      return apiError(c, parsed.error.errors[0]?.message || "Validation failed", 400);
     }
+    const validData = parsed.data;
 
-    const result = await decomposeTask(body.objective, body.projectId, body.agentId);
+    const result = await decomposeTask(validData.objective, validData.projectId, validData.agentId);
     return c.json(result, 201);
   }),
 );

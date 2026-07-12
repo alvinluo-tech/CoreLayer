@@ -13,7 +13,7 @@ export function resetGateway(): void {
 function getDbProfiles(): ModelProfile[] | null {
   try {
     const repos = getRepositories();
-    const rows = (repos.modelProfiles as unknown as { getAll: () => unknown[] }).getAll();
+    const rows = (repos.modelProfiles as unknown as { getAllSync: () => unknown[] }).getAllSync();
     if (!Array.isArray(rows) || rows.length === 0) return null;
 
     return rows.map((row: unknown) => {

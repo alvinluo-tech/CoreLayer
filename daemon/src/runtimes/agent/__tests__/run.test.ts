@@ -88,6 +88,7 @@ function createTestDb() {
       tool_calls TEXT,
       artifacts TEXT,
       approvals TEXT,
+      agent_snapshot TEXT,
       started_at TEXT DEFAULT 'CURRENT_TIMESTAMP',
       completed_at TEXT,
       duration_ms INTEGER,

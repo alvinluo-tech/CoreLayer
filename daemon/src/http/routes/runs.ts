@@ -4,6 +4,15 @@ import { apiError } from "../../shared/errors.js";
 import { cancelRun, retryRun } from "../../workflow/run-dispatcher.js";
 import { withErrorHandling } from "../middleware/error-handler.js";
 import { getActiveQueue } from "../../runtimes/agent/public-api.js";
+import { generateTrajectory } from "../../trajectory/trajectory-service.js";
+import { z } from "zod";
+
+const injectMessageSchema = z.object({
+  message: z.string().min(1, "消息不能为空"),
+  mode: z.enum(["steer", "followUp", "interrupt"]).default("steer"),
+});
+
+
 
 const runsRoutes = new Hono();
 
@@ -89,21 +98,31 @@ runsRoutes.post(
   "/:id/message",
   withErrorHandling("runs/message", async (c) => {
     const id = c.req.param("id")!;
-    const body = await c.req.json<{ message: string; mode?: "steer" | "followUp" | "interrupt" }>();
-
-    if (!body.message?.trim()) {
-      return apiError(c, "消息不能为空", 400);
+    const body = await c.req.json().catch(() => ({}));
+    const parsed = injectMessageSchema.safeParse(body);
+    if (!parsed.success) {
+      return apiError(c, parsed.error.errors[0]?.message || "Validation failed", 400);
     }
+    const { message, mode } = parsed.data;
 
-    const mode = body.mode ?? "steer";
     const queue = getActiveQueue(id);
     if (!queue) {
       return apiError(c, "Run not found or not actively running", 404);
     }
 
-    await queue.enqueue(body.message, mode);
+    await queue.enqueue(message, mode);
     return c.json({ data: { enqueued: true, mode } });
   }),
 );
 
+runsRoutes.get(
+  "/:id/trajectory",
+  withErrorHandling("runs/trajectory", async (c) => {
+    const id = c.req.param("id")!;
+    const bundle = await generateTrajectory(id);
+    return c.json(bundle);
+  })
+);
+
 export default runsRoutes;
+
