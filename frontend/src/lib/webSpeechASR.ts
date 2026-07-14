@@ -89,6 +89,8 @@ export function createWebSpeechASR(options: WebSpeechASROptions): WebSpeechASR {
   let silenceTimer: ReturnType<typeof setTimeout> | null = null;
   let consecutiveRestarts = 0;
   const MAX_RESTARTS = 3; // Give up after 3 consecutive restarts with no audio
+  let lastSpeechTime = 0;
+  let sessionStartTime = 0;
 
   const clearSilenceTimer = () => {
     if (silenceTimer) {
@@ -97,25 +99,34 @@ export function createWebSpeechASR(options: WebSpeechASROptions): WebSpeechASR {
     }
   };
 
-  const resetSilenceTimer = () => {
+  const resetSilenceTimer = (duration?: number) => {
     clearSilenceTimer();
+    const timeout = duration ?? currentSilenceTimeout;
     silenceTimer = setTimeout(() => {
       if (active) {
         stop();
         currentOnEnd?.();
       }
-    }, currentSilenceTimeout);
+    }, timeout);
   };
 
   recognition.onstart = () => {
     active = true;
-    resetSilenceTimer();
+    const elapsed = Date.now() - (lastSpeechTime || sessionStartTime);
+    const remaining = currentSilenceTimeout - elapsed;
+    if (remaining <= 0) {
+      stop();
+      currentOnEnd?.();
+    } else {
+      resetSilenceTimer(remaining);
+    }
   };
 
   recognition.onresult = (event: SpeechRecognitionEvent) => {
     if (!active) return;
     // Reset restart counter when actual audio is received
     consecutiveRestarts = 0;
+    lastSpeechTime = Date.now();
     resetSilenceTimer();
 
     let interimText = '';
@@ -159,6 +170,15 @@ export function createWebSpeechASR(options: WebSpeechASROptions): WebSpeechASR {
   recognition.onend = () => {
     clearSilenceTimer();
     if (active) {
+      const elapsed = Date.now() - (lastSpeechTime || sessionStartTime);
+      const remaining = currentSilenceTimeout - elapsed;
+
+      if (remaining <= 0) {
+        active = false;
+        currentOnEnd?.();
+        return;
+      }
+
       consecutiveRestarts++;
       if (consecutiveRestarts > MAX_RESTARTS) {
         // Too many restarts with no audio — mic is likely locked or unavailable.
@@ -183,6 +203,9 @@ export function createWebSpeechASR(options: WebSpeechASROptions): WebSpeechASR {
   const start = () => {
     if (active) return;
     active = true;
+    sessionStartTime = Date.now();
+    lastSpeechTime = 0;
+    consecutiveRestarts = 0;
     try {
       recognition.start();
     } catch {
