@@ -384,6 +384,7 @@ export function useVoiceConversation(
       };
 
       const processAudio = async () => {
+        setState('transcribing');
         const wavBlob = encodeWav(capture.pcmChunks, 16000);
         if (wavBlob.size < 2000) {
           resolve('');
@@ -1021,7 +1022,7 @@ export function useVoiceConversation(
         asr.start();
       } else {
         // Batch ASR fallback
-        setState('transcribing');
+        setState('listening');
         transcribeWithWhisper().then((text) => {
           if (!isActiveRef.current) return;
           if (text) {
@@ -1264,9 +1265,32 @@ export function useVoiceConversation(
             }
           }
         }, 3500);
+      } else {
+        // Batch ASR fallback for barge-in (e.g. on Windows WebView2)
+        transcribeWithWhisper().then((text) => {
+          if (!isActiveRef.current) return;
+          if (text) {
+            savedAssistantTextForResumeRef.current = '';
+            startConversation(text);
+          } else {
+            // If no speech detected during barge-in, attempt false-positive recovery
+            const savedText = savedAssistantTextForResumeRef.current;
+            if (savedText) {
+              logger.debug(
+                '[VoiceConversation:BargeIn] False-positive: no speech in Whisper fallback, resuming TTS'
+              );
+              isActiveRef.current = false;
+              savedAssistantTextForResumeRef.current = '';
+              startConversation(savedText);
+            } else {
+              isActiveRef.current = false;
+              playFarewellAndExitRef.current();
+            }
+          }
+        });
       }
     },
-    [startConversation, getOrCreateASR, assistantText]
+    [startConversation, getOrCreateASR, assistantText, transcribeWithWhisper]
   );
 
   const finishListening = useCallback(() => {
