@@ -63,18 +63,41 @@ app.post("/servers", withErrorHandling("mcp/servers/connect", async (c) => {
 // Update an MCP server (disconnect old, reconnect with new config)
 app.put("/servers/:id", withErrorHandling("mcp/servers/update", async (c) => {
   const serverId = c.req.param("id")!;
-  const body = await c.req.json<MCPServerConfig>();
+  const body = await c.req.json<Partial<MCPServerConfig>>();
+
+  // Preserve existing config fields that clients may not send (auth, permissions, riskPolicy)
+  const { loadMCPServers } = await import("../../config/mcp-config.js");
+  const existing = loadMCPServers().find((s) => s.id === serverId);
+
+  const config: MCPServerConfig = {
+    id: serverId,
+    name: body.name ?? existing?.name ?? serverId,
+    transport: body.transport ?? existing?.transport ?? "http",
+    enabled: body.enabled ?? existing?.enabled ?? true,
+    auth: body.auth !== undefined ? body.auth : existing?.auth,
+    permissions: body.permissions ?? existing?.permissions ?? { read: true, write: true, delete: false, bulkWrite: false },
+    riskPolicy: body.riskPolicy ?? existing?.riskPolicy ?? { low: "auto", medium: "notify", high: "confirm", critical: "deny" },
+    url: body.url ?? existing?.url,
+    command: body.command ?? existing?.command,
+    args: body.args ?? existing?.args,
+    env: body.env ?? existing?.env,
+  };
 
   try {
     await disconnectMCPServer(serverId);
-    removeMCPServer(serverId);
   } catch {
     // Ignore disconnect errors — server may already be disconnected
   }
 
-  const config = { ...body, id: serverId };
-  await connectMCPServer(config);
-  addMCPServer(config);
+  try {
+    await connectMCPServer(config);
+    addMCPServer(config);
+  } catch (err) {
+    // Connect failed — save the config anyway so the user can retry via UI
+    addMCPServer(config);
+    throw err;
+  }
+
   const manager = getMCPManager();
   const info = manager.getServerInfo(serverId);
   return c.json({ success: true, server: info });

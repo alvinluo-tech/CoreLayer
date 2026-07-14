@@ -1,12 +1,39 @@
 import { invoke } from '@tauri-apps/api/core';
 
+export interface MCPAuthConfig {
+  type: 'none' | 'bearer' | 'basic' | 'oauth';
+  tokenRef?: string;
+  username?: string;
+  passwordRef?: string;
+}
+
+export interface MCPPermissions {
+  read: boolean;
+  write: boolean;
+  delete: boolean;
+  bulkWrite: boolean;
+}
+
+export interface MCPRiskPolicy {
+  low: 'auto' | 'notify' | 'confirm';
+  medium: 'auto' | 'notify' | 'confirm';
+  high: 'auto' | 'notify' | 'confirm';
+  critical: 'auto' | 'notify' | 'confirm' | 'deny';
+}
+
 export interface MCPServerInfo {
   config: {
     id: string;
     name: string;
     transport: string;
     url?: string;
+    command?: string;
+    args?: string[];
+    env?: Record<string, string>;
+    auth?: MCPAuthConfig;
     enabled: boolean;
+    permissions?: MCPPermissions;
+    riskPolicy?: MCPRiskPolicy;
   };
   status: 'disconnected' | 'connecting' | 'connected' | 'error';
   tools: { name: string; description?: string }[];
@@ -26,6 +53,7 @@ export async function connectMCPServer(config: {
   transport: 'http' | 'stdio' | 'sse';
   url?: string;
   command?: string;
+  auth?: MCPAuthConfig;
   enabled: boolean;
 }): Promise<{ success: boolean; server?: MCPServerInfo; error?: string }> {
   return invoke('connect_mcp_server', { config });
@@ -44,6 +72,7 @@ export async function updateMCPServer(
     transport: 'http' | 'stdio' | 'sse';
     url?: string;
     command?: string;
+    auth?: MCPAuthConfig;
     enabled: boolean;
   }
 ): Promise<{ success: boolean; server?: MCPServerInfo; error?: string }> {

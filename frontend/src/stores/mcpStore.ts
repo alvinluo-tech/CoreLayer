@@ -7,6 +7,7 @@ import {
   listAllTools,
   type MCPServerInfo,
   type ToolInfo,
+  type MCPAuthConfig,
 } from '@/lib/tauri';
 
 interface MCPState {
@@ -23,11 +24,17 @@ interface MCPState {
     name: string;
     transport: 'http' | 'stdio' | 'sse';
     url?: string;
+    auth?: MCPAuthConfig;
   }) => Promise<void>;
   disconnectServer: (serverId: string) => Promise<void>;
   updateServer: (
     serverId: string,
-    config: { name: string; transport: 'http' | 'stdio' | 'sse'; url?: string }
+    config: {
+      name: string;
+      transport: 'http' | 'stdio' | 'sse';
+      url?: string;
+      auth?: MCPAuthConfig;
+    }
   ) => Promise<void>;
 }
 

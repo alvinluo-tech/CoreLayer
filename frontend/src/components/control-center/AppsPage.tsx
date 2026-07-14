@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useMCPStore } from '@/stores/mcpStore';
-import type { MCPServerInfo } from '@/lib/tauri';
+import type { MCPServerInfo, MCPAuthConfig } from '@/lib/tauri';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from './StatusBadge';
@@ -14,6 +14,7 @@ import {
   Server,
   AlertCircle,
   Loader2,
+  Key,
 } from 'lucide-react';
 
 export function AppsPage() {
@@ -37,6 +38,8 @@ export function AppsPage() {
     name: '',
     transport: 'http' as 'http' | 'stdio' | 'sse',
     url: '',
+    authType: 'none' as 'none' | 'bearer',
+    authToken: '',
   });
 
   useEffect(() => {
@@ -47,17 +50,33 @@ export function AppsPage() {
   const handleConnect = async () => {
     if (!newServer.id || !newServer.name) return;
     setFormError(null);
+
+    const auth: MCPAuthConfig | undefined =
+      newServer.authType === 'bearer' && newServer.authToken
+        ? { type: 'bearer', tokenRef: newServer.authToken }
+        : newServer.authType === 'none'
+          ? { type: 'none' }
+          : undefined;
+
     try {
       if (editingId) {
         await updateServer(editingId, {
           name: newServer.name,
           transport: newServer.transport,
           url: newServer.url,
+          auth,
         });
       } else {
-        await connectServer(newServer);
+        await connectServer({ ...newServer, auth });
       }
-      setNewServer({ id: '', name: '', transport: 'http', url: '' });
+      setNewServer({
+        id: '',
+        name: '',
+        transport: 'http',
+        url: '',
+        authType: 'none',
+        authToken: '',
+      });
       setShowAddForm(false);
       setEditingId(null);
     } catch (e) {
@@ -72,6 +91,8 @@ export function AppsPage() {
       name: server.config.name,
       transport: (server.config.transport as 'http' | 'stdio' | 'sse') ?? 'http',
       url: server.config.url ?? '',
+      authType: server.config.auth?.type === 'bearer' ? 'bearer' : 'none',
+      authToken: server.config.auth?.type === 'bearer' ? (server.config.auth.tokenRef ?? '') : '',
     });
     setShowAddForm(true);
     setFormError(null);
@@ -81,7 +102,7 @@ export function AppsPage() {
     setShowAddForm(false);
     setEditingId(null);
     setFormError(null);
-    setNewServer({ id: '', name: '', transport: 'http', url: '' });
+    setNewServer({ id: '', name: '', transport: 'http', url: '', authType: 'none', authToken: '' });
   };
 
   const totalTools = toolCounts.native + toolCounts.mcp + toolCounts.skill + toolCounts.rest;
@@ -114,7 +135,14 @@ export function AppsPage() {
               } else {
                 setEditingId(null);
                 setFormError(null);
-                setNewServer({ id: '', name: '', transport: 'http', url: '' });
+                setNewServer({
+                  id: '',
+                  name: '',
+                  transport: 'http',
+                  url: '',
+                  authType: 'none',
+                  authToken: '',
+                });
                 setShowAddForm(true);
               }
             }}
@@ -192,6 +220,35 @@ export function AppsPage() {
                 className="w-full mt-1 px-3 py-1.5 text-sm bg-background border rounded-md"
               />
             </div>
+            <div>
+              <label className="text-xs text-muted-foreground">认证方式</label>
+              <select
+                value={newServer.authType}
+                onChange={(e) =>
+                  setNewServer({
+                    ...newServer,
+                    authType: e.target.value as 'none' | 'bearer',
+                    authToken: e.target.value === 'none' ? '' : newServer.authToken,
+                  })
+                }
+                className="w-full mt-1 px-3 py-1.5 text-sm bg-background border rounded-md"
+              >
+                <option value="none">无认证</option>
+                <option value="bearer">Bearer Token</option>
+              </select>
+            </div>
+            {newServer.authType === 'bearer' && (
+              <div>
+                <label className="text-xs text-muted-foreground">Token</label>
+                <input
+                  type="password"
+                  value={newServer.authToken}
+                  onChange={(e) => setNewServer({ ...newServer, authToken: e.target.value })}
+                  placeholder="输入 Bearer Token"
+                  className="w-full mt-1 px-3 py-1.5 text-sm bg-background border rounded-md"
+                />
+              </div>
+            )}
           </div>
           <div className="flex justify-end gap-2">
             <Button variant="ghost" size="sm" onClick={handleCancelForm}>
@@ -259,6 +316,15 @@ export function AppsPage() {
                   {server.config.url && (
                     <p className="text-xs text-muted-foreground mt-1 font-mono">
                       {server.config.url}
+                    </p>
+                  )}
+                  {server.config.auth && server.config.auth.type !== 'none' && (
+                    <p className="text-xs text-orange-500 mt-1 flex items-center gap-1">
+                      <Key className="h-3 w-3" />
+                      {server.config.auth.type === 'bearer'
+                        ? 'Bearer Token'
+                        : server.config.auth.type}{' '}
+                      认证已配置
                     </p>
                   )}
                   {server.lastError && (
