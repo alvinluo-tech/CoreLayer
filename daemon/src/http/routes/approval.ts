@@ -91,7 +91,7 @@ async function resumeAndSaveToolResult(id: string, triggerLLM: boolean): Promise
     if (existing.operationKind) {
       const receipt = await executeOperation(
         existing.operationKind,
-        existing.operationPayload ? JSON.parse(existing.operationPayload as string) : {},
+        existing.operationPayload ?? {},
         { runId: existing.runId, conversationId: undefined },
       );
       resumeResult = {

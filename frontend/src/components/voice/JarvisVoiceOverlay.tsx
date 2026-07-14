@@ -449,10 +449,17 @@ export function JarvisVoiceOverlay({
                   Host Voice Command:
                 </p>
                 <div className="text-xs min-h-[1.2rem] max-h-16 overflow-y-auto leading-relaxed">
-                  {interimTranscript ? (
-                    <span className="text-white/80 animate-pulse">{interimTranscript}</span>
-                  ) : finalTranscript ? (
-                    <span className="text-white font-medium">{finalTranscript}</span>
+                  {finalTranscript || interimTranscript ? (
+                    <>
+                      {finalTranscript && (
+                        <span className="text-white font-medium">{finalTranscript}</span>
+                      )}
+                      {interimTranscript && (
+                        <span className="text-white/60 animate-pulse ml-1">
+                          {interimTranscript}
+                        </span>
+                      )}
+                    </>
                   ) : (
                     <span className="text-white/30 italic font-mono">
                       Listening for voice feed...

@@ -271,7 +271,7 @@ export function registerConversationTools(): void {
           preview: JSON.stringify(preview),
           expiresAt: Date.now() + expiresInMs,
           operationKind: preview.kind,
-          operationPayload: JSON.stringify(preview.payload),
+          operationPayload: preview.payload,
         });
 
         return {
