@@ -78,6 +78,7 @@ export function useVoiceConversation(
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
   const listeningSafetyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const accumulatedFinalTextRef = useRef<string>('');
+  const activeMicAnalyserRef = useRef<AnalyserNode | null>(null);
 
   // False-positive recovery: save TTS state for resume after spurious barge-in
   const savedAssistantTextForResumeRef = useRef<string>('');
@@ -325,6 +326,7 @@ export function useVoiceConversation(
       falsePositiveTimerRef.current = null;
     }
     savedAssistantTextForResumeRef.current = '';
+    activeMicAnalyserRef.current = null;
     createCleanup(cleanupRefs as Parameters<typeof createCleanup>[0])();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -347,6 +349,7 @@ export function useVoiceConversation(
   // --- Batch ASR fallback (P0) ---
   const transcribeWithWhisper = useCallback(async (): Promise<string> => {
     const capture = await startAudioCapture();
+    activeMicAnalyserRef.current = capture.analyser;
     const SILENCE_THRESHOLD = 20;
     const SILENCE_DURATION = 2000;
     const MAX_RECORDING = 30000;
@@ -358,6 +361,7 @@ export function useVoiceConversation(
 
       const checkVAD = () => {
         if (!isActiveRef.current) {
+          activeMicAnalyserRef.current = null;
           capture.stop();
           resolve('');
           return;
@@ -369,12 +373,14 @@ export function useVoiceConversation(
         if (avg > SILENCE_THRESHOLD) {
           silenceStart = Date.now();
         } else if (Date.now() - silenceStart > SILENCE_DURATION) {
+          activeMicAnalyserRef.current = null;
           capture.stop();
           processAudio();
           return;
         }
 
         if (Date.now() - recordingStart > MAX_RECORDING) {
+          activeMicAnalyserRef.current = null;
           capture.stop();
           processAudio();
           return;
@@ -1446,9 +1452,16 @@ export function useVoiceConversation(
           localSpeakingAnalyserRef.current.getByteFrequencyData(dataArray);
           vol = dataArray.reduce((a: number, b: number) => a + b, 0) / dataArray.length;
         }
-      } else if (state === 'listening' && micAnalyser && micDataArray) {
-        micAnalyser.getByteFrequencyData(micDataArray);
-        vol = micDataArray.reduce((a: number, b: number) => a + b, 0) / micDataArray.length;
+      } else if (state === 'listening') {
+        if (activeMicAnalyserRef.current) {
+          const analyser = activeMicAnalyserRef.current;
+          const dataArray = new Uint8Array(analyser.frequencyBinCount);
+          analyser.getByteFrequencyData(dataArray);
+          vol = dataArray.reduce((a: number, b: number) => a + b, 0) / dataArray.length;
+        } else if (micAnalyser && micDataArray) {
+          micAnalyser.getByteFrequencyData(micDataArray);
+          vol = micDataArray.reduce((a: number, b: number) => a + b, 0) / micDataArray.length;
+        }
       }
 
       if (emitFn) {
@@ -1461,28 +1474,32 @@ export function useVoiceConversation(
     if (state === 'speaking') {
       runVolumeLoop();
     } else if (state === 'listening') {
-      if (typeof navigator !== 'undefined' && navigator.mediaDevices) {
-        navigator.mediaDevices
-          .getUserMedia({ audio: true })
-          .then((stream) => {
-            if (!active) {
-              stream.getTracks().forEach((t) => t.stop());
-              return;
-            }
-            micStream = stream;
-            micAudioCtx = createAudioContext();
-            const source = micAudioCtx.createMediaStreamSource(stream);
-            micAnalyser = micAudioCtx.createAnalyser();
-            micAnalyser.fftSize = 32;
-            source.connect(micAnalyser);
-            micDataArray = new Uint8Array(micAnalyser.frequencyBinCount);
+      if (isWebSpeechASRAvailable()) {
+        if (typeof navigator !== 'undefined' && navigator.mediaDevices) {
+          navigator.mediaDevices
+            .getUserMedia({ audio: true })
+            .then((stream) => {
+              if (!active) {
+                stream.getTracks().forEach((t) => t.stop());
+                return;
+              }
+              micStream = stream;
+              micAudioCtx = createAudioContext();
+              const source = micAudioCtx.createMediaStreamSource(stream);
+              micAnalyser = micAudioCtx.createAnalyser();
+              micAnalyser.fftSize = 32;
+              source.connect(micAnalyser);
+              micDataArray = new Uint8Array(micAnalyser.frequencyBinCount);
 
-            runVolumeLoop();
-          })
-          .catch((err) => {
-            console.warn('[VoiceConversation] Failed to start mic volume tracker:', err);
-            runVolumeLoop();
-          });
+              runVolumeLoop();
+            })
+            .catch((err) => {
+              console.warn('[VoiceConversation] Failed to start mic volume tracker:', err);
+              runVolumeLoop();
+            });
+        } else {
+          runVolumeLoop();
+        }
       } else {
         runVolumeLoop();
       }
