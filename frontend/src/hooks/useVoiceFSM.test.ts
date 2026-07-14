@@ -65,6 +65,7 @@ vi.mock('./useASR', () => ({
     start: asrMock.start,
     stop: asrMock.stop,
     transcribeWithWhisper: asrMock.transcribeWithWhisper,
+    activeMicAnalyserRef: { current: null },
   })),
 }));
 

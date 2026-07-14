@@ -66,6 +66,7 @@ export function useVoiceFSM(options: UseVoiceFSMOptions) {
   const localStreamRef = useRef<MediaStream | null>(null);
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
+  const activeMicAnalyserRef = useRef<AnalyserNode | null>(null);
 
   // Composed hooks
   const asr = useASR();
@@ -389,6 +390,7 @@ export function useVoiceFSM(options: UseVoiceFSMOptions) {
       remoteAudioRef,
       dataChannelRef,
       isActiveRef,
+      activeMicAnalyserRef,
     };
     const realtimeCallbacks = { setState, setAssistantText, setFinalTranscript, setLastError };
     await createConnectRealtimeSession(realtimeRefs, realtimeCallbacks, daemonUrlRef.current)();
@@ -770,12 +772,117 @@ export function useVoiceFSM(options: UseVoiceFSMOptions) {
       asr.stop();
       tts.dispose();
       bargeIn.stop();
+      activeMicAnalyserRef.current = null;
       if (breathingTimerRef.current) clearTimeout(breathingTimerRef.current);
       if (postListenTimerRef.current) clearTimeout(postListenTimerRef.current);
       if (falsePositiveTimerRef.current) clearTimeout(falsePositiveTimerRef.current);
       if (abortControllerRef.current) abortControllerRef.current.abort();
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // High-performance real-time volume tracker & emitter (bypasses React state to keep App rendering at 0% CPU)
+  useEffect(() => {
+    let active = true;
+    let animationId = 0;
+    let micStream: MediaStream | null = null;
+    let micAudioCtx: AudioContext | null = null;
+    let micAnalyser: AnalyserNode | null = null;
+    let micDataArray: Uint8Array<ArrayBuffer> | null = null;
+    let emitFn: ((event: string, payload: any) => Promise<void>) | null = null;
+
+    const initEvent = async () => {
+      try {
+        const { emit } = await import('@tauri-apps/api/event');
+        emitFn = emit;
+      } catch (e) {
+        logger.debug('[VoiceFSM] event init ignored:', e);
+      }
+    };
+    initEvent();
+
+    const runVolumeLoop = () => {
+      if (!active) return;
+
+      let vol = 0;
+      if (state === 'speaking') {
+        if (tts.isPlaying) {
+          vol = tts.getVolume();
+        } else if (localSpeakingAnalyserRef.current) {
+          const dataArray = new Uint8Array(localSpeakingAnalyserRef.current.frequencyBinCount);
+          localSpeakingAnalyserRef.current.getByteFrequencyData(dataArray);
+          vol = dataArray.reduce((a: number, b: number) => a + b, 0) / dataArray.length;
+        }
+      } else if (state === 'listening') {
+        const activeAnalyser = activeMicAnalyserRef.current || asr.activeMicAnalyserRef?.current;
+        if (activeAnalyser) {
+          const dataArray = new Uint8Array(activeAnalyser.frequencyBinCount);
+          activeAnalyser.getByteFrequencyData(dataArray);
+          vol = dataArray.reduce((a: number, b: number) => a + b, 0) / dataArray.length;
+        } else if (micAnalyser && micDataArray) {
+          micAnalyser.getByteFrequencyData(micDataArray);
+          vol = micDataArray.reduce((a: number, b: number) => a + b, 0) / micDataArray.length;
+        }
+      }
+
+      if (emitFn) {
+        emitFn('voice-volume-tick', { volume: vol }).catch(() => {});
+      }
+
+      animationId = requestAnimationFrame(runVolumeLoop);
+    };
+
+    if (state === 'speaking') {
+      runVolumeLoop();
+    } else if (state === 'listening') {
+      const isWebSpeechAvailable =
+        typeof window !== 'undefined' &&
+        ((window as any).webkitSpeechRecognition || (window as any).SpeechRecognition);
+      if (isWebSpeechAvailable) {
+        if (typeof navigator !== 'undefined' && navigator.mediaDevices) {
+          navigator.mediaDevices
+            .getUserMedia({ audio: true })
+            .then((stream) => {
+              if (!active) {
+                stream.getTracks().forEach((t) => t.stop());
+                return;
+              }
+              micStream = stream;
+              const Ctor = window.AudioContext || (window as any).webkitAudioContext;
+              micAudioCtx = new Ctor();
+              const source = micAudioCtx.createMediaStreamSource(stream);
+              micAnalyser = micAudioCtx.createAnalyser();
+              micAnalyser.fftSize = 32;
+              source.connect(micAnalyser);
+              micDataArray = new Uint8Array(micAnalyser.frequencyBinCount);
+
+              runVolumeLoop();
+            })
+            .catch((err) => {
+              console.warn('[VoiceFSM] Failed to start mic volume tracker:', err);
+              runVolumeLoop();
+            });
+        } else {
+          runVolumeLoop();
+        }
+      } else {
+        runVolumeLoop();
+      }
+    }
+
+    return () => {
+      active = false;
+      if (animationId) cancelAnimationFrame(animationId);
+      if (micStream) {
+        micStream.getTracks().forEach((t) => t.stop());
+      }
+      if (micAudioCtx) {
+        micAudioCtx.close().catch(() => {});
+      }
+      if (emitFn) {
+        emitFn('voice-volume-tick', { volume: 0 }).catch(() => {});
+      }
+    };
+  }, [state, tts, asr]);
 
   // Display logic
   const displayAssistantText =
@@ -785,12 +892,12 @@ export function useVoiceFSM(options: UseVoiceFSMOptions) {
 
   const displayUserText =
     state === 'streaming' || state === 'speaking' || state === 'listening'
-      ? finalTranscript
+      ? asr.finalTranscript || finalTranscript
       : lastUserTextRef.current || '';
 
   return {
     state,
-    interimTranscript,
+    interimTranscript: asr.interimTranscript || interimTranscript,
     finalTranscript: displayUserText,
     assistantText: displayAssistantText,
     thinkingText,

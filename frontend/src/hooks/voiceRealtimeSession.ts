@@ -7,6 +7,7 @@ interface RealtimeRefs {
   remoteAudioRef: React.MutableRefObject<HTMLAudioElement | null>;
   dataChannelRef: React.MutableRefObject<RTCDataChannel | null>;
   isActiveRef: React.MutableRefObject<boolean>;
+  activeMicAnalyserRef: React.MutableRefObject<AnalyserNode | null>;
 }
 
 interface RealtimeCallbacks {
@@ -38,6 +39,9 @@ export function createConnectRealtimeSession(
         logger.debug('[VoiceConversation] local stream stop ignored:', e);
       }
       refs.localStreamRef.current = null;
+    }
+    if (refs.activeMicAnalyserRef) {
+      refs.activeMicAnalyserRef.current = null;
     }
 
     try {
@@ -84,6 +88,18 @@ export function createConnectRealtimeSession(
         },
       });
       refs.localStreamRef.current = localStream;
+
+      try {
+        const Ctor = window.AudioContext || (window as any).webkitAudioContext;
+        const audioCtx = new Ctor();
+        const source = audioCtx.createMediaStreamSource(localStream);
+        const analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 512;
+        source.connect(analyser);
+        refs.activeMicAnalyserRef.current = analyser;
+      } catch (e) {
+        logger.debug('[VoiceConversation:Realtime] Failed to create local analyser:', e);
+      }
 
       const track = localStream.getTracks()[0];
       if (track) {

@@ -27,6 +27,7 @@ export interface UseASRReturn {
   stop: () => string;
   /** Batch Whisper fallback for environments without Web Speech API */
   transcribeWithWhisper: () => Promise<string>;
+  activeMicAnalyserRef: React.MutableRefObject<AnalyserNode | null>;
 }
 
 export function useASR(defaultOptions?: UseASROptions): UseASRReturn {
@@ -41,6 +42,7 @@ export function useASR(defaultOptions?: UseASROptions): UseASRReturn {
   const latestInterimTextRef = useRef('');
   const isListeningRef = useRef(false);
   const optionsRef = useRef(defaultOptions);
+  const activeMicAnalyserRef = useRef<AnalyserNode | null>(null);
 
   // Keep options ref in sync
   useEffect(() => {
@@ -187,6 +189,7 @@ export function useASR(defaultOptions?: UseASROptions): UseASRReturn {
 
   const transcribeWithWhisper = useCallback(async (): Promise<string> => {
     const capture = await startAudioCapture();
+    activeMicAnalyserRef.current = capture.analyser;
     const SILENCE_THRESHOLD = 20;
     const SILENCE_DURATION = 2000;
     const MAX_RECORDING = 30000;
@@ -199,6 +202,7 @@ export function useASR(defaultOptions?: UseASROptions): UseASRReturn {
 
       const checkVAD = () => {
         if (!active) {
+          activeMicAnalyserRef.current = null;
           capture.stop();
           resolve('');
           return;
@@ -210,12 +214,14 @@ export function useASR(defaultOptions?: UseASROptions): UseASRReturn {
         if (avg > SILENCE_THRESHOLD) {
           silenceStart = Date.now();
         } else if (Date.now() - silenceStart > SILENCE_DURATION) {
+          activeMicAnalyserRef.current = null;
           capture.stop();
           processAudio();
           return;
         }
 
         if (Date.now() - recordingStart > MAX_RECORDING) {
+          activeMicAnalyserRef.current = null;
           capture.stop();
           processAudio();
           return;
@@ -266,5 +272,6 @@ export function useASR(defaultOptions?: UseASROptions): UseASRReturn {
     start,
     stop,
     transcribeWithWhisper,
+    activeMicAnalyserRef,
   };
 }

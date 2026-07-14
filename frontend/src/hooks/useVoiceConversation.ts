@@ -341,6 +341,7 @@ export function useVoiceConversation(
       remoteAudioRef,
       dataChannelRef,
       isActiveRef,
+      activeMicAnalyserRef,
     };
     const realtimeCallbacks = { setState, setAssistantText, setFinalTranscript, setLastError };
     await createConnectRealtimeSession(realtimeRefs, realtimeCallbacks, daemonUrlRef.current)();
