@@ -89,6 +89,17 @@ function executeMigrationSql(db: Database, sql: string, tolerateExistingColumns:
  * These are non-Drizzle structures that must reside in the database at runtime.
  */
 function runLegacyFTSAndConstraints(db: Database): void {
+  // Ensure executor_runs has the domain column (legacy database compatibility)
+  try {
+    const columns = db.prepare("PRAGMA table_info(executor_runs)").all() as { name: string }[];
+    if (columns.length > 0 && !columns.some((c) => c.name === "domain")) {
+      console.info("[Migrations] Adding missing 'domain' column to 'executor_runs' table...");
+      db.exec("ALTER TABLE executor_runs ADD COLUMN domain TEXT NOT NULL DEFAULT 'coding'");
+    }
+  } catch (err) {
+    console.error("[Migrations] Failed to add domain column to executor_runs:", err);
+  }
+
   // SQLite CHECK constraints rebuilds
   try {
     migrateAgentRunsStatusConstraint(db);
