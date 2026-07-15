@@ -89,15 +89,26 @@ function executeMigrationSql(db: Database, sql: string, tolerateExistingColumns:
  * These are non-Drizzle structures that must reside in the database at runtime.
  */
 function runLegacyFTSAndConstraints(db: Database): void {
-  // Ensure executor_runs has the domain column (legacy database compatibility)
+  // Ensure executor_runs has all expected columns (legacy database compatibility)
   try {
     const columns = db.prepare("PRAGMA table_info(executor_runs)").all() as { name: string }[];
-    if (columns.length > 0 && !columns.some((c) => c.name === "domain")) {
-      console.info("[Migrations] Adding missing 'domain' column to 'executor_runs' table...");
-      db.exec("ALTER TABLE executor_runs ADD COLUMN domain TEXT NOT NULL DEFAULT 'coding'");
+    if (columns.length > 0) {
+      const existingNames = new Set(columns.map((c) => c.name));
+      if (!existingNames.has("domain")) {
+        console.info("[Migrations] Adding missing 'domain' column to 'executor_runs' table...");
+        db.exec("ALTER TABLE executor_runs ADD COLUMN domain TEXT NOT NULL DEFAULT 'coding'");
+      }
+      if (!existingNames.has("environment_kind")) {
+        console.info("[Migrations] Adding missing 'environment_kind' column to 'executor_runs' table...");
+        db.exec("ALTER TABLE executor_runs ADD COLUMN environment_kind TEXT NOT NULL DEFAULT 'local'");
+      }
+      if (!existingNames.has("environment_config")) {
+        console.info("[Migrations] Adding missing 'environment_config' column to 'executor_runs' table...");
+        db.exec("ALTER TABLE executor_runs ADD COLUMN environment_config TEXT DEFAULT '{}'");
+      }
     }
   } catch (err) {
-    console.error("[Migrations] Failed to add domain column to executor_runs:", err);
+    console.error("[Migrations] Failed to check/add columns for executor_runs:", err);
   }
 
   // SQLite CHECK constraints rebuilds
