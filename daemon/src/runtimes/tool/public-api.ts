@@ -14,6 +14,7 @@
 export { toolRuntime } from "./application/execute-tool.js";
 export { getRegistry, registerJarvisTool, registerTool, getTool, getAllJarvisTools, getAllTools } from "./adapters/native-tools/registry.js";
 export { wrapToolsForAI, trimToolResult, isApprovalRequiredMarker, extractApprovalRequestIds } from "./adapters/ai-tool-wrapper.js";
+export type { AIToolRuntimeContext } from "./adapters/ai-tool-wrapper.js";
 export { registerTaskFlowAdapter } from "./adapters/native-tools/taskflow.js";
 
 import { toolRuntime } from "./application/execute-tool.js";

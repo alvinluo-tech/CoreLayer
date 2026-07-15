@@ -218,42 +218,47 @@ approvalRoutes.post("/batch/approve", withErrorHandling("approvals/batch/approve
   await Promise.all(
     pendingItems.map(async ({ id, existing }) => {
       if (!existing) return;
-      toolRuntime.getPermissionGuard().resolvePendingConfirmation(id, true);
+      const resolvedInline = toolRuntime.getPermissionGuard().resolvePendingConfirmation(id, true);
       const updated = await approvalRequests.approve(id);
       updatedList.push(updated);
-      approvedIds.push(id);
-      if (existing.runId) runIds.add(existing.runId);
+      
+      if (!resolvedInline) {
+        approvedIds.push(id);
+        if (existing.runId) runIds.add(existing.runId);
+      }
 
       await logApprovalDecision(auditLog, existing, "approve", id);
     }),
   );
 
-  // Execute only approved tools in parallel, then re-trigger LLM once per run
-  const batchResumePromise = (async () => {
-    await Promise.all(approvedIds.map((id) => resumeAndSaveToolResult(id, false)));
+  // Execute only approved tools in parallel, then re-trigger LLM once per run (for stateless fallback only)
+  if (approvedIds.length > 0) {
+    const batchResumePromise = (async () => {
+      await Promise.all(approvedIds.map((id) => resumeAndSaveToolResult(id, false)));
 
-    for (const runId of runIds) {
-      const run = await agentRuns.getById(runId);
-      if (run?.conversationId) {
-        // Resume the run from waiting_for_approval back to running
-        await agentRuns.updateStatus(runId, "running");
+      for (const runId of runIds) {
+        const run = await agentRuns.getById(runId);
+        if (run?.conversationId) {
+          // Resume the run from waiting_for_approval back to running
+          await agentRuns.updateStatus(runId, "running");
 
-        await handleMessageInConversation(
-          run.conversationId,
-          "[System: Batch tool execution completed. Continue with the conversation.]",
-          {
-            runtimeContext: {
-              runId: run.id,
-              projectId: run.projectId ?? undefined,
-              mode: run.mode,
+          await handleMessageInConversation(
+            run.conversationId,
+            "[System: Batch tool execution completed. Continue with the conversation.]",
+            {
+              runtimeContext: {
+                runId: run.id,
+                projectId: run.projectId ?? undefined,
+                mode: run.mode,
+              },
             },
-          },
-        );
+          );
+        }
       }
-    }
-  })();
+    })();
 
-  batchResumePromise.catch((err) => logError("approvals/batch/approve/resume-fatal", err));
+    batchResumePromise.catch((err) => logError("approvals/batch/approve/resume-fatal", err));
+  }
 
   return c.json({ data: updatedList }, 202);
 }));
@@ -338,14 +343,16 @@ approvalRoutes.post("/:id/approve", withErrorHandling("approvals/approve", async
   if ("notPending" in lookup) return apiError(c, lookup.notPending, 400);
   const existing = lookup.data;
 
-  toolRuntime.getPermissionGuard().resolvePendingConfirmation(id, true);
+  const resolvedInline = toolRuntime.getPermissionGuard().resolvePendingConfirmation(id, true);
   const updated = await approvalRequests.approve(id);
 
   const { auditLog } = getRepositories();
   await logApprovalDecision(auditLog, existing, "approve", id);
 
-  const resumePromise = resumeAndSaveToolResult(id, true);
-  resumePromise.catch((err) => logError("approvals/approve/resume-fatal", err));
+  if (!resolvedInline) {
+    const resumePromise = resumeAndSaveToolResult(id, true);
+    resumePromise.catch((err) => logError("approvals/approve/resume-fatal", err));
+  }
 
   return c.json({ data: updated }, 202);
 }));
@@ -404,14 +411,16 @@ approvalRoutes.post("/:id/remember", withErrorHandling("approvals/remember", asy
 
   if (existing.status === "pending") {
     const approved = validData.decision !== "deny";
-    toolRuntime.getPermissionGuard().resolvePendingConfirmation(id, approved);
+    const resolvedInline = toolRuntime.getPermissionGuard().resolvePendingConfirmation(id, approved);
 
     const { auditLog } = getRepositories();
     if (approved) {
       await approvalRequests.approve(id);
       await logApprovalDecision(auditLog, existing, "approve", id);
-      const resumePromise = resumeAndSaveToolResult(id, true);
-      resumePromise.catch((err) => logError("approvals/remember/resume-fatal", err));
+      if (!resolvedInline) {
+        const resumePromise = resumeAndSaveToolResult(id, true);
+        resumePromise.catch((err) => logError("approvals/remember/resume-fatal", err));
+      }
     } else {
       await approvalRequests.deny(id);
       await logApprovalDecision(auditLog, existing, "deny", id);

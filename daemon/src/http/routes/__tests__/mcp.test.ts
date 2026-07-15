@@ -29,6 +29,7 @@ vi.mock("../../../gateways/mcp/client.js", () => ({
 }));
 
 vi.mock("../../../config/mcp-config.js", () => ({
+  loadMCPServers: () => [],
   addMCPServer: (...args: unknown[]) => mockAddMCPServer(...args),
   removeMCPServer: (...args: unknown[]) => mockRemoveMCPServer(...args),
 }));

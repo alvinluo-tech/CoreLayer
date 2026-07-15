@@ -65,6 +65,8 @@ export interface ToolExecutionContext {
   toolCallId?: string;
   /** Tool policy mode: standard, guide_only, disable_all */
   toolPolicyMode?: string;
+  /** Callback triggered when a tool execution is suspended awaiting approval */
+  onApprovalRequired?: (approvalRequestId: string) => void;
 }
 
 export interface ToolExecutionResult {
@@ -358,7 +360,7 @@ export class ToolExecutionService {
     );
 
     if (context.caller === "ai") {
-      // Non-blocking approval: return ApprovalRequiredResult immediately
+      // Blocking approval: wait for user resolution inline
       if (effectiveRequiresConfirmation && context.runId) {
         // Idempotency: if toolCallId provided and a pending approval exists, skip duplicate
         if (context.toolCallId) {
@@ -391,25 +393,23 @@ export class ToolExecutionService {
           operationPayload: { args },
         });
 
+        // Notify client stream that approval is required
+        if (context.onApprovalRequired) {
+          context.onApprovalRequired(approvalRequest.id);
+        }
+
+        // Suspend the active thread waiting for user resolution
+        const executionResult = await this.permissionGuard.executeWithPendingConfirmation(
+          tool,
+          args,
+          { waitForExternalResolution: true, timeoutMs: expiresInMs }
+        );
+
+        const result = await executionResult.confirm();
         return {
-          kind: "approval_required",
-          approvalRequestId: approvalRequest.id,
-          runId: context.runId,
-          toolCallId: context.toolCallId ?? null,
-          toolId: tool.id,
-          toolName: tool.name,
-          operationKind: "tool.execute",
-          operationPayload: { args },
-          actor: context.caller,
-          mode: context.mode ?? "chat",
-          projectId: context.projectId ?? null,
-          taskId: null,
-          conversationId: context.conversationId ?? null,
-          source: context.source ?? null,
-          preview: tool.description ?? null,
-          risk: tool.risk,
-          createdAt: new Date().toISOString(),
-          expiresAt: new Date(Date.now() + expiresInMs).toISOString(),
+          result,
+          confirmed: result.success,
+          durationMs: Date.now() - startTime,
         };
       }
 

@@ -17,9 +17,10 @@ import { withStreamTimeout } from "../../shared/stream/stream-timeout.js";
 import { configManager } from "../../config/config-manager.js";
 import { logError } from "../../shared/errors.js";
 import { resolveConversationScope } from "./run-context.js";
-import { createEventEmitter, handleApprovalSuspension } from "./application/run-events.js";
+import { createEventEmitter } from "./application/run-events.js";
 import { registerActiveRun, unregisterActiveRun } from "./run.js";
 import type { ModelMessage } from "ai";
+import type { AIToolRuntimeContext } from "../tool/public-api.js";
 
 export type RunStreamTurnOptions = {
   onEvent?: (event: AgentRunEvent) => void;
@@ -113,22 +114,16 @@ export async function runStreamTurn(
   let fullText = "";
   const toolCallsLog: { name: string; input: unknown; output: unknown }[] = [];
   const toolCallIndexByCallId = new Map<string, number>();
-  let approvalSuspended = false;
-  let suspendedApprovalRequestIds: string[] = [];
-
-  // Buffer for events from the onToolEvent callback.
-  // The callback fires during onStepFinish (inside the SDK's stream iteration),
-  // so we can't yield from it. Instead we buffer and yield on the next iteration.
-  const eventBuffer: AgentRunEvent[] = [];
 
   const emitAndPersist = createEventEmitter(run.id, agentRunEvents, options?.onEvent);
 
-  // Build the async iterable that yields AgentRunEvents
-  const eventStream = async function* (): AsyncGenerator<AgentRunEvent> {
-    yield emitAndPersist({ type: "run_started", runId: run.id, mode: request.mode });
+  // Create an asynchronous event queue to decouple streamChat execution from generator consumption
+  const queue = new AsyncQueue<AgentRunEvent>();
 
-    if (!isAiConfigured()) {
-      try {
+  // Start background streaming execution
+  void (async () => {
+    try {
+      if (!isAiConfigured()) {
         const localResult = await handleMessage(request.input);
         fullText = localResult.reply;
 
@@ -138,19 +133,21 @@ export async function runStreamTurn(
             input: toolCall.args ?? null,
             output: toolCall.result ?? null,
           });
-          yield emitAndPersist({
-            type: "tool_call",
-            toolCall: {
-              id: toolCall.name,
-              name: toolCall.name,
-              args: toolCall.args ?? null,
-              result: toolCall.result ?? null,
-            },
-          });
+          queue.push(
+            emitAndPersist({
+              type: "tool_call",
+              toolCall: {
+                id: toolCall.name,
+                name: toolCall.name,
+                args: toolCall.args ?? null,
+                result: toolCall.result ?? null,
+              },
+            })
+          );
         }
 
         if (fullText) {
-          yield emitAndPersist({ type: "delta", text: fullText });
+          queue.push(emitAndPersist({ type: "delta", text: fullText }));
         }
 
         const savedAssistantMessage = await conversations.addMessage(conversationId, {
@@ -161,56 +158,47 @@ export async function runStreamTurn(
 
         await agentRuns.updateStatus(run.id, "succeeded");
         const conversation = await conversations.getById(conversationId);
-        yield emitAndPersist({
-          type: "run_completed",
-          result: {
-            text: fullText,
-            conversationId,
-            userMessage: savedUserMessage,
-            assistantMessage: savedAssistantMessage,
-            conversation,
-          },
-        });
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : String(err);
-        logError("runStreamTurn/localFallback", err);
-        yield emitAndPersist({ type: "run_failed", error: errorMsg });
-        await agentRuns.updateStatus(run.id, "failed", errorMsg);
-      } finally {
-        clearTimeout(watchdogId);
-        unregisterActiveRun(run.id);
+        queue.push(
+          emitAndPersist({
+            type: "run_completed",
+            result: {
+              text: fullText,
+              conversationId,
+              userMessage: savedUserMessage,
+              assistantMessage: savedAssistantMessage,
+              conversation,
+            },
+          })
+        );
+        return;
       }
-      return;
-    }
 
-    let stream: Awaited<ReturnType<typeof streamChat>>;
-    try {
-      stream = await streamChat(
+      const stream = await streamChat(
         messages,
         request.mode === "voice" ? "voice" : "text",
         conversationId,
-        // Tool event callback: buffer events for later yielding
+        // Tool event callback: push events to queue immediately
         async (event) => {
           if (event.type === "tool-call") {
             const index = toolCallsLog.length;
             toolCallsLog.push({ name: event.name, input: event.args ?? null, output: null });
             toolCallIndexByCallId.set(event.toolCallId, index);
-            eventBuffer.push(
+            queue.push(
               emitAndPersist({
                 type: "tool_call",
                 toolCall: { id: event.toolCallId, name: event.name, args: event.args },
-              }),
+              })
             );
           } else if (event.type === "tool-result") {
             const index = toolCallIndexByCallId.get(event.toolCallId);
             if (index !== undefined && toolCallsLog[index]) {
               toolCallsLog[index].output = event.result;
             }
-            eventBuffer.push(
+            queue.push(
               emitAndPersist({
                 type: "tool_call",
                 toolCall: { id: event.toolCallId, name: event.name, args: null, result: event.result },
-              }),
+              })
             );
           }
         },
@@ -219,52 +207,39 @@ export async function runStreamTurn(
           runId: run.id,
           projectId: context.projectId,
           mode: request.mode,
-        },
+          onApprovalRequired: (approvalRequestId) => {
+            queue.push(
+              emitAndPersist({
+                type: "run_suspended",
+                runId: run.id,
+                reason: "approval_required",
+                approvalRequestIds: [approvalRequestId],
+              })
+            );
+          },
+        } as AIToolRuntimeContext,
         // Memory read callback
-        (memoryIds) => emitAndPersist({ type: "memory_read", memoryIds }),
-        // Approval suspension callback
-        (ids) => {
-          approvalSuspended = true;
-          suspendedApprovalRequestIds = ids;
-        },
+        (memoryIds) => queue.push(emitAndPersist({ type: "memory_read", memoryIds }))
       );
-    } catch (err) {
-      clearTimeout(watchdogId);
-      const errorMsg = err instanceof Error ? err.message : String(err);
-      logError("runStreamTurn/streamChat", err);
-      const isCancelled = abortController.signal.aborted && !abortedByWatchdog;
-      const finalStatus = isCancelled ? "cancelled" : "failed";
-      const failEvent = emitAndPersist({ type: "run_failed", error: errorMsg });
-      yield failEvent;
-      await agentRuns.updateStatus(run.id, finalStatus, errorMsg);
-      return;
-    }
 
-    // Consume the normalized stream
-    const timeoutMs = configManager.getStreamTimeout();
-    const normalized = withStreamTimeout(
-      normalizeStream(stream.stream.fullStream),
-      timeoutMs,
-    );
+      const timeoutMs = configManager.getStreamTimeout();
+      const normalized = withStreamTimeout(
+        normalizeStream(stream.stream.fullStream),
+        timeoutMs
+      );
 
-    try {
       for await (const event of normalized) {
-        // Yield any buffered tool events first
-        while (eventBuffer.length > 0) {
-          yield eventBuffer.shift()!;
+        if (abortController.signal.aborted) {
+          break;
         }
-
         if (event.type === "delta") {
           fullText += event.text;
-          yield emitAndPersist({ type: "delta", text: event.text });
+          queue.push(emitAndPersist({ type: "delta", text: event.text }));
         }
-        // thinking, tool_calls, tool_result from normalizeStream are handled
-        // by the onToolEvent callback above; no need to duplicate here
       }
 
-      // Drain any remaining buffered events
-      while (eventBuffer.length > 0) {
-        yield eventBuffer.shift()!;
+      if (abortController.signal.aborted) {
+        return;
       }
 
       // Stream finished — save assistant message
@@ -278,36 +253,45 @@ export async function runStreamTurn(
       await agentRuns.updateStatus(run.id, "succeeded");
 
       const conversation = await conversations.getById(conversationId);
-      yield emitAndPersist({
-        type: "run_completed",
-        result: { text: fullText, conversationId, userMessage: savedUserMessage, assistantMessage: savedAssistantMessage, conversation },
-      });
+      queue.push(
+        emitAndPersist({
+          type: "run_completed",
+          result: {
+            text: fullText,
+            conversationId,
+            userMessage: savedUserMessage,
+            assistantMessage: savedAssistantMessage,
+            conversation,
+          },
+        })
+      );
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       logError("runStreamTurn/stream", err);
 
-      // If the run was suspended due to approval required, emit run_suspended
-      // and set waiting_for_approval status. Do NOT save an assistant message.
-      if (approvalSuspended) {
-        await handleApprovalSuspension(run.id, suspendedApprovalRequestIds, emitAndPersist, agentRuns);
-      } else {
-        // Save partial assistant message if we have any text
-        if (fullText) {
-          await conversations.addMessage(conversationId, {
-            role: "assistant",
-            content: fullText,
-            modelUsed: stream?.selectedModel,
-          });
-        }
-
-        const isCancelled = abortController.signal.aborted && !abortedByWatchdog;
-        const finalStatus = isCancelled ? "cancelled" : "failed";
-        yield emitAndPersist({ type: "run_failed", error: errorMsg });
-        await agentRuns.updateStatus(run.id, finalStatus, errorMsg);
+      if (fullText) {
+        await conversations.addMessage(conversationId, {
+          role: "assistant",
+          content: fullText,
+        });
       }
+
+      const isCancelled = abortController.signal.aborted && !abortedByWatchdog;
+      const finalStatus = isCancelled ? "cancelled" : "failed";
+      queue.push(emitAndPersist({ type: "run_failed", error: errorMsg }));
+      await agentRuns.updateStatus(run.id, finalStatus, errorMsg);
     } finally {
       clearTimeout(watchdogId);
       unregisterActiveRun(run.id);
+      queue.close();
+    }
+  })();
+
+  // Consume queue event stream
+  const eventStream = async function* (): AsyncGenerator<AgentRunEvent> {
+    yield emitAndPersist({ type: "run_started", runId: run.id, mode: request.mode });
+    for await (const event of queue) {
+      yield event;
     }
   };
 
@@ -315,6 +299,22 @@ export async function runStreamTurn(
   abortController.signal.addEventListener("abort", () => {
     clearTimeout(watchdogId);
     unregisterActiveRun(run.id);
+
+    // Asynchronously update DB status so we don't block the sync abort path
+    (async () => {
+      try {
+        const currentRun = await agentRuns.getById(run.id);
+        if (currentRun && (currentRun.status === "running" || currentRun.status === "queued")) {
+          const finalStatus = abortedByWatchdog ? "failed" : "cancelled";
+          const errorMsg = abortedByWatchdog ? "Watchdog timeout" : "Client disconnected";
+          await agentRuns.updateStatus(run.id, finalStatus, errorMsg);
+        }
+      } catch (err) {
+        logError("abortListener/statusUpdate", err);
+      } finally {
+        queue.close();
+      }
+    })();
   });
 
   return {
@@ -323,4 +323,48 @@ export async function runStreamTurn(
     stream: eventStream(),
     abortController,
   };
+}
+
+/**
+ * AsyncQueue — Decoupled event generator channel.
+ */
+class AsyncQueue<T> {
+  private queue: T[] = [];
+  private resolvers: ((value: IteratorResult<T>) => void)[] = [];
+  private closed = false;
+
+  push(value: T) {
+    if (this.closed) return;
+    if (this.resolvers.length > 0) {
+      const resolve = this.resolvers.shift()!;
+      resolve({ value, done: false });
+    } else {
+      this.queue.push(value);
+    }
+  }
+
+  close() {
+    this.closed = true;
+    while (this.resolvers.length > 0) {
+      const resolve = this.resolvers.shift()!;
+      resolve({ value: undefined as unknown as T, done: true });
+    }
+  }
+
+  [Symbol.asyncIterator](): AsyncIterator<T> {
+    return {
+      next: () => {
+        if (this.queue.length > 0) {
+          const value = this.queue.shift()!;
+          return Promise.resolve({ value, done: false });
+        }
+        if (this.closed) {
+          return Promise.resolve({ value: undefined as unknown as T, done: true });
+        }
+        return new Promise<IteratorResult<T>>((resolve) => {
+          this.resolvers.push(resolve);
+        });
+      }
+    };
+  }
 }

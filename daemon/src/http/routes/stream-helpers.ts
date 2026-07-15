@@ -110,14 +110,6 @@ async function writeEvent(
           approvals: approvals.filter(Boolean),
         })}\n\n`,
       );
-
-      await writer.write(
-        `event: done\ndata: ${JSON.stringify({
-          suspended: true,
-          runId: event.runId,
-          approvalRequestIds: event.approvalRequestIds,
-        })}\n\n`,
-      );
       break;
     }
   }

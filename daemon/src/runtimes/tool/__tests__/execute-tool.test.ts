@@ -166,8 +166,8 @@ describe("ToolExecutionService", () => {
     });
   });
 
-  describe("non-blocking approval", () => {
-    it("should return ApprovalRequiredResult for high-risk AI calls", async () => {
+  describe("blocking approval", () => {
+    it("should block and wait for approval for high-risk AI calls", async () => {
       const highRiskTool = makeTool({
         risk: "high",
         requiresConfirmation: true,
@@ -175,21 +175,29 @@ describe("ToolExecutionService", () => {
       mockRegistry.resolveTool.mockReturnValueOnce(highRiskTool);
       mockApprovalRequests.create.mockResolvedValue({ id: "approval-1" });
 
-      const raw = await runtime.execute(
+      // Run execute in background since it will block
+      const executePromise = runtime.execute(
         "test:tool",
         { query: "dangerous" },
         { caller: "ai", runId: "run-1" },
       );
 
-      expect(isApprovalRequiredResult(raw)).toBe(true);
-      if (isApprovalRequiredResult(raw)) {
-        expect(raw.kind).toBe("approval_required");
-        expect(raw.approvalRequestId).toBe("approval-1");
-        expect(raw.operationKind).toBe("tool.execute");
-        expect(raw.operationPayload).toEqual({ args: { query: "dangerous" } });
-      }
-      // Must NOT have called tool.execute
+      // Give it a tiny bit of time to create request and block
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      expect(mockApprovalRequests.create).toHaveBeenCalled();
       expect(mockExecute).not.toHaveBeenCalled();
+
+      // Resolve approval in memory to wake up the execute promise
+      const pending = runtime.getPermissionGuard().getPendingConfirmations();
+      expect(pending.length).toBe(1);
+      runtime.getPermissionGuard().resolvePendingConfirmation(pending[0].confirmationId, true);
+
+      const raw = await executePromise;
+      const result = assertToolResult(raw);
+      expect(result.confirmed).toBe(true);
+      expect(result.result.success).toBe(true);
+      expect(mockExecute).toHaveBeenCalledWith({ query: "dangerous" });
     });
 
     it("should not create approval when runId is missing", async () => {

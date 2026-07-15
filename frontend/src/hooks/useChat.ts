@@ -415,11 +415,17 @@ export function useChat() {
     approvalRunId,
     approveInline: async (approvalId: string) => {
       await jarvisClient.post(`/api/approvals/${approvalId}/approve`);
+      setPendingApprovals((prev) => prev.filter((app) => app.id !== approvalId));
+      if (pendingApprovals.length <= 1) {
+        setApprovalRunId(null);
+      }
     },
     denyInline: async (approvalId: string) => {
       await jarvisClient.post(`/api/approvals/${approvalId}/deny`);
-      setPendingApprovals([]);
-      setApprovalRunId(null);
+      setPendingApprovals((prev) => prev.filter((app) => app.id !== approvalId));
+      if (pendingApprovals.length <= 1) {
+        setApprovalRunId(null);
+      }
     },
   };
 }

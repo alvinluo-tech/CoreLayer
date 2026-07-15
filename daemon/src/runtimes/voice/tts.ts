@@ -65,8 +65,8 @@ export async function synthesizeSpeech(options: TTSOptions): Promise<Buffer> {
     .replace(/<thought>[\s\S]*?<\/thought>/gi, "") // Guarantee thoughts are fully excluded (safety fallback)
     .replace(/\n+/g, "，") // Convert newlines to commas for smooth pausing
     .replace(/\p{Extended_Pictographic}/gu, "") // Strip all Unicode emojis
-    .replace(/[\(（][^\)）]{1,6}[\)）]/g, "") // Strip emoticons like (高兴), （尴尬） up to 6 chars
-    .replace(/[\[【][^\]】]{1,6}[\]】]/g, "") // Strip emoticons like [生气], 【难过】 up to 6 chars
+    .replace(/[(（][^)）]{1,6}[)）]/g, "") // Strip emoticons like (高兴), （尴尬） up to 6 chars
+    .replace(/[[【][^\]】]{1,6}[\]】]/g, "") // Strip emoticons like [生气], 【难过】 up to 6 chars
     .replace(/\*[^*]{1,6}\*/g, "") // Strip emoticons like *微笑* up to 6 chars
     .trim();
 

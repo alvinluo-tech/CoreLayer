@@ -16,6 +16,7 @@ export interface AIToolRuntimeContext {
   taskId?: string;
   agentId?: string;
   mode?: "chat" | "voice" | "tick" | "scheduled" | "workflow" | "regenerate";
+  onApprovalRequired?: (approvalRequestId: string) => void;
 }
 
 const MAX_TOOL_RESULT_CHARS = 4000;
@@ -94,6 +95,7 @@ export function wrapToolsForAI(
             projectId: ctx.projectId,
             mode: ctx.mode,
             toolCallId,
+            onApprovalRequired: ctx.onApprovalRequired,
           });
           if (isApprovalRequiredResult(executeResult)) {
             // Return a marker instead of throwing — the agent loop detects this
