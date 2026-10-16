@@ -559,3 +559,398 @@ CoreLayer 现存最大问题在于过去积累的"概念虚胖"（AST 语法树�
    - 移除写死的 `repoPath` 工作目录，调用 `dispatchWithEnvironment`，强制通过 Worktree 隔离运行外部 Executor。
 5. `daemon/src/capabilities/policy-engine.ts`：
    - 引入 `shell-quote` 做 argv 规范化切分，统一合并 `DEFAULT_RISK` 与 `CAPABILITY_RISK`。
+
+---
+
+## 8. 后续 Agent 实施工程蓝图与技术规约（Engineering Blueprint & Implementation Specifications）
+
+> 本章节专为后续执行重构任务的 AI Agent（或工程师）编写。目标是提供**零歧义、零概念黑话、参数级精确**的实现规约，避免后续 Agent 陷入自由发挥或重复造轮子。
+
+### 8.1 目标系统架构拓扑（Target Architecture Topology）
+
+```text
+┌────────────────────────────────────────────────────────────────────────┐
+│                      Tauri v2 Desktop Shell (Rust)                     │
+│  - Window Management & IPC Bridge                                      │
+│  - Local Windows Job Object Process Supervisor (Memory & CPU Caps)     │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │ IPC / HTTP (Port 3001)
+┌───────────────────────────────────▼────────────────────────────────────┐
+│                    Jarvis Daemon (Node.js + Hono)                      │
+│                                                                        │
+│  ┌──────────────────────────────────────────────────────────────────┐  │
+│  │                     Vercel AI SDK Core Loop                      │  │
+│  │   - streamText + stopWhen: isStepCount(maxSteps)                 │  │
+│  │   - prepareStep Hook: pruneMessages + IterationBudget            │  │
+│  │   - onStepEnd Hook: Append step events to agent_run_events       │  │
+│  └──────────────────┬───────────────────────────┬───────────────────┘  │
+│                     │                           │                      │
+│         ┌───────────▼───────────┐   ┌───────────▼───────────┐          │
+│         │   Tool Spill Store    │   │  Permission Guardrail │          │
+│         │ (~/.jarvis/spill/)    │   │ (shell-quote argv)    │          │
+│         └───────────────────────┘   └───────────┬───────────┘          │
+│                                                 │                      │
+│  ┌──────────────────────────────────────────────▼───────────────────┐  │
+│  │              Executor Lifecycle & Workspace Manager              │  │
+│  │   - GitWorktreeEnvironment: Isolated worktree per run            │  │
+│  │   - Verification Engine: deterministic TypeCheck/Linter Gates    │  │
+│  │   - CLI Adapters: Claude Code / Codex / OpenCode                 │  │
+│  └──────────────────────────────────┬───────────────────────────────┘  │
+│                                     │                                  │
+│  ┌──────────────────────────────────▼───────────────────────────────┐  │
+│  │             Local Persistence Engine (SQLite + Drizzle)          │  │
+│  │   - Append-Only Event Log: agent_run_events (Source of Truth)    │  │
+│  │   - Add-Only Memory: sqlite-vec + FTS5 (Multi-signal Fusion)     │  │
+│  │   - Approvals & Idempotent Resume Tokens                         │  │
+│  └──────────────────────────────────────────────────────────────────┘  │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### 8.2 规约一：Agent 循环精简与事件驱动（Conversation & Loop Modernization）
+
+#### 目标文件
+
+- 改造：`daemon/src/runtimes/agent/application/conversation.ts`
+- 删除：`daemon/src/runtimes/agent/application/agent-loop.ts`
+- 清理：`daemon/src/runtimes/agent/public-api.ts` 与 `daemon/src/http/routes/runs.ts`
+
+#### 接口与实现规约
+
+1. **删除 `agent-loop.ts`**：
+   - 移除 `runAgentLoop`、`registerActiveQueue`、`getActiveQueue`。
+   - `daemon/src/runtimes/agent/public-api.ts` 中移除相应导出。
+   - `daemon/src/http/routes/runs.ts` 中针对 `POST /runs/:id/message` 的路由，移除对已不存在的队列调用，直接返回 410 Gone 或重定向至标准会话交互。
+2. **在 `conversation.ts` 中集成 `prepareStep` 与 `onStepEnd`**：
+   ```typescript
+   // daemon/src/runtimes/agent/application/conversation.ts
+   const result = streamText({
+     model: getModelGateway().getModel(selectedModel),
+     messages: aiMessages,
+     tools: aiTools,
+     stopWhen: [stepCountIs(maxSteps), hasToolCall('ask_human_approval')],
+     abortSignal: controller.signal,
+     prepareStep: async ({ stepNumber, messages }) => {
+       // 1. 动态预算控制：达到 80% 步数时，追加一条 system 提示，督促模型收尾
+       if (stepNumber >= Math.floor(maxSteps * 0.8)) {
+         messages.push({
+           role: 'system',
+           content:
+             '[System Notice: Approaching maximum step budget. Please synthesize results and deliver your final answer directly.]',
+         });
+       }
+       // 2. 动态上下文修剪：防止超长历史冲垮窗口
+       return { messages };
+     },
+     onStepEnd: async (step) => {
+       // 3. 事件源落库：将每个 step 的产出结构化追加至 agent_run_events
+       if (agentRunId) {
+         await agentRunEvents.create({
+           runId: agentRunId,
+           sequence: step.stepNumber,
+           type: 'step_completed',
+           payload: {
+             toolCalls: step.toolCalls,
+             toolResults: step.toolResults,
+             usage: step.usage,
+             finishReason: step.finishReason,
+           },
+         });
+       }
+     },
+     onFinish: async (event) => {
+       // 更新会话累计 token
+     },
+   });
+   ```
+
+---
+
+### 8.3 规约二：大工具输出 Spill 机制（Tool Output Spill Store）
+
+#### 目标文件
+
+- 新增：`daemon/src/runtimes/tool/domain/spill-store.ts`
+- 改造：`daemon/src/runtimes/tool/adapters/ai-tool-wrapper.ts`
+
+#### 接口与实现规约
+
+1. **SpillStore 核心实现**：
+
+   ```typescript
+   // daemon/src/runtimes/tool/domain/spill-store.ts
+   import { writeFileSync, mkdirSync } from 'node:fs';
+   import { join } from 'node:path';
+   import { resolveAppPaths } from '../../../config/app-paths.js';
+
+   export interface SpillRef {
+     locator: string;
+     bytes: number;
+     chars: number;
+     preview: string;
+     retrievalHint: string;
+   }
+
+   export const SPILL_THRESHOLD_CHARS = 4000;
+
+   export function saveSpill(
+     content: string,
+     options?: { sessionId?: string; toolName?: string; callId?: string }
+   ): SpillRef {
+     const { dataDir } = resolveAppPaths();
+     const session = options?.sessionId ?? 'default';
+     const spillDir = join(dataDir, 'spill', session);
+     mkdirSync(spillDir, { recursive: true });
+
+     const fileId = `${options?.toolName ?? 'tool'}_${options?.callId ?? Date.now()}`;
+     const locator = join(spillDir, `${fileId}.txt`);
+
+     writeFileSync(locator, content, 'utf8');
+
+     const bytes = Buffer.byteLength(content, 'utf8');
+     const chars = content.length;
+     const head = content.slice(0, 1000);
+     const tail = content.slice(-500);
+     const preview = `${head}\n\n... [${chars - 1500} characters omitted] ...\n\n${tail}`;
+
+     return {
+       locator,
+       bytes,
+       chars,
+       preview,
+       retrievalHint:
+         'Use file reading or grep tools with offset/limit to inspect the full content.',
+     };
+   }
+   ```
+
+2. **改造 `trimToolResult`**：
+
+   ```typescript
+   // daemon/src/runtimes/tool/adapters/ai-tool-wrapper.ts
+   import { saveSpill, SPILL_THRESHOLD_CHARS } from '../domain/spill-store.js';
+
+   export function trimToolResult(
+     value: unknown,
+     context?: { sessionId?: string; toolName?: string; callId?: string }
+   ): unknown {
+     const str = typeof value === 'string' ? value : JSON.stringify(value);
+     if (!str || str.length <= SPILL_THRESHOLD_CHARS) return value;
+
+     try {
+       const spill = saveSpill(str, context);
+       return (
+         `[Tool Output Spilled]\n` +
+         `Total Size: ${spill.bytes} bytes (${spill.chars} characters).\n` +
+         `Full Content Saved To: ${spill.locator}\n\n` +
+         `Preview:\n${spill.preview}\n\n` +
+         `Hint: ${spill.retrievalHint}`
+       );
+     } catch {
+       // 写入磁盘失败时的后备方案：保留原有的 70/30 掐头去尾截断
+       const bodyBudget = SPILL_THRESHOLD_CHARS - TRUNCATION_NOTICE.length;
+       const headLen = Math.floor(bodyBudget * 0.7);
+       const tailLen = bodyBudget - headLen;
+       return str.slice(0, headLen) + TRUNCATION_NOTICE + str.slice(-tailLen);
+     }
+   }
+   ```
+
+---
+
+### 8.4 规约三：Git Worktree 隔离真实接入（Worktree Isolation in Lifecycle）
+
+#### 目标文件
+
+- 改造：`daemon/src/workflow/executor-lifecycle-service.ts`
+- 改造：`daemon/src/workflow/run-dispatcher.ts`
+
+#### 接口与实现规约
+
+1. **在 `run-dispatcher.ts` 明确环境类型**：
+   在派发 `executeExecutorAttempt` 时，显式传递 `environmentKind: "git-worktree"`。
+2. **在 `executor-lifecycle-service.ts` 实施环境准备与清理**：
+
+   ```typescript
+   // daemon/src/workflow/executor-lifecycle-service.ts
+   let envSessionId: string | undefined;
+   let effectiveWorkingDir = input.workingDirectory;
+   let effectiveMetadata: Record<string, unknown> = { ...(input.environmentMetadata ?? {}) };
+
+   try {
+     await executorRuns.updateStatus(attempt.id, 'preparing_environment');
+
+     // 只有在 git-worktree 模式且真实代码目录存在时，动态创建工作树
+     const envKind = input.environmentKind ?? 'git-worktree';
+     if (envKind === 'git-worktree' && existsSync(input.workingDirectory)) {
+       try {
+         const env = getCodingEnvironment();
+         const session = await env.createSession({
+           workspaceId: input.workspaceId ?? 'default',
+           projectId: input.projectId,
+           runId: attempt.id,
+           agentId: input.agentId,
+           environmentKind: 'git-worktree',
+           workingDirectory: input.workingDirectory,
+           metadata: {
+             branchName: `agent/${input.agentRunId.slice(0, 8)}`,
+             repoPath: input.workingDirectory,
+             ...input.environmentMetadata,
+           },
+         });
+         envSessionId = session.id;
+         if (session.workingDirectory) {
+           effectiveWorkingDir = session.workingDirectory;
+           effectiveMetadata = {
+             ...effectiveMetadata,
+             sessionId: session.id,
+             worktreePath: session.workingDirectory,
+             branchName: `agent/${input.agentRunId.slice(0, 8)}`,
+           };
+           await executorRuns.update(attempt.id, {
+             workingDirectory: effectiveWorkingDir,
+             environmentConfig: effectiveMetadata,
+           });
+         }
+       } catch (envErr) {
+         const policy = getWorktreePolicyConfig();
+         if (policy.requireWorktreePath) throw envErr;
+       }
+     }
+
+     const handle = await adapter.prepare({
+       runId: attempt.id,
+       taskId: input.taskId,
+       workspaceId: input.workspaceId,
+       projectId: input.projectId,
+       agentId: input.agentId,
+       adapterId: input.adapterId,
+       taskPrompt: input.taskPrompt,
+       environment: {
+         kind: envKind,
+         workingDirectory: effectiveWorkingDir,
+         metadata: effectiveMetadata,
+       },
+       timeoutMs: input.timeoutMs,
+       permissionPolicy: input.permissionPolicy,
+       metadata: { allowedTools: input.allowedTools },
+     });
+     // ... 执行逻辑与验证逻辑使用 effectiveWorkingDir
+   } finally {
+     try {
+       await adapter.cleanup(attempt.id);
+     } catch {}
+     // 确保在执行与验证完毕后，安全回收临时 worktree 目录（分支仍保留）
+     if (envSessionId) {
+       try {
+         const env = getCodingEnvironment();
+         await env.dispose(envSessionId);
+       } catch {}
+     }
+   }
+   ```
+
+---
+
+### 8.5 规约四：命令结构化切分与统一风险规则（Shell Tokenization & Unified Risk Matrix）
+
+#### 目标文件
+
+- 改造：`daemon/src/capabilities/policy-engine.ts`
+- 改造：`daemon/src/capabilities/hardline-blocklist.ts`
+
+#### 接口与实现规约
+
+1. **替换字符串包含检测为 argv 切分**：
+   引入成熟库 `shell-quote`（或使用内置简单词法切分），对用户或 Agent 执行的 shell 命令进行解析：
+
+   ```typescript
+   import { parse } from 'shell-quote';
+
+   export interface ParsedShellCommand {
+     binary: string;
+     args: string[];
+     hasPipe: boolean;
+     hasRedirection: boolean;
+   }
+
+   export function parseShellCommand(rawCommand: string): ParsedShellCommand {
+     const entries = parse(rawCommand);
+     const args: string[] = [];
+     let binary = '';
+     let hasPipe = false;
+     let hasRedirection = false;
+
+     for (const entry of entries) {
+       if (typeof entry === 'string') {
+         if (!binary) binary = entry;
+         else args.push(entry);
+       } else if ('op' in entry) {
+         if (entry.op === '|') hasPipe = true;
+         if (entry.op === '>' || entry.op === '>>') hasRedirection = true;
+       }
+     }
+     return { binary, args, hasPipe, hasRedirection };
+   }
+   ```
+
+2. **统一单一风险矩阵 `RiskPolicy`**：
+   废除 `hardline-blocklist.ts` 中基于 `includes("curl")` 的粗暴逻辑，将其规约化：
+   - `binary` 在破坏性命令列表中（如 `rm`、`mkfs`、`dd`）：检查其参数是否包含 `-rf /`、未授权目录。
+   - `hasPipe === true` 且管道右侧为 `bash`、`sh`、`powershell`：直接判定为 `critical` 并硬性阻断（阻止管道式远程脚本注入）。
+   - 普通读取（`git status`、`cat`、`ls`）：自动放行 `low`。
+
+---
+
+### 8.6 规约五：单程追加记忆与多信号时序检索（Mem0 范式改造）
+
+#### 目标文件
+
+- 改造：`daemon/src/persistence/schema.ts`
+- 改造：`daemon/src/persistence/sqlite/memory-repo.ts`
+
+#### 接口与实现规约
+
+1. **Schema 改造：只增不删与时间戳**：
+   在 `memories` 表中增加：
+   - `valid_from`: text（ISO 时间戳）
+   - `superseded_by`: text（被哪条新记忆取代，默认为 null）
+   - `temporal_anchor`: text（提取时事实发生的时间上下文）
+2. **取消原地覆写**：
+   在 `memory-repo.ts` 的 `upsert` 方法中，当检测到相同的 `(scope, key)` 时：
+   - 不再执行 `UPDATE memories SET value = ...`；
+   - 而是执行：
+     1. 将旧记录标记 `superseded_by = new_memory_id`；
+     2. 插入新记录 `new_memory_id`。
+3. **混合召回公式实现**：
+
+   ```typescript
+   export function computeMemoryScore(candidate: {
+     bm25Rank: number;
+     vectorSim: number;
+     createdAt: string;
+     isSuperseded: boolean;
+   }): number {
+     const daysAgo = (Date.now() - new Date(candidate.createdAt).getTime()) / (86400 * 1000);
+     const recencyDecay = Math.exp(-0.05 * daysAgo); // 每天轻微衰减 5%
+     const supersededPenalty = candidate.isSuperseded ? 0.3 : 1.0; // 被新事实取代者大幅降权但保留
+
+     const rrf = 1 / (60 + candidate.bm25Rank) + candidate.vectorSim * 0.4;
+     return rrf * recencyDecay * supersededPenalty;
+   }
+   ```
+
+---
+
+### 8.7 验收标准与测试矩阵（Acceptance Criteria）
+
+后续 Agent 完成各项重构后，必须按以下测试矩阵逐项执行命令，全部通过方可视为任务交付：
+
+| 规约项                    | 核心改动模块                           | 必跑测试命令                                    | 预期验收结果                                                      |
+| :------------------------ | :------------------------------------- | :---------------------------------------------- | :---------------------------------------------------------------- |
+| **规约一：循环与事件**    | `conversation.ts`, `agent-loop.ts`     | `pnpm --filter daemon test src/runtimes/agent/` | 无 `agent-loop.ts` 编译报错，`streamText` 正确记录 step 事件      |
+| **规约二：Spill 机制**    | `spill-store.ts`, `ai-tool-wrapper.ts` | `pnpm --filter daemon test src/runtimes/tool/`  | 输出 >4000 字符时，落盘文件存在，返回包含 `[Tool Output Spilled]` |
+| **规约三：Worktree 隔离** | `executor-lifecycle-service.ts`        | `pnpm --filter daemon test src/workflow/`       | 34 个调度测试全部通过，Executor 实际在 `.jarvis/worktrees/` 运行  |
+| **规约四：命令结构化**    | `policy-engine.ts`                     | `pnpm --filter daemon test src/capabilities/`   | 成功防御 `curl ... \| bash` 注入，且不再误伤合法命令              |
+| **全库类型与回归**        | 全局                                   | `pnpm typecheck` && `pnpm test`                 | 0 类型错误，全局单元测试绿灯                                      |
