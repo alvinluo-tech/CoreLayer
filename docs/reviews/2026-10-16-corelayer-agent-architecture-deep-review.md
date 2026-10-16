@@ -458,3 +458,104 @@ CoreLayer 侧的所有事实性断言均给出 `file:line`，可复核。
 - 局限：DeepWiki 是对仓库生成的索引式问答，**不等价于逐行读源码**；但它引用的是仓库文件（如 `packages/sandbox/*`、`docs/subsystems/*`、`docs/architecture.md`），且与"本机对 dsh 源码的直接检视"**相互印证**，可信度显著高于初版的纯推断。
 - 仍未验证：**Google Agent Substrate**（未定位到可调研仓库）。
 - 更正记录：初版写 OTel semconv 为 "Experimental / 预期 breaking change"——**更正为 "Development"**；初版未发现 **dsh 的 experimental Agent Teams**——**已补入维度 1/4**。
+
+---
+
+## 7. 2026-10 架构最优实践推演与技术选型决策修正（Optimal Architecture & Tech Selection Decisions）
+
+本节在完成事实核查（§2-§5）与仓库级实证（§6）的基础上，进一步从**第一性原理与 2026-10 最新工业界最优实践**出发，对 CoreLayer 各子系统的技术选型做批判性重审与最优解收敛。
+
+### 7.1 核心定调与设计哲学：从"概念堆砌"转向"极简现代标准"
+
+CoreLayer 现存最大问题在于过去积累的"概念虚胖"（AST 语法树、死循环熔断、三套风险字典、伪团队协作、未接线的手写循环），这导致系统外表复杂但内部割裂。
+
+2026 年底 Agent 架构的主流趋势已经收敛：**以确定性契约（Deterministic Contracts）为骨架，以内置标准化 SDK 机制为肌肉，严格恪守单机桌面宿主（Windows + Tauri + SQLite）的物理边界。**
+
+---
+
+### 7.2 六大子系统最优解推演与落地设计
+
+#### 7.2.1 Agent Loop：彻底废弃手写外层循环，基于 Vercel AI SDK `prepareStep` + `onStepEnd` 重构
+
+- **盲区纠偏**：初版评审建议"二选一接回 `agent-loop.ts`"。深入调研 Vercel AI SDK 架构发现，SDK 现已原生支持 `prepareStep`（每步前执行模型切换、消息修剪 `pruneMessages`、动态工具过滤）和 `stopWhen`（多谓词组合终止）。
+- **2026 最优方案**：
+  1. **彻底删除 `daemon/src/runtimes/agent/application/agent-loop.ts`**（约 500 行死代码）及其相关导出，清除坏账。
+  2. 在 `conversation.ts` 的 `streamText` 中注入 **`prepareStep`**：
+     - **动态修剪与压缩**：在 `prepareStep` 中根据当前累积的 token 压力就地执行 `pruneMessages`。
+     - **迭代预算（IterationBudget）与防卡死（LoopBreaker）**：直接在 `prepareStep` 动态注入系统警告指令，不再需要外层多嵌套一层 `for` 循环。
+  3. 利用 **`onStepEnd`** 回调，每轮结束后将 step 产生的 `toolCalls`、`toolResults` 与 `usage` 结构化追加至 `agent_run_events` 表，天然形成事件源。
+
+#### 7.2.2 长期记忆：Mem0 v3 范式 —— 单程 ADD-only 追加写 + 检索期多信号融合 + `sqlite-vec`
+
+- **盲区纠偏**：CoreLayer 原有 `(key, scope)` 查重原地覆盖（Last-Write-Wins）是破坏性反模式，会导致历史事实与时序信息静默损毁。
+- **2026 最优方案（Mem0 v3 / Letta 标准）**：
+  1. **写入原则改为单程追加（ADD-only）**：用户交互中提取的新事实只增不删，每条记录携带提取时间戳与上下文 ID。
+  2. **检索期冲突消解（Resolve at Retrieval Time）**：不再在入库时武断覆盖，而是通过**多信号加权融合打分（Multi-signal Fusion）**：
+     $$\text{Final Score} = w_1 \cdot \text{Vector Sim} + w_2 \cdot \text{BM25 Term Match} + w_3 \cdot \text{Entity Match} + w_4 \cdot \text{Temporal Recency}$$
+     时间衰减因子 $\lambda^{\Delta t}$ 会让最新偏好自然获得最高权重，同时完整保留历史变迁。
+  3. **存储引擎选用 `sqlite-vec` + 原生 FTS5**：维持单文件嵌入式数据库，杜绝在桌面端引入任何独立常驻的重型向量数据库服务。
+
+#### 7.2.3 上下文与长任务：dsh `session-format-v4` 流式 Stage + Session Projections + Tool Spill
+
+- **盲区纠偏**：超限工具结果原地掐头去尾保留 4000 字符是典型的数据破坏行为，导致代码分析、长日志排查能力失效。
+- **2026 最优方案**：
+  1. **落地 Tool Spill 闭环**：工具输出 > 2000 tokens 时，原文原样存入本地私有目录 `~/.jarvis/spill/<session_id>/<tool_call_id>.txt`。
+  2. 给模型返回**标准 Spill 句柄**：`[Tool Output Spilled] Size: N bytes. Location: <path>. Preview: <first 500 chars>. RetrievalHint: Use read_file with offset/limit to inspect.` 配合现有只读工具实现可逆探查。
+  3. **引入 Session Projections（会话纯投影）思想**：任务状态（TaskGraph/Workspace）不要在多个地方冗余可变维护，而是将状态变更定义为事件，当前状态由事件流在内存折叠派生（Pure Fold Computation），消除双向同步冲突。
+
+#### 7.2.4 桌面沙箱隔离：Windows 约束下的现实最优解 —— Windows Job Object + Git Worktree
+
+- **盲区纠偏**：在 Windows 桌面端谈论 Linux gVisor/bwrap 脱离工程实际，强推 Docker 会直接劝退普通桌面用户。
+- **2026 最优方案（dsh Windows 实践）**：
+  1. **进程与生命周期隔离**：通过 Node/Rust FFI 为所有外部衍生进程绑定 **Windows Job Object**：
+     - 设置硬性内存上限（如 2GB，超限直接 OOM 终止，防止拖垮宿主系统）。
+     - 设置 CPU 份额配额。
+     - 配置 `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`（主守护进程意外退出时，所有衍生子进程被操作系统级强制清理，杜绝孤儿进程占用端口与资源）。
+  2. **文件系统隔离**：全面激活已写好的 `git-worktree-environment.ts`，任何外部代码执行器均强制在临时 worktree 运行，主仓库目录完全只读。
+  3. **权限降权**：对不受信任命令使用 `CreateRestrictedToken` 剥离管理员特权及危险 SID。
+
+#### 7.2.5 多 Agent 编排：对齐主流规范 —— Manager（Agent-as-Tool）与 Handoff 双原语
+
+- **盲区纠偏**：CoreLayer 原有 `team-orchestrator.ts`（77 行数组过滤）是概念空壳。
+- **2026 最优方案（OpenAI Agents SDK / dsh 标准）**：
+  1. **彻底废除 `team-orchestrator.ts`**。
+  2. 确立两大标准交互原语：
+     - **Manager 模式（Agent-as-Tool）**：主控 Jarvis 作为 Manager 拥有全局上下文，将外部专职 Executor（如 Claude Code、Codex）包装为普通 Tool 调用，结果返回 Manager 汇总。
+     - **Handoff 模式（控制权转移）**：当识别到特定长线领域任务时，通过 Handoff 工具将当前会话句柄整体委派给目标专职 Agent 接管。
+
+#### 7.2.6 权限设计与 HITL：结构化 argv 解析 + Guardrail Tripwires（绊线挂起）
+
+- **盲区纠偏**：三套并行的风险等级表导致策略不一致；字符串 `includes("curl")` 容易误伤且极易被命令混淆绕过；"Shell AST" 不存在。
+- **2026 最优方案**：
+  1. **合并为单一真相源 `RiskPolicy`**，废弃多套规则映射。
+  2. **放弃手写 AST 执念，改用 `shell-quote` 做 argv 规范化切分**，准确提取主命令、参数列表与管道拓扑。
+  3. **Tripwire 挂起机制**：Tool 执行前经过 Guardrail 拦截器，命中高危规则时触发 Tripwire 挂起事件并持久化当前挂起帧，向 UI 广播审批请求；用户通过后凭幂等 Token 原生恢复，彻底替代脆弱的"流中断+重开新会话"逻辑。
+
+---
+
+### 7.3 关键技术选型对比与决策总表
+
+| 子系统            | CoreLayer 现状                   | 上一版评审建议            | 2026 最新最优实践（本次修正）                                                | 选型理由与依据                                                      |
+| :---------------- | :------------------------------- | :------------------------ | :--------------------------------------------------------------------------- | :------------------------------------------------------------------ |
+| **Agent Loop**    | 遗留死循环 + Vercel SDK 回调混杂 | 二选一接回手写循环        | **彻底废弃自研循环，使用 Vercel AI SDK 的 `prepareStep` + `onStepEnd` 管道** | 用官方推荐的动态钩子实现预算警告与修剪，避免重复造轮子              |
+| **长期记忆**      | 平表 + 词法 FTS + 原地覆盖写     | 加向量检索 + RRF          | **Mem0 v3 范式：ADD-only 追加写 + 检索期多信号时序融合 + `sqlite-vec`**      | 杜绝原地覆盖导致的信息静默损毁，单文件嵌入式适合桌面端              |
+| **大工具输出**    | 原地丢弃 70% 字符（lossy）       | 简单落盘外置              | **dsh `session-format-v4` 标准：Spill 句柄 + 结构化预览 + 流式 Stage 处理**  | 保持上下文瘦身的同时做到完全可逆可探查，无内存溢出风险              |
+| **桌面沙箱**      | 无沙箱，同 UID 裸跑              | 建议调研 gVisor / microVM | **Windows Job Object（资源与生命周期上限）+ Git Worktree（文件隔离）**       | 针对 Windows 桌面原生环境的最合理落地方案，无需强加 Docker/WSL 门槛 |
+| **多 Agent 编排** | 77 行纯数组过滤伪编排            | 接线现有编排模块          | **废弃现有编排，重构为 Manager（Agent-as-Tool）与 Handoff 双原语**           | 对齐 2026 主流规范，消除概念黑话，实现清晰可控的状态流转            |
+| **命令拦截**      | 字符串 `includes("curl")`        | 建议加 AST 语法树         | **`shell-quote` argv 切分 + 结构化 Tool Tripwire 拦截器**                    | 兼顾实现的简洁性与防绕过能力，告别脆弱的字符串前缀匹配              |
+
+---
+
+### 7.4 关键重构代码落地清单
+
+1. `daemon/src/runtimes/agent/application/conversation.ts`：
+   - 接入 `prepareStep`，在此处调用 `pruneMessages` 与注入 `IterationBudget` 告警。
+   - 在 `onStepEnd` 中把 step 执行结果派发写入 `agent_run_events`。
+2. `daemon/src/runtimes/agent/application/agent-loop.ts`：
+   - 安全删除该文件及 `public-api.ts` 的冗余导出。
+3. `daemon/src/runtimes/tool/adapters/ai-tool-wrapper.ts`：
+   - 改造 `trimToolResult`：超过阈值时不直接 slice 截断，而是调用本地 `SpillStore.saveText()` 保存全文，返回带有 `[Tool Output Spilled]` 的句柄与提取指引。
+4. `daemon/src/workflow/run-dispatcher.ts`：
+   - 移除写死的 `repoPath` 工作目录，调用 `dispatchWithEnvironment`，强制通过 Worktree 隔离运行外部 Executor。
+5. `daemon/src/capabilities/policy-engine.ts`：
+   - 引入 `shell-quote` 做 argv 规范化切分，统一合并 `DEFAULT_RISK` 与 `CAPABILITY_RISK`。
