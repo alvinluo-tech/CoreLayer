@@ -2,7 +2,8 @@
  * Verification — objective checks applied to executor artifacts.
  *
  * Verification is NOT self-report. It runs concrete checks and produces
- * structured results that the delivery gate can evaluate.
+ * structured results that the executor lifecycle evaluates before a run
+ * may be considered successful.
  *
  * Domain-agnostic: verification checks can be coding-specific (lint, test, build)
  * or generic (path policy, artifact presence, output quality).

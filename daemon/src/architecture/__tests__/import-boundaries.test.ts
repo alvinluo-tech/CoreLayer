@@ -401,8 +401,6 @@ describe("Only capability/execution adapters may use child_process", () => {
     "capabilities/adapters/",
     "runtimes/coding/adapters/",
     "runtimes/coding/process-spawner.ts",
-    "runtimes/coding/docker-environment.ts",
-    "runtimes/external-agent/local-cli-adapter.ts",
   ];
   const allDaemonFiles = listTsFiles(srcDir).filter(
     (f) =>
