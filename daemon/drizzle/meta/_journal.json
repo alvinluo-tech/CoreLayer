@@ -22,6 +22,13 @@
       "when": 1783799072426,
       "tag": "0002_classy_tiger_shark",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1792209430416,
+      "tag": "0003_exotic_invaders",
+      "breakpoints": true
     }
   ]
 }

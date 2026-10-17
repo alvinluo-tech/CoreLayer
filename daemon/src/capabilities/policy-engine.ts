@@ -5,6 +5,7 @@
 
 import type { RuntimeAction, RuntimeActionType, RiskLevel, PolicyDecision } from "@jarvis/runtime-protocol";
 import { findMatchingGrant, type PermissionAction } from "./permission-grant.js";
+import { assessShellRisk } from "./hardline-blocklist.js";
 
 /** Hardline blocklist rules — cannot be overridden by any grant */
 interface HardlineRule {
@@ -17,11 +18,11 @@ interface HardlineRule {
 const HARDLINE_RULES: HardlineRule[] = [
   {
     id: "no-curl-pipe-shell",
-    description: "curl|bash or similar piped remote script execution",
+    description: "Piped or injected remote script execution (curl|bash, iwr|iex, stdin interpreters)",
     match: (a) =>
       a.type === "shell.exec" &&
       !!a.rawCommand &&
-      /curl\s.*\|\s*(ba)?sh|wget\s.*\|\s*(ba)?sh|iwr.*\|\s*iex/i.test(a.rawCommand),
+      assessShellRisk(a.rawCommand).risk === "critical",
     risk: "critical",
   },
   {

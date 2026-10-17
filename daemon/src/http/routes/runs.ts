@@ -3,16 +3,7 @@ import { getRepositories } from "../../persistence/factory.js";
 import { apiError } from "../../shared/errors.js";
 import { cancelRun, retryRun } from "../../workflow/run-dispatcher.js";
 import { withErrorHandling } from "../middleware/error-handler.js";
-import { getActiveQueue } from "../../runtimes/agent/public-api.js";
 import { generateTrajectory } from "../../trajectory/trajectory-service.js";
-import { z } from "zod";
-
-const injectMessageSchema = z.object({
-  message: z.string().min(1, "消息不能为空"),
-  mode: z.enum(["steer", "followUp", "interrupt"]).default("steer"),
-});
-
-
 
 const runsRoutes = new Hono();
 
@@ -88,30 +79,20 @@ runsRoutes.post(
 );
 
 /**
- * Enqueue a steer, followUp, or interrupt message into a running agent loop.
+ * Steer/followUp/interrupt message injection into a hand-written agent loop.
  *
- * - steer: Injected between tool-call rounds (before next LLM call)
- * - followUp: Queued until the current loop completes, then processed as a new turn
- * - interrupt: Immediately breaks the loop
+ * The hand-written loop (agent-loop.ts) and its message queue were removed —
+ * the Vercel AI SDK core loop in conversation.ts now owns step control via
+ * prepareStep. This endpoint is permanently gone: 410.
  */
 runsRoutes.post(
   "/:id/message",
   withErrorHandling("runs/message", async (c) => {
-    const id = c.req.param("id")!;
-    const body = await c.req.json().catch(() => ({}));
-    const parsed = injectMessageSchema.safeParse(body);
-    if (!parsed.success) {
-      return apiError(c, parsed.error.errors[0]?.message || "Validation failed", 400);
-    }
-    const { message, mode } = parsed.data;
-
-    const queue = getActiveQueue(id);
-    if (!queue) {
-      return apiError(c, "Run not found or not actively running", 404);
-    }
-
-    await queue.enqueue(message, mode);
-    return c.json({ data: { enqueued: true, mode } });
+    return apiError(
+      c,
+      "Run message injection was removed with the hand-written agent loop. Use the standard conversation send API instead.",
+      410,
+    );
   }),
 );
 

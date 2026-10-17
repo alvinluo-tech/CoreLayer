@@ -17,6 +17,7 @@ import { IterationBudget, injectBudgetWarning } from "./iteration-budget.js";
 import { LoopBreaker, injectLoopBreakerWarning } from "./loop-breaker.js";
 import { ForceAnswerDetector, FORCE_ANSWER_ROUNDS, FORCE_ANSWER_MSG } from "./force-answer.js";
 import { guardEmptyResponse } from "./response-guard.js";
+import { pruneMessages, budgetWarnStep, STEP_BUDGET_NOTICE } from "./context-pruner.js";
 import { applyCacheControl, logCacheStats, CACHE_CONTROL } from "./cache-control.js";
 import { selectModelForConversation } from "./model-routing.js";
 import { fetchRelevantMemories, extractSummaryFromHistory } from "./memory-fetcher.js";
@@ -316,6 +317,9 @@ export async function streamMessageInConversation(
       // Token usage accumulator
       const tokenUsage = { promptTokens: 0, completionTokens: 0 };
 
+      // Monotonic sequence for step events appended to agent_run_events
+      let stepEventSequence = 0;
+
       // Tool calls log accumulator (consumed by wrapper and SSE caller)
       const toolCallsLog: { name: string; args: unknown; result: unknown }[] = [];
 
@@ -333,6 +337,20 @@ export async function streamMessageInConversation(
         tools: aiTools,
         stopWhen: stepCountIs(maxSteps),
         abortSignal: controller.signal,
+        prepareStep: ({ stepNumber, messages }) => {
+          // 1. Dynamic context pruning: keep the in-turn window bounded so a
+          //    long tool chain cannot blow the model's context.
+          const { messages: pruned, prunedCount } = pruneMessages(messages);
+          // 2. Iteration budget warning: near the step cap, push the model to
+          //    synthesize and finish instead of spawning more tool steps.
+          if (stepNumber >= budgetWarnStep(maxSteps)) {
+            return {
+              messages: [...pruned, { role: "system" as const, content: STEP_BUDGET_NOTICE }],
+            };
+          }
+          if (prunedCount > 0) return { messages: pruned };
+          return undefined;
+        },
         onFinish: async (event: unknown) => {
           clearTimeout(timeoutId);
           const e = event as Record<string, unknown>;
@@ -349,6 +367,30 @@ export async function streamMessageInConversation(
         },
         onStepFinish: async (step: unknown) => {
           const s = step as Record<string, unknown>;
+
+          // Event sourcing: append each step's toolCalls/toolResults/usage to
+          // agent_run_events — the append-only source of truth for run replay.
+          const agentRunId = options?.runtimeContext?.runId;
+          if (agentRunId) {
+            try {
+              const { agentRunEvents } = getRepositories();
+              await agentRunEvents.create({
+                runId: agentRunId,
+                sequence: stepEventSequence++,
+                type: "step_completed",
+                payload: {
+                  stepNumber: s.stepNumber,
+                  toolCalls: s.toolCalls ?? [],
+                  toolResults: s.toolResults ?? [],
+                  usage: s.usage ?? null,
+                  finishReason: s.finishReason ?? null,
+                },
+              });
+            } catch (err) {
+              logError("onStepFinish/agentRunEvents", err);
+            }
+          }
+
           // Accumulate token usage from each step
           const usage = s.usage as Record<string, unknown> | undefined;
           if (usage) {
@@ -535,6 +577,7 @@ export async function streamChat(
 
     const maxSteps = configManager.getMaxSteps();
     const budget = new IterationBudget(maxSteps);
+    let streamStepEventSequence = 0;
 
     const controller = abortController ?? new AbortController();
     const streamTimeout = configManager.getStreamTimeout();
@@ -550,6 +593,16 @@ export async function streamChat(
       tools: aiTools,
       stopWhen: stepCountIs(maxSteps),
       abortSignal: controller.signal,
+      prepareStep: ({ stepNumber, messages: stepMessages }) => {
+        const { messages: pruned, prunedCount } = pruneMessages(stepMessages);
+        if (stepNumber >= budgetWarnStep(maxSteps)) {
+          return {
+            messages: [...pruned, { role: "system" as const, content: STEP_BUDGET_NOTICE }],
+          };
+        }
+        if (prunedCount > 0) return { messages: pruned };
+        return undefined;
+      },
       onFinish: async (event: unknown) => {
         clearTimeout(timeoutId);
         const e = event as Record<string, unknown>;
@@ -557,6 +610,29 @@ export async function streamChat(
       },
       onStepFinish: async (step: unknown) => {
         const s = step as Record<string, unknown>;
+
+        // Event sourcing for run-scoped streams (voice/regenerate paths).
+        const agentRunId = runtimeContext?.runId;
+        if (agentRunId) {
+          try {
+            const { agentRunEvents } = getRepositories();
+            await agentRunEvents.create({
+              runId: agentRunId,
+              sequence: streamStepEventSequence++,
+              type: "step_completed",
+              payload: {
+                stepNumber: s.stepNumber,
+                toolCalls: s.toolCalls ?? [],
+                toolResults: s.toolResults ?? [],
+                usage: s.usage ?? null,
+                finishReason: s.finishReason ?? null,
+              },
+            });
+          } catch (err) {
+            logError("streamChat/onStepFinish/agentRunEvents", err);
+          }
+        }
+
         const toolCalls = (s.toolCalls ?? []) as Array<Record<string, unknown>>;
         let toolResults = (s.toolResults ?? []) as Array<Record<string, unknown>>;
 

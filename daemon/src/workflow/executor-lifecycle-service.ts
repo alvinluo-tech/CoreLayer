@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import type {
   ExecutorAdapter,
   ExecutorArtifacts,
@@ -5,8 +6,13 @@ import type {
   ExecutorStatus,
 } from "@jarvis/runtime-protocol";
 import { getRepositories } from "../persistence/factory.js";
-import { getExecutorAdapter, selectExecutorAdapter } from "../runtimes/coding/public-api.js";
+import {
+  getCodingEnvironment,
+  getExecutorAdapter,
+  selectExecutorAdapter,
+} from "../runtimes/coding/public-api.js";
 import { runVerification, type VerificationReport } from "../runtimes/coding/verification.js";
+import { getWorktreePolicyConfig } from "./worktree-policy.js";
 
 export interface ExecuteExecutorAttemptInput {
   agentRunId: string;
@@ -83,9 +89,65 @@ export async function executeExecutorAttempt(
   let artifacts: ExecutorArtifacts = { runId: attempt.id, artifacts: [] };
   const verification: VerificationReport[] = [];
   let sequence = 0;
+  let envSessionId: string | undefined;
+  const environmentKind = input.environmentKind ?? "git-worktree";
+  let effectiveWorkingDir = input.workingDirectory;
+  let effectiveMetadata: Record<string, unknown> = { ...(input.environmentMetadata ?? {}) };
 
   try {
     await executorRuns.updateStatus(attempt.id, "preparing_environment");
+
+    // Isolation gate: git-worktree runs get a dedicated worktree + agent branch
+    // whenever the target repository actually exists on disk.
+    if (environmentKind === "git-worktree" && existsSync(input.workingDirectory)) {
+      const branchName = `agent/${input.agentRunId.slice(0, 8)}`;
+      try {
+        const env = getCodingEnvironment();
+        const session = await env.createSession({
+          workspaceId: input.workspaceId ?? "default",
+          projectId: input.projectId,
+          runId: attempt.id,
+          agentId: input.agentId,
+          environmentKind,
+          workingDirectory: input.workingDirectory,
+          // Authoritative isolation facts come last so caller metadata
+          // cannot shadow the derived branch or repo path.
+          metadata: {
+            ...input.environmentMetadata,
+            branchName,
+            repoPath: input.workingDirectory,
+          },
+        });
+        envSessionId = session.id;
+        if (session.workingDirectory) {
+          effectiveWorkingDir = session.workingDirectory;
+          effectiveMetadata = {
+            ...effectiveMetadata,
+            sessionId: session.id,
+            worktreePath: session.workingDirectory,
+            branchName,
+          };
+          await executorRuns.update(attempt.id, {
+            workingDirectory: effectiveWorkingDir,
+            environmentConfig: effectiveMetadata,
+          });
+        }
+      } catch (envErr) {
+        if (getWorktreePolicyConfig().requireWorktreePath) throw envErr;
+        await agentRunEvents.create({
+          runId: input.agentRunId,
+          sequence: sequence++,
+          type: "executor.environment_downgrade",
+          payload: {
+            attemptId: attempt.id,
+            environmentKind,
+            workingDirectory: input.workingDirectory,
+            reason: envErr instanceof Error ? envErr.message : String(envErr),
+          },
+        });
+      }
+    }
+
     const handle = await adapter.prepare({
       runId: attempt.id,
       taskId: input.taskId,
@@ -95,9 +157,9 @@ export async function executeExecutorAttempt(
       adapterId: input.adapterId,
       taskPrompt: input.taskPrompt,
       environment: {
-        kind: input.environmentKind ?? "git-worktree",
-        workingDirectory: input.workingDirectory,
-        metadata: input.environmentMetadata,
+        kind: environmentKind,
+        workingDirectory: effectiveWorkingDir,
+        metadata: effectiveMetadata,
       },
       timeoutMs: input.timeoutMs,
       permissionPolicy: input.permissionPolicy,
@@ -158,7 +220,7 @@ export async function executeExecutorAttempt(
         allowedPaths: input.allowedPaths,
         requiredArtifactTypes: input.requiredArtifactTypes,
         testCommand,
-        testCwd: testCommand ? input.workingDirectory : undefined,
+        testCwd: testCommand ? effectiveWorkingDir : undefined,
       }));
     }
 
@@ -221,6 +283,15 @@ export async function executeExecutorAttempt(
       await adapter.cleanup(attempt.id);
     } catch {
       // The primary attempt result remains authoritative; cleanup is retried by reconciliation.
+    }
+    // Always release the isolated worktree once execution and verification are
+    // done — the agent branch survives, the worktree directory must not.
+    if (envSessionId) {
+      try {
+        await getCodingEnvironment().dispose(envSessionId);
+      } catch {
+        // Best-effort removal; leftover worktrees are swept by reconciliation.
+      }
     }
   }
 }

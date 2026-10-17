@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const mockCredentials: Record<string, string> = {};
+const mockCredentials = vi.hoisted(() => ({}) as Record<string, string>);
+const mockAgentEventCreate = vi.hoisted(() => vi.fn(async () => ({})));
 
 vi.mock("../../../config/config-manager.js", () => ({
   configManager: {
@@ -65,7 +66,10 @@ vi.mock("../../../persistence/factory.js", () => {
     upsert: vi.fn(async (m: Record<string, unknown>) => ({ id: "mem-1", ...m })),
     upsertPreferences: vi.fn(async () => ({})),
   };
-  const repos = { conversations, memories };
+  const agentRunEvents = {
+    create: mockAgentEventCreate,
+  };
+  const repos = { conversations, memories, agentRunEvents };
   return { getRepositories: vi.fn(() => repos) };
 });
 
@@ -79,6 +83,8 @@ vi.mock("../../tool/public-api.js", () => ({
   getAllTools: vi.fn(() => []),
   wrapToolsForAI: vi.fn(() => ({})),
   getTool: vi.fn(() => null),
+  isApprovalRequiredMarker: vi.fn(() => false),
+  extractApprovalRequestIds: vi.fn(() => []),
 }));
 
 vi.mock("../../../gateways/model/gateway.js", () => ({
@@ -509,6 +515,151 @@ describe("streamMessageInConversation", () => {
     Object.keys(mockCredentials).forEach((k) => delete mockCredentials[k]);
     const r = await streamMessageInConversation("conv-1", "random question");
     expect(r.reply).toContain("本地模式");
+  });
+
+  // ---- prepareStep hook (dynamic pruning + budget warning) ----
+
+  function lastStreamTextOptions(): Record<string, unknown> {
+    const calls = (streamText as ReturnType<typeof vi.fn>).mock.calls;
+    return calls[calls.length - 1][0] as Record<string, unknown>;
+  }
+
+  it("wires prepareStep into streamText", async () => {
+    (streamText as ReturnType<typeof vi.fn>).mockReturnValue({
+      fullStream: (async function* () {})(),
+    });
+    await streamMessageInConversation("conv-1", "hi");
+    const options = lastStreamTextOptions();
+    expect(typeof options.prepareStep).toBe("function");
+    expect(typeof options.onStepFinish).toBe("function");
+  });
+
+  it("prepareStep injects the budget notice at >=80% of maxSteps", async () => {
+    (streamText as ReturnType<typeof vi.fn>).mockReturnValue({
+      fullStream: (async function* () {})(),
+    });
+    await streamMessageInConversation("conv-1", "hi");
+    const options = lastStreamTextOptions();
+    const prepareStep = options.prepareStep as (o: { stepNumber: number; messages: unknown[] }) =>
+      { messages: Array<{ role: string; content: unknown }> } | undefined;
+
+    // maxSteps is mocked to 10 → warn from step 8.
+    const warned = prepareStep({
+      stepNumber: 8,
+      messages: [{ role: "system", content: "s" }, { role: "user", content: "u" }],
+    });
+    expect(warned?.messages).toBeDefined();
+    const last = warned!.messages.at(-1)!;
+    expect(last.role).toBe("system");
+    expect(String(last.content)).toContain("Approaching maximum step budget");
+
+    const early = prepareStep({
+      stepNumber: 1,
+      messages: [{ role: "system", content: "s" }, { role: "user", content: "u" }],
+    });
+    expect(early).toBeUndefined();
+  });
+
+  it("prepareStep does not mutate the incoming message array", async () => {
+    (streamText as ReturnType<typeof vi.fn>).mockReturnValue({
+      fullStream: (async function* () {})(),
+    });
+    await streamMessageInConversation("conv-1", "hi");
+    const options = lastStreamTextOptions();
+    const prepareStep = options.prepareStep as (o: { stepNumber: number; messages: Array<{ role: string; content: unknown }> }) =>
+      { messages: Array<{ role: string; content: unknown }> } | undefined;
+    const messages = [{ role: "system", content: "s" }, { role: "user", content: "u" }];
+    prepareStep({ stepNumber: 9, messages });
+    expect(messages).toHaveLength(2);
+    expect(messages.at(-1)!.role).toBe("user");
+  });
+
+  it("prepareStep prunes oversized in-turn history", async () => {
+    (streamText as ReturnType<typeof vi.fn>).mockReturnValue({
+      fullStream: (async function* () {})(),
+    });
+    await streamMessageInConversation("conv-1", "hi");
+    const options = lastStreamTextOptions();
+    const prepareStep = options.prepareStep as (o: { stepNumber: number; messages: Array<{ role: string; content: unknown }> }) =>
+      { messages: Array<{ role: string; content: unknown }> } | undefined;
+
+    const bigHistory = [
+      { role: "system", content: "s" },
+      ...Array.from({ length: 120 }, (_, i) => ({ role: "user", content: `m${i}` })),
+    ];
+    const result = prepareStep({ stepNumber: 1, messages: bigHistory });
+    expect(result?.messages).toBeDefined();
+    expect(result!.messages.length).toBeLessThanOrEqual(80);
+    expect(result!.messages[0].role).toBe("system");
+  });
+
+  // ---- onStepFinish step-event sourcing ----
+
+  it("persists step events to agent_run_events when runId is present", async () => {
+    (streamText as ReturnType<typeof vi.fn>).mockReturnValue({
+      fullStream: (async function* () {})(),
+    });
+    await streamMessageInConversation("conv-1", "hi", undefined, undefined, {
+      runtimeContext: { runId: "run-42", mode: "chat" },
+    });
+    const options = lastStreamTextOptions();
+    const onStepFinish = options.onStepFinish as (step: unknown) => Promise<void>;
+
+    await onStepFinish({
+      stepNumber: 1,
+      usage: { inputTokens: 5, outputTokens: 7 },
+      toolCalls: [{ toolName: "search", toolCallId: "tc1", input: { q: "x" } }],
+      toolResults: [{ toolCallId: "tc1", toolName: "search", output: "ok" }],
+      finishReason: "tool-calls",
+    });
+    await onStepFinish({
+      stepNumber: 2,
+      usage: { inputTokens: 3, outputTokens: 4 },
+      toolCalls: [],
+      toolResults: [],
+      finishReason: "stop",
+    });
+
+    expect(mockAgentEventCreate).toHaveBeenCalledTimes(2);
+    expect(mockAgentEventCreate).toHaveBeenNthCalledWith(1, {
+      runId: "run-42",
+      sequence: 0,
+      type: "step_completed",
+      payload: expect.objectContaining({
+        stepNumber: 1,
+        toolCalls: [{ toolName: "search", toolCallId: "tc1", input: { q: "x" } }],
+        usage: { inputTokens: 5, outputTokens: 7 },
+        finishReason: "tool-calls",
+      }),
+    });
+    expect(mockAgentEventCreate).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      runId: "run-42",
+      sequence: 1,
+    }));
+  });
+
+  it("skips step event persistence without a runId", async () => {
+    (streamText as ReturnType<typeof vi.fn>).mockReturnValue({
+      fullStream: (async function* () {})(),
+    });
+    await streamMessageInConversation("conv-1", "hi");
+    const options = lastStreamTextOptions();
+    const onStepFinish = options.onStepFinish as (step: unknown) => Promise<void>;
+    await onStepFinish({ stepNumber: 1, usage: { inputTokens: 1, outputTokens: 1 }, toolCalls: [], toolResults: [] });
+    expect(mockAgentEventCreate).not.toHaveBeenCalled();
+  });
+
+  it("survives agent_run_events write failures without breaking the step", async () => {
+    mockAgentEventCreate.mockRejectedValueOnce(new Error("db down"));
+    (streamText as ReturnType<typeof vi.fn>).mockReturnValue({
+      fullStream: (async function* () {})(),
+    });
+    await streamMessageInConversation("conv-1", "hi", undefined, undefined, {
+      runtimeContext: { runId: "run-43" },
+    });
+    const options = lastStreamTextOptions();
+    const onStepFinish = options.onStepFinish as (step: unknown) => Promise<void>;
+    await expect(onStepFinish({ stepNumber: 1, toolCalls: [], toolResults: [] })).resolves.toBeUndefined();
   });
 });
 

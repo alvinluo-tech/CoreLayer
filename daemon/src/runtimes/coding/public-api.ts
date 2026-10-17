@@ -23,3 +23,5 @@ export {
   getExecutablePath,
   spawnProcess,
 } from "./process-spawner.js";
+
+export { getCodingEnvironment } from "./environment-integration.js";

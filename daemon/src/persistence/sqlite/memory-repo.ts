@@ -92,6 +92,167 @@ const CATEGORY_BOOSTS: Record<MemoryRow["type"], number> = {
   fact: 1.0,
 };
 
+// ---- Multi-signal temporal retrieval scoring (Mem0 v3 paradigm) ----
+
+export interface MemoryScoreCandidate {
+  /** 0-based position in the lexical (BM25/LIKE) ranking. */
+  bm25Rank: number;
+  /** Lexical/structural similarity contribution, 0..~1.5. */
+  vectorSim: number;
+  /** ISO creation timestamp of the memory version. */
+  createdAt: string;
+  /** Whether a newer version of the same fact has superseded this row. */
+  isSuperseded: boolean;
+}
+
+/**
+ * Hybrid retrieval score fusing lexical ranking and temporal decay:
+ *
+ *   score = (1/(60 + bm25Rank) + 0.4 * vectorSim) * exp(-0.05 * daysAgo) * penalty
+ *
+ * - Recency decays ~5%/day, so fresh facts naturally outrank stale ones.
+ * - Superseded versions are kept retrievable but heavily down-weighted (0.3x).
+ * - Malformed timestamps score 0 (never surface undated junk); future dates
+ *   are clamped to "today".
+ */
+export function computeMemoryScore(candidate: MemoryScoreCandidate): number {
+  const parsed = new Date(candidate.createdAt).getTime();
+  if (!Number.isFinite(parsed)) return 0;
+  const daysAgo = Math.max(0, (Date.now() - parsed) / (86_400_000));
+  const recencyDecay = Math.exp(-0.05 * daysAgo); // ~5% decay per day
+  const supersededPenalty = candidate.isSuperseded ? 0.3 : 1.0;
+
+  const rrf = 1 / (60 + candidate.bm25Rank) + candidate.vectorSim * 0.4;
+  return rrf * recencyDecay * supersededPenalty;
+}
+
+/** Fuse a lexical-scored, pre-ranked candidate list with the temporal formula. */
+function applyTemporalFusion(
+  lexicalScored: ScoredMemoryRow[],
+  limit: number,
+): ScoredMemoryRow[] {
+  return lexicalScored
+    .map((m, index) => ({
+      ...m,
+      score: computeMemoryScore({
+        bm25Rank: index,
+        vectorSim: m.score,
+        createdAt: m.createdAt,
+        isSuperseded: m.supersededBy !== null,
+      }),
+    }))
+    .filter((m) => m.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit);
+}
+
+/** Condition selecting the CURRENT version of every memory (ADD-only history). */
+function currentVersionOnly() {
+  return isNull(schema.memories.supersededBy);
+}
+
+// ---- Single-pass append write (ADD-only with supersede) ----
+
+interface AppendMemoryInput {
+  userId: string;
+  scopeType: MemoryRow["scopeType"];
+  scopeId: string | null;
+  type: MemoryRow["type"];
+  tier: MemoryRow["tier"];
+  key: string;
+  value: string;
+  source: string | null;
+  confidence: number | null;
+  sourceRunId: string | null;
+  sourceMessageId: string | null;
+  expiresAt: string | null;
+  temporalAnchor: string | null;
+}
+
+/**
+ * Append a memory version without destroying history.
+ *
+ * - New (scope, key): plain insert.
+ * - Same (scope, key) with a CHANGED value: mark every current row
+ *   supersededBy = <new id>, then insert the new version (carrying the usage
+ *   counter). Superseded rows stay queryable but down-ranked at retrieval.
+ * - Same (scope, key) with an IDENTICAL value: bump lastVerifiedAt only —
+ *   re-extracting a stable fact must not pile up duplicate history.
+ */
+function appendWithSupersede(db: DrizzleDb, input: AppendMemoryInput): MemoryRow {
+  const now = new Date().toISOString();
+  const scopeCondition = input.scopeId === null
+    ? isNull(schema.memories.scopeId)
+    : eq(schema.memories.scopeId, input.scopeId);
+
+  // Current versions of this (scope, key). Normally zero or one; superseding
+  // ALL of them self-heals crash leftovers (two simultaneous currents).
+  const currents = db
+    .select()
+    .from(schema.memories)
+    .where(
+      and(
+        eq(schema.memories.userId, input.userId),
+        eq(schema.memories.scopeType, input.scopeType),
+        scopeCondition,
+        sql`lower(${schema.memories.key}) = lower(${input.key})`,
+        isNull(schema.memories.supersededBy),
+      ),
+    )
+    .all();
+
+  if (
+    currents.length === 1 &&
+    currents[0].value === input.value &&
+    currents[0].type === input.type
+  ) {
+    const existing = currents[0];
+    db.update(schema.memories)
+      .set({ lastVerifiedAt: now, updatedAt: now })
+      .where(eq(schema.memories.id, existing.id))
+      .run();
+    const row = db.select().from(schema.memories).where(eq(schema.memories.id, existing.id)).get()!;
+    return normalize(row);
+  }
+
+  const newId = crypto.randomUUID();
+  const carriedUses = currents.length > 0 ? Math.max(...currents.map((c) => c.uses)) : 0;
+
+  db.insert(schema.memories)
+    .values({
+      id: newId,
+      userId: input.userId,
+      scopeType: input.scopeType,
+      scopeId: input.scopeId,
+      type: input.type,
+      tier: input.tier,
+      key: input.key,
+      value: input.value,
+      source: input.source,
+      confidence: input.confidence,
+      uses: carriedUses,
+      sourceRunId: input.sourceRunId,
+      sourceMessageId: input.sourceMessageId,
+      expiresAt: input.expiresAt,
+      validFrom: now,
+      supersededBy: null,
+      temporalAnchor: input.temporalAnchor,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .run();
+
+  for (const current of currents) {
+    db.update(schema.memories)
+      .set({ supersededBy: newId, updatedAt: now })
+      .where(eq(schema.memories.id, current.id))
+      .run();
+  }
+
+  const row = db.select().from(schema.memories).where(eq(schema.memories.id, newId)).get()!;
+  return normalize(row);
+}
+
 export function createSqliteMemoryRepo(database?: DrizzleDb): MemoryRepository {
   const db = database ?? defaultDb;
   return {
@@ -99,7 +260,7 @@ export function createSqliteMemoryRepo(database?: DrizzleDb): MemoryRepository {
       const rows = db
         .select()
         .from(schema.memories)
-        .where(eq(schema.memories.userId, userId))
+        .where(and(eq(schema.memories.userId, userId), currentVersionOnly()))
         .all();
       return rows.map(normalize);
     },
@@ -108,7 +269,7 @@ export function createSqliteMemoryRepo(database?: DrizzleDb): MemoryRepository {
       const rows = db
         .select()
         .from(schema.memories)
-        .where(and(eq(schema.memories.userId, userId), eq(schema.memories.type, type)))
+        .where(and(eq(schema.memories.userId, userId), eq(schema.memories.type, type), currentVersionOnly()))
         .all();
       return rows.map(normalize);
     },
@@ -117,18 +278,21 @@ export function createSqliteMemoryRepo(database?: DrizzleDb): MemoryRepository {
       const rows = db
         .select()
         .from(schema.memories)
-        .where(and(eq(schema.memories.userId, userId), eq(schema.memories.tier, tier)))
+        .where(and(eq(schema.memories.userId, userId), eq(schema.memories.tier, tier), currentVersionOnly()))
         .all();
       return rows.map(normalize);
     },
 
     async getByKey(key: string, userId = "default"): Promise<MemoryRow | null> {
-      const row = db
+      // Latest current version of the key — superseded history stays in the table.
+      const rows = db
         .select()
         .from(schema.memories)
-        .where(and(eq(schema.memories.userId, userId), eq(schema.memories.key, key)))
-        .get();
-      return row ? normalize(row) : null;
+        .where(and(eq(schema.memories.userId, userId), sql`lower(${schema.memories.key}) = lower(${key})`, currentVersionOnly()))
+        .orderBy(sql`${schema.memories.createdAt} DESC`)
+        .limit(1)
+        .all();
+      return rows[0] ? normalize(rows[0]) : null;
     },
 
     async fetchByScope(scopeType: MemoryRow["scopeType"], scopeId: string, userId = "default"): Promise<MemoryRow[]> {
@@ -140,6 +304,7 @@ export function createSqliteMemoryRepo(database?: DrizzleDb): MemoryRepository {
             eq(schema.memories.userId, userId),
             eq(schema.memories.scopeType, scopeType),
             eq(schema.memories.scopeId, scopeId),
+            currentVersionOnly(),
           ),
         )
         .all();
@@ -165,6 +330,8 @@ export function createSqliteMemoryRepo(database?: DrizzleDb): MemoryRepository {
         : eq(schema.memories.scopeType, "user");
 
       const now = new Date().toISOString();
+      // Candidate pool includes superseded versions — retrieval-time conflict
+      // resolution down-weights them (0.3x) instead of dropping history.
       const rows = db
         .select()
         .from(schema.memories)
@@ -178,9 +345,9 @@ export function createSqliteMemoryRepo(database?: DrizzleDb): MemoryRepository {
         .all()
         .map(normalize);
 
-      // Simple relevance scoring: match query against key and value
+      // Lexical relevance pass: match query against key and value
       const queryLower = query.toLowerCase();
-      const scored: ScoredMemoryRow[] = rows
+      const lexicalScored: ScoredMemoryRow[] = rows
         .map((m) => {
           let score = 0;
           const keyLower = m.key.toLowerCase();
@@ -210,10 +377,10 @@ export function createSqliteMemoryRepo(database?: DrizzleDb): MemoryRepository {
           return { ...m, score };
         })
         .filter((m) => m.score > 0)
-        .sort((a, b) => b.score - a.score)
-        .slice(0, limit);
+        .sort((a, b) => b.score - a.score);
 
-      return scored;
+      // Temporal fusion: recency decay + superseded penalty over the lexical ranking.
+      return applyTemporalFusion(lexicalScored, limit);
     },
 
     async search(query: string, userId = "default"): Promise<MemoryRow[]> {
@@ -224,6 +391,7 @@ export function createSqliteMemoryRepo(database?: DrizzleDb): MemoryRepository {
         .where(
           and(
             eq(schema.memories.userId, userId),
+            currentVersionOnly(),
             or(
               like(schema.memories.key, pattern),
               like(schema.memories.value, pattern),
@@ -297,8 +465,8 @@ export function createSqliteMemoryRepo(database?: DrizzleDb): MemoryRepository {
         rows = likeResults.map(normalize);
       }
 
-      // Score and rank
-      const scored: ScoredMemoryRow[] = rows
+      // Lexical scoring pass (superseded versions stay in the candidate pool)
+      const lexicalScored: ScoredMemoryRow[] = rows
         .map((m) => {
           let score = 0.5; // base score from FTS/LIKE match
 
@@ -318,10 +486,10 @@ export function createSqliteMemoryRepo(database?: DrizzleDb): MemoryRepository {
 
           return { ...m, score };
         })
-        .sort((a, b) => b.score - a.score)
-        .slice(0, limit);
+        .sort((a, b) => b.score - a.score);
 
-      return scored;
+      // Temporal fusion: BM25 rank + recency decay + superseded penalty.
+      return applyTemporalFusion(lexicalScored, limit);
     },
 
     async upsert(input: UpsertMemoryInput): Promise<MemoryRow> {
@@ -332,7 +500,6 @@ export function createSqliteMemoryRepo(database?: DrizzleDb): MemoryRepository {
         );
       }
 
-      const now = new Date().toISOString();
       const userId = input.userId ?? "default";
       const scopeType = input.scopeType ?? "user";
       const scopeId = input.scopeId ?? null;
@@ -340,83 +507,21 @@ export function createSqliteMemoryRepo(database?: DrizzleDb): MemoryRepository {
       // Auto-classify tier if not explicitly provided
       const tier = input.tier ?? classifyTier(input.type, input.key, input.value);
 
-      // Deduplication: case-insensitive exact match on key + scope
-      const duplicate = db
-        .select()
-        .from(schema.memories)
-        .where(
-          and(
-            eq(schema.memories.userId, userId),
-            eq(schema.memories.scopeType, scopeType),
-            scopeId === null
-              ? isNull(schema.memories.scopeId)
-              : eq(schema.memories.scopeId, scopeId),
-            sql`lower(${schema.memories.key}) = lower(${input.key})`,
-          ),
-        )
-        .get();
-
-      if (duplicate) {
-        db.update(schema.memories)
-          .set({
-            value: input.value,
-            type: input.type,
-            tier,
-            source: input.source ?? duplicate.source,
-            confidence: input.confidence ?? duplicate.confidence,
-            sourceRunId: input.sourceRunId ?? duplicate.sourceRunId,
-            sourceMessageId: input.sourceMessageId ?? duplicate.sourceMessageId,
-            expiresAt: input.expiresAt ?? duplicate.expiresAt,
-            updatedAt: now,
-          })
-          .where(eq(schema.memories.id, duplicate.id))
-          .run();
-
-        const row = db
-          .select()
-          .from(schema.memories)
-          .where(eq(schema.memories.id, duplicate.id))
-          .get()!;
-        return normalize(row);
-      }
-
-      // No duplicate found -- insert
-      db.insert(schema.memories)
-        .values({
-          id: crypto.randomUUID(),
-          userId,
-          scopeType,
-          scopeId,
-          type: input.type,
-          tier,
-          key: input.key,
-          value: input.value,
-          source: input.source ?? null,
-          confidence: input.confidence ?? null,
-          uses: 0,
-          sourceRunId: input.sourceRunId ?? null,
-          sourceMessageId: input.sourceMessageId ?? null,
-          expiresAt: input.expiresAt ?? null,
-          createdAt: now,
-          updatedAt: now,
-        })
-        .run();
-
-      const row = db
-        .select()
-        .from(schema.memories)
-        .where(
-          and(
-            eq(schema.memories.userId, userId),
-            eq(schema.memories.scopeType, scopeType),
-            scopeId === null
-              ? isNull(schema.memories.scopeId)
-              : eq(schema.memories.scopeId, scopeId),
-            eq(schema.memories.key, input.key),
-          ),
-        )
-        .get()!;
-      return normalize(row);
+      return appendWithSupersede(db, {
+        userId,
+        scopeType,
+        scopeId,
+        type: input.type,
+        tier,
+        key: input.key,
+        value: input.value,
+        source: input.source ?? null,
+        confidence: input.confidence ?? null,
+        sourceRunId: input.sourceRunId ?? null,
+        sourceMessageId: input.sourceMessageId ?? null,
+        expiresAt: input.expiresAt ?? null,
+        temporalAnchor: input.temporalAnchor ?? null,
+      });
     },
 
     async upsertPreferences(
@@ -426,75 +531,28 @@ export function createSqliteMemoryRepo(database?: DrizzleDb): MemoryRepository {
       scopeId: string | null = null,
     ): Promise<MemoryRow[]> {
       const results: MemoryRow[] = [];
-      const now = new Date().toISOString();
       for (const pref of prefs) {
         if (containsInjection(pref.key) || containsInjection(pref.value)) continue;
 
         const tier = classifyTier("preference", pref.key, pref.value);
 
-        // Dedup: check for existing preference with same key + scope
-        const duplicate = db
-          .select()
-          .from(schema.memories)
-          .where(
-            and(
-              eq(schema.memories.userId, userId),
-              eq(schema.memories.scopeType, scopeType),
-              scopeId === null
-                ? isNull(schema.memories.scopeId)
-                : eq(schema.memories.scopeId, scopeId),
-              sql`lower(${schema.memories.key}) = lower(${pref.key})`,
-            ),
-          )
-          .get();
-
-        if (duplicate) {
-          db.update(schema.memories)
-            .set({
-              value: pref.value,
-              tier,
-              source: "compression",
-              confidence: 0.9,
-              updatedAt: now,
-            })
-            .where(eq(schema.memories.id, duplicate.id))
-            .run();
-          const row = db.select().from(schema.memories).where(eq(schema.memories.id, duplicate.id)).get()!;
-          results.push(normalize(row));
-        } else {
-          db.insert(schema.memories)
-            .values({
-              id: crypto.randomUUID(),
-              userId,
-              scopeType,
-              scopeId,
-              type: "preference",
-              tier,
-              key: pref.key,
-              value: pref.value,
-              source: "compression",
-              confidence: 0.9,
-              uses: 0,
-              createdAt: now,
-              updatedAt: now,
-            })
-            .run();
-          const row = db
-            .select()
-            .from(schema.memories)
-            .where(
-              and(
-                eq(schema.memories.userId, userId),
-                eq(schema.memories.scopeType, scopeType),
-                scopeId === null
-                  ? isNull(schema.memories.scopeId)
-                  : eq(schema.memories.scopeId, scopeId),
-                eq(schema.memories.key, pref.key),
-              ),
-            )
-            .get()!;
-          results.push(normalize(row));
-        }
+        results.push(
+          await appendWithSupersede(db, {
+            userId,
+            scopeType,
+            scopeId,
+            type: "preference",
+            tier,
+            key: pref.key,
+            value: pref.value,
+            source: "compression",
+            confidence: 0.9,
+            sourceRunId: null,
+            sourceMessageId: null,
+            expiresAt: null,
+            temporalAnchor: null,
+          }),
+        );
       }
       return results;
     },
@@ -533,6 +591,7 @@ export function createSqliteMemoryRepo(database?: DrizzleDb): MemoryRepository {
           and(
             sql`${schema.memories.uses} >= ${minUses}`,
             sql`${schema.memories.tier} != 'preference'`,
+            currentVersionOnly(),
           ),
         )
         .all();
@@ -600,7 +659,7 @@ export function createSqliteMemoryRepo(database?: DrizzleDb): MemoryRepository {
       const rows = db
         .select()
         .from(schema.memories)
-        .where(and(eq(schema.memories.userId, userId), eq(schema.memories.tier, "pinned")))
+        .where(and(eq(schema.memories.userId, userId), eq(schema.memories.tier, "pinned"), currentVersionOnly()))
         .all();
       return rows.map(normalize);
     },
