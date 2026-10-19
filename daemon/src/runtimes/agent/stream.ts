@@ -117,6 +117,10 @@ export async function runStreamTurn(
 
   const emitAndPersist = createEventEmitter(run.id, agentRunEvents, options?.onEvent);
 
+  // Record the turn boundary in the event log, which is the durable record the
+  // messages table is projected from.
+  emitAndPersist({ type: "user_message", messageId: savedUserMessage.id, content: request.input });
+
   // Create an asynchronous event queue to decouple streamChat execution from generator consumption
   const queue = new AsyncQueue<AgentRunEvent>();
 
@@ -155,6 +159,14 @@ export async function runStreamTurn(
           content: fullText,
           toolCalls: toolCallsLog.length > 0 ? JSON.stringify(toolCallsLog) : undefined,
         });
+        queue.push(
+          emitAndPersist({
+            type: "assistant_message",
+            messageId: savedAssistantMessage.id,
+            content: fullText,
+            toolCalls: toolCallsLog,
+          })
+        );
 
         await agentRuns.updateStatus(run.id, "succeeded");
         const conversation = await conversations.getById(conversationId);
@@ -249,6 +261,14 @@ export async function runStreamTurn(
         toolCalls: toolCallsLog.length > 0 ? JSON.stringify(toolCallsLog) : undefined,
         modelUsed: stream?.selectedModel,
       });
+      queue.push(
+        emitAndPersist({
+          type: "assistant_message",
+          messageId: savedAssistantMessage.id,
+          content: fullText,
+          toolCalls: toolCallsLog,
+        })
+      );
 
       await agentRuns.updateStatus(run.id, "succeeded");
 

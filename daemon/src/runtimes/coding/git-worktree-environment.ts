@@ -67,24 +67,30 @@ export class GitWorktreeEnvironment implements ExecutionEnvironment {
       // report no changes rather than invent one.
     }
 
+    // A retried run must continue from its own branch, not fork a second one.
+    // Reusing the existing branch also makes re-delivery idempotent: the
+    // baseline stays where the first attempt started.
+    const branchExists = await this.branchExists(repoPath, branchName);
     try {
       await execGit(
-        ["worktree", "add", "-b", branchName, worktreePath, "HEAD"],
+        branchExists
+          ? ["worktree", "add", worktreePath, branchName]
+          : ["worktree", "add", "-b", branchName, worktreePath, "HEAD"],
         repoPath,
         "git-worktree-environment",
         { agentRunId: request.runId, projectId: request.workspaceId },
       );
-    } catch {
-      try {
-        await execGit(
-          ["worktree", "add", worktreePath, branchName],
+      if (branchExists) {
+        // Measure the whole branch, including work from earlier attempts,
+        // against the commit the branch was originally cut from.
+        baseSha = (await execGit(
+          ["rev-parse", `${branchName}~1`],
           repoPath,
           "git-worktree-environment",
-          { agentRunId: request.runId, projectId: request.workspaceId },
-        );
-      } catch (err) {
-        throw new Error(`Failed to create worktree: ${err}`);
+        )).trim();
       }
+    } catch (err) {
+      throw new Error(`Failed to create worktree: ${err}`);
     }
 
     const session: EnvironmentSession = {
@@ -321,7 +327,18 @@ export class GitWorktreeEnvironment implements ExecutionEnvironment {
     }
 
     allowGitRoot(repoPath);
-    return { committed: true, branch: branchName, sha, files: stagedFiles };
+    // Report everything the branch carries, not only this attempt's staging
+    // area: a retry resumes an existing branch, and the deliverable is the
+    // branch as a whole.
+    const branchFiles = baseSha
+      ? await this.committedFiles(worktreePath, baseSha, context)
+      : [];
+    return {
+      committed: true,
+      branch: branchName,
+      sha,
+      files: branchFiles.length > 0 ? branchFiles : stagedFiles,
+    };
   }
 
   /** Number of commits on this branch beyond the baseline it was created from. */
@@ -387,6 +404,20 @@ export class GitWorktreeEnvironment implements ExecutionEnvironment {
       // --ignore-unmatch makes "not tracked" a success; anything reaching here
       // is a real failure and must not be swallowed.
       throw new Error(`Failed to exclude ${RUNTIME_DIR} from the delivery commit: ${message}`);
+    }
+  }
+
+  /** Whether the repository already has this local branch. */
+  private async branchExists(repoPath: string, branchName: string): Promise<boolean> {
+    try {
+      await execGit(
+        ["rev-parse", "--verify", `refs/heads/${branchName}`],
+        repoPath,
+        "git-worktree-environment",
+      );
+      return true;
+    } catch {
+      return false;
     }
   }
 

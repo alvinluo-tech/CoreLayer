@@ -49,6 +49,10 @@ export interface ConversationOptions {
   onMemoryRead?: (memoryIds: string[]) => void;
   /** Called when memories are extracted and written after a turn */
   onMemoryWritten?: (memoryIds: string[]) => void;
+  /** Called after the user turn is persisted; records the turn boundary. */
+  onUserMessage?: (message: { id: string; content: string }) => void;
+  /** Called after the assistant reply is persisted; records the turn boundary. */
+  onAssistantMessage?: (message: { id: string; content: string; toolCalls: unknown[] }) => void;
 }
 
 /**
@@ -161,6 +165,8 @@ export async function streamMessageInConversation(
   needsForceAnswer?: boolean;
   forceAnswerFollowUp?: () => Promise<string>;
   saveAssistantMessage: (reply: string, toolCallsLog: unknown[]) => Promise<MessageRow>;
+  onUserMessage?: (message: { id: string; content: string }) => void;
+  onAssistantMessage?: (message: { id: string; content: string; toolCalls: unknown[] }) => void;
   suspended?: boolean;
   approvalRequestIds?: string[];
 }> {
@@ -175,6 +181,11 @@ export async function streamMessageInConversation(
     role: "user",
     content: userMessage,
   });
+
+  // The event log is the durable record of what the model was asked and what
+  // it answered; the messages table is a projection that compression can
+  // rewrite. Record the turn boundaries so history stays reconstructable.
+  options?.onUserMessage?.({ id: savedUserMsg.id, content: userMessage });
 
   // Auto-generate title from first message
   const conversation = await repo.getById(conversationId);
@@ -230,6 +241,7 @@ export async function streamMessageInConversation(
       toolCalls: toolCallsLog.length > 0 ? JSON.stringify(toolCallsLog) : undefined,
       modelUsed: selectedModel,
     });
+    options?.onAssistantMessage?.({ id: msg.id, content: reply, toolCalls: toolCallsLog });
 
     // Trigger compression if needed after response is saved
     // Re-fetch messages to include the latest assistant reply

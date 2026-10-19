@@ -298,4 +298,38 @@ describeIfGit("GitWorktreeEnvironment", () => {
     expect(result.files).not.toContain(".jarvis/");
     await env.dispose(session.id);
   });
+
+  it("resumes an existing agent branch instead of forking a new one", async () => {
+    const request = {
+      workspaceId: "ws-1",
+      runId: "run-retry",
+      agentId: "agent-1",
+      environmentKind: "git-worktree",
+      workingDirectory: repoDir,
+    };
+
+    const first = await env.createSession(request);
+    writeFileSync(join(first.workingDirectory!, "first.txt"), "first attempt\n");
+    const firstCommit = await env.commitChanges(first.id, "first attempt");
+    expect(firstCommit.committed).toBe(true);
+    await env.dispose(first.id);
+
+    // Simulate a crash after commit but before the run was recorded as done:
+    // the same run id is dispatched again.
+    const retry = await env.createSession(request);
+    expect(retry.workingDirectory).not.toBeNull();
+
+    // Work from the first attempt must still be present, and the retry must
+    // resolve against the original base — not a commit made on top of it.
+    const resumedFiles = await env.collectArtifacts(retry.id);
+    expect(JSON.stringify(resumedFiles)).not.toContain("first.txt");
+
+    writeFileSync(join(retry.workingDirectory!, "second.txt"), "second attempt\n");
+    const secondCommit = await env.commitChanges(retry.id, "second attempt");
+    expect(secondCommit.committed).toBe(true);
+    expect(secondCommit.files).toEqual(expect.arrayContaining(["first.txt", "second.txt"]));
+    expect(secondCommit.branch).toBe(firstCommit.branch);
+
+    await env.dispose(retry.id);
+  });
 });

@@ -590,9 +590,53 @@ describe("completeRun — task integration", () => {
     await completeRun("run-1", true);
 
     expect(mockTasksUpdate).toHaveBeenCalledWith("task-1", expect.objectContaining({
+      status: "needs_review",
+    }));
+  });
+
+  it("completes a task only when the run carries delivery evidence", async () => {
+    mockGetById.mockResolvedValue({
+      id: "run-1",
+      taskId: "task-1",
+      agentId: "agent-1",
+      projectId: "proj-1",
+      workspaceId: "ws-1",
+    });
+    mockTasksGetById.mockResolvedValue({
+      id: "task-1",
+      projectId: "proj-1",
+      status: "running",
+    });
+
+    await completeRun("run-1", true, undefined, false, [
+      { type: "changed_files", content: "src/feature.ts" },
+    ]);
+
+    expect(mockTasksUpdate).toHaveBeenCalledWith("task-1", expect.objectContaining({
       status: "completed",
       completedAt: expect.any(String),
     }));
+  });
+
+  it("does not complete downstream work when a run delivered nothing", async () => {
+    mockGetById.mockResolvedValue({
+      id: "run-empty",
+      taskId: "task-empty",
+      agentId: "agent-1",
+      projectId: "proj-1",
+      workspaceId: "ws-1",
+    });
+    mockTasksGetById.mockResolvedValue({
+      id: "task-empty",
+      projectId: "proj-1",
+      status: "running",
+      runHistory: [],
+    });
+
+    await completeRun("run-empty", true);
+
+    // An empty success must not unlock dependents as if work had happened.
+    expect(mockEnqueue).not.toHaveBeenCalled();
   });
 
   it("closes the workspace after the final verified task", async () => {

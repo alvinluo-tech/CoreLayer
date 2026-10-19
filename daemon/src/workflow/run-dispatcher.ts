@@ -24,6 +24,7 @@ import { reconcileWorkspaceStatus } from "../workspaces/workspace-completion.js"
 import type { AgentRunRow } from "../persistence/repository/agent.js";
 import { parseCompletionPolicy } from "./completion-policy.js";
 import { derivePermissionPolicy } from "./permission-policy.js";
+import { evaluateCompletionEvidence } from "./completion-evidence.js";
 
 const taskGraph = new TaskGraph();
 
@@ -199,7 +200,7 @@ async function dispatchToCodingRuntime(
       runRecord.projectId,
     );
   }
-  await completeRun(runId, outcome.success, outcome.error, outcome.manualInterventionRequired);
+  await completeRun(runId, outcome.success, outcome.error, outcome.manualInterventionRequired, outcome.artifacts.artifacts);
 }
 
 /**
@@ -210,8 +211,14 @@ export async function completeRun(
   success: boolean,
   error?: string,
   manualInterventionRequired = false,
+  artifacts: readonly ExecutorArtifact[] = [],
 ): Promise<void> {
   const { agentRuns, tasks } = getRepositories();
+  // A run can report success without having produced anything. Tasks are only
+  // completed on evidence; a clean exit with no changes needs review instead.
+  const evidence = success ? evaluateCompletionEvidence(artifacts) : null;
+  const delivered = evidence?.complete === true;
+
   const status = success ? "succeeded" : "failed";
   await agentRuns.updateStatus(runId, status, error);
   slotManager.releaseAgentRun(runId);
@@ -221,14 +228,21 @@ export async function completeRun(
   if (run?.taskId) {
     const task = await tasks.getById(run.taskId);
     if (task) {
-      const taskStatus = success ? "completed" : manualInterventionRequired ? "blocked" : "failed";
+      const taskStatus = !success
+        ? manualInterventionRequired ? "blocked" : "failed"
+        : delivered ? "completed" : "needs_review";
       await tasks.update(run.taskId, {
         status: taskStatus,
         ...(manualInterventionRequired ? { manualInterventionRequired: true } : {}),
-        ...(success ? { completedAt: new Date().toISOString() } : {}),
+        ...(delivered ? { completedAt: new Date().toISOString() } : {}),
         runHistory: [
           ...(task.runHistory ?? []),
-          { runId, status, error: error ?? null, completedAt: new Date().toISOString() },
+          {
+            runId,
+            status,
+            error: error ?? (delivered ? null : evidence?.reason ?? null),
+            completedAt: new Date().toISOString(),
+          },
         ],
       });
 

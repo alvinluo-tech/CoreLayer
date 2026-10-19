@@ -177,6 +177,15 @@ export async function runTurn(
         },
         onMemoryRead: (memoryIds) => emitAndPersist({ type: "memory_read", memoryIds }),
         onMemoryWritten: (memoryIds) => emitAndPersist({ type: "memory_written", memoryIds }),
+        onUserMessage: (message) =>
+          emitAndPersist({ type: "user_message", messageId: message.id, content: message.content }),
+        onAssistantMessage: (message) =>
+          emitAndPersist({
+            type: "assistant_message",
+            messageId: message.id,
+            content: message.content,
+            toolCalls: message.toolCalls,
+          }),
       },
     );
 

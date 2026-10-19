@@ -51,6 +51,14 @@ export interface ArtifactRef {
 export type AgentRunEvent =
   | { type: "run_started"; runId: string; mode: string }
   | { type: "model_selected"; modelId: string }
+  /**
+   * The user turn this run is answering, and the reply it produced.
+   *
+   * These are the durable facts a conversation is rebuilt from: the event log,
+   * not the messages table, is the source of truth for run history.
+   */
+  | { type: "user_message"; messageId: string; content: string }
+  | { type: "assistant_message"; messageId: string; content: string; toolCalls?: unknown[] }
   | { type: "memory_read"; memoryIds: string[] }
   | { type: "tool_call"; toolCall: ToolCallTrace }
   | { type: "approval_required"; approval: ApprovalRequest }
