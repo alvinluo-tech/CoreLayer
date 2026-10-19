@@ -48,6 +48,14 @@ export class CodingExecutorAdapterWrapper implements ExecutorAdapter {
   }
 
   getCapabilities(): ExecutorCapabilityProfile {
+    // An adapter may report its own profile. ACP-backed executors stream
+    // structured tool calls and can resume a session, so describing them with
+    // the CLI defaults below would understate what the caller actually gets.
+    const declared = (this.inner as CodingAgentAdapter & {
+      getCapabilities?: () => ExecutorCapabilityProfile;
+    }).getCapabilities?.();
+    if (declared) return declared;
+
     const toolConfigInjection = this.id === "claude-code" || this.id === "opencode";
     return {
       adapterId: this.id,
@@ -169,6 +177,7 @@ export class CodingExecutorAdapterWrapper implements ExecutorAdapter {
       timeoutMs: request.timeoutMs,
       permissionPolicy: request.permissionPolicy,
       allowedTools: request.metadata?.allowedTools as string[] | undefined,
+      executorModel: request.metadata?.executorModel as string | undefined,
     };
   }
 

@@ -30,6 +30,11 @@ export interface AgentExecutorPolicy {
   workDir?: string;
   /** Extra CLI args to pass to the executor */
   extraArgs?: string[];
+  /**
+   * Model the executor must run. Executors that cannot honour a pin reject the
+   * run instead of silently using their own default.
+   */
+  model?: string;
 }
 
 /** Valid executor type values for validation */
@@ -38,6 +43,7 @@ export const BUILT_IN_EXECUTORS = [
   "codex",
   "claude-code",
   "opencode",
+  "acp",
 ] as const;
 
 /**
@@ -71,5 +77,6 @@ export function isAgentExecutorPolicy(value: unknown): value is AgentExecutorPol
   if (obj.maxConcurrent !== undefined && typeof obj.maxConcurrent !== "number") return false;
   if (obj.workDir !== undefined && typeof obj.workDir !== "string") return false;
   if (obj.extraArgs !== undefined && !Array.isArray(obj.extraArgs)) return false;
+  if (obj.model !== undefined && typeof obj.model !== "string") return false;
   return true;
 }

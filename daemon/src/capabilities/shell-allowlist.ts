@@ -33,6 +33,9 @@ export const DEFAULT_SHELL_ALLOWLIST: ShellAllowlistRule[] = [
   { pattern: "claude ", description: "Claude Code CLI", riskOverride: "low" },
   { pattern: "codex ", description: "Codex CLI", riskOverride: "low" },
   { pattern: "opencode ", description: "OpenCode CLI", riskOverride: "low" },
+  // acpx drives the same external agents over ACP; the model guard and
+  // permission policy in the ACP adapter decide what each run may do.
+  { pattern: "acpx ", description: "ACP client CLI", riskOverride: "low" },
   { pattern: "ls ", description: "List directory contents", riskOverride: "low" },
   { pattern: "dir ", description: "List directory contents (Windows)", riskOverride: "low" },
   { pattern: "cat ", description: "Read file contents", riskOverride: "low" },

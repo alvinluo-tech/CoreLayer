@@ -32,6 +32,8 @@ export interface ExecuteExecutorAttemptInput {
   requiredArtifactTypes?: string[];
   manualCriteria?: string[];
   allowedTools?: string[];
+  /** Model the executor must run, when the agent policy pins one. */
+  executorModel?: string;
 }
 
 export interface ExecutorAttemptOutcome {
@@ -164,7 +166,7 @@ export async function executeExecutorAttempt(
       },
       timeoutMs: input.timeoutMs,
       permissionPolicy: input.permissionPolicy,
-      metadata: { allowedTools: input.allowedTools },
+      metadata: { allowedTools: input.allowedTools, executorModel: input.executorModel },
     });
     await adapter.start(handle);
     await executorRuns.update(attempt.id, { pid: handle.pid });

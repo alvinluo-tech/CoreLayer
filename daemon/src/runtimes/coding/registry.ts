@@ -8,6 +8,7 @@ import type { CodingAgentAdapter, CodingTask, CodingRunInfo, CodingArtifact } fr
 import { ClaudeCodeCliAdapter } from "./adapters/claude-code/cli-adapter.js";
 import { CodexCliAdapter } from "./adapters/codex/cli-adapter.js";
 import { OpenCodeCliAdapter } from "./adapters/opencode/cli-adapter.js";
+import { AcpCodingAdapter } from "./adapters/acp/adapter.js";
 import { getCapabilityBroker } from "../../capabilities/os-capability-broker.js";
 import type { ExecutorAdapter, ExecutorCapabilityProfile } from "@jarvis/runtime-protocol";
 import { CodingExecutorAdapterWrapper } from "./executor-adapter-wrapper.js";
@@ -53,6 +54,9 @@ function registerDefaults(): void {
   }
   if (!adapters.has("opencode")) {
     adapters.set("opencode", new OpenCodeCliAdapter());
+  }
+  if (!adapters.has("acp")) {
+    adapters.set("acp", new AcpCodingAdapter());
   }
 }
 

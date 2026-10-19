@@ -68,10 +68,15 @@ function makeMockHandle(mockProcess: ReturnType<typeof makeMockProcess>) {
 
 describe("ClaudeCodeAdapter", () => {
   let adapter: ClaudeCodeAdapter;
+  const originalModel = process.env.ANTHROPIC_MODEL;
 
   beforeEach(() => {
     adapter = new ClaudeCodeAdapter();
     vi.clearAllMocks();
+
+    // Claude Code only runs DeepSeek models; these tests exercise the process
+    // lifecycle, so pin an approved model rather than testing the guard here.
+    process.env.ANTHROPIC_MODEL = "deepseek-v4-pro";
 
     // Default mocks: command not available, workdir allowed, broker allows
     vi.spyOn(processSpawner, "isCommandAvailable").mockReturnValue(false);
@@ -105,6 +110,8 @@ describe("ClaudeCodeAdapter", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    if (originalModel === undefined) delete process.env.ANTHROPIC_MODEL;
+    else process.env.ANTHROPIC_MODEL = originalModel;
   });
 
   // =========================================================================

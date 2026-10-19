@@ -27,6 +27,7 @@ const agentExecutorPolicySchema = z.object({
   maxConcurrent: z.number().optional(),
   workDir: z.string().optional(),
   extraArgs: z.array(z.string()).optional(),
+  model: z.string().optional(),
 });
 
 const createProfileSchema = z.object({

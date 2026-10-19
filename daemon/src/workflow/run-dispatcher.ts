@@ -189,6 +189,9 @@ async function dispatchToCodingRuntime(
     allowedPaths: completionPolicy.allowedPaths,
     manualCriteria: completionPolicy.manualCriteria,
     allowedTools: runRecord.agentSnapshot?.tools ?? profile?.tools ?? [],
+    executorModel: executorPolicy && isAgentExecutorPolicy(executorPolicy)
+      ? executorPolicy.model
+      : undefined,
   });
 
   await agentRuns.updateArtifacts(runId, outcome.artifacts.artifacts);

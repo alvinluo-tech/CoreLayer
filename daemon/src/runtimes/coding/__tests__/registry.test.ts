@@ -69,17 +69,45 @@ describe("CodingRuntime Registry", () => {
     expect(selection.capabilities.domain).toBe("coding");
   });
 
-  it("excludes CLI executors when tool-level approval is required", async () => {
+  it("routes tool-level approval to the ACP executor, not a CLI adapter", async () => {
     // CLI adapters wrap the vendor's loop and report
-    // nativeToolApprovalIntercepted: false. Asking for real per-tool approval
-    // must not silently hand back an adapter that cannot provide it.
-    await expect(
-      selectExecutorAdapterDetailed({
-        permissionPolicy: "strict",
-        requireIsolation: true,
-        requirements: { requiresToolLevelApproval: true },
-      }),
-    ).rejects.toThrow(/tool-level approval cannot be enforced/);
+    // nativeToolApprovalIntercepted: false. The ACP executor receives tool
+    // calls as protocol messages, so it is the only adapter that can honour
+    // per-tool approval.
+    const { selection } = await selectExecutorAdapterDetailed({
+      permissionPolicy: "strict",
+      requireIsolation: true,
+      requirements: { requiresToolLevelApproval: true },
+    });
+
+    // acpx is a daemon dependency, so a workspace install always provides it.
+    expect(selection.adapterId).toBe("acp");
+    expect(selection.capabilities.metadata?.nativeToolApprovalIntercepted).toBe(true);
+    expect(selection.capabilities.permissionProjection).toBe("native");
+  });
+
+  it("skips a preferred adapter that cannot enforce tool-level approval", async () => {
+    registerCodingRuntime({
+      id: "plain-cli",
+      displayName: "Plain CLI",
+      name: "Plain CLI",
+      discover: async () => ({ available: true, transport: "cli" }),
+      startRun: async () => ({ runId: "run", adapterId: "plain-cli", status: "running", startedAt: new Date().toISOString() }),
+      createRun: async () => { throw new Error("unused"); },
+      getRunStatus: async () => { throw new Error("unused"); },
+      async *streamRunEvents() {},
+      cancelRun: async () => true,
+      collectArtifacts: async () => [],
+    } as never);
+
+    const { selection } = await selectExecutorAdapterDetailed({
+      preferredAdapterId: "plain-cli",
+      permissionPolicy: "strict",
+      requireIsolation: true,
+      requirements: { requiresToolLevelApproval: true },
+    });
+
+    expect(selection.adapterId).toBe("acp");
   });
 
   it("skips a preferred adapter that cannot satisfy a requirement", async () => {

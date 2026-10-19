@@ -28,6 +28,7 @@ import {
   type ExecutionPolicy,
 } from "../../interaction-broker.js";
 import { JsonlEventDecoder } from "../../events/jsonl-decoder.js";
+import { validateClaudeModel } from "../acp/model-guard.js";
 
 /** In-memory store for run tracking */
 const runs = new Map<string, CodingRunInfo>();
@@ -96,6 +97,24 @@ export class ClaudeCodeCliAdapter implements CodingAgentAdapter {
         decision: "denied",
         result: workdirPolicy.reason,
         metadata: { adapterId: this.id, cwd },
+      });
+      return { runId, adapterId: this.id, status: "failed", startedAt: now };
+    }
+
+    // Claude Code may be pointed at a third-party Anthropic-compatible
+    // endpoint, where a Claude model label fails as model_not_found and reads
+    // like a credential problem. Refuse before spawning instead.
+    const modelVerdict = validateClaudeModel(task.executorModel ?? process.env.ANTHROPIC_MODEL);
+    if (!modelVerdict.allowed) {
+      const info = this.createFailedInfo(runId, task, now, modelVerdict.reason);
+      runs.set(runId, info);
+      await logAuditEntry({
+        actor: "system",
+        action: "run.start",
+        resource: runId,
+        decision: "denied",
+        result: modelVerdict.reason,
+        metadata: { adapterId: this.id },
       });
       return { runId, adapterId: this.id, status: "failed", startedAt: now };
     }

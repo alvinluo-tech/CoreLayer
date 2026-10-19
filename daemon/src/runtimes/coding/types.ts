@@ -48,6 +48,8 @@ export interface CodingTask {
   permissionPolicy?: "strict" | "normal" | "permissive";
   /** Native executor tool names explicitly enabled for this run. */
   allowedTools?: string[];
+  /** Model the executor must run. Adapters that cannot honour a pin reject the run. */
+  executorModel?: string;
 }
 
 /** All coding artifact types */
@@ -114,7 +116,7 @@ export interface CodingRunInfo {
  */
 export interface CodingAgentAdapter {
   /** Unique adapter identifier */
-  readonly id: "claude-code" | "codex" | "opencode";
+  readonly id: "claude-code" | "codex" | "opencode" | "acp";
   /** Human-readable name */
   readonly displayName: string;
   /** @deprecated Use displayName instead */
