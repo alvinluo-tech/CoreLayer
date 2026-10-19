@@ -23,6 +23,7 @@ import {
 import { reconcileWorkspaceStatus } from "../workspaces/workspace-completion.js";
 import type { AgentRunRow } from "../persistence/repository/agent.js";
 import { parseCompletionPolicy } from "./completion-policy.js";
+import { derivePermissionPolicy } from "./permission-policy.js";
 
 const taskGraph = new TaskGraph();
 
@@ -140,9 +141,17 @@ async function dispatchToCodingRuntime(
     }
   }
 
+  // A run must have an explicit target repository. Falling back to the
+  // daemon's own cwd would let an agent modify the wrong codebase.
+  const repoPath = workDir ?? projectRootPath;
+  if (!repoPath) {
+    throw new Error(
+      `No repository path for run ${runId}: the agent executor policy has no workDir and project ${runRecord.projectId ?? "(none)"} has no rootPath`,
+    );
+  }
+
   // Build CodingTask from task + run info
   let taskPrompt = `Execute agent run ${runId}`;
-  const repoPath = workDir ?? projectRootPath ?? process.cwd();
   let completionPolicy = parseCompletionPolicy([]);
 
   if (taskId) {
@@ -155,11 +164,7 @@ async function dispatchToCodingRuntime(
   }
 
   const permissions = runRecord.agentSnapshot?.permissions ?? profile?.permissions ?? [];
-  const permissionPolicy = permissions.includes("unrestricted")
-    ? "permissive"
-    : permissions.includes("write")
-      ? "normal"
-      : "strict";
+  const permissionPolicy = derivePermissionPolicy(permissions);
   const selection = await selectExecutorForAttempt({
     preferredAdapterId,
     permissionPolicy,

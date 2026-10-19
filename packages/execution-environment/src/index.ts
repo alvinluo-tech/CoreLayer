@@ -174,6 +174,28 @@ export interface EnvironmentSession {
   readonly createdAt: string;
 }
 
+// ─── Commit Result ───────────────────────────────────────────────────────────
+
+/**
+ * Result of persisting environment work onto a durable branch.
+ *
+ * Disposal of an environment discards its working directory, so anything not
+ * committed before disposal is lost. Environments that support durable output
+ * implement commitChanges to turn in-progress work into a reviewable revision.
+ */
+export interface CommitResult {
+  /** Whether work was committed */
+  committed: boolean;
+  /** Branch the work landed on (absent when nothing was committed) */
+  branch?: string;
+  /** Commit SHA (absent when nothing was committed) */
+  sha?: string;
+  /** Files included in the commit */
+  files: string[];
+  /** Why nothing was committed, when committed is false */
+  reason?: string;
+}
+
 // ─── Execution Environment Interface ─────────────────────────────────────────
 
 /**
@@ -210,6 +232,14 @@ export interface ExecutionEnvironment {
 
   /** Collect all artifacts produced in this session */
   collectArtifacts(sessionId: string): Promise<Artifact[]>;
+
+  /**
+   * Persist in-progress work to a durable revision.
+   *
+   * Called before dispose when the session's output must outlive the working
+   * directory. Implementations may commit nothing when there are no changes.
+   */
+  commitChanges?(sessionId: string, message: string): Promise<CommitResult>;
 
   /** Dispose of the environment session and clean up resources */
   dispose(sessionId: string): Promise<void>;

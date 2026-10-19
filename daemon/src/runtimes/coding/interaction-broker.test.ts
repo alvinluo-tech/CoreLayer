@@ -62,4 +62,24 @@ describe("evaluateInteraction", () => {
 
     expect(decision.action).toBe("none");
   });
+
+  it("does not treat an explanatory mention of a token as a credential prompt", () => {
+    // The agent describing its own work must not be mistaken for a prompt
+    // and killed mid-answer.
+    const decision = evaluateInteraction(
+      "I store the auth token in an httpOnly cookie and send it on each request.",
+      createDefaultExecutionPolicy("builder"),
+    );
+
+    expect(decision.action).toBe("none");
+  });
+
+  it("still blocks a real credential prompt phrased as a question", () => {
+    const decision = evaluateInteraction(
+      "Enter your OpenAI API key:\n",
+      createDefaultExecutionPolicy("builder"),
+    );
+
+    expect(decision).toMatchObject({ action: "block", kind: "credential" });
+  });
 });

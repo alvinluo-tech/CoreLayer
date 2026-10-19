@@ -43,6 +43,18 @@ const CREDENTIAL_PATTERNS = [
   /\bauthentication required\b/i,
 ];
 
+/**
+ * Vocabulary alone is not evidence of a prompt: an agent explaining
+ * "we store the token in a header" would otherwise be killed mid-answer.
+ * A credential interaction must also look like something asking for input.
+ */
+const INTERACTIVE_MARKERS = [
+  /\?\s*(\[[^\]]*\])?\s*$/m,
+  /\benter\b|\bprovide\b|\bpaste\b|\binput\b/i,
+  /\brequired\b.*:?\s*$/im,
+  /[:\uFF1A]\s*$/m,
+];
+
 const DESTRUCTIVE_PATTERNS = [
   /\bdelete\b.*\b(directory|folder|all contents|recursively)\b/i,
   /\bremove\b.*\b(directory|folder|all contents|recursively)\b/i,
@@ -82,13 +94,19 @@ export function classifyInteraction(output: string): InteractionKind | null {
   const text = output.trim();
   if (!text) return null;
 
-  if (CREDENTIAL_PATTERNS.some((pattern) => pattern.test(text))) return "credential";
+  if (CREDENTIAL_PATTERNS.some((pattern) => pattern.test(text)) && looksInteractive(text)) {
+    return "credential";
+  }
   if (DESTRUCTIVE_PATTERNS.some((pattern) => pattern.test(text))) return "destructive";
   if (INSTALL_PATTERNS.some((pattern) => pattern.test(text))) return "dependency_install";
   if (SELECTION_PATTERNS.some((pattern) => pattern.test(text))) return "selection";
   if (CONTINUE_PATTERNS.some((pattern) => pattern.test(text))) return "confirmation";
 
   return null;
+}
+
+function looksInteractive(text: string): boolean {
+  return INTERACTIVE_MARKERS.some((pattern) => pattern.test(text));
 }
 
 export function evaluateInteraction(

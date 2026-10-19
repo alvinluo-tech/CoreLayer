@@ -206,4 +206,96 @@ describeIfGit("GitWorktreeEnvironment", () => {
     const found = await env.getSession(session.id);
     expect(found).toBeNull();
   });
+
+  it("commits work to the agent branch so it survives disposal", async () => {
+    const session = await env.createSession({
+      workspaceId: "ws-1",
+      runId: "run-deliver",
+      agentId: "agent-1",
+      environmentKind: "git-worktree",
+      workingDirectory: repoDir,
+    });
+    const worktreePath = session.workingDirectory!;
+    writeFileSync(join(worktreePath, "feature.txt"), "delivered\n");
+
+    const result = await env.commitChanges(session.id, "deliver feature");
+
+    expect(result.committed).toBe(true);
+    expect(result.branch).toBe("agent/run-deli");
+    expect(result.sha).toMatch(/^[0-9a-f]{40}$/);
+    expect(result.files).toContain("feature.txt");
+
+    await env.dispose(session.id);
+
+    // The worktree directory is gone, but the branch and its commit remain.
+    expect(existsSync(worktreePath)).toBe(false);
+    const log = execFileSync("git", ["log", "--oneline", "agent/run-deli"], {
+      cwd: repoDir,
+      encoding: "utf-8",
+    });
+    expect(log).toContain("deliver feature");
+    const show = execFileSync("git", ["show", "--stat", "agent/run-deli"], {
+      cwd: repoDir,
+      encoding: "utf-8",
+    });
+    expect(show).toContain("feature.txt");
+  });
+
+  it("reports nothing to commit when the agent made no changes", async () => {
+    const session = await env.createSession({
+      workspaceId: "ws-1",
+      runId: "run-empty",
+      agentId: "agent-1",
+      environmentKind: "git-worktree",
+      workingDirectory: repoDir,
+    });
+
+    const result = await env.commitChanges(session.id, "noop");
+
+    expect(result.committed).toBe(false);
+    expect(result.files).toEqual([]);
+    expect(result.reason).toBe("No changes to commit");
+    await env.dispose(session.id);
+  });
+
+  it("reports work the agent already committed itself", async () => {
+    const session = await env.createSession({
+      workspaceId: "ws-1",
+      runId: "run-selfcommit",
+      agentId: "agent-1",
+      environmentKind: "git-worktree",
+      workingDirectory: repoDir,
+    });
+    const worktreePath = session.workingDirectory!;
+    writeFileSync(join(worktreePath, "self.txt"), "agent authored\n");
+    execFileSync("git", ["add", "-A"], { cwd: worktreePath, stdio: "pipe" });
+    execFileSync("git", ["commit", "-m", "agent commit"], { cwd: worktreePath, stdio: "pipe" });
+
+    const result = await env.commitChanges(session.id, "jarvis receipt");
+
+    // A clean worktree must not hide the branch's existing commits.
+    expect(result.committed).toBe(true);
+    expect(result.files).toContain("self.txt");
+    await env.dispose(session.id);
+  });
+
+  it("keeps runtime bookkeeping out of the deliverable", async () => {
+    const session = await env.createSession({
+      workspaceId: "ws-1",
+      runId: "run-runtime-dir",
+      agentId: "agent-1",
+      environmentKind: "git-worktree",
+      workingDirectory: repoDir,
+    });
+    const worktreePath = session.workingDirectory!;
+    writeFileSync(join(worktreePath, "real.txt"), "deliverable\n");
+
+    const result = await env.commitChanges(session.id, "deliver");
+
+    expect(result.committed).toBe(true);
+    expect(result.files).toContain("real.txt");
+    // .jarvis/ holds worktrees and logs; it is not part of the change set.
+    expect(result.files).not.toContain(".jarvis/");
+    await env.dispose(session.id);
+  });
 });

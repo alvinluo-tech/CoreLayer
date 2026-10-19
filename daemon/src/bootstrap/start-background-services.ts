@@ -4,11 +4,14 @@ import { registerSensor, startSensors, setSensorChangeHandler } from "../runtime
 import { createTodoSensor } from "../runtimes/scheduler/sensors/todo-sensor.js";
 import { createReadingSensor } from "../runtimes/scheduler/sensors/reading-sensor.js";
 import { dispatchRuns } from "../workflow/run-dispatcher.js";
-import { recoverInterruptedExecutorRuns } from "../workflow/executor-lifecycle-service.js";
+import { recoverInterruptedExecutorRuns, reapStaleAgentRuns } from "../workflow/executor-lifecycle-service.js";
 
 export async function startBackgroundServices(): Promise<void> {
   // Reconcile durable non-terminal attempts before any new work can be dispatched.
   await recoverInterruptedExecutorRuns();
+  // Runs whose attempt record is already gone would otherwise stay "running"
+  // forever and keep their tasks (and dependents) blocked.
+  await reapStaleAgentRuns();
 
   // Start scheduler and register default report schedules
   await startScheduler();

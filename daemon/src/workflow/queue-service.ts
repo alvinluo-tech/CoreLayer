@@ -123,8 +123,10 @@ export async function removeFromQueue(runId: string): Promise<boolean> {
   const run = await agentRuns.getById(runId);
   if (!run) return false;
 
-  if (run.status !== "queued" && run.status !== "running" || run.completedAt) {
-    return false; // Can only cancel queued/running items
+  // Only queued or running runs may be removed, and never once completed.
+  const removable = run.status === "queued" || run.status === "running";
+  if (!removable || run.completedAt) {
+    return false;
   }
 
   await agentRuns.updateStatus(runId, "cancelled");

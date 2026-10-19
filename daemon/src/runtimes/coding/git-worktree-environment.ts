@@ -16,17 +16,23 @@ import type {
   FileReadResult,
   FileWriteResult,
   Artifact,
+  CommitResult,
 } from "@jarvis/execution-environment";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { execGit, allowGitRoot } from "../../capabilities/adapters/git-command-adapter.js";
 import { spawnProcess } from "./process-spawner.js";
 
+/** Runtime directory the environment creates inside the repository. */
+const RUNTIME_DIR = ".jarvis";
+
 interface WorktreeSessionData {
   repoPath: string;
   worktreePath: string;
   branchName: string;
   projectWorkspaceId: string;
+  /** Commit the branch was created from; the delivery baseline. */
+  baseSha: string;
 }
 
 /** In-memory session store */
@@ -45,13 +51,21 @@ export class GitWorktreeEnvironment implements ExecutionEnvironment {
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
     const branchName = (envMeta.branchName as string) ?? `agent/${request.runId.slice(0, 8)}`;
-    const worktreeRoot = join(repoPath, ".jarvis", "worktrees");
+    const worktreeRoot = join(repoPath, RUNTIME_DIR, "worktrees");
     mkdirSync(worktreeRoot, { recursive: true });
 
     allowGitRoot(repoPath);
     allowGitRoot(worktreeRoot);
 
     const worktreePath = join(worktreeRoot, `run-${id.slice(0, 8)}`);
+
+    let baseSha = "";
+    try {
+      baseSha = (await execGit(["rev-parse", "HEAD"], repoPath, "git-worktree-environment")).trim();
+    } catch {
+      // A repository without commits cannot provide a baseline; delivery will
+      // report no changes rather than invent one.
+    }
 
     try {
       await execGit(
@@ -86,7 +100,7 @@ export class GitWorktreeEnvironment implements ExecutionEnvironment {
 
     sessions.set(id, {
       session,
-      data: { repoPath, worktreePath, branchName, projectWorkspaceId: request.workspaceId },
+      data: { repoPath, worktreePath, branchName, projectWorkspaceId: request.workspaceId, baseSha },
     });
 
     return session;
@@ -226,6 +240,154 @@ export class GitWorktreeEnvironment implements ExecutionEnvironment {
     }
 
     return artifacts;
+  }
+
+  async commitChanges(sessionId: string, message: string): Promise<CommitResult> {
+    const entry = sessions.get(sessionId);
+    if (!entry) return { committed: false, files: [], reason: "Session not found" };
+
+    const { worktreePath, repoPath, branchName, baseSha } = entry.data;
+    const context = { agentRunId: entry.session.runId, projectId: entry.data.projectWorkspaceId };
+
+    let files: string[] = [];
+    try {
+      const status = await execGit(["status", "--porcelain"], worktreePath, "git-worktree-environment", context);
+      files = status
+        .split(/\r?\n/)
+        .filter(Boolean)
+        // Keep the porcelain status prefix: it distinguishes renames/deletes,
+        // which must not be passed to `git add` as plain paths.
+        .map((line) => line.slice(3).trim());
+    } catch (err) {
+      return {
+        committed: false,
+        files: [],
+        reason: `Unable to read worktree status: ${err instanceof Error ? err.message : String(err)}`,
+      };
+    }
+
+    if (files.length === 0) {
+      // The agent may have committed on its own. Uncommitted work is not the
+      // only reason a branch can carry a deliverable; commits ahead of the
+      // base are equally real and must be reported.
+      const ahead = await this.commitsAheadOfBase(worktreePath, baseSha, context);
+      if (ahead > 0) {
+        let sha: string | undefined;
+        try {
+          sha = (await execGit(["rev-parse", "HEAD"], worktreePath, "git-worktree-environment", context)).trim();
+        } catch {
+          // Receipt is best-effort.
+        }
+        const committedFiles = await this.committedFiles(worktreePath, baseSha, context);
+        return {
+          committed: true,
+          branch: branchName,
+          sha,
+          files: committedFiles,
+        };
+      }
+      return { committed: false, files: [], reason: "No changes to commit" };
+    }
+
+    // Agent identity is local to this repo so commits do not depend on the
+    // user's global git config.
+    await execGit(["config", "user.name", "Jarvis Agent"], worktreePath, "git-worktree-environment", context);
+    await execGit(["config", "user.email", "agent@jarvis.local"], worktreePath, "git-worktree-environment", context);
+    await execGit(["add", "-A"], worktreePath, "git-worktree-environment", context);
+    // Runtime bookkeeping lives inside the repo but is not part of the
+    // deliverable; committing it would pollute every agent branch.
+    await this.unstageRuntimeDir(worktreePath, context);
+
+    // Excluding the runtime directory can empty the index entirely (a run that
+    // only wrote logs). There is nothing to deliver in that case.
+    const staged = await execGit(
+      ["diff", "--cached", "--name-only"],
+      worktreePath,
+      "git-worktree-environment",
+      context,
+    );
+    const stagedFiles = staged.split(/\r?\n/).filter(Boolean);
+    if (stagedFiles.length === 0) {
+      return { committed: false, files: [], reason: "No changes to commit" };
+    }
+
+    await execGit(["commit", "-m", message], worktreePath, "git-worktree-environment", context);
+
+    let sha: string | undefined;
+    try {
+      sha = (await execGit(["rev-parse", "HEAD"], worktreePath, "git-worktree-environment", context)).trim();
+    } catch {
+      // The commit succeeded; a missing SHA only weakens the receipt.
+    }
+
+    allowGitRoot(repoPath);
+    return { committed: true, branch: branchName, sha, files: stagedFiles };
+  }
+
+  /** Number of commits on this branch beyond the baseline it was created from. */
+  private async commitsAheadOfBase(
+    worktreePath: string,
+    baseSha: string,
+    context: { agentRunId: string; projectId: string },
+  ): Promise<number> {
+    if (!baseSha) return 0;
+    try {
+      const out = await execGit(
+        ["rev-list", "--count", `${baseSha}..HEAD`],
+        worktreePath,
+        "git-worktree-environment",
+        context,
+      );
+      return Number.parseInt(out.trim(), 10) || 0;
+    } catch {
+      return 0;
+    }
+  }
+
+  /** Files changed by this branch relative to the baseline it was created from. */
+  private async committedFiles(
+    worktreePath: string,
+    baseSha: string,
+    context: { agentRunId: string; projectId: string },
+  ): Promise<string[]> {
+    if (!baseSha) return [];
+    try {
+      const out = await execGit(
+        ["diff", "--name-only", baseSha, "HEAD"],
+        worktreePath,
+        "git-worktree-environment",
+        context,
+      );
+      return out.split(/\r?\n/).filter(Boolean);
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Remove the runtime directory from the index.
+   *
+   * `git rm --cached` refuses when the path is not tracked, which is the
+   * common case, so that specific failure is expected and ignored. Anything
+   * else is rethrown rather than silently leaving runtime files in the commit.
+   */
+  private async unstageRuntimeDir(
+    worktreePath: string,
+    context: { agentRunId: string; projectId: string },
+  ): Promise<void> {
+    try {
+      await execGit(
+        ["rm", "--cached", "-r", "--quiet", "--ignore-unmatch", RUNTIME_DIR],
+        worktreePath,
+        "git-worktree-environment",
+        context,
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      // --ignore-unmatch makes "not tracked" a success; anything reaching here
+      // is a real failure and must not be swallowed.
+      throw new Error(`Failed to exclude ${RUNTIME_DIR} from the delivery commit: ${message}`);
+    }
   }
 
   async dispose(sessionId: string): Promise<void> {

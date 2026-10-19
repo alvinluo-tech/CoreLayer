@@ -56,7 +56,18 @@ export async function execGit(
   args: string[],
   cwd: string,
   actorId: string,
-  opts?: { agentRunId?: string; projectId?: string; reason?: string },
+  opts?: {
+    agentRunId?: string;
+    projectId?: string;
+    reason?: string;
+    /**
+     * Set when a human explicitly requested this operation through an HTTP
+     * route. That request is the approval: the broker is still consulted and
+     * an explicit deny still wins, but an approval_required verdict does not
+     * dead-end the call.
+     */
+    userRequested?: boolean;
+  },
 ): Promise<string> {
   // Validate executable
   // args[0] is the git subcommand (worktree, diff, etc.) — we validate the
@@ -82,7 +93,7 @@ export async function execGit(
     throw new Error(`Permission denied for git command: ${decision.reason}`);
   }
 
-  if (decision.decision === "approval_required") {
+  if (decision.decision === "approval_required" && !opts?.userRequested) {
     throw new Error(`Git command requires approval: git ${args.join(" ")}`);
   }
 

@@ -5,8 +5,14 @@ import type {
   ExecutorStatus,
 } from "@jarvis/runtime-protocol";
 import { getRepositories } from "../persistence/factory.js";
-import { getExecutorAdapter, selectExecutorAdapter } from "../runtimes/coding/public-api.js";
+import { existsSync } from "node:fs";
+import {
+  getCodingEnvironment,
+  getExecutorAdapter,
+  selectExecutorAdapter,
+} from "../runtimes/coding/public-api.js";
 import { runVerification, type VerificationReport } from "../runtimes/coding/verification.js";
+import { getWorktreePolicyConfig } from "./worktree-policy.js";
 
 export interface ExecuteExecutorAttemptInput {
   agentRunId: string;
@@ -83,9 +89,66 @@ export async function executeExecutorAttempt(
   let artifacts: ExecutorArtifacts = { runId: attempt.id, artifacts: [] };
   const verification: VerificationReport[] = [];
   let sequence = 0;
+  let envSessionId: string | undefined;
+  let effectiveWorkingDir = input.workingDirectory;
+  let effectiveMetadata: Record<string, unknown> = { ...(input.environmentMetadata ?? {}) };
+  const environmentKind = input.environmentKind ?? "git-worktree";
 
   try {
     await executorRuns.updateStatus(attempt.id, "preparing_environment");
+
+    // Isolate the run in a dedicated worktree + agent branch whenever the
+    // target repository exists. Without this the agent edits the user's
+    // checkout directly and nothing can be reviewed or rolled back.
+    if (environmentKind === "git-worktree" && existsSync(input.workingDirectory)) {
+      const branchName = `agent/${input.agentRunId.slice(0, 8)}`;
+      try {
+        const env = getCodingEnvironment();
+        const session = await env.createSession({
+          workspaceId: input.workspaceId ?? "default",
+          projectId: input.projectId,
+          runId: attempt.id,
+          agentId: input.agentId,
+          environmentKind,
+          workingDirectory: input.workingDirectory,
+          metadata: {
+            ...input.environmentMetadata,
+            // Authoritative isolation facts come last so caller metadata
+            // cannot shadow the derived branch or repo path.
+            branchName,
+            repoPath: input.workingDirectory,
+          },
+        });
+        envSessionId = session.id;
+        if (session.workingDirectory) {
+          effectiveWorkingDir = session.workingDirectory;
+          effectiveMetadata = {
+            ...effectiveMetadata,
+            sessionId: session.id,
+            worktreePath: session.workingDirectory,
+            branchName,
+          };
+          await executorRuns.update(attempt.id, {
+            workingDirectory: effectiveWorkingDir,
+            environmentConfig: effectiveMetadata,
+          });
+        }
+      } catch (envErr) {
+        if (getWorktreePolicyConfig().requireWorktreePath) throw envErr;
+        await agentRunEvents.create({
+          runId: input.agentRunId,
+          sequence: sequence++,
+          type: "executor.environment_downgrade",
+          payload: {
+            attemptId: attempt.id,
+            environmentKind,
+            workingDirectory: input.workingDirectory,
+            reason: envErr instanceof Error ? envErr.message : String(envErr),
+          },
+        });
+      }
+    }
+
     const handle = await adapter.prepare({
       runId: attempt.id,
       taskId: input.taskId,
@@ -95,9 +158,9 @@ export async function executeExecutorAttempt(
       adapterId: input.adapterId,
       taskPrompt: input.taskPrompt,
       environment: {
-        kind: input.environmentKind ?? "git-worktree",
-        workingDirectory: input.workingDirectory,
-        metadata: input.environmentMetadata,
+        kind: environmentKind,
+        workingDirectory: effectiveWorkingDir,
+        metadata: effectiveMetadata,
       },
       timeoutMs: input.timeoutMs,
       permissionPolicy: input.permissionPolicy,
@@ -222,7 +285,116 @@ export async function executeExecutorAttempt(
     } catch {
       // The primary attempt result remains authoritative; cleanup is retried by reconciliation.
     }
+    if (envSessionId) {
+      // Persist work before disposing: disposal deletes the worktree directory,
+      // so anything still uncommitted would be lost with it.
+      await deliverWorktreeChanges({
+        envSessionId,
+        attemptId: attempt.id,
+        agentRunId: input.agentRunId,
+        taskId: input.taskId,
+        artifacts,
+        agentRunEvents,
+      });
+      try {
+        await getCodingEnvironment().dispose(envSessionId);
+      } catch {
+        // Best-effort removal; leftover worktrees are swept by reconciliation.
+      }
+    }
   }
+}
+
+/**
+ * Commit the worktree's work onto its agent branch and record the receipt.
+ *
+ * The branch is the durable deliverable: the worktree directory is removed on
+ * dispose, so without this the run's only output would be a text summary.
+ */
+async function deliverWorktreeChanges(input: {
+  envSessionId: string;
+  attemptId: string;
+  agentRunId: string;
+  taskId?: string;
+  artifacts: ExecutorArtifacts;
+  agentRunEvents: ReturnType<typeof getRepositories>["agentRunEvents"];
+}): Promise<void> {
+  const environment = getCodingEnvironment();
+  if (!environment.commitChanges) return;
+
+  const message = `Jarvis agent run ${input.agentRunId.slice(0, 8)}${input.taskId ? ` (task ${input.taskId.slice(0, 8)})` : ""}`;
+
+  let result;
+  try {
+    result = await environment.commitChanges(input.envSessionId, message);
+  } catch (err) {
+    await input.agentRunEvents.create({
+      runId: input.agentRunId,
+      sequence: Number.MAX_SAFE_INTEGER - 2,
+      type: "executor.delivery_failed",
+      payload: { attemptId: input.attemptId, reason: err instanceof Error ? err.message : String(err) },
+    });
+    return;
+  }
+
+  await input.agentRunEvents.create({
+    runId: input.agentRunId,
+    sequence: Number.MAX_SAFE_INTEGER - 2,
+    type: result.committed ? "executor.delivered" : "executor.nothing_to_deliver",
+    payload: {
+      attemptId: input.attemptId,
+      branch: result.branch,
+      sha: result.sha,
+      files: result.files,
+      reason: result.reason,
+    },
+  });
+
+  if (!result.committed || result.files.length === 0) return;
+
+  input.artifacts.artifacts.push({
+    type: "changed_files",
+    content: result.files.join("\n"),
+    metadata: { branch: result.branch, sha: result.sha },
+  });
+}
+
+/**
+ * Fail agent runs that have been "running" longer than any executor could
+ * legitimately take.
+ *
+ * Executor attempts are reconciled above, but a run whose attempt row was
+ * already terminal (or never created) stays "running" forever and keeps its
+ * task queued, blocking every dependent task in the workspace.
+ */
+export async function reapStaleAgentRuns(maxAgeMs = 6 * 60 * 60 * 1000): Promise<number> {
+  const { agentRuns, tasks } = getRepositories();
+  const active = await agentRuns.getActive(200);
+  const cutoff = Date.now() - maxAgeMs;
+  let reaped = 0;
+
+  for (const run of active) {
+    if (run.status !== "running" && run.status !== "waiting_for_approval") continue;
+    const startedAt = Date.parse(run.startedAt);
+    if (Number.isNaN(startedAt) || startedAt > cutoff) continue;
+
+    await agentRuns.updateStatus(
+      run.id,
+      "failed",
+      "Run exceeded the maximum lifetime and was reaped; it can be retried",
+    );
+    if (run.taskId) {
+      const task = await tasks.getById(run.taskId);
+      // Only release tasks still waiting on this run; a task that already
+      // finished must not be dragged back to failed.
+      if (task && (task.status === "queued" || task.status === "running")) {
+        await tasks.update(run.taskId, { status: "failed" });
+      }
+    }
+    reaped++;
+  }
+
+  return reaped;
 }
 
 export async function cancelExecutorAttempt(agentRunId: string): Promise<boolean> {

@@ -19,6 +19,17 @@ export const DEFAULT_SHELL_ALLOWLIST: ShellAllowlistRule[] = [
   { pattern: "git init", description: "Initialize repository", riskOverride: "low" },
   { pattern: "git add ", description: "Stage changes", riskOverride: "low" },
   { pattern: "git commit ", description: "Commit changes", riskOverride: "low" },
+  // Delivery commits need a repository-local identity when the user has no
+  // global git identity configured.
+  { pattern: "git config user.name ", description: "Set local git author name", riskOverride: "low" },
+  { pattern: "git config user.email ", description: "Set local git author email", riskOverride: "low" },
+  { pattern: "git rev-parse ", description: "Resolve git revisions", riskOverride: "low" },
+  { pattern: "git rev-list ", description: "List git revisions", riskOverride: "low" },
+  { pattern: "git merge-base ", description: "Find common ancestor", riskOverride: "low" },
+  { pattern: "git for-each-ref ", description: "List git refs", riskOverride: "low" },
+  { pattern: "git symbolic-ref ", description: "Read the current branch", riskOverride: "low" },
+  { pattern: "git merge ", description: "Merge a reviewed branch", riskOverride: "medium" },
+  { pattern: "git rm --cached", description: "Unstage a path without deleting it", riskOverride: "low" },
   { pattern: "claude ", description: "Claude Code CLI", riskOverride: "low" },
   { pattern: "codex ", description: "Codex CLI", riskOverride: "low" },
   { pattern: "opencode ", description: "OpenCode CLI", riskOverride: "low" },

@@ -3,6 +3,7 @@ import { getRepositories } from "../../persistence/factory.js";
 import { apiError } from "../../shared/errors.js";
 import { withErrorHandling } from "../middleware/error-handler.js";
 import { getWorkspaceDetail } from "../../services/workspace-detail.js";
+import { listDeliveredBranches, mergeDeliveredBranch } from "../../services/delivery-service.js";
 import { orchestrateFromGoal } from "../../services/workspace-orchestrator.js";
 import { db, schema } from "../../persistence/client.js";
 import { eq, and } from "drizzle-orm";
@@ -257,6 +258,50 @@ workspaceRoutes.get("/:id/artifacts", withErrorHandling("workspaces/artifacts", 
       });
 
   return c.json({ data: filtered });
+}));
+
+/**
+ * GET /api/workspaces/:id/deliveries - Agent branches awaiting review
+ *
+ * Executor runs commit to agent/* branches in the project repository.
+ * Nothing merges automatically; this lists what is waiting for a decision.
+ */
+workspaceRoutes.get("/:id/deliveries", withErrorHandling("workspaces/deliveries", async (c) => {
+  const workspaceId = c.req.param("id")!;
+  const { workspaces, projects } = getRepositories();
+  const workspace = await workspaces.getById(workspaceId);
+  if (!workspace) return apiError(c, "Workspace not found", 404);
+
+  const projectId = workspace.activeProjectId;
+  if (!projectId) return c.json({ data: [] });
+
+  const project = await projects.getById(projectId);
+  if (!project?.rootPath) return c.json({ data: [] });
+
+  const branches = await listDeliveredBranches(project.rootPath);
+  return c.json({ data: branches, projectId, rootPath: project.rootPath });
+}));
+
+/**
+ * POST /api/workspaces/:id/deliveries/merge - Merge a reviewed agent branch
+ * Body: { branch: "agent/xxxxxxxx" }
+ */
+workspaceRoutes.post("/:id/deliveries/merge", withErrorHandling("workspaces/merge-delivery", async (c) => {
+  const workspaceId = c.req.param("id")!;
+  const body = await c.req.json<{ branch?: string }>();
+  if (!body.branch) return apiError(c, "branch is required", 400);
+
+  const { workspaces, projects } = getRepositories();
+  const workspace = await workspaces.getById(workspaceId);
+  if (!workspace) return apiError(c, "Workspace not found", 404);
+  if (!workspace.activeProjectId) return apiError(c, "Workspace has no active project", 400);
+
+  const project = await projects.getById(workspace.activeProjectId);
+  if (!project?.rootPath) return apiError(c, "Project has no repository path", 400);
+
+  const result = await mergeDeliveredBranch(project.rootPath, body.branch);
+  if (!result.merged) return apiError(c, result.reason, 409);
+  return c.json({ success: true, message: result.reason });
 }));
 
 export default workspaceRoutes;

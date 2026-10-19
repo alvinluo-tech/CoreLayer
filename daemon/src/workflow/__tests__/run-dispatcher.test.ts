@@ -23,6 +23,7 @@ const mockTasksGetByProjectId = vi.fn().mockResolvedValue([]);
 const mockTasksGetByWorkspaceId = vi.fn().mockResolvedValue([]);
 const mockWorkspacesUpdate = vi.fn().mockResolvedValue(undefined);
 const mockPendingActionsGetOpenByWorkspace = vi.fn().mockResolvedValue([]);
+const mockProjectsGetById = vi.fn().mockResolvedValue({ id: "proj-1", rootPath: "/tmp/repo" });
 
 vi.mock("../../persistence/factory.js", () => ({
   getRepositories: vi.fn(() => ({
@@ -46,6 +47,9 @@ vi.mock("../../persistence/factory.js", () => ({
     },
     workspaces: {
       update: (...args: unknown[]) => mockWorkspacesUpdate(...args),
+    },
+    projects: {
+      getById: (...args: unknown[]) => mockProjectsGetById(...args),
     },
     pendingActions: {
       getOpenByWorkspace: (...args: unknown[]) => mockPendingActionsGetOpenByWorkspace(...args),
@@ -153,6 +157,8 @@ function createRun(overrides: { id?: string; status?: string; completedAt?: stri
     status: overrides.status ?? "queued",
     completedAt: overrides.completedAt ?? null,
     conversationId: "conv-1",
+    // Dispatch requires an explicit repository; no cwd fallback exists.
+    projectId: "proj-1",
     input: "test input",
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),

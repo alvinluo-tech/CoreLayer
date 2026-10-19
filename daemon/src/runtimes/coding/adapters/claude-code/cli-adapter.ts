@@ -259,6 +259,11 @@ export class ClaudeCodeCliAdapter implements CodingAgentAdapter {
       emitter.emit(runId, { type: "run_failed", error: decision.reason });
     };
 
+    // Track CLI-reported failures. The `claude` CLI exits 0 even when the
+    // model call fails (e.g. model_not_found), reporting it via is_error,
+    // so exit code alone cannot decide success.
+    let cliReportedError: string | undefined;
+
     const handle = spawnProcessLive({
       command: "claude",
       args,
@@ -267,6 +272,12 @@ export class ClaudeCodeCliAdapter implements CodingAgentAdapter {
       logDir,
       onStdout: (chunk) => {
         for (const event of decoder.push(chunk)) {
+          if (event.native.is_error === true || event.native.error) {
+            const message = typeof event.native.result === "string"
+              ? event.native.result
+              : String(event.native.error ?? "Executor reported an error");
+            cliReportedError = message;
+          }
           emitter.emit(runId, { type: "agent_message", text: event.text, native: event.native });
         }
         handleInteractiveChunk(chunk);
@@ -293,7 +304,7 @@ export class ClaudeCodeCliAdapter implements CodingAgentAdapter {
       info.completedAt = new Date().toISOString();
       info.durationMs = Date.now() - new Date(info.startedAt).getTime();
 
-      if (code === 0) {
+      if (code === 0 && !cliReportedError) {
         info.status = "succeeded";
         const summary = handle.stdout.join("") || "Task completed successfully";
         info.artifacts.push({ type: "final_summary", content: summary });
@@ -321,7 +332,8 @@ export class ClaudeCodeCliAdapter implements CodingAgentAdapter {
         });
       } else {
         info.status = "failed";
-        info.error = handle.stderr.join("") || `Exit code ${code}`;
+        info.error = cliReportedError
+          ?? (handle.stderr.join("") || `Exit code ${code}`);
         info.artifacts.push({ type: "error", content: info.error });
         emitter.emit(runId, { type: "run_failed", error: info.error });
 
