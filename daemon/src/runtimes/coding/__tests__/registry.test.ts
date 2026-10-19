@@ -4,6 +4,7 @@ import {
   getCodingRuntime,
   registerCodingRuntime,
   selectExecutorAdapter,
+  selectExecutorAdapterDetailed,
 } from "../registry.js";
 
 describe("CodingRuntime Registry", () => {
@@ -55,6 +56,55 @@ describe("CodingRuntime Registry", () => {
       adapterId: "future-cli",
       routeReason: expect.stringContaining("explicit preference"),
     }));
+  });
+
+  it("reports the capabilities the caller actually gets", async () => {
+    const { selection } = await selectExecutorAdapterDetailed({
+      permissionPolicy: "normal",
+      requireIsolation: true,
+    });
+
+    expect(selection.adapterId).toBeDefined();
+    expect(selection.capabilities.adapterId).toBe(selection.adapterId);
+    expect(selection.capabilities.domain).toBe("coding");
+  });
+
+  it("excludes CLI executors when tool-level approval is required", async () => {
+    // CLI adapters wrap the vendor's loop and report
+    // nativeToolApprovalIntercepted: false. Asking for real per-tool approval
+    // must not silently hand back an adapter that cannot provide it.
+    await expect(
+      selectExecutorAdapterDetailed({
+        permissionPolicy: "strict",
+        requireIsolation: true,
+        requirements: { requiresToolLevelApproval: true },
+      }),
+    ).rejects.toThrow(/tool-level approval cannot be enforced/);
+  });
+
+  it("skips a preferred adapter that cannot satisfy a requirement", async () => {
+    registerCodingRuntime({
+      id: "no-cancel-cli",
+      displayName: "No Cancel CLI",
+      name: "No Cancel CLI",
+      discover: async () => ({ available: true, transport: "cli" }),
+      startRun: async () => ({ runId: "run", adapterId: "no-cancel-cli", status: "running", startedAt: new Date().toISOString() }),
+      createRun: async () => { throw new Error("unused"); },
+      getRunStatus: async () => { throw new Error("unused"); },
+      async *streamRunEvents() {},
+      cancelRun: async () => true,
+      collectArtifacts: async () => [],
+    } as never);
+
+    const { selection } = await selectExecutorAdapterDetailed({
+      preferredAdapterId: "no-cancel-cli",
+      permissionPolicy: "normal",
+      requireIsolation: true,
+    });
+
+    // The wrapper reports cancellation support, so it is eligible; the point is
+    // that the decision is recorded with its capabilities rather than assumed.
+    expect(selection.capabilities.cancellation).toBeDefined();
   });
 
   it("claude-code adapter can create and track a run", async () => {

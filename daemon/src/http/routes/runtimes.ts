@@ -8,7 +8,7 @@
 import { Hono } from "hono";
 import { apiError, extractErrorMessage, logError } from "../../shared/errors.js";
 import { withErrorHandling } from "../middleware/error-handler.js";
-import { listCodingRuntimes, getCodingRuntime, getExecutablePath, spawnProcess } from "../../runtimes/coding/public-api.js";
+import { listCodingRuntimes, getCodingRuntime, getExecutorAdapter, getExecutablePath, spawnProcess } from "../../runtimes/coding/public-api.js";
 
 const app = new Hono();
 
@@ -43,6 +43,44 @@ interface AdapterDiagnostic {
   executablePath: string | null;
   pathSource: "PATH";
   installHint: string;
+  capabilities?: AdapterCapabilitySummary;
+}
+
+/**
+ * The control guarantees a caller actually gets, as opposed to what the UI
+ * might assume.
+ */
+interface AdapterCapabilitySummary {
+  cancellation: boolean;
+  structuredEvents: boolean;
+  toolLevelApproval: boolean;
+  isolatedEnvironment: boolean;
+  budgetPrecision: "exact" | "estimated" | "unknown";
+}
+
+/**
+ * Summarise an adapter's declared capabilities.
+ *
+ * CLI adapters delegate to a vendor tool loop: they stream events and can be
+ * cancelled, but approvals are inferred from output rather than intercepted,
+ * and cost is estimated from tokens rather than reported per call.
+ */
+function describeCapabilities(adapterId: string): AdapterCapabilitySummary | undefined {
+  const adapter = getCodingRuntime(adapterId);
+  if (!adapter) return undefined;
+  try {
+    const profile = getExecutorAdapter(adapterId)?.getCapabilities();
+    if (!profile) return undefined;
+    return {
+      cancellation: profile.cancellation,
+      structuredEvents: profile.streamEvents,
+      toolLevelApproval: profile.metadata?.nativeToolApprovalIntercepted === true,
+      isolatedEnvironment: profile.isolatedEnvironment,
+      budgetPrecision: profile.metadata?.nativeToolApprovalIntercepted === true ? "exact" : "estimated",
+    };
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -87,6 +125,10 @@ app.get("/coding/diagnostics", async (c) => {
           executablePath,
           pathSource: "PATH",
           installHint: INSTALL_HINTS[expected.id] ?? "",
+          // What this executor can and cannot be held to. A CLI cannot
+          // enforce per-tool approval or report exact cost, and the UI must
+          // not imply otherwise.
+          capabilities: describeCapabilities(expected.id),
         });
       } catch (err) {
         results.push({

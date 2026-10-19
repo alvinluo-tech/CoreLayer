@@ -16,6 +16,7 @@ export {
   getExecutorAdapter,
   registerCodingRuntime,
   selectExecutorAdapter,
+  selectExecutorAdapterDetailed,
 } from "./registry.js";
 
 export {
