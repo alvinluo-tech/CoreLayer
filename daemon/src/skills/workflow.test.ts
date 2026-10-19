@@ -44,7 +44,7 @@ describe("executeWorkflow", () => {
     expect(result.workflowName).toBe("test-workflow");
     expect(result.stepResults).toHaveLength(1);
     expect(result.finalOutput).toEqual("result-1");
-    expect(mockExecuteSkill).toHaveBeenCalledWith("skill-a", {});
+    expect(mockExecuteSkill).toHaveBeenCalledWith("skill-a", {}, { userRequested: true });
   });
 
   it("should execute multi-step workflow sequentially", async () => {
@@ -98,7 +98,7 @@ describe("executeWorkflow", () => {
       { other: 42 },
     );
 
-    expect(mockExecuteSkill).toHaveBeenCalledWith("skill-a", { other: 42, key: "value" });
+    expect(mockExecuteSkill).toHaveBeenCalledWith("skill-a", { other: 42, key: "value" }, { userRequested: true });
   });
 
   it("should map output from previous steps via mapInput", async () => {
@@ -120,7 +120,7 @@ describe("executeWorkflow", () => {
       ],
     });
 
-    expect(mockExecuteSkill).toHaveBeenLastCalledWith("skill-b", { result: { extracted: "data" }, mapped: "data" });
+    expect(mockExecuteSkill).toHaveBeenLastCalledWith("skill-b", { result: { extracted: "data" }, mapped: "data" }, { userRequested: true });
   });
 
   it("should pass output as input to next step", async () => {
@@ -138,7 +138,7 @@ describe("executeWorkflow", () => {
     });
 
     // Second call should receive { result: "first-output" }
-    expect(mockExecuteSkill).toHaveBeenLastCalledWith("skill-b", { result: "first-output" });
+    expect(mockExecuteSkill).toHaveBeenLastCalledWith("skill-b", { result: "first-output" }, { userRequested: true });
   });
 
   it("should handle empty steps array", async () => {
@@ -203,7 +203,7 @@ describe("executeWorkflow", () => {
       { custom: "data" },
     );
 
-    expect(mockExecuteSkill).toHaveBeenCalledWith("skill-a", { custom: "data" });
+    expect(mockExecuteSkill).toHaveBeenCalledWith("skill-a", { custom: "data" }, { userRequested: true });
   });
 });
 

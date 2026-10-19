@@ -5,6 +5,7 @@ import type {
 } from "./types.js";
 import { isApprovalRequiredResult } from "@jarvis/runtime-protocol";
 import { getSkill } from "./loader.js";
+import { evaluateSkillTrust } from "./governance.js";
 import { toolRuntime } from "../runtimes/tool/public-api.js";
 
 /**
@@ -18,6 +19,11 @@ export interface SkillRuntimeContext {
   conversationId?: string;
   projectId?: string;
   taskId?: string;
+  /**
+   * Set when a person explicitly asked for this skill. Explicit invocation
+   * overrides governance; automatic selection must pass the trust check.
+   */
+  userRequested?: boolean;
 }
 
 /**
@@ -37,6 +43,19 @@ export async function executeSkill(
       output: null,
       durationMs: 0,
       error: `Skill not found: ${skillName}`,
+    };
+  }
+
+  // A skill that has not earned trust must not run unattended.
+  const trust = evaluateSkillTrust(loaded.manifest);
+  if (!trust.auto && !runtimeContext?.userRequested) {
+    return {
+      success: false,
+      skillName,
+      steps: [],
+      output: null,
+      durationMs: 0,
+      error: `Skill requires explicit invocation: ${trust.reason}`,
     };
   }
 

@@ -21,6 +21,33 @@ export interface SkillManifest {
   steps: SkillStep[];
   /** Optional input schema for skill parameters */
   inputSchema?: Record<string, unknown>;
+  /**
+   * Automation level. A skill that has not earned trust runs only when a
+   * person asks for it; see `skills/governance.ts`.
+   */
+  autonomy?: "auto" | "suggest";
+  /** Set when the skill is no longer recommended for automatic use. */
+  deprecatedAt?: string;
+  deprecationReason?: string;
+  /** Evidence this skill was derived from and how it has performed. */
+  provenance?: SkillProvenance;
+}
+
+export interface SkillProvenance {
+  /** Task or run this skill was summarised from, when known. */
+  sourceTaskId?: string;
+  sourceRunId?: string;
+  /** Repositories or stacks the skill is known to apply to. */
+  appliesTo?: string[];
+  /** Recorded executions, most recent last. */
+  history?: SkillExecutionRecord[];
+}
+
+export interface SkillExecutionRecord {
+  runId?: string;
+  success: boolean;
+  executedAt: string;
+  error?: string;
 }
 
 export interface SkillStep {

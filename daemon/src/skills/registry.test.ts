@@ -191,7 +191,7 @@ describe("registerSkillAsTool", () => {
     const tool = mockRegisterJarvisTool.mock.calls[0][0];
     const result = await tool.execute({ query: "hello" });
 
-    expect(mockExecuteSkill).toHaveBeenCalledWith("test-skill", { query: "hello" });
+    expect(mockExecuteSkill).toHaveBeenCalledWith("test-skill", { query: "hello" }, { userRequested: true });
     expect(result.success).toBe(true);
     expect(result.data).toEqual({ result: "done" });
   });

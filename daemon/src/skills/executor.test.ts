@@ -49,7 +49,7 @@ describe("executeSkill", () => {
   it("should return error when skill not found", async () => {
     mockGetSkill.mockReturnValue(undefined);
 
-    const result = await executeSkill("nonexistent");
+    const result = await executeSkill("nonexistent", {}, { userRequested: true });
 
     expect(result.success).toBe(false);
     expect(result.error).toContain("Skill not found");
@@ -59,11 +59,30 @@ describe("executeSkill", () => {
   it("should execute a skill with no steps", async () => {
     mockGetSkill.mockReturnValue(makeSkill(makeManifest({ steps: [] })));
 
-    const result = await executeSkill("empty-skill");
+    const result = await executeSkill("empty-skill", {}, { userRequested: true });
 
     expect(result.success).toBe(true);
     expect(result.steps).toEqual([]);
     expect(result.output).toBeNull();
+  });
+
+  it("refuses to run an untrusted skill autonomously", async () => {
+    mockGetSkill.mockReturnValue(makeSkill(makeManifest({ steps: [] })));
+
+    // No recorded success and no explicit request: refuse rather than run.
+    const result = await executeSkill("empty-skill", {});
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("requires explicit invocation");
+    expect(result.steps).toEqual([]);
+  });
+
+  it("runs an untrusted skill when a person asks for it", async () => {
+    mockGetSkill.mockReturnValue(makeSkill(makeManifest({ steps: [] })));
+
+    const result = await executeSkill("empty-skill", {}, { userRequested: true });
+
+    expect(result.success).toBe(true);
   });
 
   it("should execute a single tool_call step", async () => {
@@ -80,7 +99,7 @@ describe("executeSkill", () => {
       durationMs: 10,
     });
 
-    const result = await executeSkill("single-step");
+    const result = await executeSkill("single-step", {}, { userRequested: true });
 
     expect(result.success).toBe(true);
     expect(result.steps).toHaveLength(1);
@@ -109,7 +128,7 @@ describe("executeSkill", () => {
       durationMs: 5,
     });
 
-    const result = await executeSkill("fail-skill");
+    const result = await executeSkill("fail-skill", {}, { userRequested: true });
 
     expect(result.success).toBe(false);
     expect(result.steps).toHaveLength(1);
@@ -140,7 +159,7 @@ describe("executeSkill", () => {
         durationMs: 10,
       });
 
-    const result = await executeSkill("chain-skill");
+    const result = await executeSkill("chain-skill", {}, { userRequested: true });
 
     expect(result.success).toBe(true);
     expect(result.steps).toHaveLength(2);
@@ -161,7 +180,7 @@ describe("executeSkill", () => {
     );
     mockToolExecute.mockRejectedValue(new Error("boom"));
 
-    const result = await executeSkill("crash-skill");
+    const result = await executeSkill("crash-skill", {}, { userRequested: true });
 
     expect(result.success).toBe(false);
     expect(result.error).toContain("boom");
@@ -190,7 +209,7 @@ describe("condition step", () => {
       ),
     );
 
-    const result = await executeSkill("cond-skill", { ready: true });
+    const result = await executeSkill("cond-skill", { ready: true }, { userRequested: true });
 
     expect(result.success).toBe(true);
     expect(result.steps[0].output).toEqual({ condition: true, next: "next_step" });
@@ -213,7 +232,7 @@ describe("condition step", () => {
       ),
     );
 
-    const result = await executeSkill("cond-false-skill", { ready: false });
+    const result = await executeSkill("cond-false-skill", { ready: false }, { userRequested: true });
 
     expect(result.success).toBe(true);
     expect(result.steps[0].output).toEqual({ condition: false, next: "fallback" });
@@ -236,7 +255,7 @@ describe("condition step", () => {
       ),
     );
 
-    const result = await executeSkill("compare-skill", { count: 10 });
+    const result = await executeSkill("compare-skill", { count: 10 }, { userRequested: true });
 
     expect(result.success).toBe(true);
     expect(result.steps[0].output).toEqual({ condition: true, next: "many" });
@@ -259,7 +278,7 @@ describe("condition step", () => {
       ),
     );
 
-    const result = await executeSkill("danger-skill");
+    const result = await executeSkill("danger-skill", {}, { userRequested: true });
 
     expect(result.success).toBe(true);
     expect(result.steps[0].output).toEqual({ condition: false, next: "safe" });
@@ -286,7 +305,7 @@ describe("transform step", () => {
       ),
     );
 
-    const result = await executeSkill("transform-skill", { name: "Alice" });
+    const result = await executeSkill("transform-skill", { name: "Alice" }, { userRequested: true });
 
     expect(result.success).toBe(true);
     expect(result.steps[0].output).toBe(true);
@@ -307,7 +326,7 @@ describe("transform step", () => {
       ),
     );
 
-    const result = await executeSkill("transform-falsy");
+    const result = await executeSkill("transform-falsy", {}, { userRequested: true });
 
     expect(result.success).toBe(true);
     expect(result.steps[0].output).toBe(false);
@@ -322,7 +341,7 @@ describe("transform step", () => {
       ),
     );
 
-    const result = await executeSkill("no-transform");
+    const result = await executeSkill("no-transform", {}, { userRequested: true });
 
     expect(result.success).toBe(true);
     expect(result.steps[0].output).toBe(false);
@@ -349,7 +368,7 @@ describe("output step", () => {
       ),
     );
 
-    const result = await executeSkill("output-skill", { name: "Bob", count: 5 });
+    const result = await executeSkill("output-skill", { name: "Bob", count: 5 }, { userRequested: true });
 
     expect(result.success).toBe(true);
     expect(result.steps[0].output).toBe("Hello Bob, you have 5 items");
@@ -364,7 +383,7 @@ describe("output step", () => {
       ),
     );
 
-    const result = await executeSkill("empty-template");
+    const result = await executeSkill("empty-template", {}, { userRequested: true });
 
     expect(result.success).toBe(true);
     expect(result.steps[0].output).toBe("");
@@ -385,7 +404,7 @@ describe("unknown step type", () => {
       ),
     );
 
-    const result = await executeSkill("unknown-step-skill");
+    const result = await executeSkill("unknown-step-skill", {}, { userRequested: true });
 
     expect(result.success).toBe(true); // unknown steps don't stop execution
     expect(result.steps[0].success).toBe(false);
@@ -407,7 +426,7 @@ describe("tool_call step edge cases", () => {
       ),
     );
 
-    const result = await executeSkill("no-tool-skill");
+    const result = await executeSkill("no-tool-skill", {}, { userRequested: true });
 
     expect(result.success).toBe(false);
     expect(result.steps[0].success).toBe(false);
@@ -428,7 +447,7 @@ describe("tool_call step edge cases", () => {
       durationMs: 5,
     });
 
-    const result = await executeSkill("err-skill");
+    const result = await executeSkill("err-skill", {}, { userRequested: true });
 
     expect(result.success).toBe(false);
     expect(result.steps[0].success).toBe(false);
@@ -456,7 +475,7 @@ describe("tool_call step edge cases", () => {
       projectId: "proj-1",
     };
 
-    const result = await executeSkill("ctx-skill", {}, runtimeContext);
+    const result = await executeSkill("ctx-skill", {}, { ...runtimeContext, userRequested: true });
 
     expect(result.success).toBe(true);
     expect(mockToolExecute).toHaveBeenCalledWith("my_tool", { key: "val" }, {
@@ -483,7 +502,7 @@ describe("tool_call step edge cases", () => {
       durationMs: 5,
     });
 
-    const result = await executeSkill("no-ctx-skill");
+    const result = await executeSkill("no-ctx-skill", {}, { userRequested: true });
 
     expect(result.success).toBe(true);
     expect(mockToolExecute).toHaveBeenCalledWith("my_tool", {}, {

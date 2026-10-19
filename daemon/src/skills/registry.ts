@@ -44,7 +44,11 @@ export function registerSkillAsTool(skill: LoadedSkill): void {
     permissions: [],
     requiresConfirmation: manifest.risk === "high" || manifest.risk === "critical",
     execute: async (args: unknown): Promise<ToolResult> => {
-      const result = await executeSkill(manifest.name, args as Record<string, unknown>);
+      // The tool is registered from a manifest and invoked by name, so this is
+      // a deliberate request rather than autonomous skill selection.
+      const result = await executeSkill(manifest.name, args as Record<string, unknown>, {
+        userRequested: true,
+      });
       return {
         success: result.success,
         data: result.output,

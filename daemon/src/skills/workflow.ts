@@ -64,7 +64,9 @@ export async function executeWorkflow(
         currentInput = { ...currentInput, ...step.input };
       }
 
-      const result = await executeSkill(step.skill, currentInput);
+      // A workflow names its skills explicitly, so each step is a deliberate
+      // request rather than autonomous selection.
+      const result = await executeSkill(step.skill, currentInput, { userRequested: true });
       stepResults.push(result);
 
       if (!result.success) {
