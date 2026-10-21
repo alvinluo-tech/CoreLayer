@@ -208,6 +208,7 @@ async function dispatchToCodingRuntime(
     adapterId: selection.adapterId,
     taskPrompt,
     workingDirectory: repoPath,
+    environmentKind: "git-worktree",
     timeoutMs: granted?.timeoutMs ?? 300_000,
     permissionPolicy,
     testCommands: granted?.testCommands.length

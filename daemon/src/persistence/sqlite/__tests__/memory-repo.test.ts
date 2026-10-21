@@ -25,6 +25,9 @@ function createTestDb() {
       source_run_id TEXT,
       source_message_id TEXT,
       last_verified_at TEXT,
+      valid_from TEXT,
+      superseded_by TEXT,
+      temporal_anchor TEXT,
       created_at TEXT DEFAULT 'CURRENT_TIMESTAMP',
       updated_at TEXT DEFAULT 'CURRENT_TIMESTAMP'
     );
@@ -36,7 +39,7 @@ const testDb = createTestDb();
 
 vi.mock("../../client.js", () => ({ db: testDb, schema }));
 
-const { createSqliteMemoryRepo } = await import("../memory-repo.js");
+const { createSqliteMemoryRepo, computeMemoryScore } = await import("../memory-repo.js");
 
 describe("Memory Repository", () => {
   let memories: ReturnType<typeof createSqliteMemoryRepo>;
@@ -803,6 +806,215 @@ describe("Memory Repository", () => {
       expect(ws2).toHaveLength(1);
       expect(ws1[0].value).toBe("spaces");
       expect(ws2[0].value).toBe("tabs");
+    });
+  });
+
+  // ---- ADD-only versioning (Mem0 paradigm) ----
+
+  describe("ADD-only upsert with supersede", () => {
+    it("preserves the old version in history instead of overwriting it", async () => {
+      const first = await memories.upsert({ type: "fact", key: "editor", value: "VSCode" });
+      const second = await memories.upsert({ type: "fact", key: "editor", value: "Cursor" });
+
+      expect(second.id).not.toBe(first.id);
+      expect(second.value).toBe("Cursor");
+      expect(second.supersededBy).toBeNull();
+      expect(second.validFrom).toBeTruthy();
+
+      // Raw table keeps BOTH versions — nothing was destroyed.
+      const raw = testDb.select().from(schema.memories).all();
+      expect(raw).toHaveLength(2);
+
+      const old = raw.find((r) => r.id === first.id)!;
+      expect(old.value).toBe("VSCode");
+      expect(old.supersededBy).toBe(second.id);
+    });
+
+    it("returns only the current version from listing APIs", async () => {
+      await memories.upsert({ type: "fact", key: "editor", value: "VSCode" });
+      await memories.upsert({ type: "fact", key: "editor", value: "Cursor" });
+
+      expect(await memories.getAll()).toHaveLength(1);
+      const byKey = await memories.getByKey("editor");
+      expect(byKey!.value).toBe("Cursor");
+    });
+
+    it("does not pile up history for identical re-extractions", async () => {
+      const first = await memories.upsert({ type: "fact", key: "os", value: "Windows" });
+      const again = await memories.upsert({ type: "fact", key: "os", value: "Windows" });
+
+      expect(again.id).toBe(first.id);
+      expect(again.supersededBy).toBeNull();
+      const raw = testDb.select().from(schema.memories).all();
+      expect(raw).toHaveLength(1);
+      expect(again.lastVerifiedAt).toBeTruthy();
+    });
+
+    it("supersedes case-insensitive key matches", async () => {
+      const first = await memories.upsert({ type: "fact", key: "User_Name", value: "Alvin" });
+      const second = await memories.upsert({ type: "fact", key: "user_name", value: "Bob" });
+
+      const raw = testDb.select().from(schema.memories).all();
+      expect(raw).toHaveLength(2);
+      const old = raw.find((r) => r.id === first.id)!;
+      expect(old.supersededBy).toBe(second.id);
+      expect(await memories.getByKey("USER_NAME")).not.toBeNull();
+    });
+
+    it("supersedes crash-leftover duplicate currents self-healing", async () => {
+      const first = await memories.upsert({ type: "fact", key: "k", value: "v1" });
+      // Simulate a crash between insert and mark: insert a second current row
+      // directly bypassing the repository.
+      testDb.insert(schema.memories).values({
+        id: "orphan-current",
+        userId: "default",
+        scopeType: "user",
+        scopeId: null,
+        type: "fact",
+        tier: "context",
+        key: "k",
+        value: "v2",
+        source: null,
+        confidence: null,
+        uses: 0,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }).run();
+
+      await memories.upsert({ type: "fact", key: "k", value: "v3" });
+
+      // Every prior current row must be superseded by the new version.
+      const raw = testDb.select().from(schema.memories).all();
+      const currents = raw.filter((r) => r.supersededBy === null);
+      expect(currents).toHaveLength(1);
+      expect(currents[0].value).toBe("v3");
+      expect(raw.find((r) => r.id === first.id)!.supersededBy).toBeTruthy();
+      expect(raw.find((r) => r.id === "orphan-current")!.supersededBy).toBe(currents[0].id);
+    });
+
+    it("keeps supersede scoped: same key in another scope stays current", async () => {
+      await memories.upsert({ type: "fact", key: "style", value: "dark", scopeType: "workspace", scopeId: "ws-1" });
+      await memories.upsert({ type: "fact", key: "style", value: "light", scopeType: "workspace", scopeId: "ws-1" });
+      await memories.upsert({ type: "fact", key: "style", value: "solarized", scopeType: "workspace", scopeId: "ws-2" });
+
+      const ws2 = await memories.fetchByScope("workspace", "ws-2");
+      expect(ws2).toHaveLength(1);
+      expect(ws2[0].value).toBe("solarized");
+      expect(ws2[0].supersededBy).toBeNull();
+    });
+
+    it("carries the uses counter into the new version", async () => {
+      const first = await memories.upsert({ type: "fact", key: "k", value: "v1" });
+      await memories.incrementUses(first.id);
+      await memories.incrementUses(first.id);
+      const second = await memories.upsert({ type: "fact", key: "k", value: "v2" });
+      expect(second.uses).toBe(2);
+    });
+
+    it("records the temporal anchor on the new version", async () => {
+      const row = await memories.upsert({
+        type: "fact",
+        key: "vacation",
+        value: "去了日本",
+        temporalAnchor: "2026-08",
+      });
+      expect(row.temporalAnchor).toBe("2026-08");
+      expect(row.validFrom).toBeTruthy();
+    });
+
+    it("supersedes via upsertPreferences the same way", async () => {
+      await memories.upsertPreferences([{ key: "theme", value: "dark" }]);
+      const updated = await memories.upsertPreferences([{ key: "theme", value: "light" }]);
+
+      expect(updated[0].value).toBe("light");
+      const raw = testDb.select().from(schema.memories).all();
+      expect(raw).toHaveLength(2);
+      expect(raw.find((r) => r.value === "dark")!.supersededBy).toBe(updated[0].id);
+    });
+  });
+
+  // ---- Multi-signal temporal retrieval ----
+
+  describe("temporal fusion retrieval", () => {
+    it("ranks the current version above its superseded predecessor", async () => {
+      await memories.upsert({ type: "fact", key: "favorite_editor", value: "VSCode" });
+      await memories.upsert({ type: "fact", key: "favorite_editor", value: "Cursor" });
+
+      const results = await memories.searchScored("favorite_editor");
+      expect(results.length).toBe(2);
+      expect(results[0].value).toBe("Cursor");
+      expect(results[0].supersededBy).toBeNull();
+      const superseded = results.find((r) => r.value === "VSCode")!;
+      expect(superseded.supersededBy).toBeTruthy();
+      expect(superseded.score).toBeLessThan(results[0].score);
+    });
+
+    it("keeps superseded history retrievable (down-weighted, not deleted)", async () => {
+      await memories.upsert({ type: "fact", key: "phone", value: "13800000000" });
+      await memories.upsert({ type: "fact", key: "phone", value: "13900000000" });
+
+      const results = await memories.searchScored("phone");
+      expect(results.some((r) => r.value === "13800000000")).toBe(true);
+    });
+
+    it("prefers the newer memory when lexical scores are equal", async () => {
+      const oldDate = new Date(Date.now() - 40 * 86_400_000).toISOString();
+      testDb.insert(schema.memories).values({
+        id: "old-mem", userId: "default", scopeType: "user", scopeId: null,
+        type: "fact", tier: "fact", key: "drink", value: "coffee",
+        source: null, confidence: null, uses: 0,
+        createdAt: oldDate, updatedAt: oldDate,
+      }).run();
+      await memories.upsert({ type: "fact", key: "drink", value: "tea" });
+
+      const results = await memories.searchScored("drink");
+      const coffee = results.find((r) => r.value === "coffee")!;
+      const tea = results.find((r) => r.value === "tea")!;
+      // 40 days of ~5%/day decay ≈ 0.135x — recency must dominate.
+      expect(tea.score).toBeGreaterThan(coffee.score);
+      expect(results[0].value).toBe("tea");
+    });
+  });
+
+  // ---- computeMemoryScore (pure formula) ----
+
+  describe("computeMemoryScore", () => {
+    const today = () => new Date().toISOString();
+    const daysAgoIso = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString();
+
+    it("computes the fusion formula for a fresh current memory", () => {
+      const score = computeMemoryScore({ bm25Rank: 0, vectorSim: 1, createdAt: today(), isSuperseded: false });
+      expect(score).toBeCloseTo(1 / 60 + 0.4, 5);
+    });
+
+    it("applies the 0.3 superseded penalty", () => {
+      const current = computeMemoryScore({ bm25Rank: 0, vectorSim: 1, createdAt: today(), isSuperseded: false });
+      const superseded = computeMemoryScore({ bm25Rank: 0, vectorSim: 1, createdAt: today(), isSuperseded: true });
+      expect(superseded).toBeCloseTo(current * 0.3, 5);
+    });
+
+    it("decays ~5% per day", () => {
+      const fresh = computeMemoryScore({ bm25Rank: 0, vectorSim: 1, createdAt: today(), isSuperseded: false });
+      const tenDays = computeMemoryScore({ bm25Rank: 0, vectorSim: 1, createdAt: daysAgoIso(10), isSuperseded: false });
+      expect(tenDays).toBeCloseTo(fresh * Math.exp(-0.5), 5);
+      expect(tenDays).toBeLessThan(fresh);
+    });
+
+    it("penalizes worse lexical rank positions", () => {
+      const rank0 = computeMemoryScore({ bm25Rank: 0, vectorSim: 0.5, createdAt: today(), isSuperseded: false });
+      const rank9 = computeMemoryScore({ bm25Rank: 9, vectorSim: 0.5, createdAt: today(), isSuperseded: false });
+      expect(rank9).toBeLessThan(rank0);
+    });
+
+    it("scores 0 on malformed timestamps (never surfaces undated junk)", () => {
+      expect(computeMemoryScore({ bm25Rank: 0, vectorSim: 1, createdAt: "not-a-date", isSuperseded: false })).toBe(0);
+    });
+
+    it("clamps future timestamps to no boost beyond fresh", () => {
+      const future = new Date(Date.now() + 30 * 86_400_000).toISOString();
+      const fresh = computeMemoryScore({ bm25Rank: 0, vectorSim: 1, createdAt: today(), isSuperseded: false });
+      const futureScore = computeMemoryScore({ bm25Rank: 0, vectorSim: 1, createdAt: future, isSuperseded: false });
+      expect(futureScore).toBeCloseTo(fresh, 5);
     });
   });
 });

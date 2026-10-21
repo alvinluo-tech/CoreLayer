@@ -3,6 +3,7 @@ import { isApprovalRequiredResult } from "@jarvis/runtime-protocol";
 import { toolRuntime } from "../public-api.js";
 import { getRegistry } from "./native-tools/registry.js";
 import { resolveToolCallId, withToolInvocationContext } from "../domain/tool-call-id.js";
+import { saveSpill, SPILL_THRESHOLD_CHARS } from "../domain/spill-store.js";
 
 /**
  * Runtime context passed through to ToolRuntime for every AI tool call.
@@ -19,7 +20,6 @@ export interface AIToolRuntimeContext {
   onApprovalRequired?: (approvalRequestId: string) => void;
 }
 
-const MAX_TOOL_RESULT_CHARS = 4000;
 const TRUNCATION_NOTICE = "\n\n[结果已截断——过长，已保留首尾摘要]";
 
 /**
@@ -44,21 +44,38 @@ export function extractApprovalRequestIds(value: unknown): string[] {
 }
 
 /**
- * Soft-trim a tool result if it exceeds MAX_TOOL_RESULT_CHARS.
- * Preserves head (70%) + tail (30%) with a truncation notice.
+ * Trim a tool result that exceeds SPILL_THRESHOLD_CHARS.
+ *
+ * Preferred path: spill the full text to disk (SpillStore) and return a
+ * structured handle — total size, on-disk locator, head/tail preview, and a
+ * retrieval hint — so oversized output stays fully inspectable.
+ *
+ * Fallback path: if the disk write fails, degrade to the lossy 70/30
+ * head/tail truncation instead of failing the agent turn.
  * JSON.stringify is applied first to handle structured data.
  */
-export function trimToolResult(value: unknown): unknown {
+export function trimToolResult(
+  value: unknown,
+  context?: { sessionId?: string; toolName?: string; callId?: string },
+): unknown {
   const str = typeof value === "string" ? value : JSON.stringify(value);
-  if (!str || str.length <= MAX_TOOL_RESULT_CHARS) return value;
+  if (!str || str.length <= SPILL_THRESHOLD_CHARS) return value;
 
-  const bodyBudget = MAX_TOOL_RESULT_CHARS - TRUNCATION_NOTICE.length;
-  const headLen = Math.floor(bodyBudget * 0.7);
-  const tailLen = bodyBudget - headLen;
-
-  const head = str.slice(0, headLen);
-  const tail = str.slice(-tailLen);
-  return head + TRUNCATION_NOTICE + tail;
+  try {
+    const spill = saveSpill(str, context);
+    return (
+      `[Tool Output Spilled]\n` +
+      `Total Size: ${spill.bytes} bytes (${spill.chars} characters).\n` +
+      `Full Content Saved To: ${spill.locator}\n\n` +
+      `Preview:\n${spill.preview}\n\n` +
+      `Hint: ${spill.retrievalHint}`
+    );
+  } catch {
+    const bodyBudget = SPILL_THRESHOLD_CHARS - TRUNCATION_NOTICE.length;
+    const headLen = Math.floor(bodyBudget * 0.7);
+    const tailLen = bodyBudget - headLen;
+    return str.slice(0, headLen) + TRUNCATION_NOTICE + str.slice(-tailLen);
+  }
 }
 
 /**
@@ -106,7 +123,13 @@ export function wrapToolsForAI(
             // in onStepFinish and suspends the run.
             return `${APPROVAL_REQUIRED_PREFIX}${JSON.stringify({ ids: [executeResult.approvalRequestId] })}`;
           }
-          if (executeResult.result.success) return trimToolResult(executeResult.result.data);
+          if (executeResult.result.success) {
+            return trimToolResult(executeResult.result.data, {
+              sessionId: ctx.conversationId ?? ctx.runId,
+              toolName: name,
+              callId: toolCallId,
+            });
+          }
           throw new Error(executeResult.result.error ?? "Tool execution failed");
         },
       } as Tool;

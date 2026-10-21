@@ -55,8 +55,37 @@ Cargo.lock
 # Test coverage
 coverage/
 
-# Docs (local only)
-docs/
+# Docs
+# Publishable reference docs are tracked; working notes stay local.
+# See AGENTS.md "Documentation policy" before adding or moving docs.
+# --- local-only working notes (NOT published) ---
+docs/planning/
+docs/superpowers/
+docs/bugs/
+docs/problems/
+docs/audits/
+docs/competition/
+docs/research/
+docs/ideas/
+docs/voice-pipeline/
+docs/design/
+docs/architecture/*todo*.md
+docs/architecture/*plan*.md
+docs/architecture/*refactor*.md
+docs/architecture/agent-os-*.md
+docs/architecture/*review*.md
+docs/architecture/roadmap/
+docs/architecture/2026-*.md
+# --- publishable (tracked, tracked via explicit entry even if a parent dir is ignored) ---
+!docs/ARCHITECTURE.md
+!docs/DESIGN.md
+!docs/PRD.md
+!docs/git-workflow.md
+!docs/mcp-compatibility-guide.md
+!docs/architecture/final-multi-runtime-architecture.md
+!docs/architecture/final-directory-structure-design.md
+!docs/architecture/mcp-tool-architecture.md
+!docs/reviews/
 
 # Design mockups
 frontend/mockups/

@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import type {
   ExecutorAdapter,
   ExecutorArtifacts,
@@ -5,7 +6,6 @@ import type {
   ExecutorStatus,
 } from "@jarvis/runtime-protocol";
 import { getRepositories } from "../persistence/factory.js";
-import { existsSync } from "node:fs";
 import {
   getCodingEnvironment,
   getExecutorAdapter,
@@ -235,7 +235,7 @@ export async function executeExecutorAttempt(
         allowedPaths: input.allowedPaths,
         requiredArtifactTypes: input.requiredArtifactTypes,
         testCommand,
-        testCwd: testCommand ? input.workingDirectory : undefined,
+        testCwd: testCommand ? effectiveWorkingDir : undefined,
       }));
     }
 
@@ -301,7 +301,8 @@ export async function executeExecutorAttempt(
     }
     if (envSessionId) {
       // Persist work before disposing: disposal deletes the worktree directory,
-      // so anything still uncommitted would be lost with it.
+      // so anything still uncommitted would be lost with it. The agent branch
+      // survives disposal; the worktree directory must not.
       await deliverWorktreeChanges({
         envSessionId,
         attemptId: attempt.id,

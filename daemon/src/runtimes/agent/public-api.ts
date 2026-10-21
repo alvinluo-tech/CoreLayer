@@ -19,8 +19,6 @@ export { ContextBuilder } from "./application/context-builder.js";
 export { decomposeTask } from "./application/task-decomposer.js";
 export { buildTickSystemPrompt } from "./application/prompt-builder.js";
 export { compressConversation } from "./application/compressor.js";
-export { runAgentLoop, MessageQueue, registerActiveQueue, unregisterActiveQueue, getActiveQueue } from "./application/agent-loop.js";
-export type { AgentLoopConfig, DeliveryMode } from "./application/agent-loop.js";
 export { shouldGenerateSummary, generateRollingSummary, getRollingSummary } from "./application/rolling-summary.js";
 export type { RollingSummaryConfig } from "./application/rolling-summary.js";
 export type { AgentRunEvent } from "./domain/agent-run.js";
@@ -33,7 +31,6 @@ import { ContextBuilder } from "./application/context-builder.js";
 import { decomposeTask } from "./application/task-decomposer.js";
 import { buildTickSystemPrompt } from "./application/prompt-builder.js";
 import { compressConversation } from "./application/compressor.js";
-import { runAgentLoop, MessageQueue, registerActiveQueue, unregisterActiveQueue, getActiveQueue } from "./application/agent-loop.js";
 import { shouldGenerateSummary, generateRollingSummary, getRollingSummary } from "./application/rolling-summary.js";
 
 /** Facade — prefer importing this object over individual named exports. */
@@ -51,11 +48,6 @@ export const agentRuntimeApi = {
   decomposeTask,
   buildTickSystemPrompt,
   compressConversation,
-  runAgentLoop,
-  MessageQueue,
-  registerActiveQueue,
-  unregisterActiveQueue,
-  getActiveQueue,
   shouldGenerateSummary,
   generateRollingSummary,
   getRollingSummary,

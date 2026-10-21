@@ -275,6 +275,9 @@ describe("assembleContext", () => {
       sourceMessageId: null,
       lastVerifiedAt: null,
       expiresAt: null,
+      validFrom: null,
+      supersededBy: null,
+      temporalAnchor: null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };

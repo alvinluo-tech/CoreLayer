@@ -15,6 +15,12 @@ export interface MemoryRow {
   sourceMessageId: string | null;
   lastVerifiedAt: string | null;
   expiresAt: string | null;
+  /** ISO timestamp of when this version of the fact became true (ADD-only history). */
+  validFrom: string | null;
+  /** ID of the memory row that replaced this one, if superseded. */
+  supersededBy: string | null;
+  /** Optional time context of when the underlying fact occurred. */
+  temporalAnchor: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -36,6 +42,8 @@ export interface UpsertMemoryInput {
   sourceRunId?: string;
   sourceMessageId?: string;
   expiresAt?: string;
+  /** Time context of when the fact occurred (e.g. "last summer", an ISO date). */
+  temporalAnchor?: string;
 }
 
 export interface MemoryRepository {

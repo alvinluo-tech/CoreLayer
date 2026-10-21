@@ -66,6 +66,9 @@ function createTestDb() {
       source_run_id TEXT,
       source_message_id TEXT,
       last_verified_at TEXT,
+      valid_from TEXT,
+      superseded_by TEXT,
+      temporal_anchor TEXT,
       created_at TEXT DEFAULT 'CURRENT_TIMESTAMP',
       updated_at TEXT DEFAULT 'CURRENT_TIMESTAMP'
     );

@@ -273,6 +273,12 @@ export const memories = sqliteTable("memories", {
   sourceMessageId: text("source_message_id"),
   lastVerifiedAt: text("last_verified_at"),
   expiresAt: text("expires_at"),
+  // Temporal versioning (Mem0-style ADD-only history): rows are never
+  // overwritten — a changed fact inserts a new row and marks the old one
+  // supersededBy = <new id>. validFrom records when this version became true.
+  validFrom: text("valid_from"),
+  supersededBy: text("superseded_by"),
+  temporalAnchor: text("temporal_anchor"),
   createdAt: text("created_at").default("CURRENT_TIMESTAMP").notNull(),
   updatedAt: text("updated_at").default("CURRENT_TIMESTAMP").notNull(),
 });
