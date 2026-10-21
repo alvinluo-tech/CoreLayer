@@ -10,6 +10,7 @@
  * reliability number.
  */
 
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { isAbsolute, join, normalize, resolve } from "node:path";
 import type { EvalTask } from "./corpus.js";
@@ -21,21 +22,47 @@ export interface CheckResult {
   detail: string;
 }
 
+/**
+ * A result from a rule the corpus did not declare: the workspaces-untouched
+ * rule for negative tasks. Kept distinct from a declared `command` check so the
+ * report does not claim the corpus described something it did not.
+ */
+export type VerdictCheck = CheckResult | { kind: "workspace-unchanged"; passed: boolean; detail: string };
+
 export interface AttemptVerdict {
   passed: boolean;
-  checks: CheckResult[];
+  checks: VerdictCheck[];
 }
 
+/** Digest of a seeded file, taken before the executor runs. */
+export type SeedDigests = Record<string, string>;
+
 const COMMAND_TIMEOUT_MS = 60_000;
+
+/** Digest of the files a task seeds, for `file-unchanged` checks. */
+export function digestSeeds(files: Record<string, string>): SeedDigests {
+  const digests: SeedDigests = {};
+  for (const [path, content] of Object.entries(files)) {
+    digests[path] = sha256(content);
+  }
+  return digests;
+}
 
 export async function judgeAttempt(
   task: EvalTask,
   workspace: string,
-  options: { commandTimeoutMs?: number } = {},
+  options: { commandTimeoutMs?: number; seedDigests?: SeedDigests } = {},
 ): Promise<AttemptVerdict> {
   const checks: CheckResult[] = [];
   for (const check of task.checks) {
-    checks.push(await runCheck(check, workspace, options.commandTimeoutMs ?? COMMAND_TIMEOUT_MS));
+    checks.push(
+      await runCheck(
+        check,
+        workspace,
+        options.commandTimeoutMs ?? COMMAND_TIMEOUT_MS,
+        options.seedDigests ?? digestSeeds(task.files),
+      ),
+    );
   }
   return { passed: checks.every((check) => check.passed), checks };
 }
@@ -44,6 +71,7 @@ async function runCheck(
   check: EvalTask["checks"][number],
   workspace: string,
   commandTimeoutMs: number,
+  seedDigests: SeedDigests,
 ): Promise<CheckResult> {
   switch (check.type) {
     case "file-exists": {
@@ -77,6 +105,22 @@ async function runCheck(
         kind: check.type,
         passed: found,
         detail: found ? `${check.path} contains the expected text` : `${check.path} does not contain ${JSON.stringify(check.text)}`,
+      };
+    }
+
+    case "file-unchanged": {
+      const path = safeResolve(workspace, check.path);
+      if (!path) return { kind: check.type, passed: false, detail: `path escapes workspace: ${check.path}` };
+      const expected = seedDigests[check.path];
+      if (expected === undefined) {
+        return { kind: check.type, passed: false, detail: `${check.path} was not seeded, so nothing can be compared` };
+      }
+      if (!existsSync(path)) return { kind: check.type, passed: false, detail: `${check.path} was deleted` };
+      const actual = sha256(readFileSync(path, "utf-8"));
+      return {
+        kind: check.type,
+        passed: actual === expected,
+        detail: actual === expected ? `${check.path} is unchanged` : `${check.path} was modified`,
       };
     }
 
@@ -115,4 +159,8 @@ function safeResolve(workspace: string, relative: string): string | null {
   return target === root || target.startsWith(`${root}${process.platform === "win32" ? "\\" : "/"}`)
     ? target
     : null;
+}
+
+function sha256(text: string): string {
+  return createHash("sha256").update(text, "utf-8").digest("hex");
 }

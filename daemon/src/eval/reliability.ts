@@ -32,6 +32,11 @@ export interface TaskReliability {
 export interface ReliabilityReport {
   /** Number of attempts requested per task (k). */
   k: number;
+  /**
+   * Tasks that produced at least one scored attempt. A task whose every attempt
+   * was voided by an environment fault is absent rather than reported as 0/0:
+   * it has no evidence, and an empty row reads as a failure.
+   */
   tasks: TaskReliability[];
   /** Unweighted mean of per-attempt success rates. */
   meanPassRate: number;
@@ -47,7 +52,9 @@ export interface ReliabilityReport {
 export function summarizeReliability(results: readonly TaskAttempts[], k = 3): ReliabilityReport {
   if (k < 1) throw new Error(`k must be at least 1, received ${k}`);
 
-  const tasks: TaskReliability[] = results.map((result) => {
+  const tasks: TaskReliability[] = results
+    .filter((result) => result.outcomes.length > 0)
+    .map((result) => {
     const attempts = result.outcomes.length;
     const successes = result.outcomes.filter(Boolean).length;
     // pass^k is the probability that all k attempts succeed.

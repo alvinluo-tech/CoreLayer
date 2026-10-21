@@ -123,6 +123,44 @@ describe("spawnProcess (integration)", () => {
   });
 });
 
+// ---- prompt fidelity ----
+
+/**
+ * A coding prompt reaches the agent as one argv entry. On Windows, routing that
+ * argv through `cmd.exe` (`shell: true`) ends the command at the first newline
+ * and re-interprets embedded quotes, so the agent silently received a fraction
+ * of the task while the run still reported success. A list prompt arrived as
+ * "Items:" and nothing else.
+ */
+describe("multi-line arguments (integration)", () => {
+  const prompt =
+    'Do these edits:\n1. rename "getUser" to "findUser"\n2. update `app.js`\n\nThen run `node check.mjs`.';
+  const echoScript = "process.stdout.write(process.argv[2] ?? '')";
+
+  it("spawnProcess preserves a multi-line argument exactly", async () => {
+    const script = createScript("echo-arg", echoScript);
+    const result = await spawnProcess({ command: "node", args: [script, prompt] });
+    expect(result.stdout).toBe(prompt);
+  });
+
+  it("spawnProcessLive preserves a multi-line argument exactly", async () => {
+    const script = createScript("echo-arg-live", echoScript);
+    const chunks: string[] = [];
+    const handle = spawnProcessLive({
+      command: "node",
+      args: [script, prompt],
+      onStdout: (chunk) => chunks.push(chunk),
+    });
+
+    await new Promise<void>((resolve) => {
+      if (handle.exitCode !== null) return resolve();
+      handle.process.on("close", () => resolve());
+    });
+
+    expect(chunks.join("")).toBe(prompt);
+  });
+});
+
 // ---- spawnProcessLive ----
 
 describe("spawnProcessLive (integration)", () => {

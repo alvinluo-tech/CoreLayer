@@ -39,9 +39,20 @@ const INFRA_RUNTIME_PATTERNS: ReadonlyArray<RegExp> = [
 /** The provider answered, and the answer was a capacity or auth problem. */
 const INFRA_PROVIDER_PATTERNS: ReadonlyArray<RegExp> = [
   /\bHTTP (?:401|403|429|5\d\d)\b/i,
+  // Providers spell the status in several ways: `(429)`, `status 429`, or a bare
+  // `429` next to the error kind. Requiring the `HTTP ` prefix missed all of them.
+  // The status must sit in brackets or follow a status word, so a message that
+  // merely mentions "429 items" stays the agent's failure.
+  /[([]\s*(?:401|403|429|5\d\d)\s*[)\]]/,
+  /\b(?:status|code|error)[ :=#]*(?:401|403|429|5\d\d)\b/i,
+  /\b5\d\d\b.*(?:internal|server) error/i,
   /rate.?limit/i,
   /insufficient (credit|balance|quota)/i,
   /model_not_found/i,
+  // The ACP layer reports the provider's machine-readable kind separately from
+  // the human message, and the JSON puts it in the same string.
+  /"errorKind"\s*:\s*"(?:rate_limit|overloaded|authentication|permission|server_error)"/i,
+  /usage exceeds/i,
 ];
 
 export function classifyFailure(input: {

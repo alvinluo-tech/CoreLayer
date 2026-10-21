@@ -17,6 +17,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSyncBuffered } from "../runtimes/coding/public-api.js";
+import { classifyFailure, type FailureVerdict } from "../workflow/failure-classification.js";
 import type { EvalCorpus, EvalTask } from "./corpus.js";
 import { judgeAttempt, type AttemptVerdict } from "./judge.js";
 import {
@@ -48,6 +49,14 @@ export interface AttemptRecord {
   executor: ExecutorStatus;
   verdict: AttemptVerdict;
   executorError?: string;
+  /**
+   * Why the attempt failed, when the executor did. `infra` means the run never
+   * got a fair chance (an exhausted quota, a refused connection, a dead
+   * worktree), so the attempt says nothing about the agent. Keeping it on the
+   * record rather than filtering attempts out preserves the fact that the
+   * attempt happened.
+   */
+  failureKind?: FailureVerdict;
   workspace: string;
   durationMs: number;
 }
@@ -63,6 +72,8 @@ export interface EvalRunResult {
   falsePositives: number;
   /** Attempts where the executor reported failure but every check passed. */
   falseNegatives: number;
+  /** Attempts voided by an environment fault; they count neither way. */
+  voided: number;
 }
 
 export interface RunOptions {
@@ -86,23 +97,31 @@ export async function runCorpus(
   const startedAt = new Date().toISOString();
   const attempts: AttemptRecord[] = [];
   const only = options.only && options.only.length > 0 ? new Set(options.only) : null;
+  // Consecutive voided attempts. A gateway that answers 429 does so for every
+  // run until its quota resets, so continuing wastes a full timeout per task and
+  // then reports a corpus-wide failure that is really one outage.
+  let consecutiveVoided = 0;
 
   for (const task of corpus.tasks) {
     if (only && !only.has(task.id)) continue;
     for (let attempt = 1; attempt <= corpus.attempts; attempt += 1) {
       if (options.signal?.aborted) break;
+      if (consecutiveVoided >= MAX_CONSECUTIVE_VOIDED) break;
       const record = await runAttempt(task, attempt, executor, options);
       attempts.push(record);
       options.onAttempt?.(record);
+      consecutiveVoided = record.failureKind === "infra" ? consecutiveVoided + 1 : 0;
     }
+    if (consecutiveVoided >= MAX_CONSECUTIVE_VOIDED) break;
   }
 
+  const scored = attempts.filter((record) => record.failureKind !== "infra");
   const grouped: TaskAttempts[] = corpus.tasks
     .filter((task) => !only || only.has(task.id))
     .map((task) => ({
       taskId: task.id,
       tags: task.tags,
-      outcomes: attempts.filter((record) => record.taskId === task.id).map((record) => record.passed),
+      outcomes: scored.filter((record) => record.taskId === task.id).map((record) => record.passed),
     }));
 
   return {
@@ -112,10 +131,20 @@ export async function runCorpus(
     finishedAt: new Date().toISOString(),
     attempts,
     reliability: summarizeReliability(grouped, corpus.attempts),
-    falsePositives: attempts.filter((record) => record.executor === "succeeded" && !record.passed).length,
-    falseNegatives: attempts.filter((record) => record.executor !== "succeeded" && record.passed).length,
+    falsePositives: scored.filter((record) => record.executor === "succeeded" && !record.passed).length,
+    falseNegatives: scored.filter((record) => record.executor !== "succeeded" && record.passed).length,
+    voided: attempts.length - scored.length,
   };
 }
+
+/**
+ * Stop the run after this many environment faults in a row.
+ *
+ * Three is enough to tell a flaky single attempt from the environment being
+ * down, and small enough that a broken gateway costs minutes instead of the
+ * whole corpus times its timeout.
+ */
+const MAX_CONSECUTIVE_VOIDED = 3;
 
 async function runAttempt(
   task: EvalTask,
@@ -140,7 +169,26 @@ async function runAttempt(
     clearTimeout(timer);
   }
 
-  const verdict = await judgeAttempt(task, workspace);
+  let verdict = await judgeAttempt(task, workspace);
+  if (task.expectNoChange) {
+    // Restraint is judged on the whole tree, not on the files a check happens to
+    // name: an agent that "does nothing" while creating a scratch note still did
+    // something the user did not ask for. The seed commit is the baseline, so
+    // untracked files count and `git status --porcelain` is the whole answer.
+    const dirt = workingTreeChanges(workspace);
+    verdict = {
+      passed: verdict.passed && dirt.length === 0,
+      checks: [
+        ...verdict.checks,
+        {
+          kind: "workspace-unchanged",
+          passed: dirt.length === 0,
+          detail: dirt.length === 0 ? "workspace is untouched" : `workspace changed: ${dirt.join(", ")}`,
+        },
+      ],
+    };
+  }
+
   const record: AttemptRecord = {
     taskId: task.id,
     attempt,
@@ -148,6 +196,9 @@ async function runAttempt(
     executor: executorResult.status,
     verdict,
     ...(executorResult.error ? { executorError: executorResult.error } : {}),
+    ...(executorResult.status !== "succeeded"
+      ? { failureKind: classifyFailure({ error: executorResult.error ?? `executor reported ${executorResult.status}` }) }
+      : {}),
     workspace,
     durationMs: Date.now() - started,
   };
@@ -198,6 +249,27 @@ function initRepository(workspace: string): void {
   // A seed-only commit would fail on a task with no files; the empty tree is a
   // valid base and keeps every workspace shaped the same way.
   git(["commit", "-q", "--allow-empty", "-m", "eval seed"]);
+}
+
+/**
+ * Paths that differ from the seed commit, tracked or not.
+ *
+ * Returns an empty list only when the working tree is exactly what was seeded.
+ * A failure to read the tree is reported as a change, because an unjudgeable
+ * negative task must not count as restraint.
+ */
+function workingTreeChanges(workspace: string): string[] {
+  try {
+    const output = execFileSyncBuffered("git", ["status", "--porcelain", "--untracked-files=all"], {
+      cwd: workspace,
+    });
+    return output
+      .split(/\r?\n/)
+      .map((line) => line.slice(3).trim())
+      .filter(Boolean);
+  } catch (error) {
+    return [`<git status failed: ${error instanceof Error ? error.message.split("\n")[0] : String(error)}>`];
+  }
 }
 
 function removeWorkspace(workspace: string): void {

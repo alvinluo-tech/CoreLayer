@@ -38,19 +38,16 @@ export interface SpawnResult {
 
 const activeProcesses = new Map<number, ChildProcess>();
 
-function quoteWindowsShellArg(arg: string): string {
-  if (arg.length === 0) return "\"\"";
-  if (!/[\s"&|<>^]/.test(arg)) return arg;
-
-  // Node's Windows shell mode does not reliably preserve argv boundaries for
-  // arguments containing spaces. Wrap those args so prompts stay single values.
-  return `"${arg.replace(/"/g, "\\\"")}"`;
-}
-
-function normalizeSpawnArgs(args: string[]): string[] {
-  if (process.platform !== "win32") return args;
-  return args.map(quoteWindowsShellArg);
-}
+/**
+ * Why the spawn paths do not use a shell on Windows.
+ *
+ * `shell: true` routes argv through `cmd.exe`, which ends the command at the
+ * first newline and has no reliable escape for an embedded `"`. A coding prompt
+ * is multi-line text containing quotes, so it arrived at the agent truncated
+ * while the process still exited 0 — a partial task that looked complete. The
+ * commands passed here are always an executable plus an argv array, never a
+ * shell pipeline, so dropping the shell costs nothing.
+ */
 
 export interface WorkdirPolicyResult {
   allowed: boolean;
@@ -165,11 +162,14 @@ export function spawnProcess(options: SpawnOptions): Promise<SpawnResult> {
     const stdoutLines: string[] = [];
     const stderrLines: string[] = [];
 
-    const child = spawn(options.command, normalizeSpawnArgs(options.args), {
+    // No shell on any platform: `command` is an executable and `args` is already
+    // an argv array, so the shell only adds ways to corrupt an argument. On
+    // Windows it ended a multi-line prompt at the first newline and exited 0,
+    // which made a truncated task look like a completed one.
+    const child = spawn(options.command, options.args, {
       cwd: options.cwd,
       env: { ...process.env, ...options.env },
       stdio: ["pipe", "pipe", "pipe"],
-      shell: process.platform === "win32",
     });
 
     if (child.pid) {
@@ -227,11 +227,18 @@ export function spawnProcessLive(
     logDir?: string;
   },
 ): SpawnedProcess {
-  const child = spawn(options.command, normalizeSpawnArgs(options.args), {
+  // No shell, on any platform.
+  //
+  // `shell: true` on Windows routes every argument through `cmd.exe`, which ends
+  // the command at the first newline and re-interprets quotes. A coding prompt is
+  // multi-line text with quotes in it, so the agent received a truncated prompt
+  // and answered accordingly, while the exit code still said success. The
+  // command here is always an executable plus an argv array (node, acpx), never
+  // a shell pipeline, so nothing is lost by dropping the shell.
+  const child = spawn(options.command, options.args, {
     cwd: options.cwd,
     env: { ...process.env, ...options.env },
     stdio: ["pipe", "pipe", "pipe"],
-    shell: process.platform === "win32",
   });
 
   if (child.pid) {

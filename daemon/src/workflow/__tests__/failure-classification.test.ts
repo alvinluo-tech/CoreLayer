@@ -37,6 +37,26 @@ describe("classifyFailure", () => {
     }
   });
 
+  it("recognises the rejection text an ACP run actually produces", () => {
+    // Verbatim from a live run. The status appears as `(429)` and the kind as a
+    // JSON field, neither of which the earlier `HTTP 429` / `rate limit`
+    // patterns matched, so a quota outage was being counted as agent failure.
+    const error =
+      'Internal error: API Error: Request rejected (429) · {"detail":{"error":{"message":' +
+      '"{\\"code\\":6004,\\"msg\\":\\"usage exceeds frequency limit\\"}"}},' +
+      '"code":429}}} ({"errorKind":"rate_limit"})';
+    expect(classifyFailure({ error })).toBe("infra");
+  });
+
+  it("recognises a bare status code and a server-side error", () => {
+    expect(classifyFailure({ error: "Request failed with status 503" })).toBe("infra");
+    expect(classifyFailure({ error: "API Error (500): internal server error" })).toBe("infra");
+  });
+
+  it("keeps a task failure that merely mentions a number as the agent's", () => {
+    expect(classifyFailure({ error: "expected 429 items but found 12" })).toBe("agent");
+  });
+
   it("never excuses an unknown error as infrastructure", () => {
     expect(classifyFailure({ error: "something nobody has classified" })).toBe("agent");
     expect(classifyFailure({ error: "" })).toBe("agent");

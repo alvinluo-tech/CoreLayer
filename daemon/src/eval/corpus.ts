@@ -36,6 +36,12 @@ export const evalTaskSchema = z
           z.object({ type: z.literal("file-exists"), path: z.string().min(1) }),
           z.object({ type: z.literal("file-contains"), path: z.string().min(1), text: z.string().min(1) }),
           z.object({ type: z.literal("file-missing"), path: z.string().min(1) }),
+          /**
+           * The file must be byte-identical to what was seeded. Weaker than it
+           * sounds: `file-contains` passes if a single substring survives, and
+           * only a digest catches a "change nothing else" requirement.
+           */
+          z.object({ type: z.literal("file-unchanged"), path: z.string().min(1) }),
           z.object({ type: z.literal("command"), command: z.string().min(1) }),
         ]),
       )
@@ -44,10 +50,24 @@ export const evalTaskSchema = z
     timeoutMs: z.number().int().positive().default(180_000),
     /** Tags for grouping results by capability area. */
     tags: z.array(z.string()).default([]),
+    /**
+     * Negative tasks: the correct behaviour is to change nothing. The executor
+     * is still started (and charged the same budget), because "do not act"
+     * includes not hanging. Without this, a corpus can only test action, never
+     * restraint.
+     */
+    expectNoChange: z.boolean().default(false),
   })
   .refine(
     (task) => Object.keys(task.files).every((path) => !path.startsWith("/") && !path.includes("..")),
     { message: "seed file paths must be relative and must not traverse upward" },
+  )
+  .refine(
+    (task) =>
+      task.checks.every(
+        (check) => check.type !== "file-unchanged" || task.files[check.path] !== undefined,
+      ),
+    { message: "a file-unchanged check must name a file the task seeds" },
   );
 
 export type EvalTask = z.infer<typeof evalTaskSchema>;

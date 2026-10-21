@@ -14,6 +14,9 @@ function task(checks: EvalTask["checks"]): EvalTask {
     checks,
     timeoutMs: 60_000,
     tags: [],
+    // Task ids in these tests never call for restraint; the runner-level tests
+    // cover that rule.
+    expectNoChange: false,
   };
 }
 
@@ -77,5 +80,37 @@ describe("judgeAttempt", () => {
     const command = process.platform === "win32" ? "exit 1" : "false";
     const verdict = await judgeAttempt(task([{ type: "command", command }]), workspace);
     expect(verdict.passed).toBe(false);
+  });
+
+  it("passes file-unchanged only while the seeded bytes are intact", async () => {
+    const seeded = "{\n  \"keep\": true\n}\n";
+    writeFileSync(join(workspace, "data.json"), seeded, "utf-8");
+    const checks: EvalTask["checks"] = [{ type: "file-unchanged", path: "data.json" }];
+    // The digest comes from what the task seeded, not from the file on disk now,
+    // or the check would compare the workspace with itself.
+    const seededTask: EvalTask = { ...task(checks), files: { "data.json": seeded } };
+
+    // Reformatting the JSON changes every byte while keeping the same value;
+    // that is what a "do not touch this file" requirement has to catch.
+    writeFileSync(join(workspace, "data.json"), JSON.stringify(JSON.parse(seeded)), "utf-8");
+    expect((await judgeAttempt(seededTask, workspace)).passed).toBe(false);
+
+    writeFileSync(join(workspace, "data.json"), seeded, "utf-8");
+    expect((await judgeAttempt(seededTask, workspace)).passed).toBe(true);
+  });
+
+  it("fails file-unchanged when the file was deleted", async () => {
+    const verdict = await judgeAttempt(task([{ type: "file-unchanged", path: "gone.txt" }]), workspace, {
+      seedDigests: { "gone.txt": "expected" },
+    });
+    expect(verdict.passed).toBe(false);
+    expect(verdict.checks[0].detail).toContain("deleted");
+  });
+
+  it("fails file-unchanged with no seed to compare against", async () => {
+    writeFileSync(join(workspace, "x.txt"), "x", "utf-8");
+    const verdict = await judgeAttempt(task([{ type: "file-unchanged", path: "x.txt" }]), workspace);
+    expect(verdict.passed).toBe(false);
+    expect(verdict.checks[0].detail).toContain("not seeded");
   });
 });

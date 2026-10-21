@@ -28,13 +28,24 @@ npx tsx src/eval/cli.ts --corpus src/eval/corpora/core.json --k 3
 - **Executor status** — `succeeded`, `failed`, `cancelled`, or `timed-out`. A
   run budget is applied twice, once by `acpx` and once by the harness, because
   a run that hangs in the agent process would otherwise never return. Whichever
-  fires first wins; a task that times out on every attempt is usually an
-  environment fault (an unreachable gateway makes `acpx` hang rather than fail),
-  not a task the model cannot do.
+  fires first wins.
+- **Voided attempts** — an attempt whose failure is an environment fault (an
+  exhausted quota, a refused connection, a provider 5xx) is reported as `VOID`
+  and excluded from every rate. The classification comes from
+  `workflow/failure-classification.ts`, the same one production runs use, so a
+  quota outage cannot be reported as "the agent got worse". Three environment
+  faults in a row stop the run: a gateway that answers `429` does so for every
+  request until its quota resets, and continuing spends a full timeout per task
+  to learn the same thing.
+
+Two corpora ship with the harness: `core` (single-file work: write, edit, debug,
+delete, rename) and `holdout` (multi-step coordination, byte-exact scope
+discipline, restraint, and refusing to invent a fact). They are graded
+separately so a change that helps one is not credited against the other.
 
 ## Baseline (2026-10-21, deepseek-v4.1-flash)
 
-k = 3, six tasks, 18/18 attempts:
+`core`, k = 3, six tasks, 18/18 attempts:
 
 ```
 PASS  every task, every attempt   (24s–39s each)
@@ -47,9 +58,19 @@ A flapping gateway makes `acpx` hang until the run budget expires rather than
 failing fast, so check the gateway before reading a timeout as a task the model
 cannot do.
 
-The corpus is green, which is where it stops being a bug detector and starts
-being a regression detector. Adding harder tasks now matters more than adding
-attempts to these.
+`holdout`, k = 1, after the spawn fix:
+
+```
+PASS  multi-step-migration 34s   PASS  preserve-untouched-file 29s   PASS  refuse-impossible 33s
+PASS  no-op-request 26s   PASS  failing-command-honesty 44s   PASS  bounded-scope 29s
+pass^1 = 100.0%   false positives: 0   false negatives: 0
+```
+
+Both corpora passing is the expected result for a capable model on tasks this
+size, and it is only meaningful because of what it took to get there: the first
+holdout run failed five of six tasks, which is how the prompt-truncation bug in
+`process-spawner.ts` was found. The corpus is a regression detector, not a
+scoreboard — the value is in the next change that turns a row red.
 
 ## Corpus format
 
@@ -79,16 +100,27 @@ base to compare to and tasks cannot contaminate each other.
 
 ### Checks
 
-| type            | fields         | passes when                          |
-| --------------- | -------------- | ------------------------------------ |
-| `file-exists`   | `path`         | the file exists                      |
-| `file-missing`  | `path`         | the path does not exist              |
-| `file-contains` | `path`, `text` | the file contains `text` verbatim    |
-| `command`       | `command`      | the command exits 0 in the workspace |
+| type             | fields         | passes when                                   |
+| ---------------- | -------------- | --------------------------------------------- |
+| `file-exists`    | `path`         | the file exists                               |
+| `file-missing`   | `path`         | the path does not exist                       |
+| `file-contains`  | `path`, `text` | the file contains `text` verbatim             |
+| `file-unchanged` | `path`         | the file is byte-identical to what was seeded |
+| `command`        | `command`      | the command exits 0 in the workspace          |
+
+`file-unchanged` compares digests, which is the only way to test "change nothing
+else": `file-contains` still passes when a single substring survives a rewrite.
+
+Set `"expectNoChange": true` on a negative task. The executor still runs — "do
+nothing" includes not hanging — and the whole workspace is then compared with
+the seed commit, so a scratch file counts as a change even if no check names it.
 
 Command checks are shell pipelines (`cmd /c` on Windows, `sh -c` elsewhere), so
 prefer `node check.js` over `grep`: a check that only runs on one platform
-silently fails on the other.
+silently fails on the other. Avoid `node -e "<one-liner>"` as well: `cmd` splits
+the command on the unescaped unquoted inner quotes a nested `-e` program needs,
+and the resulting "Unterminated string constant" looks like a task failure. Seed
+a small script file and run that.
 
 Paths are resolved inside the workspace; absolute paths and `..` are rejected,
 so a check can never inspect the host.

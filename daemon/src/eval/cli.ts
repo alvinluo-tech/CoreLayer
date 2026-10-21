@@ -121,6 +121,12 @@ async function main(): Promise<number> {
     `\nfalse positives: ${result.falsePositives}  false negatives: ${result.falseNegatives}\n` +
       `(claimed success, task failed / reported failure, task passed)\n`,
   );
+  if (result.voided > 0) {
+    process.stdout.write(
+      `\nvoided: ${result.voided} attempt(s) hit an environment fault and are excluded from every rate\n` +
+        `(a quota or connectivity problem says nothing about the agent)\n`,
+    );
+  }
 
   if (options.jsonOut) {
     const target = resolve(options.jsonOut);
@@ -132,7 +138,7 @@ async function main(): Promise<number> {
 }
 
 function printAttempt(record: AttemptRecord): void {
-  const outcome = record.passed ? "PASS" : "FAIL";
+  const outcome = record.passed ? "PASS" : record.failureKind === "infra" ? "VOID" : "FAIL";
   const detail = record.passed
     ? ""
     : `  (${record.verdict.checks.filter((check) => !check.passed).map((check) => check.detail).join("; ")})`;

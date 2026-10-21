@@ -32,6 +32,7 @@ const corpus: EvalCorpus = {
       checks: [{ type: "file-exists", path: "OUT.txt" }],
       timeoutMs: 60_000,
       tags: ["write"],
+      expectNoChange: false,
     },
   ],
 };
@@ -136,5 +137,141 @@ describe("runCorpus", () => {
     });
     await runCorpus({ ...corpus, attempts: 1 }, executor, { cleanup: true });
     expect(log).toContain("eval seed");
+  });
+});
+
+describe("negative tasks (expectNoChange)", () => {
+  const negative: EvalCorpus = {
+    name: "negative",
+    attempts: 1,
+    tasks: [
+      {
+        id: "leave-it-alone",
+        title: "leave it alone",
+        prompt: "do nothing",
+        files: { "config.json": "{\"a\":1}\n" },
+        checks: [{ type: "file-unchanged", path: "config.json" }],
+        timeoutMs: 60_000,
+        tags: ["restraint"],
+        expectNoChange: true,
+      },
+    ],
+  };
+
+  it("passes an executor that changes nothing", async () => {
+    const executor = scriptedExecutor((_id, workspace) => {
+      // Reading the file is allowed; restraint is about writes.
+      readFileSync(join(workspace, "config.json"), "utf-8");
+      return { status: "succeeded" };
+    });
+    const result = await runCorpus(negative, executor, { cleanup: true });
+    expect(result.attempts[0].passed).toBe(true);
+  });
+
+  it("fails an executor that writes a file nobody asked for", async () => {
+    const executor = scriptedExecutor((_id, workspace) => {
+      writeFileSync(join(workspace, "scratch.md"), "notes", "utf-8");
+      return { status: "succeeded" };
+    });
+    const result = await runCorpus(negative, executor, { cleanup: true });
+    expect(result.attempts[0].passed).toBe(false);
+    const detail = result.attempts[0].verdict.checks.map((check) => check.detail).join(" ");
+    expect(detail).toContain("scratch.md");
+  });
+
+  it("fails an executor that reformats a seeded file", async () => {
+    const executor = scriptedExecutor((_id, workspace) => {
+      writeFileSync(join(workspace, "config.json"), "{ \"a\": 1 }\n", "utf-8");
+      return { status: "succeeded" };
+    });
+    const result = await runCorpus(negative, executor, { cleanup: true });
+    expect(result.attempts[0].passed).toBe(false);
+  });
+
+  it("reports a distinct kind for the tree-level rule", async () => {
+    const executor = scriptedExecutor(() => ({ status: "succeeded" }));
+    const result = await runCorpus(negative, executor, { cleanup: true });
+    expect(result.attempts[0].verdict.checks.map((check) => check.kind)).toContain("workspace-unchanged");
+  });
+});
+
+describe("environment faults", () => {
+  const quotaError =
+    'Internal error: API Error: Request rejected (429) · {"detail":"usage exceeds frequency limit"}}';
+
+  /** An executor that fails the way a provider outage fails: same error, every time. */
+  function quotaExecutor(): EvalExecutor {
+    return {
+      name: "quota",
+      async run() {
+        return { status: "failed", error: quotaError };
+      },
+    };
+  }
+
+  const oneTask = (attempts = 2): EvalCorpus => ({ ...corpus, attempts });
+
+  it("marks a quota rejection as an environment fault", async () => {
+    const result = await runCorpus(oneTask(), quotaExecutor(), { cleanup: true });
+    expect(result.attempts[0].failureKind).toBe("infra");
+  });
+
+  it("keeps voided attempts out of the reliability figures", async () => {
+    const result = await runCorpus(oneTask(), quotaExecutor(), { cleanup: true });
+    // The task never had a fair chance, so it is absent from the report rather
+    // than recorded as an empty row that would read as a failure.
+    expect(result.reliability.tasks).toHaveLength(0);
+    expect(result.reliability.meanPassRate).toBe(0);
+    expect(result.voided).toBe(result.attempts.length);
+  });
+
+  it("stops the run instead of spending a timeout on every remaining task", async () => {
+    const many: EvalCorpus = {
+      ...corpus,
+      attempts: 3,
+      tasks: [1, 2, 3, 4, 5].map((index) => ({ ...corpus.tasks[0], id: `t${index}`, title: `t${index}` })),
+    };
+    const result = await runCorpus(many, quotaExecutor(), { cleanup: true });
+
+    expect(result.attempts.length).toBe(3);
+    expect(result.attempts.every((record) => record.failureKind === "infra")).toBe(true);
+  });
+
+  it("does not stop for an agent failure, however many occur", async () => {
+    const many: EvalCorpus = {
+      ...corpus,
+      attempts: 2,
+      tasks: [1, 2, 3].map((index) => ({ ...corpus.tasks[0], id: `t${index}`, title: `t${index}` })),
+    };
+    const executor: EvalExecutor = {
+      name: "lazy",
+      async run() {
+        return { status: "failed", error: "the agent gave up" };
+      },
+    };
+    const result = await runCorpus(many, executor, { cleanup: true });
+    expect(result.attempts).toHaveLength(6);
+    expect(result.voided).toBe(0);
+  });
+
+  it("resets the run of faults once an attempt completes normally", async () => {
+    let call = 0;
+    const flaky: EvalExecutor = {
+      name: "flaky",
+      async run(_task, workspace) {
+        call += 1;
+        if (call <= 2) return { status: "failed", error: quotaError };
+        writeFileSync(join(workspace, "OUT.txt"), "done", "utf-8");
+        return { status: "succeeded" };
+      },
+    };
+    const many: EvalCorpus = {
+      ...corpus,
+      attempts: 3,
+      tasks: [1, 2].map((index) => ({ ...corpus.tasks[0], id: `t${index}`, title: `t${index}` })),
+    };
+    const result = await runCorpus(many, flaky, { cleanup: true });
+    expect(result.attempts.length).toBe(6);
+    expect(result.voided).toBe(2);
   });
 });
