@@ -7,7 +7,7 @@
 
 import { getRepositories } from "../persistence/factory.js";
 import type { AgentRunRow } from "../persistence/repository.js";
-import type { AgentRunSnapshot } from "../persistence/repository/agent.js";
+import type { AgentRunSnapshot, DelegationRecord } from "../persistence/repository/agent.js";
 import { dispatchRuns } from "./run-dispatcher.js";
 import { createHash } from "node:crypto";
 
@@ -39,6 +39,12 @@ export async function enqueue(input: {
   conversationId?: string;
   mode?: AgentRunRow["mode"];
   selectedModel?: string;
+  /** Objective for a run that has no task row, e.g. a delegated subtask. */
+  objective?: string;
+  /** Run that dispatched this one, for delegated work. */
+  parentRunId?: string;
+  /** Bounds granted by the delegating run. */
+  delegation?: DelegationRecord;
 }): Promise<QueueEntry> {
   const { agentRuns, agentProfiles } = getRepositories();
   let agentSnapshot: AgentRunSnapshot | null = null;
@@ -72,6 +78,9 @@ export async function enqueue(input: {
     mode: input.mode ?? "chat",
     selectedModel: input.selectedModel,
     agentSnapshot,
+    objective: input.objective ?? null,
+    parentRunId: input.parentRunId ?? null,
+    delegation: input.delegation ?? null,
   });
 
   // Trigger dispatch immediately so queued runs don't wait for a tick

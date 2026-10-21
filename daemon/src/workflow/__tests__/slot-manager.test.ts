@@ -164,3 +164,47 @@ describe("concurrent limit enforcement", () => {
     expect(manager.getUsage().agentRunQueueDepth).toBe(7);
   });
 });
+
+// ---- Delegated runs ----
+
+describe("delegated runs", () => {
+  it("starts a child even when every parent slot is taken", () => {
+    // This is the deadlock: a parent waiting on its child holds a slot, so a
+    // child that shared the same budget could never start.
+    manager.acquireAgentRun("parent-1");
+    manager.acquireAgentRun("parent-2");
+    manager.acquireAgentRun("parent-3");
+    expect(manager.canStartAgentRun()).toBe(false);
+
+    expect(manager.acquireAgentRun("child-1", { delegated: true })).toBe(true);
+  });
+
+  it("bounds how many children can run at once", () => {
+    expect(manager.acquireAgentRun("c1", { delegated: true })).toBe(true);
+    expect(manager.acquireAgentRun("c2", { delegated: true })).toBe(true);
+    expect(manager.acquireAgentRun("c3", { delegated: true })).toBe(true);
+    expect(manager.acquireAgentRun("c4", { delegated: true })).toBe(false);
+  });
+
+  it("frees the child slot when the child finishes", () => {
+    manager.acquireAgentRun("c1", { delegated: true });
+    manager.releaseAgentRun("c1");
+    expect(manager.acquireAgentRun("c2", { delegated: true })).toBe(true);
+  });
+
+  it("does not double-count a run released twice or acquired twice", () => {
+    manager.acquireAgentRun("c1", { delegated: true });
+    expect(manager.acquireAgentRun("c1", { delegated: true })).toBe(true);
+    manager.releaseAgentRun("c1");
+    manager.releaseAgentRun("c1");
+    expect(manager.acquireAgentRun("c2", { delegated: true })).toBe(true);
+  });
+
+  it("counts a running child so a parent slot is not handed out twice", () => {
+    const custom = new SlotManager({ maxConcurrentAgentRuns: 1 });
+    expect(custom.acquireAgentRun("parent-1")).toBe(true);
+    expect(custom.acquireAgentRun("child-1", { delegated: true })).toBe(true);
+    // Parent budget is full, and the child's extra capacity is already in use.
+    expect(custom.acquireAgentRun("parent-2")).toBe(false);
+  });
+});

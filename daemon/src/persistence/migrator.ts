@@ -1,6 +1,7 @@
 import type { Database } from "better-sqlite3";
 import { migrations } from "./migrations.js";
 import { migrateAgentRunsStatusConstraint } from "./sqlite/agent-runs-migration.js";
+import { migrateAgentRunDelegation } from "./sqlite/agent-run-delegation-migration.js";
 import { migrateApprovalActionDigest } from "./sqlite/approval-digest-migration.js";
 import { migrateApprovalRequestsStatusConstraint } from "./sqlite/approval-status-migration.js";
 import { migrateMessageFts } from "./sqlite/message-fts-migration.js";
@@ -106,6 +107,14 @@ function runLegacyFTSAndConstraints(db: Database): void {
     migrateAgentRunsStatusConstraint(db);
   } catch (err) {
     console.error("[Migrations] Failed to migrate agent_runs status constraint:", err);
+  }
+
+  // The status rebuild recreates the table, so the delegation columns are added
+  // afterwards; on a fresh database they already exist and this is a no-op.
+  try {
+    migrateAgentRunDelegation(db);
+  } catch (err) {
+    console.error("[Migrations] Failed to add agent_runs delegation columns:", err);
   }
 
   try {

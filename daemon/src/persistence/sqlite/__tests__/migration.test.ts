@@ -22,6 +22,9 @@ describe("compiled forward migrations", () => {
       "heartbeat_at", "lease_owner", "lease_expires_at",
     ]));
     expect(columnNames(sqlite, "pending_actions")).toContain("result");
+    expect(columnNames(sqlite, "agent_runs")).toEqual(expect.arrayContaining([
+      "delegation", "parent_run_id", "objective",
+    ]));
     sqlite.close();
   });
 
@@ -36,7 +39,33 @@ describe("compiled forward migrations", () => {
     expect(columnNames(sqlite, "agent_runs")).toContain("agent_snapshot");
     expect(columnNames(sqlite, "executor_runs")).toContain("attempt_number");
     expect(columnNames(sqlite, "pending_actions")).toContain("result");
+    expect(columnNames(sqlite, "agent_runs")).toEqual(expect.arrayContaining([
+      "delegation", "parent_run_id", "objective",
+    ]));
     expect(sqlite.prepare("SELECT id FROM workspaces WHERE id = ?").get("legacy-ws")).toBeTruthy();
+    sqlite.close();
+  });
+});
+
+describe("agent_runs delegation columns", () => {
+  it("keeps existing runs when the columns are added", async () => {
+    const sqlite = new Database(":memory:");
+    // The genesis schema predates delegations, so the table starts without the
+    // columns and without any migration bookkeeping row.
+    sqlite.exec(migrations[0].sql);
+    sqlite.prepare("INSERT INTO agent_runs (id, status) VALUES (?, ?)").run("old-run", "succeeded");
+
+    await runDbMigrations(sqlite);
+
+    const row = sqlite
+      .prepare("SELECT id, status, delegation, parent_run_id, objective FROM agent_runs WHERE id = ?")
+      .get("old-run") as Record<string, unknown>;
+    expect(row.status).toBe("succeeded");
+    // A run that predates delegation had no parent and no granted bounds, which
+    // is exactly what NULL says; inventing a value would be worse.
+    expect(row.delegation).toBeNull();
+    expect(row.parent_run_id).toBeNull();
+    expect(row.objective).toBeNull();
     sqlite.close();
   });
 });

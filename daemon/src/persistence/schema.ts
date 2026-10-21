@@ -486,6 +486,15 @@ export const agentRuns = sqliteTable("agent_runs", {
   artifacts: text("artifacts").default("[]"), // JSON array
   approvals: text("approvals").default("[]"), // JSON array
   agentSnapshot: text("agent_snapshot"), // immutable resolved AgentProfile JSON
+  /**
+   * Delegation records (JSON array). A run dispatched by another agent keeps
+   * the chain of bounds it was granted, so a child can never appear to have
+   * had more latitude than its caller. Absent for runs a user started.
+   */
+  delegation: text("delegation"), // JSON
+  parentRunId: text("parent_run_id"), // the run that dispatched this one
+  /** The objective handed to the dispatcher; `taskId` is set for workflow runs only. */
+  objective: text("objective"),
   startedAt: text("started_at").default("CURRENT_TIMESTAMP").notNull(),
   completedAt: text("completed_at"),
   durationMs: integer("duration_ms"),

@@ -54,6 +54,9 @@ function makeRun(overrides: Partial<AgentRunRow> = {}): AgentRunRow {
     artifacts: null,
     approvals: null,
     agentSnapshot: null,
+    delegation: null,
+    parentRunId: null,
+    objective: null,
     startedAt: "2026-01-01T00:00:00Z",
     completedAt: null,
     durationMs: null,
@@ -89,6 +92,9 @@ describe("enqueue", () => {
       mode: "chat",
       selectedModel: undefined,
       agentSnapshot: null,
+      objective: null,
+      parentRunId: null,
+      delegation: null,
     });
     expect(entry.runId).toBe("run-001");
     expect(entry.taskId).toBe("task-001");

@@ -10,6 +10,27 @@
  */
 
 import { createHash } from "crypto";
+import { AsyncLocalStorage } from "node:async_hooks";
+
+/**
+ * The run a tool call belongs to.
+ *
+ * The AI SDK invokes a tool's `execute` with only its arguments, so a tool that
+ * needs to know *who is calling* — delegating work, attributing an effect —
+ * cannot receive it as a parameter without trusting the model to supply it.
+ * The agent loop establishes this context around the turn instead.
+ */
+const toolInvocationContext = new AsyncLocalStorage<{ runId?: string }>();
+
+/** Run `fn` with `runId` as the current tool-invocation context. */
+export function withToolInvocationContext<T>(runId: string | undefined, fn: () => T): T {
+  return toolInvocationContext.run({ runId }, fn);
+}
+
+/** The run that owns the current tool call, if one was established. */
+export function currentRunId(): string | undefined {
+  return toolInvocationContext.getStore()?.runId;
+}
 
 /**
  * Normalize args for deterministic hashing.

@@ -146,7 +146,10 @@ function createTestDb() {
       tool_calls TEXT DEFAULT '[]',
       artifacts TEXT DEFAULT '[]',
       approvals TEXT DEFAULT '[]',
-      agent_snapshot TEXT
+      agent_snapshot TEXT,
+      delegation TEXT,
+      parent_run_id TEXT,
+      objective TEXT
     );
 
     CREATE TABLE IF NOT EXISTS approval_requests (

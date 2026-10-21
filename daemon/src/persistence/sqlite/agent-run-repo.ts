@@ -31,6 +31,9 @@ function mapRow(row: typeof schema.agentRuns.$inferSelect): AgentRunRow {
     artifacts: row.artifacts ? JSON.parse(row.artifacts) : null,
     approvals: row.approvals ? JSON.parse(row.approvals) : null,
     agentSnapshot: row.agentSnapshot ? JSON.parse(row.agentSnapshot) : null,
+    delegation: row.delegation ? JSON.parse(row.delegation) : null,
+    parentRunId: row.parentRunId,
+    objective: row.objective,
     startedAt: row.startedAt,
     completedAt: row.completedAt,
     durationMs: row.durationMs,
@@ -59,6 +62,9 @@ export function createSqliteAgentRunRepo(database?: DrizzleDb): AgentRunReposito
           routeReason: input.routeReason ?? null,
           selectedTools: input.selectedTools ? JSON.stringify(input.selectedTools) : "[]",
           agentSnapshot: input.agentSnapshot ? JSON.stringify(input.agentSnapshot) : null,
+          delegation: input.delegation ? JSON.stringify(input.delegation) : null,
+          parentRunId: input.parentRunId ?? null,
+          objective: input.objective ?? null,
           startedAt: now,
         })
         .run();

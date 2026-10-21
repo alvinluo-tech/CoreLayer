@@ -346,6 +346,91 @@ describe("dispatchRuns", () => {
   });
 });
 
+// ---- delegated runs ----
+
+describe("dispatchRuns — delegated runs", () => {
+  const granted = {
+    allowedPaths: ["src/parser/**"],
+    testCommands: ["npm test -- parser"],
+    requiredArtifactTypes: ["changed_files"],
+    timeoutMs: 120_000,
+    allowedTools: ["read", "edit"],
+    executor: "acp",
+    executorModel: "deepseek-v4.1-flash",
+  };
+
+  function delegatedRun(overrides: Record<string, unknown> = {}) {
+    return {
+      ...createRun({ id: "child-1" }),
+      objective: "Fix the parser regression",
+      parentRunId: "parent-1",
+      delegation: {
+        parentRunId: "parent-1",
+        parentBounds: { ...granted, allowedPaths: ["src/**"] },
+        grantedBounds: granted,
+        dispatchedAt: "2026-01-01T00:00:00Z",
+      },
+      ...overrides,
+    };
+  }
+
+  it("runs the delegated objective instead of the placeholder prompt", async () => {
+    mockGetQueued.mockResolvedValue([delegatedRun()]);
+    await dispatchRuns();
+    await vi.waitFor(() => expect(mockExecuteExecutorAttempt).toHaveBeenCalled());
+    const input = mockExecuteExecutorAttempt.mock.calls[0][0] as Record<string, unknown>;
+    expect(input.taskPrompt).toBe("Fix the parser regression");
+  });
+
+  it("uses the granted bounds, not the agent profile or task defaults", async () => {
+    mockGetQueued.mockResolvedValue([delegatedRun()]);
+    mockAgentProfilesGetById.mockResolvedValue({
+      tools: ["read", "edit", "shell"],
+      permissions: [],
+      executorPolicy: null,
+    });
+    mockTasksGetById.mockResolvedValue({
+      title: "task",
+      objective: "task objective",
+      acceptanceCriteria: ["test: npm test", "path: src/**"],
+    });
+
+    await dispatchRuns();
+    await vi.waitFor(() => expect(mockExecuteExecutorAttempt).toHaveBeenCalled());
+    const input = mockExecuteExecutorAttempt.mock.calls[0][0] as Record<string, unknown>;
+
+    expect(input.allowedPaths).toEqual(["src/parser/**"]);
+    expect(input.testCommands).toEqual(["npm test -- parser"]);
+    expect(input.timeoutMs).toBe(120_000);
+    expect(input.allowedTools).toEqual(["read", "edit"]);
+    // The objective outranks the task row: a child runs what it was told.
+    expect(input.taskPrompt).toBe("Fix the parser regression");
+  });
+
+  it("pins the executor the delegation was granted", async () => {
+    mockGetQueued.mockResolvedValue([delegatedRun()]);
+    await dispatchRuns();
+    await vi.waitFor(() => expect(mockSelectExecutorForAttempt).toHaveBeenCalled());
+    const input = mockSelectExecutorForAttempt.mock.calls[0][0] as Record<string, unknown>;
+    expect(input.preferredAdapterId).toBe("acp");
+  });
+
+  it("falls back to the task policy for a run with no delegation", async () => {
+    mockGetQueued.mockResolvedValue([{ ...createRun({ id: "run-1" }), taskId: "task-1" }]);
+    mockTasksGetById.mockResolvedValue({
+      title: "task",
+      objective: "task objective",
+      acceptanceCriteria: ["path: src/**"],
+    });
+
+    await dispatchRuns();
+    await vi.waitFor(() => expect(mockExecuteExecutorAttempt).toHaveBeenCalled());
+    const input = mockExecuteExecutorAttempt.mock.calls[0][0] as Record<string, unknown>;
+    expect(input.taskPrompt).toBe("task objective");
+    expect(input.allowedPaths).toEqual(["src/**"]);
+  });
+});
+
 // ---- completeRun ----
 
 describe("completeRun", () => {

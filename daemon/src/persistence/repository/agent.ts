@@ -1,5 +1,22 @@
 // Agent runs, run events, and agent profiles
 
+import type { DelegationBounds } from "../../workflow/delegation-bounds.js";
+
+/**
+ * One link in the delegation chain.
+ *
+ * Recorded at dispatch time, from what the parent actually held rather than
+ * what it asked for, so the audit trail shows the bounds that were granted.
+ */
+export interface DelegationRecord {
+  parentRunId: string;
+  /** Bounds in force before this delegation narrowed them. */
+  parentBounds: DelegationBounds;
+  /** Bounds the child runs under. Never wider than `parentBounds`. */
+  grantedBounds: DelegationBounds;
+  dispatchedAt: string;
+}
+
 export interface AgentRunRow {
   id: string;
   conversationId: string | null;
@@ -21,6 +38,11 @@ export interface AgentRunRow {
   artifacts: unknown[] | null;
   approvals: unknown[] | null;
   agentSnapshot: AgentRunSnapshot | null;
+  /** Present when another run dispatched this one. */
+  delegation: DelegationRecord | null;
+  parentRunId: string | null;
+  /** The objective the dispatcher must execute, for runs without a task row. */
+  objective: string | null;
   startedAt: string;
   completedAt: string | null;
   durationMs: number | null;
@@ -54,6 +76,9 @@ export interface CreateAgentRunInput {
   routeReason?: string;
   selectedTools?: string[];
   agentSnapshot?: AgentRunSnapshot | null;
+  delegation?: DelegationRecord | null;
+  parentRunId?: string | null;
+  objective?: string | null;
 }
 
 export interface AgentRunRepository {

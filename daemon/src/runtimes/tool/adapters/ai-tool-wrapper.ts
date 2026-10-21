@@ -2,7 +2,7 @@ import type { Tool } from "ai";
 import { isApprovalRequiredResult } from "@jarvis/runtime-protocol";
 import { toolRuntime } from "../public-api.js";
 import { getRegistry } from "./native-tools/registry.js";
-import { resolveToolCallId } from "../domain/tool-call-id.js";
+import { resolveToolCallId, withToolInvocationContext } from "../domain/tool-call-id.js";
 
 /**
  * Runtime context passed through to ToolRuntime for every AI tool call.
@@ -88,15 +88,19 @@ export function wrapToolsForAI(
         execute: async (args: unknown) => {
           const toolId = resolveToolId(name);
           const toolCallId = resolveToolCallId(undefined, ctx.runId, toolId, args);
-          const executeResult = await toolRuntime.execute(toolId, args, {
-            caller: "ai",
-            runId: ctx.runId,
-            conversationId: ctx.conversationId,
-            projectId: ctx.projectId,
-            mode: ctx.mode,
-            toolCallId,
-            onApprovalRequired: ctx.onApprovalRequired,
-          });
+          // Any tool that needs to know which run invoked it reads this, rather
+          // than taking a runId argument the model would have to supply.
+          const executeResult = await withToolInvocationContext(ctx.runId, () =>
+            toolRuntime.execute(toolId, args, {
+              caller: "ai",
+              runId: ctx.runId,
+              conversationId: ctx.conversationId,
+              projectId: ctx.projectId,
+              mode: ctx.mode,
+              toolCallId,
+              onApprovalRequired: ctx.onApprovalRequired,
+            }),
+          );
           if (isApprovalRequiredResult(executeResult)) {
             // Return a marker instead of throwing — the agent loop detects this
             // in onStepFinish and suspends the run.

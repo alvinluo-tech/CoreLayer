@@ -65,7 +65,10 @@ export async function dispatchRuns(): Promise<DispatchResult> {
   let skipped = 0;
 
   for (const run of pendingRuns) {
-    if (!slotManager.canStartAgentRun()) {
+    // A delegated child gets its own slot: its parent is blocked waiting on it,
+    // so sharing the parent's capacity would deadlock both.
+    const delegated = Boolean(run.delegation);
+    if (!delegated && !slotManager.canStartAgentRun()) {
       skipped++;
       continue;
     }
@@ -80,7 +83,7 @@ export async function dispatchRuns(): Promise<DispatchResult> {
     }
 
     // Mark as actually running and acquire slot
-    const acquired = slotManager.acquireAgentRun(run.id);
+    const acquired = slotManager.acquireAgentRun(run.id, { delegated });
     if (!acquired) {
       skipped++;
       continue;
@@ -156,10 +159,21 @@ async function dispatchToCodingRuntime(
   let taskPrompt = `Execute agent run ${runId}`;
   let completionPolicy = parseCompletionPolicy([]);
 
+  // A dispatched child carries its own objective and its granted bounds. Those
+  // were narrowed against the parent at dispatch time, so they replace — not
+  // merge with — anything the task row or agent profile would suggest: reading
+  // those here would let the child silently regain scope the parent gave up.
+  const granted = runRecord.delegation?.grantedBounds;
+
+  if (runRecord.objective) {
+    taskPrompt = runRecord.objective;
+  }
   if (taskId) {
     const task = await tasks.getById(taskId);
     if (task) {
-      taskPrompt = task.objective ?? task.description ?? task.title;
+      if (!runRecord.objective) {
+        taskPrompt = task.objective ?? task.description ?? task.title;
+      }
       completionPolicy = parseCompletionPolicy(task.acceptanceCriteria);
       // TODO: task may have a repoPath field in the future
     }
@@ -168,7 +182,7 @@ async function dispatchToCodingRuntime(
   const permissions = runRecord.agentSnapshot?.permissions ?? profile?.permissions ?? [];
   const permissionPolicy = derivePermissionPolicy(permissions);
   const selection = await selectExecutorForAttempt({
-    preferredAdapterId,
+    preferredAdapterId: granted?.executor ?? preferredAdapterId,
     permissionPolicy,
     requireIsolation: true,
   });
@@ -183,16 +197,21 @@ async function dispatchToCodingRuntime(
     adapterId: selection.adapterId,
     taskPrompt,
     workingDirectory: repoPath,
-    timeoutMs: 300_000,
+    timeoutMs: granted?.timeoutMs ?? 300_000,
     permissionPolicy,
-    testCommands: completionPolicy.testCommands,
-    requiredArtifactTypes: completionPolicy.requiredArtifactTypes,
-    allowedPaths: completionPolicy.allowedPaths,
+    testCommands: granted?.testCommands.length
+      ? granted.testCommands
+      : completionPolicy.testCommands,
+    requiredArtifactTypes: granted?.requiredArtifactTypes.length
+      ? granted.requiredArtifactTypes
+      : completionPolicy.requiredArtifactTypes,
+    allowedPaths: granted?.allowedPaths.length ? granted.allowedPaths : completionPolicy.allowedPaths,
     manualCriteria: completionPolicy.manualCriteria,
-    allowedTools: runRecord.agentSnapshot?.tools ?? profile?.tools ?? [],
-    executorModel: executorPolicy && isAgentExecutorPolicy(executorPolicy)
-      ? executorPolicy.model
-      : undefined,
+    allowedTools: granted?.allowedTools.length
+      ? granted.allowedTools
+      : runRecord.agentSnapshot?.tools ?? profile?.tools ?? [],
+    executorModel: granted?.executorModel
+      ?? (executorPolicy && isAgentExecutorPolicy(executorPolicy) ? executorPolicy.model : undefined),
   });
 
   await agentRuns.updateArtifacts(runId, outcome.artifacts.artifacts);
