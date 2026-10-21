@@ -91,6 +91,10 @@ export async function dispatchAgent(input: DispatchAgentInput): Promise<Dispatch
 
   const entry = await enqueue({
     agentId: parent.agentId ?? undefined,
+    // The child inherits the parent's permissions when it has no profile of its
+    // own; otherwise it would resolve to zero permissions and project to the
+    // strict policy, silently refusing the writes the delegation was for.
+    agentSnapshot: parent.agentSnapshot,
     workspaceId: parent.workspaceId ?? undefined,
     projectId: parent.projectId ?? undefined,
     conversationId: parent.conversationId ?? undefined,

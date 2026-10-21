@@ -39,6 +39,30 @@ describe("verifyPathPolicy", () => {
     expect(result.metadata?.violations).toHaveLength(1);
   });
 
+  it("should compare Windows paths against forward-slash patterns", () => {
+    // Git reports paths with the platform separator. A `src/**` policy that
+    // only understands forward slashes rejects every Windows run — and, worse,
+    // passes every backslash path through a deny rule it never matched.
+    const allowed = verifyPathPolicy(["src\\parser\\index.ts"], ["src/parser/**"]);
+    expect(allowed.passed).toBe(true);
+
+    const denied = verifyPathPolicy(["src\\secret\\.env"], undefined, ["src/secret/**"]);
+    expect(denied.passed).toBe(false);
+  });
+
+  it("should ignore a git status prefix on a changed-file entry", () => {
+    // `changed_files` is produced both as bare paths and as `git status`
+    // porcelain lines. Reading "M src/a.ts" as a path rejects every file in a
+    // scoped run.
+    expect(verifyPathPolicy(["M src/index.ts"], ["src/**"]).passed).toBe(true);
+    expect(verifyPathPolicy(["?? src/new.ts"], ["src/**"]).passed).toBe(true);
+    expect(verifyPathPolicy(["R  src/old.ts -> src/new.ts"], ["src/**"]).passed).toBe(true);
+
+    // The prefix must not become a way around the policy.
+    expect(verifyPathPolicy(["M config/secret.json"], ["src/**"]).passed).toBe(false);
+    expect(verifyPathPolicy(["R  src/a.ts -> config/b.json"], ["src/**"]).passed).toBe(false);
+  });
+
   it("should pass with empty changed files", () => {
     const result = verifyPathPolicy([], ["src/**"]);
     expect(result.passed).toBe(true);

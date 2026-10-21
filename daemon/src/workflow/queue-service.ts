@@ -45,9 +45,18 @@ export async function enqueue(input: {
   parentRunId?: string;
   /** Bounds granted by the delegating run. */
   delegation?: DelegationRecord;
+  /**
+   * Snapshot to use when there is no agent to look up.
+   *
+   * A delegated child inherits its parent's snapshot: the parent's permissions
+   * are what make its capabilities legitimate, and a child that silently fell
+   * back to "no permissions" would be stricter than its parent in a way nobody
+   * asked for.
+   */
+  agentSnapshot?: AgentRunSnapshot | null;
 }): Promise<QueueEntry> {
   const { agentRuns, agentProfiles } = getRepositories();
-  let agentSnapshot: AgentRunSnapshot | null = null;
+  let agentSnapshot: AgentRunSnapshot | null = input.agentSnapshot ?? null;
   if (input.agentId) {
     const profile = await agentProfiles.getById(input.agentId);
     if (profile) {

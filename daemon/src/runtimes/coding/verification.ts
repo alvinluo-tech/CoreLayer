@@ -211,13 +211,36 @@ export async function runVerification(
 
 /**
  * Simple glob matching (supports * and **).
+ *
+ * Paths are normalised to forward slashes before matching. Git and the
+ * executors report paths with the platform separator, so on Windows every
+ * `changed_files` entry would otherwise be compared as `src\\a.ts` against a
+ * `src/**` policy and reported as a violation — a path policy that silently
+ * fails closed on the platform most users run.
  */
 function matchesGlob(path: string, pattern: string): boolean {
+  const normalizedPath = stripStatusPrefix(path).replace(/\\/g, "/");
+  const normalizedPattern = pattern.replace(/\\/g, "/");
   // Convert glob to regex
-  const regex = pattern
+  const regex = normalizedPattern
     .replace(/\*\*/g, "{{DOUBLE_STAR}}")
     .replace(/\*/g, "[^/]*")
     .replace(/\{\{DOUBLE_STAR\}\}/g, ".*")
     .replace(/\?/g, "[^/]");
-  return new RegExp(`^${regex}$`).test(path);
+  return new RegExp(`^${regex}$`).test(normalizedPath);
+}
+
+/**
+ * Drop a leading `git status` code from a changed-file entry.
+ *
+ * `changed_files` artifacts are produced in two shapes: bare paths, and lines
+ * copied from `git status --porcelain` such as `M src/a.ts` or `?? new.md`.
+ * Comparing the latter as a path makes every file look like it falls outside
+ * its own allowed directory.
+ */
+function stripStatusPrefix(entry: string): string {
+  const withoutStatus = entry.replace(/^\s*(?:[MADRCU?!]{1,2}\s+)/, "").trim();
+  // `R  old -> new` names the new path last.
+  const arrow = withoutStatus.lastIndexOf(" -> ");
+  return arrow >= 0 ? withoutStatus.slice(arrow + 4).trim() : withoutStatus;
 }
