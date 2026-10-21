@@ -16,6 +16,7 @@ import { getRepositories } from "../persistence/factory.js";
 import { getRegistry } from "../runtimes/tool/public-api.js";
 import type { ToolResult } from "@jarvis/types";
 import type { RuntimeAction } from "@jarvis/runtime-protocol";
+import { matchesApprovedAction } from "./action-digest.js";
 import type {
   PendingActionRow,
   PendingActionStatus,
@@ -147,6 +148,32 @@ export async function executeApprovedTool(
   }
 
   const payload = request.operationPayload as { args: unknown };
+
+  // What the human approved must be what runs. The payload is re-read from the
+  // database between the click and the dispatch, so a row rewritten in that
+  // window would otherwise execute a different call under the same approval.
+  if (!matchesApprovedAction(request.actionDigest, request.toolId, payload.args)) {
+    const error = "Approved action no longer matches the call about to run; refusing to execute";
+    await getRepositories().auditLog.create({
+      actor: "system",
+      action: "approval.digest_mismatch",
+      resource: `tool:${request.toolName}`,
+      riskLevel: request.risk,
+      permissionDecision: "deny",
+      confirmedByUser: false,
+      result: "denied",
+      metadata: { toolId: request.toolId, approvalId: approvalRequestId },
+    });
+    const result = {
+      approvalRequestId,
+      toolResult: { success: false, error },
+      toolId: request.toolId,
+      toolName: request.toolName,
+      runId: request.runId,
+    };
+    if (pending) await pendingActions.transition(pending.id, ["executing"], "failed", error, result);
+    return result;
+  }
 
   const registry = getRegistry();
   const tool = registry.resolveTool(request.toolId) ?? registry.getTool(`native:${request.toolId}`);

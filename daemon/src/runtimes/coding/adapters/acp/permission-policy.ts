@@ -36,6 +36,34 @@ const READ_KINDS = new Set(["read", "search", "fetch", "think"]);
 const WRITE_KINDS = new Set(["edit", "delete", "move", "execute"]);
 
 /**
+ * Commands an unattended run may auto-approve beyond plain reads.
+ *
+ * A run with nobody watching cannot ask a human, so the choice is approve or
+ * escalate (kill the run). Escalating on `ls` or `git status` makes the
+ * executor unusable; approving `npm install` or `docker run` unattended hands
+ * a model the network and the host. The list is deliberately small and
+ * argument-aware; everything else escalates.
+ */
+const BENIGN_COMMAND_PATTERNS: ReadonlyArray<RegExp> = [
+  /^(ls|dir|pwd|cat|head|tail|wc|file|stat|tree|which|where|echo)\b/i,
+  /^git\s+(status|diff|log|show|branch|rev-parse|ls-files|describe)\b/i,
+  /^(node|npm|pnpm|yarn|npx)\s+(-v|--version)\b/i,
+  /^(python|python3|go|rustc|cargo|java)\s+(-V|--version|version)\b/i,
+];
+
+/** A shell call the policy cannot read as a plain command escalates. */
+function commandIsBenign(rawInput: unknown): boolean {
+  if (!rawInput || typeof rawInput !== "object") return false;
+  const command = (rawInput as Record<string, unknown>).command;
+  if (typeof command !== "string") return false;
+  const trimmed = command.trim();
+  // Compound commands, pipes, redirection and substitution can smuggle an
+  // arbitrary second step past a prefix match.
+  if (/[|;&<>$`\n]/.test(trimmed)) return false;
+  return BENIGN_COMMAND_PATTERNS.some((pattern) => pattern.test(trimmed));
+}
+
+/**
  * Infer the ACP ToolKind.
  *
  * ACP lets an adapter omit `kind`, so the title's leading action word is used
@@ -64,9 +92,10 @@ export function inferToolKind(request: PermissionRequestView): string {
  * Resolve a permission request against the run's permission policy.
  *
  * - permissive: approve every request
- * - normal: approve reads/searches, approve edits and commands (the run is
- *   already isolated in a dedicated worktree and branch)
- * - strict: approve reads, escalate anything that mutates or executes
+ * - normal: approve reads/searches and benign shell commands; escalate writes
+ *   and any command the policy cannot read (a worktree isolates the blast
+ *   radius, but "nobody is watching" means mutating calls still need a human)
+ * - strict: reads and benign shell commands only; everything else escalates
  */
 export function resolvePermissionDecision(
   policy: CodingPermissionPolicy,
@@ -81,15 +110,28 @@ export function resolvePermissionDecision(
     return approveOrEscalate(allowOption, kind);
   }
 
-  if (policy === "strict" && (WRITE_KINDS.has(kind) || !READ_KINDS.has(kind))) {
+  if (READ_KINDS.has(kind)) {
+    return approveOrEscalate(allowOption, kind);
+  }
+
+  if (kind === "execute" && commandIsBenign(request.rawInput)) {
+    return approveOrEscalate(allowOption, kind);
+  }
+
+  if (policy === "strict") {
     return {
       action: "escalate",
       reason: `Strict policy: '${request.title ?? request.toolCallId ?? "tool"}' (${kind}) needs explicit approval`,
     };
   }
 
-  if (READ_KINDS.has(kind) || WRITE_KINDS.has(kind)) {
-    return approveOrEscalate(allowOption, kind);
+  // normal: writes and unreadable commands are exactly the class of action an
+  // unattended run must not take on its own.
+  if (WRITE_KINDS.has(kind)) {
+    return {
+      action: "escalate",
+      reason: `Unattended run: '${request.title ?? request.toolCallId ?? "tool"}' (${kind}) needs explicit approval`,
+    };
   }
 
   // Unknown kinds are not silently trusted. "other" covers tools whose effect
@@ -135,8 +177,10 @@ function pickRejectOption(options: readonly PermissionOptionView[]): PermissionO
  * Map the Jarvis permission policy onto acpx's `--permission-policy` JSON.
  *
  * acpx resolves requests itself before they reach the adapter, so the two
- * layers must agree. Strict runs escalate writes to this adapter rather than
- * letting acpx fail the session.
+ * layers must agree: whatever this module would escalate must also be escalated
+ * by acpx, or acpx would auto-approve a call this adapter refused to run.
+ * Anything the policy does not classify falls through to `defaultAction`, which
+ * is why it is never `approve` outside the permissive policy.
  */
 export function toAcpxPermissionPolicy(policy: CodingPermissionPolicy): {
   autoApprove?: string[];
@@ -150,5 +194,5 @@ export function toAcpxPermissionPolicy(policy: CodingPermissionPolicy): {
   if (policy === "strict") {
     return { autoApprove: ["read", "search", "fetch"], escalate: ["edit", "delete", "move", "execute"], defaultAction: "escalate" };
   }
-  return { defaultAction: "approve" };
+  return { autoApprove: ["read", "search", "fetch"], defaultAction: "escalate" };
 }

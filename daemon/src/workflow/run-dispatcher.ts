@@ -25,6 +25,7 @@ import type { AgentRunRow } from "../persistence/repository/agent.js";
 import { parseCompletionPolicy } from "./completion-policy.js";
 import { derivePermissionPolicy } from "./permission-policy.js";
 import { evaluateCompletionEvidence } from "./completion-evidence.js";
+import { classifyFailure, type FailureVerdict } from "./failure-classification.js";
 
 const taskGraph = new TaskGraph();
 
@@ -196,12 +197,20 @@ async function dispatchToCodingRuntime(
 
   await agentRuns.updateArtifacts(runId, outcome.artifacts.artifacts);
   if (outcome.artifacts.artifacts.length > 0) {
-    await syncArtifactsToTable(
-      runId,
-      outcome.artifacts.artifacts,
-      runRecord.workspaceId,
-      runRecord.projectId,
-    );
+    try {
+      await syncArtifactsToTable(
+        runId,
+        outcome.artifacts.artifacts,
+        runRecord.workspaceId,
+        runRecord.projectId,
+      );
+    } catch (err) {
+      // The executor's work exists; only the workspace copy failed. Report it
+      // as a run failure rather than dropping the deliverable silently.
+      const message = err instanceof Error ? err.message : String(err);
+      await completeRun(runId, false, message, false, outcome.artifacts.artifacts);
+      return;
+    }
   }
   await completeRun(runId, outcome.success, outcome.error, outcome.manualInterventionRequired, outcome.artifacts.artifacts);
 }
@@ -223,6 +232,12 @@ export async function completeRun(
   const delivered = evidence?.complete === true;
 
   const status = success ? "succeeded" : "failed";
+  // An infrastructure failure is evidence about the environment, not about the
+  // agent. It still fails the run, but the caller and the history need to be
+  // able to exclude it from success-rate statistics.
+  const failureVerdict: FailureVerdict | undefined = success
+    ? undefined
+    : classifyFailure({ error, verificationFailed: false });
   await agentRuns.updateStatus(runId, status, error);
   slotManager.releaseAgentRun(runId);
 
@@ -243,6 +258,7 @@ export async function completeRun(
           {
             runId,
             status,
+            ...(failureVerdict ? { failureVerdict } : {}),
             error: error ?? (delivered ? null : evidence?.reason ?? null),
             completedAt: new Date().toISOString(),
           },
@@ -368,9 +384,24 @@ async function syncArtifactsToTable(
       title: String(title),
       content: artifact.content ?? (artifact.metadata ? JSON.stringify(artifact.metadata) : null),
       metadata: JSON.stringify(artifactMetadata),
-    }).catch(() => {
-      // Best-effort — don't fail the run over artifact persistence
+    }).catch((err: unknown) => {
+      // A deliverable the user cannot find is a failure, not a warning. The run
+      // itself already succeeded, so this is recorded rather than rethrown and
+      // still fails the run through `completeRun`.
+      throw new ArtifactPersistenceError(
+        `Artifact '${String(title)}' (${artifact.type}) was produced but could not be stored: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
     });
+  }
+}
+
+/** Raised when a produced artifact cannot be written to the workspace store. */
+export class ArtifactPersistenceError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ArtifactPersistenceError";
   }
 }
 

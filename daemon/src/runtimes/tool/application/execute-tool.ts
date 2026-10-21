@@ -6,6 +6,7 @@ import { getRepositories } from "../../../persistence/factory.js";
 import { checkHardlineBlocklist } from "../../../capabilities/hardline-blocklist.js";
 import { canAutoApprove } from "../../../capabilities/capability-policy.js";
 import type { OperationRisk } from "../../../operations/domain/operation.js";
+import { actionDigest } from "../../../approvals/action-digest.js";
 
 /**
  * Basic validation of tool args against the tool's inputSchema.
@@ -391,6 +392,7 @@ export class ToolExecutionService {
           expiresAt: Date.now() + expiresInMs,
           operationKind: "tool.execute",
           operationPayload: { args },
+          actionDigest: actionDigest(tool.id, args),
         });
 
         // Notify client stream that approval is required

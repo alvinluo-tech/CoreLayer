@@ -86,11 +86,13 @@ export async function runStreamTurn(
     content: request.input,
   });
 
-  // Build message history for streamChat (filter out non-user/assistant messages for type safety)
+  // history passed to streamChat is no longer sliced here. streamChat runs the
+  // ContextBuilder, which owns the budget, memory section and history
+  // selection; a fixed `slice(-20)` upstream threw that work away and made the
+  // streaming path behave differently from the non-streaming one.
   const history = await conversations.getMessages(conversationId);
   const messages: ModelMessage[] = history
     .filter((msg) => msg.role === "user" || msg.role === "assistant")
-    .slice(-20)
     .map((msg) => ({
       role: msg.role as "user" | "assistant",
       content: msg.content,

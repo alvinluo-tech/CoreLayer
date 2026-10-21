@@ -18,6 +18,8 @@ export interface ApprovalRequestRow {
   expiresAt: number | null;
   operationKind: string | null;
   operationPayload: unknown;
+  /** sha256(toolId + canonical args) of the approved call; null for pre-digest rows. */
+  actionDigest: string | null;
 }
 
 export interface CreateApprovalRequestInput {
@@ -35,6 +37,7 @@ export interface CreateApprovalRequestInput {
   expiresAt?: number;
   operationKind?: string;
   operationPayload?: unknown;
+  actionDigest?: string;
 }
 
 export interface ApprovalRequestRepository {

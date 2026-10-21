@@ -1,6 +1,7 @@
 import type { Database } from "better-sqlite3";
 import { migrations } from "./migrations.js";
 import { migrateAgentRunsStatusConstraint } from "./sqlite/agent-runs-migration.js";
+import { migrateApprovalActionDigest } from "./sqlite/approval-digest-migration.js";
 import { migrateApprovalRequestsStatusConstraint } from "./sqlite/approval-status-migration.js";
 import { migrateMessageFts } from "./sqlite/message-fts-migration.js";
 
@@ -111,6 +112,12 @@ function runLegacyFTSAndConstraints(db: Database): void {
     migrateApprovalRequestsStatusConstraint(db);
   } catch (err) {
     console.error("[Migrations] Failed to migrate approval_requests status constraint:", err);
+  }
+
+  try {
+    migrateApprovalActionDigest(db);
+  } catch (err) {
+    console.error("[Migrations] Failed to add approval action digest column:", err);
   }
 
   // Full-Text Search setups

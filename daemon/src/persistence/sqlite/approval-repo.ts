@@ -28,7 +28,18 @@ function mapRow(row: typeof schema.approvalRequests.$inferSelect): ApprovalReque
     expiresAt: row.expiresAt ?? null,
     operationKind: row.operationKind ?? null,
     operationPayload: row.operationPayload ? JSON.parse(row.operationPayload) : null,
+    actionDigest: readActionDigest(row),
   };
+}
+
+/**
+ * The digest column is added by an out-of-band migration, so the drizzle row
+ * type does not carry it yet. Reading through the raw record keeps the
+ * repository honest about old databases that have not run the migration.
+ */
+function readActionDigest(row: typeof schema.approvalRequests.$inferSelect): string | null {
+  const value = (row as unknown as Record<string, unknown>).actionDigest;
+  return typeof value === "string" && value ? value : null;
 }
 
 export function createSqliteApprovalRepo(database?: DrizzleDb): ApprovalRequestRepository {
@@ -57,6 +68,14 @@ export function createSqliteApprovalRepo(database?: DrizzleDb): ApprovalRequestR
           operationPayload: input.operationPayload != null ? JSON.stringify(input.operationPayload) : null,
         })
         .run();
+      if (input.actionDigest) {
+        // Written after the insert because the column is added out-of-band and
+        // is not part of the drizzle table definition.
+        db.update(schema.approvalRequests)
+          .set({ ...({ actionDigest: input.actionDigest } as Record<string, unknown>) })
+          .where(eq(schema.approvalRequests.id, id))
+          .run();
+      }
       const row = db
         .select()
         .from(schema.approvalRequests)

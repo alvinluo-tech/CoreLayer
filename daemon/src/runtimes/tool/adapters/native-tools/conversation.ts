@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getRepositories } from "../../../../persistence/factory.js";
 import { registerTool } from "./registry.js";
 import { ConversationCleanupPlanner } from "../../../../operations/planners/conversation-cleanup-planner.js";
+import { actionDigest } from "../../../../approvals/action-digest.js";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -272,6 +273,9 @@ export function registerConversationTools(): void {
           expiresAt: Date.now() + expiresInMs,
           operationKind: preview.kind,
           operationPayload: preview.payload,
+          // The cleanup executes an operation rather than a tool call, so the
+          // digest is bound to the planned payload that will actually run.
+          actionDigest: actionDigest(preview.kind, preview.payload),
         });
 
         return {

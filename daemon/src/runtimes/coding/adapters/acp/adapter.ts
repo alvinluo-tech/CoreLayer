@@ -62,11 +62,32 @@ import {
   isSessionUpdate,
   type AcpJsonRpcMessage,
 } from "./jsonrpc-decoder.js";
+import { createStderrBuffer, type StderrBuffer } from "./stderr-buffer.js";
+import { probeAcpAgent, type AcpCapabilitySnapshot } from "./capability-probe.js";
 
 const runs = new Map<string, CodingRunInfo>();
 const processes = new Map<string, number>();
 const sessions = new Map<string, AcpRunSession>();
 const emitter = new CodingEventEmitter();
+
+/**
+ * How long an escalated run is given to finish the turn after the request is
+ * answered. The agent needs this window to write its own refusal and wind
+ * down; killing the process the instant a permission is escalated loses the
+ * partial work and the reason.
+ */
+const ESCALATION_GRACE_MS = 5_000;
+
+/**
+ * What an ACP turn must produce to count as having done anything. A turn that
+ * ends with no assistant text and no tool call is a failed turn in practice:
+ * measured adapters answer `end_turn` after a provider error and report the
+ * error only on stderr.
+ */
+interface TurnEvidence {
+  textChunks: number;
+  toolCalls: number;
+}
 
 interface AcpRunSession {
   tracker: ToolCallTracker;
@@ -75,6 +96,13 @@ interface AcpRunSession {
   cancelled: boolean;
   /** Accumulated assistant text for the final summary. */
   transcript: string;
+  /** Retained stderr tail, used when the protocol reports success but nothing ran. */
+  stderr: StderrBuffer;
+  evidence: TurnEvidence;
+  /** Set once a permission was escalated to a human; the run is winding down. */
+  escalating?: boolean;
+  escalationReason?: string;
+  escalationTimer?: ReturnType<typeof setTimeout>;
 }
 
 function policyForTask(task: CodingTask): CodingPermissionPolicy {
@@ -134,6 +162,17 @@ export class AcpCodingAdapter implements CodingAgentAdapter {
     } catch {
       return { available: true, version: undefined, transport: "cli" };
     }
+  }
+
+  /**
+   * Measure whether the configured ACP agent can actually start a session.
+   *
+   * `discover()` only proves acpx is installed. This performs the ACP handshake
+   * without running a prompt turn, so a caller can distinguish "ready" from
+   * "needs a login" from "the launch command is broken" before spending a run.
+   */
+  async probe(agent: string, cwd: string, model?: string): Promise<AcpCapabilitySnapshot> {
+    return probeAcpAgent({ agent, cwd, model });
   }
 
   async startRun(task: CodingTask): Promise<CodingRunHandle> {
@@ -283,7 +322,14 @@ export class AcpCodingAdapter implements CodingAgentAdapter {
     const env: Record<string, string> = { ANTHROPIC_MODEL: model };
     if (configDir) env.CLAUDE_CONFIG_DIR = configDir;
 
-    const session: AcpRunSession = { tracker: createToolCallTracker(), configDir, cancelled: false, transcript: "" };
+    const session: AcpRunSession = {
+      tracker: createToolCallTracker(),
+      configDir,
+      cancelled: false,
+      transcript: "",
+      stderr: createStderrBuffer(),
+      evidence: { textChunks: 0, toolCalls: 0 },
+    };
     sessions.set(runId, session);
 
     const decoder = new AcpStreamDecoder();
@@ -308,7 +354,9 @@ export class AcpCodingAdapter implements CodingAgentAdapter {
       },
       onStderr: (chunk) => {
         const text = chunk.trim();
-        if (text) emitter.emit(runId, { type: "agent_message", text: `[stderr] ${text}` });
+        if (!text) return;
+        session.stderr.push(chunk);
+        emitter.emit(runId, { type: "agent_message", text: `[stderr] ${text}` });
       },
     });
 
@@ -328,7 +376,17 @@ export class AcpCodingAdapter implements CodingAgentAdapter {
       info.completedAt = new Date().toISOString();
       info.durationMs = Date.now() - new Date(info.startedAt).getTime();
 
-      const succeeded = !session.cancelled && (promptCompleted ? promptError === undefined : code === 0);
+      const protocolSucceeded = !session.cancelled && (promptCompleted ? promptError === undefined : code === 0);
+      // A turn that produced neither text nor a tool call did nothing, whatever
+      // the stop reason says. Measured adapters report `end_turn` after a
+      // provider error and leave the cause on stderr.
+      const emptyTurn =
+        protocolSucceeded &&
+        session.evidence.textChunks === 0 &&
+        session.evidence.toolCalls === 0 &&
+        session.transcript.trim().length === 0;
+
+      const succeeded = protocolSucceeded && !emptyTurn && !session.escalating;
       if (succeeded) {
         info.status = "succeeded";
         const summary = session.transcript.trim() || handle.stdout.join("") || "Task completed successfully";
@@ -356,7 +414,13 @@ export class AcpCodingAdapter implements CodingAgentAdapter {
         });
       } else if (!session.cancelled) {
         info.status = "failed";
-        info.error = promptError ?? (handle.stderr.join("").trim() || `Exit code ${code}`);
+        info.error = resolveFailureReason({
+          promptError,
+          escalation: session.escalationReason,
+          emptyTurn,
+          stderrTail: session.stderr.text(),
+          exitCode: code,
+        });
         info.artifacts.push({ type: "error", content: info.error });
         emitter.emit(runId, { type: "run_failed", error: info.error });
         emitWorkspaceEvent({
@@ -423,13 +487,19 @@ export class AcpCodingAdapter implements CodingAgentAdapter {
       const update = message.params?.update as AcpSessionUpdate | undefined;
       if (!update) return;
       const mapping = mapAcpUpdate(update, session.tracker);
-      if (mapping.agentText) session.transcript += mapping.agentText;
-      for (const event of mapping.events) emitter.emit(runId, event);
+      if (mapping.agentText) {
+        session.transcript += mapping.agentText;
+        session.evidence.textChunks += 1;
+      }
+      for (const event of mapping.events) {
+        if (event.type === "tool_call") session.evidence.toolCalls += 1;
+        emitter.emit(runId, event);
+      }
       return;
     }
 
     if (isPermissionRequest(message)) {
-      this.answerPermission(runId, message);
+      this.answerPermission(runId, session, message);
       return;
     }
 
@@ -449,7 +519,11 @@ export class AcpCodingAdapter implements CodingAgentAdapter {
     }
   }
 
-  private answerPermission(runId: string, message: AcpJsonRpcMessage): void {
+  private answerPermission(
+    runId: string,
+    session: AcpRunSession | undefined,
+    message: AcpJsonRpcMessage,
+  ): void {
     const info = runs.get(runId);
     const task = info?.task;
     const policy: CodingPermissionPolicy = task ? policyForTask(task) : "normal";
@@ -470,19 +544,27 @@ export class AcpCodingAdapter implements CodingAgentAdapter {
 
     // acpx owns the agent's stdin and answers this request with its own
     // `--permission-policy`, so the reply on the wire is not ours to send.
-    // What we can do is refuse to run a turn whose policy would escalate:
-    // leaving it to acpx would let a strict run be silently auto-approved.
+    // Killing the process here is the only way to refuse the action; what has
+    // to change is when: the answer rides out first so the agent can wind its
+    // turn down and keep whatever it had already produced, and the kill is only
+    // the backstop for an agent that ignores the refusal.
     const pid = processes.get(runId);
     if (decision.action === "escalate") {
-      const reason = decision.reason;
-      if (info && info.status === "running") {
-        info.status = "failed";
-        info.error = reason;
-        info.completedAt = new Date().toISOString();
-        info.artifacts.push({ type: "error", content: reason });
-        emitter.emit(runId, { type: "run_failed", error: reason });
+      if (session) {
+        session.escalating = true;
+        session.escalationReason = decision.reason;
+        if (!session.escalationTimer && pid) {
+          session.escalationTimer = setTimeout(() => {
+            killProcessTree(pid);
+          }, ESCALATION_GRACE_MS);
+          session.escalationTimer.unref?.();
+        }
       }
-      if (pid) killProcessTree(pid);
+      emitter.emit(runId, {
+        type: "approval_requested",
+        risk: "escalation",
+        reason: decision.reason,
+      });
       return;
     }
 
@@ -583,9 +665,28 @@ function createIsolatedClaudeConfigDir(): string | undefined {
   }
 }
 
+function resolveFailureReason(input: {
+  promptError?: string;
+  escalation?: string;
+  emptyTurn: boolean;
+  stderrTail: string;
+  exitCode: number | null;
+}): string {
+  if (input.escalation) return input.escalation;
+  if (input.promptError) return input.promptError;
+  if (input.emptyTurn) {
+    const tail = input.stderrTail.trim().split("\n").slice(-3).join(" | ");
+    return tail
+      ? `ACP turn produced no output; stderr: ${tail}`
+      : "ACP turn produced no output and reported no error";
+  }
+  return input.stderrTail.trim() || `Exit code ${input.exitCode}`;
+}
+
 function cleanupSession(runId: string): void {
   const session = sessions.get(runId);
   if (!session) return;
+  if (session.escalationTimer) clearTimeout(session.escalationTimer);
   if (session.configDir) {
     try {
       rmSync(session.configDir, { recursive: true, force: true });
