@@ -10,7 +10,7 @@
 
 /** Result of a single verification check */
 export interface VerificationResult {
-  /** Check name (e.g., "path-policy", "test-command", "artifact-presence") */
+  /** Check name (e.g., "path-policy", "test-command", "artifact-presence", "adversarial-judge") */
   checkName: string;
   /** Whether the check passed */
   passed: boolean;
@@ -22,6 +22,16 @@ export interface VerificationResult {
   durationMs?: number;
   /** Additional metadata */
   metadata?: Record<string, unknown>;
+}
+
+export interface AdjudicationVerificationOptions {
+  /** Whether the adversarial review gate is active. Defaults to true when options provided. */
+  enabled?: boolean;
+  taskObjective: string;
+  gitDiff: string;
+  changedFiles?: string[];
+  testCommandOutput?: string;
+  attemptId?: string;
 }
 
 /** Aggregate verification report for a run */
@@ -166,6 +176,47 @@ export async function verifyTestCommand(
 }
 
 /**
+ * Run an adversarial adjudication review on the attempt's diff and objective.
+ */
+export async function verifyAdversarialAdjudication(
+  options: AdjudicationVerificationOptions,
+  deps?: Partial<import("../../workflow/adjudication/adjudication-service.js").AdjudicationDeps>,
+): Promise<VerificationResult> {
+  const start = Date.now();
+  if (options.enabled === false) {
+    return {
+      checkName: "adversarial-judge",
+      passed: true,
+      summary: "Adversarial judge check disabled",
+      severity: "info",
+      durationMs: Date.now() - start,
+    };
+  }
+
+  const { adjudicateAttempt } = await import(
+    "../../workflow/adjudication/adjudication-service.js"
+  );
+
+  const verdict = await adjudicateAttempt(options, deps);
+  const passed = verdict.decision === "APPROVE";
+
+  return {
+    checkName: "adversarial-judge",
+    passed,
+    summary: `[${verdict.decision}] ${verdict.summary}`,
+    severity: passed ? "info" : "critical",
+    durationMs: Date.now() - start,
+    metadata: {
+      decision: verdict.decision,
+      confidence: verdict.confidence,
+      critique: verdict.critique,
+      issues: verdict.issues,
+      testsIntegrityVerdict: verdict.testsIntegrityVerdict,
+    },
+  };
+}
+
+/**
  * Run all verification checks and produce a report.
  */
 export async function runVerification(
@@ -178,6 +229,10 @@ export async function runVerification(
     requiredArtifactTypes?: string[];
     testCommand?: string;
     testCwd?: string;
+    adjudication?: AdjudicationVerificationOptions;
+  },
+  deps?: {
+    adjudicationDeps?: Partial<import("../../workflow/adjudication/adjudication-service.js").AdjudicationDeps>;
   },
 ): Promise<VerificationReport> {
   const start = Date.now();
@@ -198,6 +253,11 @@ export async function runVerification(
   // Test command check
   if (options.testCommand && options.testCwd) {
     results.push(await verifyTestCommand(options.testCommand, options.testCwd));
+  }
+
+  // Adversarial adjudication review check
+  if (options.adjudication) {
+    results.push(await verifyAdversarialAdjudication(options.adjudication, deps?.adjudicationDeps));
   }
 
   return {

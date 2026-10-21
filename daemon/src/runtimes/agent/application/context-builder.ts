@@ -53,6 +53,8 @@ export interface BuiltContext {
   compressionUrgency: "soft" | "hard" | "none";
   tokens: ContextDebugInfo["tokens"];
   toolsUsed: string[];
+  /** IDs of the exact memory rows injected into the system prompt */
+  injectedMemoryIds: string[];
   /** Whether Anthropic prompt caching should be enabled for this context. */
   cacheEnabled: boolean;
   debug: () => ContextDebugInfo;
@@ -194,11 +196,14 @@ export class ContextBuilder {
   private modelName: string;
   private userMessage?: string;
   private summary?: string;
+  private userProfile?: string;
+  private memorySnapshot?: string;
   private systemPromptOverride?: string;
   private sections: ContextSection[] = [];
   private selectedToolNames: string[] = [];
   private selectedMemoryItems: { key: string; type: string; score: number }[] =
     [];
+  private injectedMemoryIds: string[] = [];
 
   constructor(config: {
     mode?: "text" | "voice";
@@ -206,12 +211,16 @@ export class ContextBuilder {
     modelName: string;
     userMessage?: string;
     systemPromptOverride?: string;
+    userProfile?: string;
+    memorySnapshot?: string;
   }) {
     this.mode = config.mode ?? "text";
     this.conversationId = config.conversationId;
     this.modelName = config.modelName;
     this.userMessage = config.userMessage;
     this.systemPromptOverride = config.systemPromptOverride;
+    this.userProfile = config.userProfile;
+    this.memorySnapshot = config.memorySnapshot;
   }
 
   /**
@@ -219,6 +228,16 @@ export class ContextBuilder {
    */
   withSummary(summary: string): this {
     this.summary = summary;
+    return this;
+  }
+
+  withUserProfile(profile: string): this {
+    this.userProfile = profile;
+    return this;
+  }
+
+  withMemorySnapshot(snapshot: string): this {
+    this.memorySnapshot = snapshot;
     return this;
   }
 
@@ -261,6 +280,7 @@ export class ContextBuilder {
         compressionUrgency: urgency,
         tokens: tokenInfo,
         toolsUsed: [],
+        injectedMemoryIds: [],
         cacheEnabled: systemPrompt.length > 4000,
         debug: () => ({
           mode: this.mode,
@@ -294,6 +314,26 @@ export class ContextBuilder {
     // Volatile tier (changes each turn - placed at end for cache optimization)
     const memorySection = this.buildMemorySection(memories);
     this.sections.push(memorySection);
+
+    if (this.userProfile && this.userProfile.trim().length > 0) {
+      const content = `## 用户画像\n${this.userProfile.trim()}`;
+      this.sections.push({
+        name: "user-profile",
+        content,
+        tokens: estimateTokens(content),
+        tier: "volatile",
+      });
+    }
+
+    if (this.memorySnapshot && this.memorySnapshot.trim().length > 0) {
+      const content = `## 长期记忆快照\n${this.memorySnapshot.trim()}`;
+      this.sections.push({
+        name: "memory-snapshot",
+        content,
+        tokens: estimateTokens(content),
+        tier: "volatile",
+      });
+    }
 
     this.sections.push(this.buildConversationInfoSection());
     this.sections.push(this.buildDateSection());
@@ -372,6 +412,7 @@ export class ContextBuilder {
         budget: budget.maxInputTokens,
       },
       toolsUsed: this.selectedToolNames,
+      injectedMemoryIds: this.injectedMemoryIds,
       cacheEnabled,
       debug: () => this.buildDebugInfo(memories, {
         system: systemPromptTokens,
@@ -508,6 +549,8 @@ export class ContextBuilder {
       type: m.type,
       score: m.score,
     }));
+
+    this.injectedMemoryIds = topMemories.map((m) => m.id);
 
     let memoryText = topMemories
       .map((m) => m.tier === "pinned" ? `[固定] ${m.key}: ${m.value}` : `${m.key}: ${m.value}`)

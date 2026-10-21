@@ -86,3 +86,36 @@ export function allRequiredGatesPass(results: VerificationResult[], taskType: st
 export function resetGates(): void {
   gates.clear();
 }
+
+/**
+ * Creates an adversarial judge quality gate that blocks delivery if the LLM judge rejects.
+ */
+export function createAdversarialJudgeQualityGate(options: {
+  required?: boolean;
+  taskObjective?: string;
+  diffContent?: string;
+} = {}): QualityGate {
+  return {
+    name: "adversarial-judge",
+    taskTypes: ["coding", "*"],
+    required: options.required ?? true,
+    async check(context: GateContext): Promise<VerificationResult> {
+      const { verifyAdversarialAdjudication } = await import("./verification.js");
+      const taskObjective =
+        options.taskObjective ||
+        (context.metadata?.taskObjective as string) ||
+        `Audit changes for run ${context.runId}`;
+
+      const diffArtifact = context.artifacts.find(
+        (a) => a.type === "diff" || a.type === "diff_summary",
+      );
+      const gitDiff = options.diffContent || diffArtifact?.content || "";
+
+      return verifyAdversarialAdjudication({
+        taskObjective,
+        gitDiff,
+        changedFiles: context.changedFiles,
+      });
+    },
+  };
+}

@@ -1,6 +1,4 @@
-import { readFileSync, writeFileSync, existsSync, mkdirSync, statSync, watch } from "fs";
-import { join } from "path";
-import { homedir } from "os";
+import { readFileSync, writeFileSync, existsSync, statSync, watch } from "fs";
 import { validateConfig } from "./config-schema.js";
 
 // ---- In-memory cache ----
@@ -119,22 +117,16 @@ export interface VoiceConfig {
 
 export type Credentials = Record<string, string>;
 
-// ---- Config directory ----
-// NOTE: credentials.json stores API keys in plaintext. This is a temporary
-// solution until SecretStore (Rust-side encrypted storage) is implemented.
-// Migration plan: move credential reads/writes to SecretStore, keeping
-// credentials.json as an unencrypted fallback for development only.
-
-function getConfigDir(): string {
-  return process.env.JARVIS_HOME || join(homedir(), ".jarvis", "config");
-}
+// ---- Storage Layout ----
+import { getStorageLayout, ensureStorageLayout, type JarvisStorageLayout } from "./storage-layout.js";
+export { getStorageLayout, ensureStorageLayout, type JarvisStorageLayout };
 
 function getConfigPath(): string {
-  return join(getConfigDir(), "config.json");
+  return getStorageLayout().configPath;
 }
 
 function getCredentialsPath(): string {
-  return join(getConfigDir(), "credentials.json");
+  return getStorageLayout().credentialsPath;
 }
 
 // ---- Defaults ----
@@ -197,10 +189,7 @@ const DEFAULT_CONFIG: JarvisConfig = {
 // ---- File I/O ----
 
 function ensureDir(): void {
-  const dir = getConfigDir();
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true });
-  }
+  ensureStorageLayout();
 }
 
 function readJsonFile<T>(filePath: string, fallback: T): T {
@@ -380,6 +369,10 @@ class ConfigManager {
     const current = this.getConfig();
     const merged = { ...current.voice, ...partial };
     this.updateConfig({ voice: merged });
+  }
+
+  getStorageLayout(): JarvisStorageLayout {
+    return getStorageLayout();
   }
 }
 

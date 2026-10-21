@@ -64,6 +64,9 @@ frontend/mockups/
 # Codex config
 .codex/
 
+# Agent tool state
+.zcode/
+
 # Build artifacts
 .sea-temp/
 

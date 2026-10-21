@@ -5,6 +5,9 @@ import { registerConversationTools } from "../runtimes/tool/adapters/native-tool
 import { registerMemoryTools } from "../runtimes/memory/connector.js";
 import { registerChartTools } from "../runtimes/tool/adapters/native-tools/chart.js";
 import { registerDelegationTools } from "../runtimes/tool/adapters/native-tools/delegation.js";
+import { registerTaskGraphTools } from "../runtimes/tool/adapters/native-tools/task-graph.js";
+import { registerCodeIntelligenceTools } from "../runtimes/tool/adapters/native-tools/code-intelligence.js";
+import { registerToolDiscoveryTools } from "../runtimes/tool/adapters/native-tools/tool-discovery.js";
 import { registerAllAdapters } from "../gateways/mcp/adapters/index.js";
 
 export function registerAllTools(): void {
@@ -15,5 +18,8 @@ export function registerAllTools(): void {
   registerMemoryTools();
   registerChartTools();
   registerDelegationTools();
+  registerTaskGraphTools();
+  registerCodeIntelligenceTools();
+  registerToolDiscoveryTools();
   registerAllAdapters();
 }

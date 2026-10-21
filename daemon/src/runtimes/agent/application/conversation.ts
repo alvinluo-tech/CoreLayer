@@ -2,7 +2,14 @@ import { generateText, streamText, stepCountIs } from "ai";
 import type { ModelMessage } from "ai";
 import { ContextBuilder } from "./context-builder.js";
 import { compressConversation, createSummaryMessage, extractMemoriesFromTurn } from "./compressor.js";
-import { getAllTools, wrapToolsForAI, isApprovalRequiredMarker, extractApprovalRequestIds } from "../../tool/public-api.js";
+import {
+  getAllTools,
+  getAllJarvisTools,
+  wrapToolsForAI,
+  isApprovalRequiredMarker,
+  extractApprovalRequestIds,
+  getDynamicToolRouter,
+} from "../../tool/public-api.js";
 
 import { configManager } from "../../../config/config-manager.js";
 import { getModelGateway } from "../../../gateways/model/gateway.js";
@@ -21,6 +28,7 @@ import { applyCacheControl, logCacheStats, CACHE_CONTROL } from "./cache-control
 import { selectModelForConversation } from "./model-routing.js";
 import { fetchRelevantMemories, extractSummaryFromHistory } from "./memory-fetcher.js";
 import { handleLocally } from "./local-handler.js";
+import { loadFrozenMemorySnapshot } from "../../../context/memory-snapshot/memory-snapshot.js";
 
 export function isAiConfigured(): boolean {
   const creds = configManager.getCredentials();
@@ -222,16 +230,26 @@ export async function streamMessageInConversation(
     }
   }
 
+  const frozenMemory = loadFrozenMemorySnapshot();
   const builder = new ContextBuilder({
     mode: "text",
     conversationId,
     modelName: selectedModel,
     userMessage,
     systemPromptOverride: options?.systemPromptOverride,
+    userProfile: frozenMemory.userProfileText,
+    memorySnapshot: frozenMemory.memoryText,
   });
   if (summary) builder.withSummary(summary);
 
   const context = await builder.build(memories, history);
+
+  if (context.injectedMemoryIds && context.injectedMemoryIds.length > 0) {
+    const memRepo = getRepositories().memories;
+    Promise.all(context.injectedMemoryIds.map((id) => memRepo.recordInjection(id))).catch((err) => {
+      logError("streamMessageInConversation/recordInjection", err);
+    });
+  }
 
   const saveAssistantMessage = async (reply: string, toolCallsLog: unknown[]) => {
     // Save assistant message
@@ -307,7 +325,12 @@ export async function streamMessageInConversation(
 
   if (isAiConfigured()) {
     try {
-      const rawTools = wrapToolsForAI(getAllTools(), {
+      const routedTools = getDynamicToolRouter().routeTools({
+        allTools: getAllTools(),
+        query: userMessage,
+        jarvisTools: getAllJarvisTools(),
+      });
+      const rawTools = wrapToolsForAI(routedTools, {
         conversationId,
         runId: options?.runtimeContext?.runId,
         projectId: options?.runtimeContext?.projectId,
@@ -524,14 +547,29 @@ export async function streamChat(
       onMemoryRead(memories.map((m) => m.id));
     }
 
+    const frozenMemory = loadFrozenMemorySnapshot();
     const builder = new ContextBuilder({
       mode,
       conversationId,
       modelName: selectedModel,
+      userProfile: frozenMemory.userProfileText,
+      memorySnapshot: frozenMemory.memoryText,
     });
     const context = await builder.build(memories, []);
 
-    const rawTools = wrapToolsForAI(getAllTools(), {
+    if (context.injectedMemoryIds && context.injectedMemoryIds.length > 0) {
+      const memRepo = getRepositories().memories;
+      Promise.all(context.injectedMemoryIds.map((id) => memRepo.recordInjection(id))).catch((err) => {
+        logError("streamMessageDirect/recordInjection", err);
+      });
+    }
+
+    const routedTools = getDynamicToolRouter().routeTools({
+      allTools: getAllTools(),
+      query: userMessage,
+      jarvisTools: getAllJarvisTools(),
+    });
+    const rawTools = wrapToolsForAI(routedTools, {
       conversationId,
       runId: runtimeContext?.runId,
       projectId: runtimeContext?.projectId,
@@ -639,7 +677,12 @@ export async function handleMessage(userMessage: string): Promise<{
   });
   const context = await builder.build([], []);
 
-  const rawTools = wrapToolsForAI(getAllTools());
+  const routedTools = getDynamicToolRouter().routeTools({
+    allTools: getAllTools(),
+    query: userMessage,
+    jarvisTools: getAllJarvisTools(),
+  });
+  const rawTools = wrapToolsForAI(routedTools);
   const aiTools = context.cacheEnabled
     ? applyCacheControl([], rawTools).tools
     : rawTools;

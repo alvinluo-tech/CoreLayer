@@ -76,9 +76,13 @@ vi.mock("../../../shared/errors.js", () => ({
 }));
 
 vi.mock("../../tool/public-api.js", () => ({
-  getAllTools: vi.fn(() => []),
-  wrapToolsForAI: vi.fn(() => ({})),
+  getAllTools: vi.fn(() => ({})),
+  getAllJarvisTools: vi.fn(() => []),
+  wrapToolsForAI: vi.fn((tools: unknown) => tools ?? {}),
   getTool: vi.fn(() => null),
+  getDynamicToolRouter: vi.fn(() => ({
+    routeTools: vi.fn((opts: { allTools: unknown }) => opts.allTools ?? {}),
+  })),
 }));
 
 vi.mock("../../../gateways/model/gateway.js", () => ({
