@@ -1,6 +1,12 @@
 /**
  * Computer Control Runtime — manages direct OS interactions.
  *
+ * STATUS: capability layer not implemented. Permission checks, risk grading,
+ * approval routing and audit logging are complete and tested; the actual OS
+ * interaction is not. `executeOperation` below returns a hardcoded success
+ * without moving the cursor, typing, or capturing a frame. Consumers must not
+ * treat a `success: true` result as evidence that anything happened on screen.
+ *
  * All operations go through OSCapabilityBroker for permission checks.
  * All operations are high/critical risk by default.
  * Screenshot/screen content is sensitive data that must be audited
@@ -112,8 +118,12 @@ export async function requestComputerControl(
     await auditScreenshot(request);
   }
 
-  // Placeholder: actual OS interaction would happen here via Rust Core
-  // For now, return a successful result with no data
+  // NOT IMPLEMENTED. Every operation returns success without performing any OS
+  // interaction, and no Rust-side command exists to perform one. Wiring this up
+  // means: expose the primitive from src-tauri (screenshot capture, input
+  // synthesis, window enumeration), call it here, and populate the result
+  // fields declared in ComputerControlResult. Until then, register this runtime
+  // as unavailable rather than shipping a success that changes nothing.
   return {
     success: true,
     operation,

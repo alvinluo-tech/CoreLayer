@@ -61,6 +61,13 @@ export const schedulerRuntime = new SchedulerRuntime({
 registerRuntime("scheduler", schedulerRuntime);
 
 // ─── Computer Control Runtime ─────────────────────────────────────────────────
+//
+// Deliberately NOT registered with the runtime host yet. The permission, risk
+// and audit layers are complete, but `executeOperation` still returns a
+// hardcoded success without touching the OS (see computer-control-runtime.ts),
+// and no Rust-side capability exists to back it. Registering it would report
+// this runtime as "running" through /api/runtime/components and expose tools
+// that silently do nothing.
 
 export const computerControlRuntime = new ComputerControlRuntime({
   id: "computer-control-runtime",
@@ -68,7 +75,6 @@ export const computerControlRuntime = new ComputerControlRuntime({
   version: "1.0.0",
   ...runtimeDefaults,
 });
-registerRuntime("computer-control", computerControlRuntime);
 
 // ─── Coding Runtime ──────────────────────────────────────────────────────────
 

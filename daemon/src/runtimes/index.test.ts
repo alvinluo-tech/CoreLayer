@@ -93,10 +93,14 @@ describe("Runtimes Index", () => {
     );
   });
 
-  it("registers computer-control runtime", () => {
-    expect(mockRegisterRuntime).toHaveBeenCalledWith(
+  // Computer control is constructed but deliberately unregistered: its
+  // permission and audit layers are finished while the OS capability layer is
+  // still a stub. Registering it would advertise a runtime that reports
+  // "running" and accepts operations without performing them.
+  it("does not register computer-control runtime", () => {
+    expect(mockRegisterRuntime).not.toHaveBeenCalledWith(
       "computer-control",
-      expect.objectContaining({ kind: "computer-control", id: "computer-control-runtime" }),
+      expect.anything(),
     );
   });
 
@@ -114,8 +118,8 @@ describe("Runtimes Index", () => {
     );
   });
 
-  it("registers exactly 7 runtimes", () => {
-    expect(mockRegisterRuntime).toHaveBeenCalledTimes(7);
+  it("registers exactly 6 runtimes", () => {
+    expect(mockRegisterRuntime).toHaveBeenCalledTimes(6);
   });
 
   it("exports runtime instances", () => {
