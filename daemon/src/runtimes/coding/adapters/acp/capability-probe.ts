@@ -18,6 +18,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { locateAcpxRuntime, type AcpxRuntimeLocation } from "./acpx-runtime.js";
+import { claudeRunEnv } from "./adapter.js";
 
 export type AcpAgentStatus = "ready" | "needs_auth" | "unreachable" | "unknown";
 
@@ -127,10 +128,12 @@ function runProbe(
   options: ProbeOptions,
 ): Promise<{ stdout: string; stderr: string; code: number | null }> {
   // Claude Code reads the user's ~/.claude/settings.json over the parent env,
-  // so the probe is isolated exactly like a real run; otherwise the handshake
-  // could succeed against a model the run would never use.
+  // so the probe is isolated exactly like a real run and receives the same
+  // routing settings; otherwise the handshake could succeed against a model the
+  // run would never use, or fail with an authentication error a real run would
+  // not hit.
   let configDir: string | undefined;
-  const env: NodeJS.ProcessEnv = { ...process.env };
+  const env: NodeJS.ProcessEnv = { ...process.env, ...claudeRunEnv(options.model ?? "") };
   if (options.agent === "claude") {
     try {
       configDir = mkdtempSync(join(tmpdir(), "jarvis-acp-probe-"));
@@ -140,7 +143,6 @@ function runProbe(
       configDir = undefined;
     }
   }
-  if (options.model) env.ANTHROPIC_MODEL = options.model;
 
   const args = [
     ...runtime.prefixArgs,

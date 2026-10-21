@@ -68,6 +68,8 @@ import { probeAcpAgent, type AcpCapabilitySnapshot } from "./capability-probe.js
 const runs = new Map<string, CodingRunInfo>();
 const processes = new Map<string, number>();
 const sessions = new Map<string, AcpRunSession>();
+/** Runs whose `run_started` was already delivered to a stream consumer. */
+const announcedStreams = new Set<string>();
 const emitter = new CodingEventEmitter();
 
 /**
@@ -319,7 +321,7 @@ export class AcpCodingAdapter implements CodingAgentAdapter {
     args.push("claude", "exec", task.taskPrompt);
 
     const configDir = createIsolatedClaudeConfigDir();
-    const env: Record<string, string> = { ANTHROPIC_MODEL: model };
+    const env = claudeRunEnv(model);
     if (configDir) env.CLAUDE_CONFIG_DIR = configDir;
 
     const session: AcpRunSession = {
@@ -578,13 +580,20 @@ export class AcpCodingAdapter implements CodingAgentAdapter {
   }
 
   async *streamRunEvents(runId: string): AsyncIterable<NormalizedEvent> {
-    const info = runs.get(runId);
+    let info = runs.get(runId);
     if (!info) throw new Error(`Coding run not found: ${runId}`);
 
     const { iterable } = emitter.createStream(runId);
-    emitter.emit(runId, { type: "run_started", runId });
+    // A run is announced once, by `startRun`. Re-announcing on every drain
+    // would make a consumer that reads in several passes see the run start
+    // over and over.
+    if (!announcedStreams.has(runId)) {
+      announcedStreams.add(runId);
+      emitter.emit(runId, { type: "run_started", runId });
+    }
     yield* iterable;
 
+    info = runs.get(runId) ?? info;
     emitter.emit(
       runId,
       info.status === "succeeded"
@@ -654,6 +663,12 @@ export function resolveClaudeModel(task: CodingTask): string | undefined {
  * The Claude Agent SDK applies that file's `env` block over the parent process
  * environment, which silently replaces ANTHROPIC_BASE_URL and the model with
  * whatever the user last configured for interactive use.
+ *
+ * The catch: that file is also where a gateway deployment keeps its
+ * credentials. Isolating it with a bare `{}` strips the auth token too, and the
+ * agent then fails every turn with "Authentication required". The routing is
+ * therefore re-applied from the parent environment (see `claudeRunEnv`), not by
+ * copying the file, and the settings themselves stay empty.
  */
 function createIsolatedClaudeConfigDir(): string | undefined {
   try {
@@ -663,6 +678,27 @@ function createIsolatedClaudeConfigDir(): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+/**
+ * Environment for one external Claude Code run.
+ *
+ * Only variables this process actually holds are carried: copying a value out
+ * of the user's settings file would reintroduce the exact override the isolated
+ * config directory exists to prevent. Written to the child's environment rather
+ * than to its settings file, because a settings-level `env` block has been
+ * measured not reaching the SDK in this setup while the process environment does.
+ */
+export function claudeRunEnv(
+  model: string,
+  env: NodeJS.ProcessEnv = process.env,
+): Record<string, string> {
+  const out: Record<string, string> = { ANTHROPIC_MODEL: model };
+  for (const key of ["ANTHROPIC_BASE_URL", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY"]) {
+    const value = env[key]?.trim();
+    if (value) out[key] = value;
+  }
+  return out;
 }
 
 function resolveFailureReason(input: {
@@ -680,10 +716,14 @@ function resolveFailureReason(input: {
       ? `ACP turn produced no output; stderr: ${tail}`
       : "ACP turn produced no output and reported no error";
   }
-  return input.stderrTail.trim() || `Exit code ${input.exitCode}`;
+  if (input.stderrTail.trim()) return input.stderrTail.trim();
+  // an agent that exits non-zero without a word is a launch problem, not a
+  // task failure; say which code so the distinction is visible in the log
+  return `ACP agent exited with code ${input.exitCode} before reporting a result`;
 }
 
 function cleanupSession(runId: string): void {
+  announcedStreams.delete(runId);
   const session = sessions.get(runId);
   if (!session) return;
   if (session.escalationTimer) clearTimeout(session.escalationTimer);

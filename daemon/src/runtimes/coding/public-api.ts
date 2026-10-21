@@ -23,6 +23,7 @@ export {
   isCommandAvailable,
   getExecutablePath,
   spawnProcess,
+  execFileSyncBuffered,
 } from "./process-spawner.js";
 
 export {

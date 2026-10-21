@@ -2,7 +2,9 @@
  * Process Spawner — cross-platform subprocess management for coding runtimes.
  *
  * Handles spawning, streaming, and killing child processes
- * with proper cleanup on Windows and Unix.
+ * with proper cleanup on Windows and Unix. This module is the daemon's single
+ * entry point for child-process authority; anything outside
+ * `runtimes/coding/adapters` and `capabilities/adapters` goes through it.
  */
 
 import { spawn, execFileSync, type ChildProcess } from "child_process";
@@ -129,6 +131,28 @@ export function getExecutablePath(command: string): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Run a command to completion and return its stdout, or throw when it exits
+ * non-zero or exceeds `timeoutMs`.
+ *
+ * Unlike `spawnProcess`, this throws instead of returning an exit code, which
+ * suits control-flow callers that treat a non-zero exit as a failure rather
+ * than as data.
+ */
+export function execFileSyncBuffered(
+  command: string,
+  args: string[],
+  options: { cwd?: string; env?: NodeJS.ProcessEnv; timeoutMs?: number } = {},
+): string {
+  return execFileSync(command, args, {
+    cwd: options.cwd,
+    env: options.env ?? process.env,
+    encoding: "utf-8",
+    stdio: ["ignore", "pipe", "pipe"],
+    timeout: options.timeoutMs ?? 30_000,
+  });
 }
 
 /**

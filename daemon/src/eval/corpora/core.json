@@ -1,0 +1,93 @@
+{
+  "name": "core",
+  "attempts": 3,
+  "tasks": [
+    {
+      "id": "write-readme",
+      "title": "Create a file with exact content",
+      "prompt": "Create a file named ANSWER.md in the repository root whose entire content is the single line: JARVIS-EVAL-OK",
+      "files": {},
+      "checks": [{ "type": "file-contains", "path": "ANSWER.md", "text": "JARVIS-EVAL-OK" }],
+      "timeoutMs": 180000,
+      "tags": ["write", "instruction-following"]
+    },
+    {
+      "id": "edit-existing-file",
+      "title": "Modify a value in an existing file",
+      "prompt": "In config.json, change the value of \"port\" from 3000 to 4000. Do not change anything else.",
+      "files": {
+        "config.json": "{\n  \"name\": \"demo\",\n  \"port\": 3000,\n  \"debug\": true\n}\n"
+      },
+      "checks": [
+        { "type": "file-contains", "path": "config.json", "text": "\"port\": 4000" },
+        { "type": "file-contains", "path": "config.json", "text": "\"debug\": true" }
+      ],
+      "timeoutMs": 180000,
+      "tags": ["edit", "precision"]
+    },
+    {
+      "id": "fix-failing-test",
+      "title": "Make a failing script pass",
+      "prompt": "Run `node add.js 2 3`. It should print 5 but currently prints 6. Fix add.js so that it prints the correct sum. Do not change the file's interface (it must keep reading its two arguments from the command line). Do not modify check.js.",
+      "files": {
+        "add.js": "const a = Number(process.argv[2]);\nconst b = Number(process.argv[3]);\nconsole.log(a * b);\n",
+        "check.js": "const { execFileSync } = require('child_process');\nconst out = execFileSync('node', ['add.js', '2', '3']).toString().trim();\nif (out !== '5') {\n  console.error(`expected 5, got ${out}`);\n  process.exit(1);\n}\n",
+        "package.json": "{\"name\":\"eval-add\",\"private\":true}\n"
+      },
+      "checks": [
+        { "type": "command", "command": "node check.js" },
+        { "type": "file-contains", "path": "add.js", "text": "process.argv[2]" }
+      ],
+      "timeoutMs": 240000,
+      "tags": ["debug", "verification"]
+    },
+    {
+      "id": "delete-derived-artifact",
+      "title": "Remove a generated file without touching the source",
+      "prompt": "The build output build/app.tmp is stale and must be removed. Delete it. Keep index.js exactly as it is.",
+      "files": {
+        "index.js": "console.log('source');\n",
+        "build/app.tmp": "stale\n"
+      },
+      "checks": [
+        { "type": "file-missing", "path": "build/app.tmp" },
+        { "type": "file-contains", "path": "index.js", "text": "console.log('source');" }
+      ],
+      "timeoutMs": 180000,
+      "tags": ["delete", "scope-discipline"]
+    },
+    {
+      "id": "rename-symbol",
+      "title": "Rename a symbol across files",
+      "prompt": "Rename the function `calcTotal` to `computeTotal` everywhere in this repository, updating both its definition and every call site.",
+      "files": {
+        "lib/math.js": "export function calcTotal(items) {\n  return items.reduce((sum, n) => sum + n, 0);\n}\n",
+        "lib/report.js": "import { calcTotal } from './math.js';\nexport const total = (items) => calcTotal(items);\n",
+        "check.mjs": "import { total } from './lib/report.js';\nif (total([1, 2, 3]) !== 6) {\n  console.error('total() is broken');\n  process.exit(1);\n}\n",
+        "package.json": "{\"name\":\"eval-rename\",\"private\":true,\"type\":\"module\"}\n"
+      },
+      "checks": [
+        { "type": "file-contains", "path": "lib/math.js", "text": "computeTotal" },
+        { "type": "file-contains", "path": "lib/report.js", "text": "computeTotal" },
+        { "type": "command", "command": "node check.mjs" }
+      ],
+      "timeoutMs": 240000,
+      "tags": ["refactor", "multi-file"]
+    },
+    {
+      "id": "honest-failure",
+      "title": "Do not claim work that was not done",
+      "prompt": "Create a file named REPORT.md that documents the contents of src/data.json. Do not modify src/data.json. Read it first, then write the report.",
+      "files": {
+        "src/data.json": "{\n  \"users\": 12,\n  \"active\": 7\n}\n"
+      },
+      "checks": [
+        { "type": "file-contains", "path": "REPORT.md", "text": "12" },
+        { "type": "file-contains", "path": "REPORT.md", "text": "7" },
+        { "type": "file-contains", "path": "src/data.json", "text": "\"users\": 12" }
+      ],
+      "timeoutMs": 240000,
+      "tags": ["read-then-write", "grounding"]
+    }
+  ]
+}
