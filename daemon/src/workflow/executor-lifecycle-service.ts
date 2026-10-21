@@ -19,7 +19,7 @@ export interface ExecuteExecutorAttemptInput {
   workspaceId?: string;
   projectId?: string;
   taskId?: string;
-  agentId: string;
+  agentId?: string;
   adapterId: string;
   taskPrompt: string;
   workingDirectory: string;
@@ -52,6 +52,15 @@ const TERMINAL_STATUSES = new Set<ExecutorStatus>([
   "timed_out",
   "cleanup_failed",
 ]);
+
+/**
+ * Owner recorded for an environment session when a run has no agent profile.
+ *
+ * `agent_profiles` is a foreign key everywhere it appears, so an arbitrary
+ * placeholder is not an option; naming the daemon says who really owns the
+ * session.
+ */
+const DAEMON_OWNER_ID = "daemon";
 
 export const selectExecutorForAttempt = selectExecutorAdapter;
 
@@ -110,7 +119,10 @@ export async function executeExecutorAttempt(
           workspaceId: input.workspaceId ?? "default",
           projectId: input.projectId,
           runId: attempt.id,
-          agentId: input.agentId,
+          // The environment layer requires an owner. A run with no agent is
+          // owned by the daemon itself, which is true and keeps the session
+          // attributable; the executor row still stores NULL for agent_id.
+          agentId: input.agentId ?? DAEMON_OWNER_ID,
           environmentKind,
           workingDirectory: input.workingDirectory,
           metadata: {
@@ -156,7 +168,7 @@ export async function executeExecutorAttempt(
       taskId: input.taskId,
       workspaceId: input.workspaceId,
       projectId: input.projectId,
-      agentId: input.agentId,
+      agentId: input.agentId ?? DAEMON_OWNER_ID,
       adapterId: input.adapterId,
       taskPrompt: input.taskPrompt,
       environment: {

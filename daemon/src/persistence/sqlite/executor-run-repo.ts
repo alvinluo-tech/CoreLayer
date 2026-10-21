@@ -67,6 +67,8 @@ export function createSqliteExecutorRunRepo(database?: DrizzleDb): ExecutorRunRe
           workspaceId: input.workspaceId ?? null,
           projectId: input.projectId ?? null,
           taskId: input.taskId ?? null,
+          // `agent_id` is a foreign key into agent_profiles. A run with no agent
+          // must record NULL; a placeholder name would be rejected by SQLite.
           agentId: input.agentId ?? null,
           adapterId: input.adapterId,
           attemptNumber: input.attemptNumber ?? 1,

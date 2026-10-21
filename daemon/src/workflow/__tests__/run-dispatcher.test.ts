@@ -24,6 +24,7 @@ const mockTasksGetByWorkspaceId = vi.fn().mockResolvedValue([]);
 const mockWorkspacesUpdate = vi.fn().mockResolvedValue(undefined);
 const mockPendingActionsGetOpenByWorkspace = vi.fn().mockResolvedValue([]);
 const mockProjectsGetById = vi.fn().mockResolvedValue({ id: "proj-1", rootPath: "/tmp/repo" });
+const mockExecutorRunsGetByAgentRun = vi.fn().mockResolvedValue([]);
 
 vi.mock("../../persistence/factory.js", () => ({
   getRepositories: vi.fn(() => ({
@@ -56,6 +57,9 @@ vi.mock("../../persistence/factory.js", () => ({
     },
     agentRunEvents: {
       create: vi.fn().mockResolvedValue({}),
+    },
+    executorRuns: {
+      getByAgentRun: (...args: unknown[]) => mockExecutorRunsGetByAgentRun(...args),
     },
   })),
 }));
@@ -428,6 +432,34 @@ describe("dispatchRuns — delegated runs", () => {
     const input = mockExecuteExecutorAttempt.mock.calls[0][0] as Record<string, unknown>;
     expect(input.taskPrompt).toBe("task objective");
     expect(input.allowedPaths).toEqual(["src/**"]);
+  });
+
+  it("runs the child in the parent's worktree, not the project root", async () => {
+    // A child has no project of its own. Without inheriting the parent's
+    // worktree it fails outright, or worse, edits a tree the parent is not
+    // delivering from.
+    mockGetQueued.mockResolvedValue([delegatedRun()]);
+    mockExecutorRunsGetByAgentRun.mockResolvedValue([
+      { attemptNumber: 1, workingDirectory: "/tmp/worktrees/stale" },
+      { attemptNumber: 2, workingDirectory: "/tmp/worktrees/parent-2" },
+    ]);
+
+    await dispatchRuns();
+    await vi.waitFor(() => expect(mockExecuteExecutorAttempt).toHaveBeenCalled());
+    const input = mockExecuteExecutorAttempt.mock.calls[0][0] as Record<string, unknown>;
+
+    expect(mockExecutorRunsGetByAgentRun).toHaveBeenCalledWith("parent-1");
+    expect(input.workingDirectory).toBe("/tmp/worktrees/parent-2");
+  });
+
+  it("still falls back to the project root when the parent never started an attempt", async () => {
+    mockGetQueued.mockResolvedValue([delegatedRun()]);
+    mockExecutorRunsGetByAgentRun.mockResolvedValue([]);
+
+    await dispatchRuns();
+    await vi.waitFor(() => expect(mockExecuteExecutorAttempt).toHaveBeenCalled());
+    const input = mockExecuteExecutorAttempt.mock.calls[0][0] as Record<string, unknown>;
+    expect(input.workingDirectory).toBe("/tmp/repo");
   });
 });
 

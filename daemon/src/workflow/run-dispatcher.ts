@@ -148,7 +148,15 @@ async function dispatchToCodingRuntime(
 
   // A run must have an explicit target repository. Falling back to the
   // daemon's own cwd would let an agent modify the wrong codebase.
-  const repoPath = workDir ?? projectRootPath;
+  //
+  // The order matters for delegated work: a child has no project of its own, so
+  // it inherits the repository its parent is actually running in. Without that
+  // step every delegated run fails with "no repository path", because the
+  // parent's worktree is only known through its executor attempt.
+  const repoPath =
+    (runRecord.delegation ? await parentRepositoryPath(runRecord.delegation.parentRunId) : undefined)
+    ?? workDir
+    ?? projectRootPath;
   if (!repoPath) {
     throw new Error(
       `No repository path for run ${runId}: the agent executor policy has no workDir and project ${runRecord.projectId ?? "(none)"} has no rootPath`,
@@ -193,7 +201,10 @@ async function dispatchToCodingRuntime(
     workspaceId: runRecord.workspaceId ?? undefined,
     projectId: runRecord.projectId ?? undefined,
     taskId: taskId ?? undefined,
-    agentId: agentId ?? "unassigned",
+    // `executor_runs.agent_id` is a foreign key into agent_profiles, so a run
+    // with no agent records none: the literal "unassigned" is not a profile id
+    // and fails the insert outright.
+    agentId: agentId ?? undefined,
     adapterId: selection.adapterId,
     taskPrompt,
     workingDirectory: repoPath,
@@ -232,6 +243,26 @@ async function dispatchToCodingRuntime(
     }
   }
   await completeRun(runId, outcome.success, outcome.error, outcome.manualInterventionRequired, outcome.artifacts.artifacts);
+}
+
+/**
+ * The repository a parent run is actually working in.
+ *
+ * A run does not store its repository directly: the executor attempt does, and
+ * it is written once the worktree exists. A parent that delegates therefore
+ * passes down its own worktree — a child that started from the project root
+ * instead would edit a different tree than the one its parent is about to
+ * deliver.
+ */
+async function parentRepositoryPath(parentRunId: string): Promise<string | undefined> {
+  const { executorRuns } = getRepositories();
+  const attempts = await executorRuns.getByAgentRun(parentRunId);
+  // Latest attempt wins: an earlier attempt may point at a worktree that was
+  // already cleaned up.
+  const latest = attempts
+    .filter((attempt) => Boolean(attempt.workingDirectory))
+    .sort((a, b) => b.attemptNumber - a.attemptNumber)[0];
+  return latest?.workingDirectory ?? undefined;
 }
 
 /**
