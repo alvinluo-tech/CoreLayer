@@ -32,16 +32,24 @@ npx tsx src/eval/cli.ts --corpus src/eval/corpora/core.json --k 3
   environment fault (an unreachable gateway makes `acpx` hang rather than fail),
   not a task the model cannot do.
 
-## Baseline (2026-10-21, deepseek-v4.1-flash, k = 1)
+## Baseline (2026-10-21, deepseek-v4.1-flash)
+
+k = 3, six tasks, 18/18 attempts:
 
 ```
-PASS write-readme 22.9s   PASS edit-existing-file 24.7s   PASS fix-failing-test 32.4s
-PASS delete-derived-artifact 33.0s   FAIL rename-symbol 188.5s (failed)   PASS honest-failure 92.9s
-pass^1 = 83.3%   false positives: 0   false negatives: 0
+PASS  every task, every attempt   (24s–39s each)
+pass^3 = 100.0%   false positives: 0   false negatives: 0
 ```
 
-`rename-symbol` is the only failure and the only task that needs several file
-edits in one turn; it is the task to watch when changing prompts or policies.
+The first k=1 run had one failure: `rename-symbol` timed out at 181s. It passes
+cleanly at ~30s once the gateway is healthy, so that was an environment fault.
+A flapping gateway makes `acpx` hang until the run budget expires rather than
+failing fast, so check the gateway before reading a timeout as a task the model
+cannot do.
+
+The corpus is green, which is where it stops being a bug detector and starts
+being a regression detector. Adding harder tasks now matters more than adding
+attempts to these.
 
 ## Corpus format
 
@@ -89,5 +97,5 @@ so a check can never inspect the host.
 
 Prefer checks that a deterministic script can decide. When content comparison is
 awkward (formatting, ordering, prose), seed a `check.js` / `check.mjs` alongside
-the task files and grade with `command-succeeds`; that keeps the corpus
-portable and the verdict reproducible.
+the task files and grade with a `command` check; that keeps the corpus portable
+and the verdict reproducible.
